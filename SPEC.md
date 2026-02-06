@@ -14,72 +14,160 @@ Personal TypeScript browser built on Electron with Chrome extension support, Rea
 - **Styling**: Tailwind CSS 4
 - **Storage**: SQLite (better-sqlite3) for history/bookmarks, JSON for settings
 - **Extensions**: `electron-chrome-extensions` package
-- **IPC**: Type-safe wrapper with zod validation
+- **IPC**: Command bus + event bus with typed registries (bridges IPC transparently)
 
 ## Architecture
 
-### Process Model
+Features are the organizing unit. Each feature handles commands, emits events, owns its state, and accesses browser capabilities + storage through abstractions. 19 feature specs live in `docs/features/`.
+
 ```
-┌─────────────────────────────────────────────────────────┐
-│                     Main Process                         │
-│  - Window management                                     │
-│  - Keyboard shortcuts (global + app)                     │
-│  - Download handling                                     │
-│  - Extension host                                        │
-│  - System tray/native menus                              │
-│  - SQLite database                                       │
-└─────────────────────────────────────────────────────────┘
-           │ IPC (type-safe)
-           ▼
-┌─────────────────────────────────────────────────────────┐
-│                   Browser Chrome (Renderer)              │
-│  - React app                                             │
-│  - Sidebar (Arc-style tab organization)                  │
-│  - Command palette (Cmd+K/Ctrl+K to invoke)              │
-│  - Spaces/folders for tab organization                   │
-│  - Settings UI                                           │
-│  - Minimal chrome, content-first                         │
-└─────────────────────────────────────────────────────────┘
-           │ manages
-           ▼
-┌─────────────────────────────────────────────────────────┐
-│              WebContentsView (per tab)                   │
-│  - Actual web page content                               │
-│  - Isolated from browser chrome                          │
-│  - Chrome extension content scripts run here             │
-└─────────────────────────────────────────────────────────┘
+Features (19, see docs/features/)
+    ↕ send commands, listen to events
+Command Bus + Event Bus
+    ↕ bridge IPC transparently
+Abstraction Layer
+  ├── Platform (wraps Electron/Chromium)
+  └── Data (wraps SQLite/JSON)
+    ↕
+Electron / Chromium
 ```
+
+### Platform Abstraction
+
+Interface wrapping WebContentsView management, sessions, windows, keyboard shortcuts, downloads, clipboard, and shell access. Two implementations:
+- **`ElectronPlatform`** — production, delegates to real Electron APIs
+- **`MockPlatform`** — tests, in-memory simulation
+
+### Data Abstraction
+
+Interface wrapping SQLite + JSON storage. Provides key-value access, tabular queries, and per-feature schema migrations. Two implementations:
+- **`SqliteDataStore`** — production, backed by better-sqlite3 + JSON files
+- **`InMemoryDataStore`** — tests, no filesystem
+
+### Command Bus
+
+Routes named commands to a single handler each. Commands are imperative; exactly one handler per command name.
+```typescript
+bus.handle('tabs:create', handler)   // register
+bus.send('tabs:create', { url })     // invoke
+```
+
+### Event Bus
+
+Pub/sub for outcome events. Events are past-tense; zero or more listeners.
+```typescript
+bus.on('tabs:created', listener)     // subscribe
+bus.emit('tabs:created', { tab })    // publish
+```
+
+Both buses bridge the IPC boundary transparently — features don't know which process they're talking to.
+
+### Process Boundary
+
+Features span main + renderer via up to 3 files:
+- **`feature.main.ts`** — main-process logic (platform calls, data access, command handlers)
+- **`feature.renderer.tsx`** — renderer logic (React state, UI components)
+- **`feature.shared.ts`** — shared types, command/event names, payload schemas
+
+### Strong Typing for Commands & Events
+
+Command/event names and payloads are TypeScript types in each feature's `.shared.ts`. The bus is generic over a type registry so `bus.send('tabs:create', payload)` is compile-time checked — misspelled names or wrong payloads are type errors. Registry built by merging each feature's command/event type maps.
+
+### Feature Registration & Startup
+
+Features are registered via a manual list in entry points (explicit, no magic). Startup is two-phase:
+
+1. **Register** — all features register command handlers, event listeners, key bindings, and other passive setup. No side effects.
+2. **Start** — all features begin active logic (publishing events, loading persisted state, etc.). Only runs after every feature completes phase 1.
+
+This guarantees all handlers are wired before any events flow.
+
+### Testability
+
+Three tiers:
+- **Unit tests** — feature tested with MockPlatform + InMemoryDataStore. No Electron dependency. Verify command handling and event emission in isolation.
+- **Integration tests** — multiple features wired together with mocks. Verify cross-feature command/event flows.
+- **E2E tests** — real Electron app. Cover user workflows from feature specs (e.g. "Open a page", "Switch workspace", "Bookmark the current tab"). Full stack from UI through platform to persisted state.
 
 ### Directory Structure
 ```
 src/
-├── main/                    # Main process
-│   ├── index.ts            # Entry point
-│   ├── windows/            # Window management
-│   ├── keyboard/           # Shortcut handling
-│   ├── downloads/          # Download manager
-│   ├── extensions/         # Extension host
-│   ├── storage/            # SQLite + settings
-│   └── ipc/                # IPC handlers
-├── renderer/               # Browser chrome (React)
-│   ├── index.html
-│   ├── main.tsx
-│   ├── components/
-│   │   ├── Sidebar/           # Arc-style sidebar with tabs
-│   │   ├── CommandPalette/    # Action dialog (Cmd+K)
-│   │   ├── TabItem/           # Individual tab (pinned/bookmark/ephemeral)
-│   │   ├── Workspace/         # Workspace container
-│   │   └── Settings/
-│   ├── hooks/
-│   ├── stores/             # Zustand or similar
-│   └── styles/
-├── preload/                # Preload scripts
-│   ├── chrome.ts           # Browser chrome preload
-│   └── content.ts          # Web content preload
-├── shared/                 # Shared types/utils
-│   ├── types/
-│   └── ipc-schema.ts       # Type-safe IPC definitions
-└── extensions/             # Extension system integration
+├── features/           # 19 feature modules
+│   ├── tabs/          # .main.ts, .renderer.tsx, .store.ts, .shared.ts, .test.ts
+│   ├── workspaces/
+│   ├── command-palette/
+│   └── ...            # one dir per feature
+├── platform/          # Platform interface + ElectronPlatform + MockPlatform
+├── data/              # DataStore interface + SqliteDataStore + InMemoryDataStore
+├── bus/               # CommandBus + EventBus + IPC bridge
+├── main/              # Entry point, feature wiring
+├── renderer/          # React root, Shell layout, shared UI primitives
+├── preload/           # Preload scripts (expose bus over IPC)
+└── shared/            # Cross-cutting types
+```
+
+### React Component Organization
+
+Three layers separate layout, feature UI, and shared primitives:
+
+- **`renderer/Shell.tsx`** — Thin layout skeleton. Imports feature components and slots them into a CSS grid. No business logic.
+- **Feature components** — Each feature's `.renderer.tsx` exports its React components (e.g. `<Sidebar />`, `<CommandPalette />`, `<TitleBar />`). These live with their feature, not in a shared folder.
+- **`renderer/components/`** — Shared UI primitives beyond shadcn (drag handles, keyboard shortcut display, etc.).
+
+```tsx
+// Shell.tsx — dumb layout, composes feature components
+<div className="grid grid-rows-[auto_1fr] grid-cols-[auto_1fr]">
+  <TitleBar />           {/* custom-window-chrome */}
+  <Sidebar />            {/* sidebar — contains tabs, folders, workspaces */}
+  <ContentArea />        {/* WebContentsView host */}
+  <CommandPalette />     {/* command-palette — overlay */}
+  <FindBar />            {/* find-text — overlay */}
+</div>
+```
+
+### Feature ↔ UI Communication
+
+Each feature has a **renderer-side Zustand store** (`feature.store.ts`) holding UI-relevant state. One store per feature, not a global store.
+
+Features distinguish two kinds of state:
+- **Authoritative state** (tab list, active workspace, settings) — owned by main process, synced to renderer store via bus events
+- **Ephemeral UI state** (drag position, input text, animation state) — renderer-only, lives in Zustand store or React local state, never synced to main
+
+**Three communication paths:**
+
+**1. Main → Renderer (state push):**
+Main-process feature handles a command, emits an event. The renderer store listens for events and updates. Components subscribe to the store via hooks — synchronous React reads, no IPC round-trip on render.
+
+```
+tabs.main.ts                  IPC bridge              tabs.store.ts
+  handles tabs:create  →  emits tabs:created  →  store.onTabCreated()
+  owns authoritative state                        holds UI-optimized copy
+```
+
+**2. Renderer → Main (user actions):**
+UI interactions call action functions that dispatch commands on the bus. Command crosses IPC → main handler → emits event → store updates → React re-renders.
+
+```tsx
+// tabs.renderer.tsx
+function TabItem({ tab }) {
+  const bus = useCommandBus();
+  return <button onClick={() => bus.send('tabs:activate', { tabId: tab.id })}>{tab.title}</button>;
+}
+```
+
+**3. Cross-feature renderer reads:**
+Features may import another feature's store for read-only access (e.g. sidebar reads workspace store). All writes go through commands so main process stays authoritative.
+
+Rule: **features export read-only selector hooks from their store; all mutations go through commands.**
+
+```tsx
+// sidebar.renderer.tsx — reads from workspaces feature
+import { useWorkspacesStore } from '../workspaces/workspaces.store';
+
+function WorkspaceList() {
+  const workspaces = useWorkspacesStore(s => s.workspaces);
+  // ...render, but mutations go through bus.send('workspaces:switch', ...)
+}
 ```
 
 ## Key Implementation Details
@@ -93,49 +181,11 @@ src/
   - Default: shared session
   - Toggle per-tab to create isolated session (like incognito but persistent if desired)
 
-### 2. Command Palette (Arc-inspired)
-- Invoke with `Cmd+K` / `Ctrl+K` (configurable)
-- **Features**:
-  - Navigate to URL directly
-  - Search with bang syntax: `!g query` (Google), `!gh query` (GitHub), `!ddg query` (DuckDuckGo)
-  - Quick actions: new tab, close tab, settings, etc.
-  - Search open tabs
-  - Search history/bookmarks
-- **Configurable search providers** stored in settings:
-  ```typescript
-  searchProviders: {
-    'g': { name: 'Google', url: 'https://google.com/search?q=%s' },
-    'gh': { name: 'GitHub', url: 'https://github.com/search?q=%s' },
-    'ddg': { name: 'DuckDuckGo', url: 'https://duckduckgo.com/?q=%s' },
-  }
-  ```
-- Default search (no bang): configurable, defaults to DuckDuckGo
+### 2. Command Palette
+See `docs/features/CommandPaletteFeature.specs.md` for full spec.
 
-### 3. Arc-style Sidebar & Tab Model
-- Vertical tab list (no horizontal tab bar)
-- Workspaces for organizing tabs
-- Collapsible sidebar
-- Drag-and-drop reordering
-
-**Three Tab Types**:
-1. **Pinned tabs** - Global, always visible across workspaces, persist forever
-2. **Bookmark tabs** - Workspace-specific, persist forever until manually removed
-3. **Ephemeral tabs** - Workspace-specific, auto-removed if older than 8 hours on startup
-
-```typescript
-// Tab schema
-interface Tab {
-  id: string;
-  type: 'pinned' | 'bookmark' | 'ephemeral';
-  workspaceId: string | null;  // null for pinned (global)
-  url: string;
-  title: string;
-  position: number;
-  sessionPartition: string | null;
-  createdAt: Date;
-  lastAccessedAt: Date;
-}
-```
+### 3. Sidebar & Tab Model
+See `docs/features/SidebarFeature.specs.md`, `docs/features/TabsFeature.specs.md`, `docs/features/PinnedTabsFeature.specs.md`.
 
 ### 4. Keyboard Shortcuts
 - `globalShortcut` for system-wide shortcuts
@@ -165,27 +215,17 @@ Using `electron-chrome-extensions`:
 - Minimize IPC traffic (batch updates)
 - Background tab throttling
 
-### 8. Storage
+### 8. Storage (Data Abstraction)
 
-**Local (SQLite + JSON)**:
-```typescript
-// SQLite tables
-- history(id, url, title, visit_time, visit_count)
-- downloads(id, url, path, state, progress, created_at)
-- tabs(id, workspace_id, type, url, title, position, session_partition, created_at, last_accessed_at)
-- workspaces(id, name, color, position)
+All persistence goes through the `DataStore` interface. Each feature owns its schema and provides migrations. The store exposes key-value and tabular access; features never touch SQLite or the filesystem directly.
 
-// JSON files
-- settings.json (user preferences, search providers)
-- shortcuts.json (keyboard bindings)
-- extensions.json (installed extensions list)
+**Summary of persisted data**:
+```
+SQLite tables: history, downloads, tabs, workspaces
+JSON files:    settings.json, shortcuts.json, extensions.json
 ```
 
-**Cloud (Convex - optional, future)**:
-- Selective sync for cross-device features
-- Navigation history with metadata
-- Bookmarks sync
-- User preferences sync
+**Cloud (Convex — optional, future)**: selective sync for cross-device bookmarks, history, preferences.
 
 ## Project Phases
 
@@ -305,6 +345,8 @@ Git tag (v1.0.0) → GitHub Actions → Build artifacts → GitHub Releases
 - **Extension storage**: Let Electron handle via built-in partition (simplest approach)
 - **Updates**: Auto-update via electron-updater + GitHub Releases, triggered by git tags
 - **Default browser**: Windows registry registration for http/https protocols
+- **IPC architecture**: Command bus + event bus bridging IPC transparently; strong-typed with per-feature type registries
+- **Testing strategy**: MockPlatform + InMemoryDataStore for feature unit tests; integration tests with multiple features + mocks; E2E with real Electron
 
 ## Open Questions & Research Needed
 
@@ -335,42 +377,42 @@ Git tag (v1.0.0) → GitHub Actions → Build artifacts → GitHub Releases
 
 ### Important (Resolve During Early Development)
 
-**5. State Management**
-- Zustand vs Jotai vs React Context
-- Consider React Compiler compatibility
-- Need to handle: tabs, workspaces, settings, history, downloads
+**5. ~~State Management~~ (Resolved)**
+- **Decision: Zustand, one store per feature** — modular, aligns with feature architecture
+- Still need to verify React Compiler compatibility with Zustand
 
-**6. IPC Architecture**
-- Type-safe IPC wrapper design
-- Batching strategy for performance
-- Error handling across process boundary
-
-**7. Tab Lifecycle Management**
+**6. Tab Lifecycle Management**
 - When to truly destroy vs hibernate tabs?
 - Memory thresholds for tab eviction?
 - How to handle tab restoration after eviction?
 
-**8. Multi-Window Architecture**
+**7. Multi-Window Architecture**
 - Shared state across windows?
 - Which window "owns" pinned tabs?
 - Window position/size persistence
 
+**8. Optimistic UI Updates**
+- When user acts (e.g. clicks a tab), should the renderer store update immediately before the main-process round-trip?
+- Optimistic updates feel snappier but need a reconciliation pattern for when main process rejects/modifies the action
+- Which actions warrant optimistic updates vs waiting for confirmation?
+
+**9. Sidebar Composition Strategy**
+- Sidebar visually contains workspace tabs, pinned tabs, folders — pieces owned by other features
+- Option A: sidebar.renderer.tsx imports components from other features directly
+- Option B: features register "sidebar slots" and sidebar renders them dynamically
+- Slot pattern is more decoupled but adds complexity; direct imports match the "read-only cross-feature store" pattern
+
 ### Nice to Have (Can Defer)
 
-**9. macOS/Linux Support**
+**10. macOS/Linux Support**
 - Default browser registration on macOS (LSHandlers)
 - Linux desktop integration (.desktop files)
 - Platform-specific UI considerations
 
-**10. Performance Baselines**
+**11. Performance Baselines**
 - Startup time target?
 - Memory per tab target?
 - Acceptable command palette latency?
-
-**11. Testing Strategy**
-- E2E testing for Electron (Playwright? Spectron?)
-- Unit testing for React components
-- Extension compatibility testing automation
 
 ### Known Limitations (Accept for Now)
 
