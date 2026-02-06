@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Folders feature lets you quickly group (or ungroup) the current bookmarked tab into a folder within the Action Context tab list.
+The Folders feature lets you quickly group (or ungroup) the current bookmarked tab into a folder within the Sidebar tab list.
 
 Folders apply to bookmarked (persistent) tabs in the current workspace.
 
@@ -10,7 +10,7 @@ See also: `TabsFeature.specs.md` for folder UI behavior (expanding/collapsing, r
 
 ## Terminology
 
-- **Folder**: a named group of bookmarked tabs in the Action Context persistent list.
+- **Folder**: a named group of bookmarked tabs in the Sidebar persistent list.
 - **Bookmarked tab**: a tab in the persistent (top) tab list.
 
 ## Requirements
@@ -40,3 +40,20 @@ This feature uses the following shortcut:
 ### Mouse interactions
 
 - None.
+
+## Commands & Events
+
+### Commands
+
+- `folders:toggle` — Toggle folder membership for the current bookmarked tab.
+- `folders:rename` — Rename a folder. Payload: `{ folderId: string, name: string }`.
+
+### Events
+
+- `folders:changed` — Folder structure changed. Payload: `{ workspaceId: string }`.
+
+## Unresolved Issues
+
+- **Folder creation UX**: When a folder is created via the toggle shortcut, what is the default folder name? Is the user prompted to name it immediately?
+- **Empty folders**: What happens when all tabs are removed from a folder? Is the empty folder automatically deleted or does it persist?
+- **Ctrl-G conflict**: Ctrl-G is "Go to line" in many editors and "Find next" in some apps. Relatively low risk for a browser but worth noting.

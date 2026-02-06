@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Dev Tools feature controls Chromium developer tools for tabs and (in developer scenarios) for the embedded UI surfaces.
+The Dev Tools feature controls Chromium developer tools for tabs. In Electron, dev tools are managed via `webContents.openDevTools()` / `webContents.closeDevTools()` on each tab's `WebContentsView`.
 
 ## Terminology
 
@@ -10,8 +10,8 @@ The Dev Tools feature controls Chromium developer tools for tabs and (in develop
 
 ## Requirements
 
-- The active tab’s dev tools must be toggleable via a keyboard shortcut.
-- When a tab is closed, any dev tools belonging to it must be closed.
+- The active tab's dev tools must be toggleable via a keyboard shortcut.
+- When a tab is closed, any dev tools belonging to it are automatically closed by Electron (the `WebContentsView` is destroyed).
 - When switching tabs, dev tools for the previously active tab must be closed.
 
 ## Workflows
@@ -33,3 +33,18 @@ This feature uses the following shortcut:
 ### Mouse interactions
 
 - None.
+
+## Commands & Events
+
+### Commands
+
+- `devtools:toggle` — Toggle dev tools for the active tab.
+
+### Events
+
+- None.
+
+## Unresolved Issues
+
+- **Dev tools docking mode**: Should dev tools open as a separate window, docked to the bottom, or docked to the right? Electron supports all modes via the `mode` parameter. Consider making this configurable or defaulting to a separate window.
+- **Browser chrome dev tools**: For development purposes, should there be a separate shortcut to open dev tools for the browser chrome (renderer) itself? This is useful for debugging the React UI.

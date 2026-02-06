@@ -4,7 +4,7 @@
 
 The Workspaces feature lets you organize your browsing into separate named workspaces, each with its own set of tabs (including tab ordering and folder layout).
 
-Workspaces are primarily managed through the Action Context UI workspace switcher (icons along the top). The active workspace determines which tabs appear in the Action Context tab list.
+Workspaces are primarily managed through the Sidebar workspace switcher (icons along the top). The active workspace determines which tabs appear in the Sidebar tab list.
 
 See also: `TabsFeature.specs.md` for details on the tab list UI (persistent vs ephemeral tabs, folders, and tab ordering).
 
@@ -13,7 +13,7 @@ See also: `TabsFeature.specs.md` for details on the tab list UI (persistent vs e
 - **Workspace**: A named container with a color and icon.
 - **Active workspace**: The workspace currently selected.
 - **Workspace tabs**: The tabs that belong to a workspace, including their saved metadata and whether one is marked active.
-- **Ephemeral tab start index**: The index separating persistent (bookmarked) tabs from ephemeral tabs within a workspace’s tab ordering.
+- **Ephemeral tab start index**: The index separating persistent (bookmarked) tabs from ephemeral tabs within a workspace's tab ordering.
 
 ## Requirements
 
@@ -22,18 +22,18 @@ See also: `TabsFeature.specs.md` for details on the tab list UI (persistent vs e
 - The app always has at least one workspace.
 - Workspaces can be created, updated (name/icon/color), and deleted.
 - Deleting the last workspace is not allowed.
-- Workspace definitions and tab state are persisted to disk and restored on startup.
+- Workspace definitions and tab state are persisted to SQLite and restored on startup.
 
 ### Workspace activation
 
 - Switching workspace updates:
   - the active workspace state in the UI, and
-  - the Action Context tab list to show the workspace’s tabs and folders.
-- The host updates the current workspace color when the active workspace changes.
+  - the Sidebar tab list to show the workspace's tabs and folders.
+- The browser chrome updates the workspace accent color when the active workspace changes.
 
 ### Tab state persistence
 
-- When the user changes tabs in the Action Context UI (reorder, move between persistent/ephemeral, folder changes, close tabs), the workspace’s tab state is saved.
+- When the user changes tabs in the Sidebar (reorder, move between persistent/ephemeral, folder changes, close tabs), the workspace's tab state is saved.
 - The saved workspace state includes:
   - tab ordering,
   - which tabs are persistent vs ephemeral,
@@ -56,23 +56,23 @@ See also: `TabsFeature.specs.md` for details on the tab list UI (persistent vs e
 
 - Select another workspace.
 - The workspace switcher highlights the new active workspace.
-- The tab list updates to the workspace’s saved tab set and folder layout.
+- The tab list updates to the workspace's saved tab set and folder layout.
 
 ### Create a workspace
 
-- Open the workspace editor in “Create” mode.
+- Open the workspace editor in "Create" mode.
 - Choose a name, icon, and color.
 - Save to create and immediately switch to the new workspace.
 
 ### Edit the current workspace
 
-- Open the workspace editor in “Edit” mode.
+- Open the workspace editor in "Edit" mode.
 - Update name, icon, and/or color.
 - Save to apply.
 
 ### Delete a workspace
 
-- Open the workspace editor in “Edit” mode.
+- Open the workspace editor in "Edit" mode.
 - Choose Delete and confirm.
 - If you deleted the currently active workspace, the app activates another remaining workspace.
 
@@ -98,9 +98,34 @@ This feature uses the following shortcuts:
 
 ### Mouse interactions
 
-In the Action Context workspace switcher:
+In the Sidebar workspace switcher:
 
 - **Activate workspace**: Click a workspace icon.
-- **Create workspace**: Click the “add workspace” button, fill the form, then click Create.
-- **Edit workspace**: Click the “edit workspace” button, update fields, then click Update.
+- **Create workspace**: Click the "add workspace" button, fill the form, then click Create.
+- **Edit workspace**: Click the "edit workspace" button, update fields, then click Update.
 - **Delete workspace**: In edit mode, click Delete and confirm (only available when there is more than one workspace).
+
+## Commands & Events
+
+### Commands
+
+- `workspaces:switch` — Switch to a workspace. Payload: `{ workspaceId: string }`.
+- `workspaces:create` — Create a new workspace. Payload: `{ name: string, icon: string, color: string }`.
+- `workspaces:update` — Update a workspace. Payload: `{ workspaceId: string, changes: Partial<Workspace> }`.
+- `workspaces:delete` — Delete a workspace. Payload: `{ workspaceId: string }`.
+- `workspaces:move-tab` — Move the current tab to a workspace. Payload: `{ targetWorkspaceId: string }`.
+- `workspaces:restore-tab` — Restore the current tab to its original address.
+
+### Events
+
+- `workspaces:switched` — The active workspace changed. Payload: `{ workspaceId: string }`.
+- `workspaces:created` — A workspace was created. Payload: `{ workspace: Workspace }`.
+- `workspaces:updated` — A workspace was updated. Payload: `{ workspaceId: string, changes: Partial<Workspace> }`.
+- `workspaces:deleted` — A workspace was deleted. Payload: `{ workspaceId: string }`.
+
+## Unresolved Issues
+
+- **Ctrl-R conflict**: Ctrl-R is the universal "Reload page" shortcut in browsers. Overriding this is very likely to frustrate users. Consider a different shortcut for restore, or use a modifier (e.g. Ctrl-Shift-R).
+- **Workspace deletion and tabs**: What happens to the tabs in a deleted workspace? Are they moved to another workspace, closed, or lost?
+- **Workspace icons**: Where do workspace icons come from? An icon picker? Emoji? Custom images?
+- **Maximum workspaces**: Should there be a limit on the number of workspaces?
