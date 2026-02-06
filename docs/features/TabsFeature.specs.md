@@ -1,0 +1,97 @@
+# Specification for Tabs Feature
+
+## Overview
+
+The Tabs feature is responsible for creating, switching, and closing tabs.
+
+It also keeps the in-app tab list (the Action Context panel) in sync with the actual set of open tabs,
+so you can always see which tabs exist, which one is active, and move tabs between “bookmarked/persistent”
+and “ephemeral/temporary” groups.
+
+## Terminology
+
+- **Tab**: A single open browsing session.
+- **Active tab**: The tab currently shown in the main browser area.
+- **Ephemeral tab**: A normal, temporary tab. Ephemeral tabs appear in the lower “ephemeral” list in the
+  Action Context.
+- **Bookmarked tab**: A tab that is promoted to the persistent (top) list in the Action Context.
+- **Pinned tab**: A special kind of tab managed by the Pinned Tabs feature. Pinned tabs are not
+  bookmarkable via this feature’s bookmark shortcut.
+- **Workspace**: A collection of tabs (and folder layout) that you can switch between.
+
+## Requirements
+
+### Core behavior
+
+- Creating a new tab opens the requested address and adds it to the tab list.
+- Activating a tab shows that tab’s content and updates the tab list selection.
+- Closing a tab disposes the tab and removes it from the tab list.
+
+### Workspaces
+
+- When you switch to a workspace, the Action Context tab list updates to show that workspace’s tabs and
+  their folder layout.
+- The active tab after switching workspace is:
+  - the active pinned tab (if a pinned tab is currently active), otherwise
+  - the tab marked active in the workspace (if any).
+
+### Bookmarking (persistent vs ephemeral)
+
+- Toggling bookmark on the current tab moves it between the “bookmarked/persistent” list and the “ephemeral”
+  list in the Action Context.
+- If the current tab is pinned, the bookmark toggle does nothing.
+
+## Workflows
+
+### Open a page
+
+- When you trigger navigation from elsewhere in the app (for example, the action dialog or link handling),
+  the app can either:
+  - navigate the current tab to the new address, or
+  - create a new tab and navigate it to the new address.
+- New tabs may be created in the background (preloaded) or activated immediately.
+
+### Switch tabs
+
+- Select a tab from the Action Context tab list.
+- The selected tab becomes the active tab.
+
+### Close a tab
+
+- Close a tab from the Action Context tab list.
+- If the closed tab was active, the UI may select another tab (most recently used), otherwise no active tab
+  change is required.
+
+### Switch workspace
+
+- Switch to another workspace.
+- The tab list updates to show that workspace’s tabs and folders.
+- The app activates the appropriate tab for the new workspace (see Requirements → Workspaces).
+
+### Bookmark the current tab
+
+- Toggle bookmark on the currently active tab.
+- If the tab is not pinned, it moves between the bookmarked/persistent list and the ephemeral list.
+
+## Interactions
+
+### Keyboard shortcuts
+
+This feature uses the following shortcut:
+
+- **Ctrl-B**: Toggle tab as bookmark.
+
+### Mouse interactions
+
+In the Action Context tab list:
+
+- **Activate tab**: Click a tab to make it active.
+- **Close tab**: Click the tab’s close button.
+- **Reorder tabs**: Drag a tab by its favicon/drag handle to reorder.
+- **Move between groups**: Drag tabs between the persistent (top) and ephemeral (bottom) lists.
+- **Clear ephemeral tabs**: Click **Clear** to close all ephemeral tabs.
+- **Folder interactions (persistent list)**:
+  - Click a folder header to open/close it.
+  - Drag tabs into/out of folders by reordering.
+  - Drag folders as a unit (folders cannot be nested, and folders cannot be moved into the ephemeral list).
+  - Rename a folder via the folder UI.
