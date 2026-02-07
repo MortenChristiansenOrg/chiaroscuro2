@@ -1,4 +1,4 @@
-import type { TabId, WindowId, WorkspaceId } from "../shared/types";
+import type { TabId, WindowId } from "../shared/types";
 
 export interface Platform {
   // Window management

@@ -2,8 +2,9 @@
 # Build in WSL, run natively on Windows
 set -e
 
-WIN_DIR="/mnt/c/Users/morten/.chiaroscuro-dev"
-WIN_PATH='C:\Users\morten\.chiaroscuro-dev'
+WIN_USER=$(powershell.exe -NoProfile -Command '[System.Environment]::UserName' | tr -d '\r')
+WIN_DIR="/mnt/c/Users/${WIN_USER}/.chiaroscuro-dev"
+WIN_PATH="C:\\Users\\${WIN_USER}\\.chiaroscuro-dev"
 
 mkdir -p "$WIN_DIR"
 
