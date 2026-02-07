@@ -1,7 +1,8 @@
+// Feature registrations (side-effect imports)
+import "../../features/window-chrome/window-chrome.feature";
+
+import { Shell } from "./Shell";
+
 export default function App() {
-  return (
-    <div className="flex h-screen items-center justify-center bg-background text-foreground">
-      <h1 className="text-4xl font-bold">Chiaroscuro</h1>
-    </div>
-  );
+  return <Shell />;
 }

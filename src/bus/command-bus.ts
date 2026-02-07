@@ -1,6 +1,6 @@
 import type { CommandRegistry } from "./types";
 
-type Handler<P, R> = (payload: P) => R | Promise<R>;
+type Handler<P, R> = (payload: P) => R | Promise<R> | void | Promise<void>;
 
 export class CommandBus<TRegistry extends CommandRegistry> {
   private handlers = new Map<string, Handler<unknown, unknown>>();

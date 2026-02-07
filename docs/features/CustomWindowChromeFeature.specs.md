@@ -59,6 +59,7 @@ None.
 
 - `window:minimize` — Minimize the window.
 - `window:maximize-restore` — Toggle maximize/restore.
+- `window:close` — Close the window.
 - `window:copy-address` — Copy the active tab's address to clipboard (with tracking parameter stripping).
 
 ### Events
@@ -66,8 +67,11 @@ None.
 - `window:maximized-changed` — Window maximized state changed. Payload: `{ maximized: boolean }`.
 - `tab:loading-changed` — Active tab loading state changed. Payload: `{ tabId: string, loading: boolean }`.
 
+## Resolved Decisions
+
+- **Platform-specific title bar**: macOS uses native traffic lights via `titleBarStyle: 'hidden'`. Custom minimize/maximize/close buttons rendered only on Windows/Linux, right-aligned.
+- **Close button**: Included alongside minimize and maximize/restore.
+
 ## Unresolved Issues
 
-- **Platform-specific title bar**: On macOS, the convention is traffic lights (red/yellow/green) on the left. On Windows/Linux, minimize/maximize/close on the right. Should the custom chrome adapt to the platform, or use a uniform custom design?
 - **Tracking parameter list**: The list of ad-tracking query parameters to strip needs to be defined and maintained. Consider using a community-maintained list or making it configurable.
-- **Close button**: The spec mentions minimize and maximize/restore but not a close button. A close button should be included in the window chrome controls.
