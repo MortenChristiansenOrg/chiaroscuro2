@@ -12,6 +12,7 @@ bunx electron-vite build
 
 echo "Syncing to Windows..."
 rsync -a --delete out/ "$WIN_DIR/out/"
+rsync -a --delete resources/ "$WIN_DIR/resources/"
 cp package.json "$WIN_DIR/"
 
 # One-time: install electron on Windows side

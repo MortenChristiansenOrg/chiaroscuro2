@@ -1,10 +1,16 @@
 import path from "node:path";
-import { BrowserWindow, app } from "electron";
+import { BrowserWindow, Menu, app } from "electron";
+
+Menu.setApplicationMenu(null);
+
+const iconFile = process.platform === "win32" ? "icon.ico" : "icon.png";
+const iconPath = path.join(__dirname, "../../resources", iconFile);
 
 function createWindow(): void {
   const win = new BrowserWindow({
     width: 1200,
     height: 800,
+    icon: iconPath,
     webPreferences: {
       preload: path.join(__dirname, "../preload/index.js"),
       sandbox: false,
