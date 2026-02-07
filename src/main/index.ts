@@ -11,6 +11,8 @@ function createWindow(): void {
     width: 1200,
     height: 800,
     icon: iconPath,
+    titleBarStyle: "hidden",
+    backgroundMaterial: "acrylic",
     webPreferences: {
       preload: path.join(__dirname, "../preload/index.js"),
       sandbox: false,
