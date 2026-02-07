@@ -19,5 +19,6 @@
     "src/features/**/*.renderer.tsx",
     "src/features/**/*.store.ts",
     "src/features/**/*.shared.ts"
-  ]
+  ],
+  "exclude": ["src/bus/ipc-main-bridge.ts"]
 }
