@@ -16,6 +16,7 @@
     "src/renderer/**/*",
     "src/bus/**/*",
     "src/shared/**/*",
+    "src/features/**/*.feature.ts",
     "src/features/**/*.renderer.tsx",
     "src/features/**/*.store.ts",
     "src/features/**/*.shared.ts"

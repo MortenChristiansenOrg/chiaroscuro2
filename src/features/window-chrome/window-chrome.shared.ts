@@ -8,6 +8,7 @@ export const WINDOW_COPY_ADDRESS = "window:copy-address" as const;
 
 // ── Event names ──────────────────────────────────────────────────
 export const WINDOW_MAXIMIZED_CHANGED = "window:maximized-changed" as const;
+// TODO: emitted by Tabs feature (not yet implemented) — store + UI already wired
 export const TAB_LOADING_CHANGED = "tab:loading-changed" as const;
 
 // ── Payload types ────────────────────────────────────────────────
