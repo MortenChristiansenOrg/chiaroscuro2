@@ -40,6 +40,14 @@ If the app is already running with CDP and just needs the proxy:
 node .claude/skills/ui-review/scripts/cdp-proxy.mjs &
 ```
 
+### Stopping the app
+
+After the review is complete, tear down everything (Electron, CDP proxy, virtual desktop):
+
+```bash
+.claude/skills/ui-review/scripts/teardown-app.sh
+```
+
 ### One-time setup (optional, for virtual desktop isolation)
 
 ```powershell
@@ -146,6 +154,16 @@ mcp__chrome-devtools__list_network_requests
 1. **Performance feel** — Does the UI feel snappy? Any visible jank or delayed renders? Use `performance_start_trace` if something feels slow.
 2. **State persistence** — Navigate away and back. Is state preserved correctly?
 3. **Window chrome integration** — Does the custom title bar work? Minimize/maximize/close? Draggable regions?
+
+### Phase 6: Teardown
+
+After collecting all findings, tear down the app and proxy:
+
+```bash
+.claude/skills/ui-review/scripts/teardown-app.sh
+```
+
+This kills Electron, both CDP proxy hops, and removes the virtual desktop.
 
 ## Output Format
 

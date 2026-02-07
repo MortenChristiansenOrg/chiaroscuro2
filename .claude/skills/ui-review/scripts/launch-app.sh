@@ -78,6 +78,10 @@ if [ "$HAS_VDESKTOP" = "yes" ]; then
     }
     \$targetIdx = if (\$origIdx -eq 0) { 1 } else { 0 }
 
+    # Name the target desktop
+    \$targetDesktop = Get-Desktop \$targetIdx
+    Set-DesktopName \$targetDesktop '$DESKTOP_NAME'
+
     Switch-Desktop \$targetIdx
     Start-Process -FilePath '$WIN_ELECTRON' -ArgumentList '.','--remote-debugging-port=$PORT' -WorkingDirectory '$WIN_PATH'
     Start-Sleep -Milliseconds 1000
@@ -96,8 +100,12 @@ fi
 # Start CDP proxy (WSL2 NAT mode can't reach Windows' 127.0.0.1 directly)
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# Kill any existing proxy
+# Kill any existing proxy (WSL side + Windows-side relay on port 9223)
 pkill -f "cdp-proxy.mjs" 2>/dev/null || true
+powershell.exe -NoProfile -Command "
+  Get-NetTCPConnection -LocalPort 9223 -State Listen -ErrorAction SilentlyContinue |
+    ForEach-Object { Stop-Process -Id \$_.OwningProcess -Force -ErrorAction SilentlyContinue }
+" 2>/dev/null || true
 sleep 1
 
 echo "Starting CDP proxy..."
