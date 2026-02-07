@@ -12,8 +12,9 @@ Personal TypeScript browser built on Electron with Chrome extension support, Rea
 - **UI**: React 19 + React Compiler + Vite
 - **Components**: shadcn/ui
 - **Styling**: Tailwind CSS 4
-- **Storage**: SQLite (better-sqlite3) for history/bookmarks, JSON for settings
-- **Extensions**: `electron-chrome-extensions` package
+- **Storage**: RxDB (free filesystem storage) for structured data, JSON for settings
+- **Ad blocking**: `@cliqz/adblocker-electron` (Ghostery) — native, no extension needed
+- **Extensions**: `electron-chrome-extensions` ^4.9 (opt-in/experimental, ~30-40% Chrome API coverage)
 - **IPC**: Command bus + event bus with typed registries (bridges IPC transparently)
 
 ## Architecture
@@ -27,7 +28,7 @@ Command Bus + Event Bus
     ↕ bridge IPC transparently
 Abstraction Layer
   ├── Platform (wraps Electron/Chromium)
-  └── Data (wraps SQLite/JSON)
+  └── Data (wraps RxDB/JSON)
     ↕
 Electron / Chromium
 ```
@@ -40,9 +41,9 @@ Interface wrapping WebContentsView management, sessions, windows, keyboard short
 
 ### Data Abstraction
 
-Interface wrapping SQLite + JSON storage. Provides key-value access, tabular queries, and per-feature schema migrations. Two implementations:
-- **`SqliteDataStore`** — production, backed by better-sqlite3 + JSON files
-- **`InMemoryDataStore`** — tests, no filesystem
+Interface wrapping RxDB + JSON storage. RxDB provides reactive NoSQL document collections with MongoDB-like queries — no SQL. Per-feature collections with schema validation and migrations. Two implementations:
+- **`RxDBDataStore`** — production, backed by RxDB with free Filesystem RxStorage (main process) + JSON files for settings
+- **`InMemoryDataStore`** — tests, RxDB Memory RxStorage, no filesystem
 
 ### Command Bus
 
@@ -85,7 +86,7 @@ This guarantees all handlers are wired before any events flow.
 ### Testability
 
 Three tiers:
-- **Unit tests** — feature tested with MockPlatform + InMemoryDataStore. No Electron dependency. Verify command handling and event emission in isolation.
+- **Unit tests** — feature tested with MockPlatform + InMemoryDataStore (RxDB Memory RxStorage). No Electron dependency. Verify command handling and event emission in isolation.
 - **Integration tests** — multiple features wired together with mocks. Verify cross-feature command/event flows.
 - **E2E tests** — real Electron app. Cover user workflows from feature specs (e.g. "Open a page", "Switch workspace", "Bookmark the current tab"). Full stack from UI through platform to persisted state.
 
@@ -98,7 +99,7 @@ src/
 │   ├── command-palette/
 │   └── ...            # one dir per feature
 ├── platform/          # Platform interface + ElectronPlatform + MockPlatform
-├── data/              # DataStore interface + SqliteDataStore + InMemoryDataStore
+├── data/              # DataStore interface + RxDBDataStore + InMemoryDataStore
 ├── bus/               # CommandBus + EventBus + IPC bridge
 ├── main/              # Entry point, feature wiring
 ├── renderer/          # React root, Shell layout, shared UI primitives
@@ -200,41 +201,140 @@ See `docs/features/SidebarFeature.specs.md`, `docs/features/TabsFeature.specs.md
 - Pause/resume/cancel support
 
 ### 6. Chrome Extension Support
-Using `electron-chrome-extensions`:
+
+Extensions are **opt-in/experimental**. Don't rely on them for critical functionality — the ecosystem is not mature enough (~30-40% Chrome API coverage).
+
+**Native alternatives for critical needs:**
+- **Ad blocking**: `@cliqz/adblocker-electron` (Ghostery). Native, fast, uses uBlock/EasyList filter lists. No extension needed.
+- **Password managers**: 1Password/Bitwarden have OS-level autofill via accessibility APIs. Browser extensions for these don't work in Electron.
+- **DevTools extensions**: React DevTools works natively via `session.loadExtension()`.
+
+**Optional extension support** (via `electron-chrome-extensions` ^4.9 + `electron-chrome-web-store`):
 - Load unpacked extensions
-- Support `.crx` files from Chrome Web Store
+- CWS integration for `.crx` downloads + auto-updates
 - Extension popup windows
 - Content scripts injection
-- Background service workers
-- Most chrome.* APIs
+- Basic MV3 service workers (Electron 35+)
 
-### 7. Performance Optimizations
+**Known limitations:**
+- `declarativeNetRequest` not supported (MV3 ad blockers won't work)
+- `chrome.storage.sync/managed` not supported
+- `chrome.commands` (keyboard shortcuts) not supported
+- Service workers are kept persistent (no idle/wake lifecycle)
+- uBlock Origin (MV2 and Lite/MV3): does not work
+- 1Password, Bitwarden: do not work
+
+### 7. Tab Lifecycle Management
+
+Three-tier lifecycle: **active → suspended → evicted**. Thresholds are user-configurable via the Settings feature.
+
+**States:**
+| State | What happens | Cost |
+|---|---|---|
+| Active/Hidden | WebContentsView exists, renderer throttled by Chromium | Full memory |
+| Suspended | `backgroundThrottling` keeps timers/network idle, page stays in memory | Full memory, ~0 CPU |
+| Evicted | `webContents.close()` called, only metadata + screenshot retained | < 15 MB |
+
+**Default eviction policy (configurable in Settings):**
+- **Pinned tabs**: never evict, only throttle
+- **Bookmarked tabs**: evict after 30min inactive when available RAM < 25%
+- **Ephemeral tabs**: evict after 15min inactive when available RAM < 25%
+- **Aggressive mode** (RAM < 15%): evict all non-active non-protected tabs
+- **Never evict**: tabs playing audio, running WebRTC, or with unsaved form data
+
+**Eviction flow:**
+1. `webContents.capturePage()` → save screenshot as compressed JPEG
+2. `webContents.navigationHistory.getAllEntries()` → save nav stack
+3. Save URL, title, favicon, scroll position
+4. `webContents.close()` → kill renderer process
+
+**Restoration flow:**
+1. Show screenshot as placeholder immediately
+2. Create new `WebContentsView`
+3. `navigationHistory.restore({ entries, index })` → restores full nav stack + scroll
+4. Fade out screenshot on `did-finish-load`
+5. Stagger restores: max 1 tab per 500ms
+
+**Monitoring:** Poll `app.getAppMetrics()` + `process.getSystemMemoryInfo()` every 30s. Map tabs to PIDs via `webContents.getOSProcessId()`.
+
+### 8. Multi-Window Architecture
+
+Main process is authoritative. Each renderer window gets projected Zustand stores synced via IPC.
+
+**Bus topology:** Single command bus + single event bus in main process. Each window renderer gets a thin IPC proxy. Commands carry `windowId` for routing. Events broadcast to all windows.
+
+**Tab ownership:**
+- **Pinned tabs**: global, shown in all windows' sidebars. WebContentsView reparented between windows on activation (`removeChildView` → `addChildView`, no recreation).
+- **Bookmarked tabs**: per-workspace, owned by one window at a time.
+- **Ephemeral tabs**: per-workspace, owned by one window.
+
+**Window state persistence:** `electron-window-state` package. Per-window state stored in RxDB `window-state` collection keyed by `windowId` (x, y, width, height, maximized, activeWorkspaceId). Migrate to native Electron window state API when RFC #16 ships.
+
+### 9. Optimistic UI Updates
+
+IPC round-trip is ~0.08ms — most actions don't need optimistic updates. Use selectively:
+
+| Pattern | Actions |
+|---|---|
+| **Always optimistic** (renderer-only) | Sidebar toggle, folder expand/collapse, tab reorder during drag |
+| **Optimistic + confirm** | Tab activate, bookmark toggle |
+| **Hybrid** (highlight optimistic, data waits) | Workspace switch (highlight workspace immediately, tab list waits for `workspaces:switched` event) |
+| **Wait for main** (with loading indicator) | Tab create, tab close (mark as "closing"), URL navigation, workspace CRUD |
+
+**Reconciliation:** Track optimistic state in a separate `_optimistic` layer in Zustand stores. Events always overwrite confirmed state and clear corresponding optimistic overrides. No explicit rollback logic — if main rejects, the event carries the corrected value. Commands use `send` (fire-and-forget), responses come as events.
+
+### 10. Sidebar Composition
+
+**Direct imports** (Option A). Sidebar imports child components from other features directly. This matches the existing cross-feature store import pattern — no reason to add a separate slot registration system for a single-team app. Sidebar owns layout via flex/gap; child components don't manage their own spacing. Migrate to slot registration only if/when a plugin system is added.
+
+```tsx
+// sidebar.renderer.tsx
+export function Sidebar() {
+  return (
+    <aside>
+      <PinnedTabsList />
+      <WorkspaceSelector />
+      <FolderTree />
+      <EphemeralTabs />
+    </aside>
+  );
+}
+```
+
+### 11. Performance Optimizations
 - Lazy load tabs (don't render until focused)
 - Limit concurrent WebContentsViews
 - Use `v8-compile-cache` for faster startup
 - Minimize IPC traffic (batch updates)
 - Background tab throttling
 
-### 8. Storage (Data Abstraction)
+### 12. Storage (Data Abstraction)
 
-All persistence goes through the `DataStore` interface. Each feature owns its schema and provides migrations. The store exposes key-value and tabular access; features never touch SQLite or the filesystem directly.
+All persistence goes through the `DataStore` interface. Each feature owns its RxDB collection schema and provides migrations. Features never touch RxDB or the filesystem directly.
+
+**RxDB** runs in the main process using the free Filesystem RxStorage. Provides:
+- Reactive observable queries (feed directly into Zustand stores via subscriptions)
+- MongoDB-like query syntax (no SQL)
+- JSON Schema-based validation with TypeScript inference
+- Built-in schema migrations, encryption, compression
 
 **Summary of persisted data**:
 ```
-SQLite tables: history, downloads, tabs, workspaces
-JSON files:    settings.json, shortcuts.json, extensions.json
+RxDB collections: history, downloads, tabs, workspaces, pinned-tabs,
+                  tab-customizations, domain-customizations, window-state
+JSON files:       settings.json, shortcuts.json, extensions.json
 ```
 
-**Cloud (Convex — optional, future)**: selective sync for cross-device bookmarks, history, preferences.
+**Cloud sync (Convex — optional)**: All data is local-only by default. Convex can be added as a separate optional data store for selective cross-device sync (bookmarks, workspace definitions, user preferences). Convex is not a sync layer for RxDB — it's an independent store for data the user opts to sync. Local RxDB remains the source of truth; synced data is mirrored to/from Convex when connected.
 
 ## Project Phases
 
-### Phase 0: Research & Prototyping
-1. Test electron-chrome-extensions with critical extensions (uBlock, 1Password)
-2. Evaluate electron-builder vs Electron Forge
-3. Verify Tailwind 4 + shadcn compatibility
+### Phase 0: Research & Prototyping ✓
+1. ~~Test electron-chrome-extensions~~ → Extensions are opt-in/experimental; use native ad blocking + OS-level password managers
+2. ~~Evaluate electron-builder vs Electron Forge~~ → electron-builder (Bun compat, built-in updater, cross-compilation)
+3. ~~Verify Tailwind 4 + shadcn compatibility~~ → Fully compatible since Feb 2025
 4. Prototype basic Electron + React 19 + Vite setup with Bun
-5. Test better-sqlite3 native module compilation
+5. ~~Test better-sqlite3 native module compilation~~ → Replaced with RxDB (pure JS, no native modules)
 
 ### Phase 1: Foundation
 1. Project setup (Electron + Vite + React 19 + TypeScript + Bun)
@@ -287,18 +387,25 @@ JSON files:    settings.json, shortcuts.json, extensions.json
 ## Dependencies (key packages)
 ```json
 {
-  "electron": "^29.0.0",
+  "electron": "^35.0.0",
   "electron-updater": "^6.x",
-  "electron-chrome-extensions": "^3.x",
-  "better-sqlite3": "^9.x",
+  "electron-chrome-extensions": "^4.9",
+  "electron-chrome-web-store": "^0.13",
+  "@cliqz/adblocker-electron": "^1.34",
+  "rxdb": "^16.x",
+  "rxdb-utils": "^2.x",
   "react": "^19.x",
   "babel-plugin-react-compiler": "^19.x",
   "tailwindcss": "^4.x",
-  "zustand": "^4.x",
+  "zustand": "^5.x",
   "zod": "^3.x"
 }
 ```
-Note: shadcn/ui components added via `bunx shadcn@latest init`
+**Dev dependencies**: `electron-builder` ^26.x, `electron-vite`
+**Tailwind**: Use `@tailwindcss/vite` plugin (set `"moduleResolution": "bundler"` in tsconfig). Fallback: `@tailwindcss/postcss`.
+**shadcn/ui**: `bunx shadcn@latest init` (supports TW4 natively; may need `vite.config.js` symlink for electron-vite detection)
+**Zustand**: Use inline selectors (`useStore(s => s.field)`), avoid auto-generated selectors. Use `useShallow` for multi-field selections.
+**RxDB**: Free Filesystem RxStorage for main process, Memory RxStorage for tests. No native modules required — pure JS.
 
 ## Build & Distribution
 - `electron-builder` for packaging
@@ -339,91 +446,61 @@ Git tag (v1.0.0) → GitHub Actions → Build artifacts → GitHub Releases
 - **Sessions**: Shared by default, per-tab isolation toggle available
 - **DevTools**: Standard Chromium DevTools (no custom enhancements initially)
 - **Navigation**: Arc-style command palette with bang syntax (`!g`, `!gh`, etc.), no persistent address bar
-- **Sync**: Local-first with optional Convex for selective cloud sync (future)
+- **Sync**: Local-first (RxDB). Optional Convex as separate sync store for selected data (bookmarks, workspace defs, preferences). Convex is independent, not an RxDB sync layer — local RxDB remains source of truth
 - **Search**: Configurable providers via bang syntax, DuckDuckGo as default
 - **Tab persistence**: Three-tier model (pinned=global/forever, bookmark=workspace/forever, ephemeral=workspace/8hr TTL)
 - **Extension storage**: Let Electron handle via built-in partition (simplest approach)
 - **Updates**: Auto-update via electron-updater + GitHub Releases, triggered by git tags
 - **Default browser**: Windows registry registration for http/https protocols
 - **IPC architecture**: Command bus + event bus bridging IPC transparently; strong-typed with per-feature type registries
-- **Testing strategy**: MockPlatform + InMemoryDataStore for feature unit tests; integration tests with multiple features + mocks; E2E with real Electron
+- **Testing strategy**: MockPlatform + InMemoryDataStore (RxDB Memory RxStorage) for feature unit tests; integration tests with multiple features + mocks; E2E with real Electron
+- **Chrome extensions**: Opt-in/experimental via `electron-chrome-extensions` ^4.9. ~30-40% API coverage, no MV3 `declarativeNetRequest`. Use `@cliqz/adblocker-electron` for ad blocking, OS-level autofill for password managers, `session.loadExtension()` for DevTools extensions.
+- **Build tooling**: `electron-builder` ^26 + `electron-vite`. Forge doesn't support Bun, has experimental Vite plugin. electron-builder has built-in `electron-updater`, better cross-compilation, more CI examples.
+- **Tailwind 4 + shadcn**: Fully compatible since Feb 2025. Use `@tailwindcss/vite` plugin with `"moduleResolution": "bundler"`. Requires Electron 24+ (Chrome 112+).
+- **Storage**: RxDB (free Filesystem RxStorage) for structured data, JSON for settings. No SQL. All local-only by default; optional Convex sync for selected data (future). No native modules required — pure JS, no `@electron/rebuild` needed for storage.
+- **State management**: Zustand v5, one store per feature. Inline selectors (`useStore(s => s.field)`) work with React Compiler. Avoid auto-generated selectors (`.use.bears()`). Use `useShallow` for multi-field.
+- **Tab lifecycle**: Three-tier (active → suspended → evicted). Configurable thresholds in Settings. Screenshot + nav history preserved on eviction, `navigationHistory.restore()` on focus.
+- **Multi-window**: Main-process authoritative, single bus, renderer projections via IPC. Pinned tabs global + reparented between windows. `electron-window-state` for persistence.
+- **Storage**: RxDB (free Filesystem RxStorage) for structured data, JSON for settings. No SQL. All local-only by default; optional Convex sync for selected data (future).
+- **Optimistic UI**: Selective — sidebar toggle/drag are renderer-only; tab activate/bookmark toggle are optimistic+confirm; tab create/close wait for main. `_optimistic` layer in Zustand for reconciliation.
+- **Sidebar composition**: Direct imports (Option A). Matches existing cross-feature store import pattern. Migrate to slots only if plugin system is added.
+- **Performance baselines**: Cold start < 2s, memory/tab < 80MB, command palette < 50ms, IPC < 1ms, tab switch < 100ms
 
-## Open Questions & Research Needed
+## Performance Targets
 
-### Critical (Must Resolve Before Implementation)
+| Metric | Target | Stretch |
+|---|---|---|
+| Cold startup | < 2s | < 1s |
+| Warm startup | < 1s | < 500ms |
+| Memory per active tab | < 80 MB | < 50 MB |
+| Memory per evicted tab | < 15 MB | < 5 MB |
+| Memory total (10 tabs) | < 1 GB | < 600 MB |
+| Command palette open | < 50ms | < 30ms |
+| Palette filter/keystroke | < 16ms (1 frame) | < 8ms |
+| IPC round-trip | < 1ms | < 0.2ms |
+| Tab switch (show/hide) | < 100ms | < 50ms |
 
-**1. Chrome Extension Compatibility**
-- Which `electron-chrome-extensions` version is most stable?
-- What percentage of Chrome APIs are supported?
-- Test critical extensions: uBlock Origin, 1Password, Bitwarden, React DevTools
-- Is Manifest V3 supported? (Most extensions migrating to MV3)
-- Alternative: `electron-browser-shell` - more complete but complex
+## Deferred Questions
 
-**2. Build Tooling**
-- `electron-builder` vs `Electron Forge`
-- Forge: official, integrated, opinionated
-- Builder: flexible, widely used, more docs
-- Need to evaluate for: auto-update support, code signing workflow, CI/CD integration
-
-**3. Tailwind 4 + shadcn Compatibility**
-- Does shadcn fully support Tailwind 4?
-- Any migration issues or workarounds needed?
-- Alternative: Stick with Tailwind 3 until ecosystem matures
-
-**4. Native Module Strategy (better-sqlite3)**
-- How to handle native module rebuilds on Electron updates?
-- Test with Bun: any compatibility issues?
-- Alternatives: sql.js (pure JS), libsql, or JSON files for MVP
-
-### Important (Resolve During Early Development)
-
-**5. ~~State Management~~ (Resolved)**
-- **Decision: Zustand, one store per feature** — modular, aligns with feature architecture
-- Still need to verify React Compiler compatibility with Zustand
-
-**6. Tab Lifecycle Management**
-- When to truly destroy vs hibernate tabs?
-- Memory thresholds for tab eviction?
-- How to handle tab restoration after eviction?
-
-**7. Multi-Window Architecture**
-- Shared state across windows?
-- Which window "owns" pinned tabs?
-- Window position/size persistence
-
-**8. Optimistic UI Updates**
-- When user acts (e.g. clicks a tab), should the renderer store update immediately before the main-process round-trip?
-- Optimistic updates feel snappier but need a reconciliation pattern for when main process rejects/modifies the action
-- Which actions warrant optimistic updates vs waiting for confirmation?
-
-**9. Sidebar Composition Strategy**
-- Sidebar visually contains workspace tabs, pinned tabs, folders — pieces owned by other features
-- Option A: sidebar.renderer.tsx imports components from other features directly
-- Option B: features register "sidebar slots" and sidebar renders them dynamically
-- Slot pattern is more decoupled but adds complexity; direct imports match the "read-only cross-feature store" pattern
-
-### Nice to Have (Can Defer)
-
-**10. macOS/Linux Support**
+**macOS/Linux Support** (defer to Phase 6):
 - Default browser registration on macOS (LSHandlers)
 - Linux desktop integration (.desktop files)
 - Platform-specific UI considerations
-
-**11. Performance Baselines**
-- Startup time target?
-- Memory per tab target?
-- Acceptable command palette latency?
 
 ### Known Limitations (Accept for Now)
 
 - **Code signing**: Skipped for now, accept warnings
 - **Electron bundle size**: ~200MB, acceptable for desktop app
-- **Not all Chrome extensions will work**: Document compatibility
+- **Chrome extension compatibility**: ~30-40% of APIs; document what works and what doesn't
 
 ## Verification (Post-Implementation)
 
 1. **Build**: `bun run dev` starts Electron with hot-reload
 2. **Test navigation**: Open command palette, navigate to URLs, test bang syntax
 3. **Test tabs**: Create/close tabs, switch workspaces, verify persistence
-4. **Test extensions**: Load uBlock Origin, verify content scripts work
-5. **Test downloads**: Download file, verify folder selection dialog
+4. **Test ad blocking**: Verify `@cliqz/adblocker-electron` blocks ads on major sites
+5. **Test extensions**: Load React DevTools via `session.loadExtension()`, optionally test CWS extensions
+6. **Test downloads**: Download file, verify folder selection dialog
+7. **Test tab lifecycle**: Verify eviction after configured timeout, restoration with screenshot placeholder
+8. **Test multi-window**: Open second window, verify pinned tabs shown in both, tab reparenting works
+9. **Test performance**: Cold start < 2s, 10-tab memory < 1GB, command palette < 50ms
