@@ -1,0 +1,23 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "composite": true,
+    "target": "ES2024",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2024"],
+    "types": ["node"],
+    "outDir": "./out/tsconfig.node"
+  },
+  "include": [
+    "src/main/**/*",
+    "src/preload/**/*",
+    "src/bus/**/*",
+    "src/platform/**/*",
+    "src/data/**/*",
+    "src/shared/**/*",
+    "src/features/**/*.main.ts",
+    "src/features/**/*.shared.ts",
+    "electron.vite.config.ts"
+  ]
+}
