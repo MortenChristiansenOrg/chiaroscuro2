@@ -14,7 +14,8 @@
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
     "typecheck": "tsc --build",
-    "dev:win": "./scripts/dev-win.sh"
+    "dev:win": "./scripts/dev-win.sh",
+    "verify": "./scripts/verify-all.sh"
   },
   "dependencies": {
     "electron-updater": "^6.6.2",
