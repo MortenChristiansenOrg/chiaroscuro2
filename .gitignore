@@ -90,3 +90,6 @@ typings/
 # Electron build output
 dist/
 out/
+
+
+.env.local
