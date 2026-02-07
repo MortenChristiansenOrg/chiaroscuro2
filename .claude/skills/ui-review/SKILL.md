@@ -1,7 +1,6 @@
 ---
 name: ui-review
 description: Review the app's UI/UX by launching it, taking screenshots, checking console/network errors, and evaluating visual design + interaction quality. Use with /ui-review [FEATURE_OR_AREA].
-invocation: user
 ---
 
 # Goal
@@ -22,6 +21,7 @@ Chrome DevTools MCP is configured globally at `http://127.0.0.1:9222`. The Elect
 This project runs in WSL2. Electron must launch on the Windows host. WSL2 uses NAT networking so it can't reach Windows' `127.0.0.1` directly — a two-hop CDP proxy bridges this gap.
 
 **Architecture:**
+
 ```
 Chrome DevTools MCP → WSL 127.0.0.1:9222 → [cdp-proxy] → Windows 0.0.0.0:9223 → 127.0.0.1:9222 (Electron CDP)
 ```
@@ -36,6 +36,7 @@ The launcher handles everything: build, sync, launch on separate virtual desktop
 ```
 
 If the app is already running with CDP and just needs the proxy:
+
 ```bash
 node .claude/skills/ui-review/scripts/cdp-proxy.mjs &
 ```
@@ -87,6 +88,7 @@ Verify that implemented features work correctly.
 4. **Test keyboard shortcuts** — Verify any shortcuts defined in the spec
 
 **Tools to use:**
+
 - `take_screenshot` — after each action to verify visual state
 - `take_snapshot` — to verify element existence/state when screenshot is ambiguous
 - `click`, `fill`, `press_key` — to simulate user interactions
@@ -127,23 +129,28 @@ Evaluate interaction quality and efficiency.
 Check for hidden errors that the user wouldn't see.
 
 **Console errors:**
+
 ```
 mcp__chrome-devtools__list_console_messages types=["error","warn"]
 ```
+
 - For each error, use `get_console_message` to get full details
 - Distinguish between: app errors (bugs), expected warnings, third-party noise
 - Check for React rendering errors, unhandled promise rejections, failed imports
 
 **Network errors:**
+
 ```
 mcp__chrome-devtools__list_network_requests
 ```
+
 - Check for failed requests (4xx, 5xx status codes)
 - Check for unexpectedly slow requests
 - Look for CORS issues or blocked resources
 - Use `get_network_request` to inspect specific failures
 
 **Runtime state:**
+
 - Use `evaluate_script` to check for:
   - Uncaught error handlers: `() => window.__errorCount || 'none'`
   - Memory leaks (large detached DOM trees): `() => document.querySelectorAll('*').length`
@@ -171,35 +178,45 @@ This kills Electron, both CDP proxy hops, and removes the virtual desktop.
 # UI Review: <area or "Full App">
 
 ## Summary
+
 <1-2 sentence overall assessment>
 
 ## Behavior
-| Feature/Workflow | Status | Notes |
-|---|---|---|
-| ... | PASS/FAIL/PARTIAL | ... |
+
+| Feature/Workflow | Status            | Notes |
+| ---------------- | ----------------- | ----- |
+| ...              | PASS/FAIL/PARTIAL | ...   |
 
 ## Visual Design
+
 **Rating: X/5**
+
 - Strengths: ...
 - Issues: ...
 
 ## UX
+
 **Rating: X/5**
+
 - Strengths: ...
 - Issues: ...
 
 ## Errors Found
-| Type | Severity | Description |
-|---|---|---|
-| console/network/runtime | high/medium/low | ... |
+
+| Type                    | Severity        | Description |
+| ----------------------- | --------------- | ----------- |
+| console/network/runtime | high/medium/low | ...         |
 
 ## Recommendations
+
 Prioritized list of fixes/improvements:
+
 1. [HIGH] ...
 2. [MED] ...
 3. [LOW] ...
 
 ## Screenshots
+
 Reference screenshots taken during review (saved to scratchpad directory).
 ```
 

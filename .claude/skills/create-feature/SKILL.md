@@ -218,7 +218,26 @@ Fix any failures before proceeding.
 
 ---
 
-### Step 11: Architecture Conformance Review
+### Step 11: UI Review
+
+If the feature has renderer UI (`<feature>.renderer.tsx`), perform a visual and behavioral review using the `ui-review` skill.
+
+**Run the review:**
+
+Invoke `/ui-review <feature-name>` (which launches the app, connects via CDP, and produces a structured review report with ratings and recommendations).
+
+**Act on recommendations:**
+
+1. **Auto-implement** any recommendation you judge to be clearly correct (e.g., missing hover states, broken styling, console errors, failed interactions).
+2. **Collect uncertain recommendations** — any where the right call depends on taste, product direction, or tradeoffs you can't resolve alone — into a list.
+3. If there are uncertain recommendations, present them to the user with AskUserQuestion (multiSelect) and let them pick which to implement. Implement the selected ones.
+4. After all changes, re-run `bun test` and `bun run typecheck` to verify nothing broke.
+
+**Skip this step** if the feature is main-process-only with no UI components.
+
+---
+
+### Step 12: Architecture Conformance Review
 
 Launch a sub-agent to review the completed feature against the project architecture. This agent should read `SPEC.md` and verify:
 
@@ -273,6 +292,7 @@ Report any violations with specific file:line references and suggested fixes. Fi
 - If tests fail: analyze failures, fix, re-run. Don't skip tests.
 - If type errors: fix types first — they catch real bugs.
 - If architecture review finds violations: fix before completing.
+- If UI review finds issues: fix clear bugs immediately, consult user on subjective items.
 - If user rejects spec or plan: iterate based on feedback.
 
 ## Output
@@ -282,4 +302,5 @@ When complete, summarize:
 - Files created
 - Commands and events registered
 - Test results
+- UI review results (if applicable) and changes made
 - Architecture review status

@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { WindowChromeCommands } from "./window-chrome.shared";
 import {
   WINDOW_CLOSE,
@@ -85,24 +86,63 @@ function CopyIcon() {
   );
 }
 
+function CheckIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      width="12"
+      height="12"
+      viewBox="0 0 12 12"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+    >
+      <polyline points="2.5,6 5,9 9.5,3" />
+    </svg>
+  );
+}
+
+function CopyAddressButton() {
+  const [copied, setCopied] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout>>(null);
+
+  useEffect(
+    () => () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    },
+    [],
+  );
+
+  const handleClick = useCallback(() => {
+    sendCommand(WINDOW_COPY_ADDRESS);
+    setCopied(true);
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => setCopied(false), 1500);
+  }, []);
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      className="flex h-8 w-10 items-center justify-center text-foreground/60 hover:bg-foreground/10 active:bg-foreground/15 hover:text-foreground transition-colors"
+      title={copied ? "Copied!" : "Copy address"}
+    >
+      {copied ? <CheckIcon /> : <CopyIcon />}
+    </button>
+  );
+}
+
 function WindowControls() {
   const maximized = useWindowChromeStore((s) => s.maximized);
 
   return (
     <div className="flex items-center">
-      <button
-        type="button"
-        onClick={() => sendCommand(WINDOW_COPY_ADDRESS)}
-        className="flex h-8 w-10 items-center justify-center text-foreground/60 hover:bg-foreground/10 hover:text-foreground transition-colors"
-        title="Copy address"
-      >
-        <CopyIcon />
-      </button>
+      <CopyAddressButton />
 
       <button
         type="button"
         onClick={() => sendCommand(WINDOW_MINIMIZE)}
-        className="flex h-8 w-12 items-center justify-center text-foreground/60 hover:bg-foreground/10 hover:text-foreground transition-colors"
+        className="flex h-8 w-12 items-center justify-center text-foreground/60 hover:bg-foreground/10 active:bg-foreground/15 hover:text-foreground transition-colors"
         title="Minimize"
       >
         <MinimizeIcon />
@@ -111,7 +151,7 @@ function WindowControls() {
       <button
         type="button"
         onClick={() => sendCommand(WINDOW_MAXIMIZE_RESTORE)}
-        className="flex h-8 w-12 items-center justify-center text-foreground/60 hover:bg-foreground/10 hover:text-foreground transition-colors"
+        className="flex h-8 w-12 items-center justify-center text-foreground/60 hover:bg-foreground/10 active:bg-foreground/15 hover:text-foreground transition-colors"
         title={maximized ? "Restore" : "Maximize"}
       >
         {maximized ? <RestoreIcon /> : <MaximizeIcon />}
@@ -120,7 +160,7 @@ function WindowControls() {
       <button
         type="button"
         onClick={() => sendCommand(WINDOW_CLOSE)}
-        className="flex h-8 w-12 items-center justify-center text-foreground/60 hover:bg-destructive hover:text-white transition-colors"
+        className="flex h-8 w-12 items-center justify-center text-foreground/60 hover:bg-destructive active:bg-destructive/80 hover:text-white transition-colors"
         title="Close"
       >
         <CloseIcon />
