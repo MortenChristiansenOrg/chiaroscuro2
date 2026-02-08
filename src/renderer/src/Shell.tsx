@@ -1,6 +1,5 @@
 import { type ComponentType, useEffect } from "react";
-import { DesignMockups } from "./DesignMockups";
-import { TooltipLayer } from "./TooltipLayer";
+import { TooltipLayer } from "./components/TooltipLayer";
 
 type EventSubscriber = (
   onEvent: (name: string, callback: (payload: unknown) => void) => () => void,
@@ -33,7 +32,7 @@ export function Shell() {
 
   return (
     <>
-      <DesignMockups />
+      {features.map((f) => f.Chrome && <f.Chrome key={f.name} />)}
       <TooltipLayer />
     </>
   );
