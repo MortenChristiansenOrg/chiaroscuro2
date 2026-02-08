@@ -6,7 +6,7 @@ export function ColorSwatch({
   return (
     <div className="flex items-center gap-3.5 py-2.5">
       <div
-        className="w-11 h-11 rounded-lg border border-border flex-shrink-0 shadow-sm"
+        className="w-11 h-11 rounded-lg border border-border shrink-0 shadow-sm"
         style={{ background: color }}
       />
       <div className="min-w-0">

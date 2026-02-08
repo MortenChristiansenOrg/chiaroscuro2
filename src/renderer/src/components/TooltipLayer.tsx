@@ -8,23 +8,26 @@ interface Tip {
   above: boolean;
 }
 
+let tooltipId = 0;
+
 export function TooltipLayer() {
   const [tip, setTip] = useState<Tip | null>(null);
   const timerRef = useRef(0);
   const targetRef = useRef<Element | null>(null);
+  const idRef = useRef(`tooltip-${++tooltipId}`);
 
   useEffect(() => {
-    const onOver = (e: MouseEvent) => {
-      const el = (e.target as Element).closest?.("[data-tip]");
+    const show = (el: Element) => {
       if (el === targetRef.current) return;
 
       window.clearTimeout(timerRef.current);
+
+      // Clean up previous target
+      if (targetRef.current) {
+        targetRef.current.removeAttribute("aria-describedby");
+      }
       targetRef.current = el;
 
-      if (!el) {
-        setTip(null);
-        return;
-      }
       const text = el.getAttribute("data-tip");
       if (!text) {
         setTip(null);
@@ -34,6 +37,7 @@ export function TooltipLayer() {
       timerRef.current = window.setTimeout(() => {
         const r = el.getBoundingClientRect();
         const above = r.bottom + 32 > window.innerHeight;
+        el.setAttribute("aria-describedby", idRef.current);
         setTip({
           text,
           x: Math.max(8, Math.min(window.innerWidth - 8, r.left + r.width / 2)),
@@ -43,18 +47,47 @@ export function TooltipLayer() {
       }, 500);
     };
 
-    const onLeave = () => {
+    const hide = () => {
       window.clearTimeout(timerRef.current);
+      if (targetRef.current) {
+        targetRef.current.removeAttribute("aria-describedby");
+      }
       targetRef.current = null;
       setTip(null);
     };
 
+    const onOver = (e: MouseEvent) => {
+      const el = (e.target as Element).closest?.("[data-tip]");
+      if (!el) {
+        if (targetRef.current) hide();
+        return;
+      }
+      show(el);
+    };
+
+    const onFocusIn = (e: FocusEvent) => {
+      const el = (e.target as Element).closest?.("[data-tip]");
+      if (!el) return;
+      show(el);
+    };
+
+    const onFocusOut = () => {
+      hide();
+    };
+
     document.addEventListener("mouseover", onOver, true);
-    document.addEventListener("mouseleave", onLeave);
+    document.addEventListener("mouseleave", hide);
+    document.addEventListener("focusin", onFocusIn, true);
+    document.addEventListener("focusout", onFocusOut, true);
     return () => {
       document.removeEventListener("mouseover", onOver, true);
-      document.removeEventListener("mouseleave", onLeave);
+      document.removeEventListener("mouseleave", hide);
+      document.removeEventListener("focusin", onFocusIn, true);
+      document.removeEventListener("focusout", onFocusOut, true);
       window.clearTimeout(timerRef.current);
+      if (targetRef.current) {
+        targetRef.current.removeAttribute("aria-describedby");
+      }
     };
   }, []);
 
@@ -62,6 +95,8 @@ export function TooltipLayer() {
 
   return createPortal(
     <div
+      id={idRef.current}
+      role="tooltip"
       style={{
         position: "fixed",
         top: tip.y,

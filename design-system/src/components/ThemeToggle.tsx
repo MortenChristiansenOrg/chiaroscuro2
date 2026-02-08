@@ -1,18 +1,16 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 export function ThemeToggle() {
-  const [dark, setDark] = useState(false);
+  const [dark, setDark] = useState(() => window.matchMedia("(prefers-color-scheme: dark)").matches);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
   }, [dark]);
 
-  const toggle = useCallback(() => setDark((d) => !d), []);
-
   return (
     <button
       type="button"
-      onClick={toggle}
+      onClick={() => setDark((d) => !d)}
       className="flex items-center justify-center w-8 h-8 rounded-lg hover:bg-muted transition-colors"
       aria-label="Toggle theme"
     >

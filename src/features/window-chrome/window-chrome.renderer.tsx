@@ -125,6 +125,7 @@ function CopyAddressButton() {
       type="button"
       onClick={handleClick}
       className="flex h-8 w-10 items-center justify-center text-foreground/60 hover:bg-foreground/10 active:bg-foreground/15 hover:text-foreground transition-colors"
+      aria-label={copied ? "Copied!" : "Copy address"}
       data-tip={copied ? "Copied!" : "Copy address"}
     >
       {copied ? <CheckIcon /> : <CopyIcon />}
@@ -143,6 +144,7 @@ function WindowControls() {
         type="button"
         onClick={() => sendCommand(WINDOW_MINIMIZE)}
         className="flex h-8 w-12 items-center justify-center text-foreground/60 hover:bg-foreground/10 active:bg-foreground/15 hover:text-foreground transition-colors"
+        aria-label="Minimize"
         data-tip="Minimize"
       >
         <MinimizeIcon />
@@ -152,6 +154,7 @@ function WindowControls() {
         type="button"
         onClick={() => sendCommand(WINDOW_MAXIMIZE_RESTORE)}
         className="flex h-8 w-12 items-center justify-center text-foreground/60 hover:bg-foreground/10 active:bg-foreground/15 hover:text-foreground transition-colors"
+        aria-label={maximized ? "Restore" : "Maximize"}
         data-tip={maximized ? "Restore" : "Maximize"}
       >
         {maximized ? <RestoreIcon /> : <MaximizeIcon />}
@@ -161,6 +164,7 @@ function WindowControls() {
         type="button"
         onClick={() => sendCommand(WINDOW_CLOSE)}
         className="flex h-8 w-12 items-center justify-center text-foreground/60 hover:bg-destructive active:bg-destructive/80 hover:text-white transition-colors"
+        aria-label="Close"
         data-tip="Close"
       >
         <CloseIcon />

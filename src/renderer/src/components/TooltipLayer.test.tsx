@@ -103,6 +103,7 @@ describe("TooltipLayer", () => {
       toJSON: () => {},
     });
 
+    const originalInnerHeight = window.innerHeight;
     // Set viewport height small enough that bottom + 32 > innerHeight
     Object.defineProperty(window, "innerHeight", { value: 800, writable: true });
 
@@ -112,6 +113,8 @@ describe("TooltipLayer", () => {
     const tooltip = screen.getByText("Above me");
     // translateY(-100%) means positioned above
     expect(tooltip.style.transform).toContain("translateY(-100%)");
+
+    Object.defineProperty(window, "innerHeight", { value: originalInnerHeight, writable: true });
   });
 
   it("switches tooltip when moving between data-tip elements", () => {

@@ -7,7 +7,7 @@ export function Layout({ children }: { children: ReactNode }) {
     <div className="flex h-screen overflow-hidden">
       <Sidebar />
       <div className="flex-1 flex flex-col overflow-hidden">
-        <header className="flex items-center justify-end h-10 px-4 border-b border-border flex-shrink-0">
+        <header className="flex items-center justify-end h-10 px-4 border-b border-border shrink-0">
           <ThemeToggle />
         </header>
         <main className="flex-1 overflow-y-auto">

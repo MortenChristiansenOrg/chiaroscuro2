@@ -116,5 +116,6 @@ for i in $(seq 1 30); do
 done
 
 echo " timeout. Check that Edge launched correctly on Windows."
+kill $VITE_PID 2>/dev/null
 kill $CDP_PROXY_PID 2>/dev/null
 exit 1

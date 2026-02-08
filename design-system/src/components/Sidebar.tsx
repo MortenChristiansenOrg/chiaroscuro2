@@ -16,7 +16,7 @@ export function Sidebar() {
   }
 
   return (
-    <nav className="w-56 flex-shrink-0 border-r border-border h-full overflow-y-auto py-4 px-3">
+    <nav className="w-56 shrink-0 border-r border-border h-full overflow-y-auto py-4 px-3">
       <div className="mb-6 px-2">
         <div className="text-sm font-semibold tracking-tight">Chiaroscuro</div>
         <div className="text-xs text-muted-foreground">Design System</div>

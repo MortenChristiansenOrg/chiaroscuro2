@@ -40,7 +40,7 @@ This project runs in WSL2. The browser (Electron or Edge) must launch on the Win
 
 **Architecture:**
 
-```
+```text
 Chrome DevTools MCP → WSL 127.0.0.1:9222 → [cdp-proxy] → Windows 0.0.0.0:9223 → 127.0.0.1:9222 (Browser CDP)
 ```
 
