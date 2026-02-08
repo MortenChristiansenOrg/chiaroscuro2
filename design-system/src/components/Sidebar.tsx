@@ -1,4 +1,4 @@
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { routes } from "../routes";
 
 const groups = new Map<string, (typeof routes)[number][]>();
@@ -10,7 +10,7 @@ for (const route of routes) {
 }
 
 export function Sidebar() {
-  const [location, setLocation] = useLocation();
+  const [location] = useLocation();
 
   return (
     <nav className="w-56 shrink-0 border-r border-border h-full overflow-y-auto py-4 px-3">
@@ -26,18 +26,18 @@ export function Sidebar() {
           {items.map((r) => {
             const active = location === r.path;
             return (
-              <button
+              <Link
                 key={r.path}
-                type="button"
-                onClick={() => setLocation(r.path)}
-                className={`w-full text-left text-sm px-2 py-1 rounded-md transition-colors ${
+                href={r.path}
+                aria-current={active ? "page" : undefined}
+                className={`block w-full text-left text-sm px-2 py-1 rounded-md transition-colors ${
                   active
                     ? "bg-accent text-accent-foreground font-medium"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 }`}
               >
                 {r.title}
-              </button>
+              </Link>
             );
           })}
         </div>

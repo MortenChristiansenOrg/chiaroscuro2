@@ -91,9 +91,10 @@ else
 fi
 
 # Start CDP proxy
+RELAY_PORT=$((PORT + 1))
 pkill -f "cdp-proxy.mjs" 2>/dev/null || true
 powershell.exe -NoProfile -Command "
-  Get-NetTCPConnection -LocalPort 9223 -State Listen -ErrorAction SilentlyContinue |
+  Get-NetTCPConnection -LocalPort $RELAY_PORT -State Listen -ErrorAction SilentlyContinue |
     ForEach-Object { Stop-Process -Id \$_.OwningProcess -Force -ErrorAction SilentlyContinue }
 " 2>/dev/null || true
 sleep 1
