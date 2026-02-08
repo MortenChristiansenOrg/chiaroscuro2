@@ -66,7 +66,7 @@ THREADS=$(gh api graphql \
 # These are embedded in the review body markdown and have no thread/resolved state.
 # We only look at the LATEST CodeRabbit review to avoid duplicates from repeated reviews.
 _review_body_stderr=$(mktemp)
-REVIEW_BODY_COMMENTS=$(gh api "repos/$OWNER/$REPO/pulls/$PR_NUMBER/reviews" --paginate --jq '.' | jq -s 'add' | python3 -c '
+REVIEW_BODY_COMMENTS=$(gh api "repos/$OWNER/$REPO/pulls/$PR_NUMBER/reviews" --paginate | jq -s 'add' | python3 -c '
 import json, re, sys
 
 reviews = json.load(sys.stdin)
@@ -166,12 +166,4 @@ print(json.dumps(comments))
 rm -f "$_review_body_stderr"
 
 # 3. Merge both arrays
-printf '%s\n%s' "$THREADS" "$REVIEW_BODY_COMMENTS" | python3 -c "
-import json, sys
-decoder = json.JSONDecoder()
-data = sys.stdin.read().strip()
-first, idx = decoder.raw_decode(data)
-rest = data[idx:].strip()
-second = json.loads(rest) if rest else []
-print(json.dumps(first + second, indent=2))
-"
+jq -n --argjson a "$THREADS" --argjson b "$REVIEW_BODY_COMMENTS" '$a + $b'

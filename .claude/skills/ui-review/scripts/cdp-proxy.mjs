@@ -16,8 +16,8 @@
 import { execSync, spawn } from "node:child_process";
 import { createConnection, createServer } from "node:net";
 
-const CDP_PORT = 9222;
-const RELAY_PORT = 9223;
+const CDP_PORT = Number.parseInt(process.env.CHIAROSCURO_DEBUG_PORT || "9222", 10);
+const RELAY_PORT = CDP_PORT + 1;
 
 // Detect Windows host IP from WSL default gateway
 function getWindowsIP() {

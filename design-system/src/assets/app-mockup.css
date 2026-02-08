@@ -26,6 +26,8 @@
   );
   border-radius: 12px;
   overflow: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: oklch(0.5 0 0 / 0.15) transparent;
 }
 
 .app-mockup ::-webkit-scrollbar {
@@ -219,6 +221,9 @@
 /* Window controls */
 .app-mockup .wc {
   display: flex;
+  margin-left: auto;
+  padding-right: 4px;
+  gap: 2px;
 }
 .app-mockup .wc button {
   display: flex;
@@ -340,12 +345,6 @@
 .app-mockup .nav-btns button:hover {
   background: oklch(1 0 0 / 0.1);
   color: oklch(1 0 0 / 0.7);
-}
-
-.app-mockup .wc {
-  margin-left: auto;
-  padding-right: 4px;
-  gap: 2px;
 }
 
 /* Body */

@@ -3,7 +3,7 @@
 # with CDP enabled. Uses the same CDP proxy as the Electron app launcher.
 #
 # Usage: ./launch-docs.sh
-set -e
+set -euo pipefail
 
 PORT="${CHIAROSCURO_DEBUG_PORT:-9222}"
 DESKTOP_NAME="Chiaroscuro Dev"

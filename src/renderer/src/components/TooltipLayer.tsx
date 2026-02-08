@@ -8,13 +8,14 @@ interface Tip {
   above: boolean;
 }
 
-let tooltipId = 0;
+let nextTooltipId = 0;
 
 export function TooltipLayer() {
   const [tip, setTip] = useState<Tip | null>(null);
   const timerRef = useRef(0);
   const targetRef = useRef<Element | null>(null);
-  const idRef = useRef(`tooltip-${++tooltipId}`);
+  const idRef = useRef("");
+  if (!idRef.current) idRef.current = `tooltip-${++nextTooltipId}`;
 
   useEffect(() => {
     const show = (el: Element) => {
@@ -112,6 +113,9 @@ export function TooltipLayer() {
         lineHeight: 1.4,
         letterSpacing: "0.01em",
         whiteSpace: "nowrap",
+        maxWidth: "min(320px, calc(100vw - 16px))",
+        overflow: "hidden",
+        textOverflow: "ellipsis",
         pointerEvents: "none",
         zIndex: 99999,
         animation: "tip-in 0.12s ease",

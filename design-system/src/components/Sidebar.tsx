@@ -1,19 +1,16 @@
 import { useLocation } from "wouter";
 import { routes } from "../routes";
 
+const groups = new Map<string, (typeof routes)[number][]>();
+for (const route of routes) {
+  const group = route.group ?? "Overview";
+  const arr = groups.get(group);
+  if (arr) arr.push(route);
+  else groups.set(group, [route]);
+}
+
 export function Sidebar() {
   const [location, setLocation] = useLocation();
-
-  const groups = new Map<string, (typeof routes)[number][]>();
-  for (const route of routes) {
-    const group = route.group ?? "Overview";
-    const arr = groups.get(group);
-    if (arr) {
-      arr.push(route);
-    } else {
-      groups.set(group, [route]);
-    }
-  }
 
   return (
     <nav className="w-56 shrink-0 border-r border-border h-full overflow-y-auto py-4 px-3">
