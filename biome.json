@@ -20,7 +20,25 @@
       "recommended": true
     }
   },
+  "overrides": [
+    {
+      "include": ["src/renderer/src/DesignMockups.tsx"],
+      "linter": {
+        "rules": {
+          "a11y": {
+            "noSvgWithoutTitle": "off"
+          }
+        }
+      }
+    }
+  ],
   "files": {
-    "ignore": ["dist/", "out/", "node_modules/", "src/renderer/src/components/ui/"]
+    "ignore": [
+      "dist/",
+      "out/",
+      "node_modules/",
+      "src/renderer/src/components/ui/",
+      "design-system/dist/"
+    ]
   }
 }

@@ -1,3 +1,7 @@
+# Documentation
+
+- Overall system architecture and specification: SPEC.md
+
 # Development
 
 - `bun dev` — start dev server + Electron (Linux/WSLg)

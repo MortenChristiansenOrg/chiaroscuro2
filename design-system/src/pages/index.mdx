@@ -1,0 +1,31 @@
+---
+title: Overview
+---
+
+import { AppMockup } from "../components/AppMockup"
+
+# Chiaroscuro Design System
+
+The visual language for Chiaroscuro — a personal browser built on Electron. This system documents design tokens, patterns, and components extracted from the D8 "Baseline" mockup.
+
+## Design Philosophy
+
+- **Glassmorphism**: Translucent layers with backdrop blur over a gradient wallpaper
+- **oklch color space**: All colors defined in oklch for perceptual uniformity
+- **Pill-shaped elements**: Tabs, URL bar, and workspace bubbles use generous border-radius
+- **Subtle depth**: Minimal box-shadows, hover lifts, and animated borders
+- **Plus Jakarta Sans**: Primary UI typeface with DM Sans for labels
+
+## Reference Design
+
+The "Baseline" mockup — the chosen direction for implementation.
+
+<div className="my-8 rounded-xl border border-border overflow-hidden shadow-lg">
+  <AppMockup />
+</div>
+
+## Structure
+
+**Foundations** — Color palette, typography, spacing, borders, shadows, and icons extracted from the mockup CSS.
+
+**Components** — Individual UI elements (buttons, tabs, sidebar, address bar, cards, tooltips, workspace switcher) shown in isolation with their token values.

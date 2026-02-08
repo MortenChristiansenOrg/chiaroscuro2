@@ -1,0 +1,45 @@
+---
+title: Tooltips
+---
+
+# Tooltips
+
+Tooltips use a `[data-tip]` attribute system — any element with `data-tip="text"` gets a tooltip on hover after a 500ms delay.
+
+## Implementation
+
+A `TooltipLayer` component listens to global `mouseover` events, finds the nearest `[data-tip]` ancestor, and renders a positioned portal.
+
+## Visual Specs
+
+| Property | Value |
+|----------|-------|
+| Background | `oklch(0.16 0 0 / 0.92)` |
+| Backdrop filter | `blur(12px)` |
+| Color | `oklch(0.88 0 0)` |
+| Font size | `11px` |
+| Font weight | `500` |
+| Letter spacing | `0.01em` |
+| Padding | `4px 10px` |
+| Border radius | `7px` |
+| Position | Fixed, centered below trigger (or above if near viewport bottom) |
+| Delay | `500ms` |
+| Animation | `tip-in 0.12s ease` — fade+scale from 0.96 to 1 |
+| z-index | `99999` |
+
+## Usage
+
+```html
+<button data-tip="Copy URL">…</button>
+```
+
+No wrapper component needed — just add the attribute.
+
+## Animation Keyframes
+
+```css
+@keyframes tip-in {
+  from { opacity: 0; scale: 0.96; }
+  to { opacity: 1; scale: 1; }
+}
+```
