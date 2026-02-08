@@ -1,0 +1,55 @@
+---
+title: Borders & Radius
+---
+
+import { ComponentPreview } from "../components/ComponentPreview"
+
+# Borders & Radius
+
+## Border Radius Scale
+
+| Value | Usage |
+|-------|-------|
+| `6px` | Tab close button |
+| `8px` | Nav buttons, URL copy button, window controls, content panel, workspace controls |
+| `12px` | URL pill, pinned icons, app mockup container |
+| `16px` | Cards |
+| `20px` | Tabs (pill-shaped) |
+| `50%` | Favicons, workspace bubbles |
+
+<ComponentPreview label="Radius Scale">
+  <div style={{ display: "flex", gap: 16, alignItems: "end" }}>
+    {[
+      { r: 6, label: "6px" },
+      { r: 8, label: "8px" },
+      { r: 12, label: "12px" },
+      { r: 16, label: "16px" },
+      { r: 20, label: "20px" },
+      { r: 9999, label: "50%" },
+    ].map((item) => (
+      <div key={item.label} style={{ textAlign: "center" }}>
+        <div
+          style={{
+            width: 48, height: 48,
+            borderRadius: item.r,
+            background: "oklch(0.45 0.04 250 / 0.25)",
+            border: "1px solid oklch(0.5 0 0 / 0.2)",
+          }}
+        />
+        <div style={{ fontSize: 10, color: "oklch(0.5 0 0)", marginTop: 4 }}>{item.label}</div>
+      </div>
+    ))}
+  </div>
+</ComponentPreview>
+
+## Border Styles
+
+| Color | Usage |
+|-------|-------|
+| `oklch(1 0 0 / 0.07)` | Separator lines, ephemeral divider |
+| `oklch(1 0 0 / 0.08)` | Subtle panel borders |
+| `oklch(0.92 0 0)` | Page nav border (light content) |
+| `oklch(0.93 0 0)` | Card borders |
+| `oklch(0.94 0 0)` | Hero section border, footer border |
+
+All borders in the glass UI use white with very low opacity (`0.07–0.08`). Content panel borders use light gray oklch values.

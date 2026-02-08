@@ -1,0 +1,102 @@
+---
+title: Colors
+---
+
+import { ColorSwatch, SwatchGrid } from "../components/ColorSwatch"
+
+# Colors
+
+All colors use the oklch color space for perceptual uniformity. The palette is split between mockup-specific "glass" colors and the shadcn semantic token system.
+
+## Glass UI Colors
+
+Used in the browser chrome — titlebar, sidebar, and overlays on top of the wallpaper gradient.
+
+<SwatchGrid>
+  <ColorSwatch name="Glass Background" color="oklch(0.45 0.04 250 / 0.12)" />
+  <ColorSwatch name="Glass Hover" color="oklch(1 0 0 / 0.1)" />
+  <ColorSwatch name="Glass Active" color="oklch(1 0 0 / 0.22)" />
+  <ColorSwatch name="Glass Border" color="oklch(1 0 0 / 0.07)" />
+  <ColorSwatch name="Glass Subtle" color="oklch(1 0 0 / 0.08)" />
+  <ColorSwatch name="Glass Strong" color="oklch(1 0 0 / 0.14)" />
+</SwatchGrid>
+
+## Text Colors (on glass)
+
+<SwatchGrid>
+  <ColorSwatch name="Primary Text" color="oklch(1 0 0 / 0.95)" />
+  <ColorSwatch name="Secondary Text" color="oklch(1 0 0 / 0.55)" />
+  <ColorSwatch name="Muted Text" color="oklch(1 0 0 / 0.35)" />
+  <ColorSwatch name="Hint Text" color="oklch(1 0 0 / 0.25)" />
+  <ColorSwatch name="Label Text" color="oklch(1 0 0 / 0.3)" />
+</SwatchGrid>
+
+## Accent & Semantic
+
+<SwatchGrid>
+  <ColorSwatch name="Accent Glow" color="oklch(0.65 0.15 270)" />
+  <ColorSwatch name="Destructive / Close" color="oklch(0.577 0.245 27.325)" />
+  <ColorSwatch name="Loading Gradient" color="oklch(0.65 0.15 270 / 0.8)" />
+</SwatchGrid>
+
+## Workspace Colors
+
+<SwatchGrid>
+  <ColorSwatch name="Workspace 1" color="oklch(0.6 0.12 230)" />
+  <ColorSwatch name="Workspace 2" color="oklch(0.6 0.12 340)" />
+  <ColorSwatch name="Workspace 3" color="oklch(0.6 0.12 130)" />
+</SwatchGrid>
+
+## Favicon Palette
+
+<SwatchGrid>
+  <ColorSwatch name="Gmail" color="oklch(0.58 0.18 28)" />
+  <ColorSwatch name="Calendar" color="oklch(0.52 0.14 255)" />
+  <ColorSwatch name="Slack" color="oklch(0.52 0.1 320)" />
+  <ColorSwatch name="GitHub" color="oklch(0.22 0 0)" />
+  <ColorSwatch name="Figma" color="oklch(0.5 0.18 350)" />
+  <ColorSwatch name="Docs" color="oklch(0.52 0.12 255)" />
+  <ColorSwatch name="Notion" color="oklch(0.3 0 0)" />
+  <ColorSwatch name="Linear" color="oklch(0.5 0.15 270)" />
+  <ColorSwatch name="Reddit" color="oklch(0.55 0.2 35)" />
+  <ColorSwatch name="Wikipedia" color="oklch(0.75 0 0)" />
+</SwatchGrid>
+
+## Wallpaper Gradient
+
+Background gradient behind the glass UI:
+
+```css
+background: linear-gradient(150deg,
+  oklch(0.45 0.09 270) 0%,
+  oklch(0.38 0.08 250) 30%,
+  oklch(0.33 0.09 230) 55%,
+  oklch(0.40 0.07 200) 80%,
+  oklch(0.42 0.06 260) 100%);
+```
+
+## Shadcn Semantic Tokens
+
+The app also uses shadcn/ui's CSS variable system for standard UI components. See `main.css` `:root` and `.dark` blocks for the full set (background, foreground, card, popover, primary, secondary, muted, accent, destructive, border, input, ring, sidebar variants).
+
+| Token | Light | Dark |
+|-------|-------|------|
+| `--background` | `oklch(1 0 0 / 0.7)` | `oklch(0.145 0 0)` |
+| `--foreground` | `oklch(0.145 0 0)` | `oklch(0.985 0 0)` |
+| `--primary` | `oklch(0.205 0 0)` | `oklch(0.985 0 0)` |
+| `--muted` | `oklch(0.97 0 0)` | `oklch(0.269 0 0)` |
+| `--border` | `oklch(0.922 0 0)` | `oklch(0.269 0 0)` |
+| `--destructive` | `oklch(0.577 0.245 27.325)` | `oklch(0.396 0.141 25.723)` |
+
+## Content Colors
+
+Used inside the white content panel for page mock content:
+
+<SwatchGrid>
+  <ColorSwatch name="Page Text" color="oklch(0.15 0 0)" />
+  <ColorSwatch name="Page Secondary" color="oklch(0.5 0 0)" />
+  <ColorSwatch name="Page Muted" color="oklch(0.6 0 0)" />
+  <ColorSwatch name="Page Border" color="oklch(0.92 0 0)" />
+  <ColorSwatch name="Hero Accent" color="oklch(0.45 0.06 145)" />
+  <ColorSwatch name="Content BG" color="oklch(0.995 0 0)" />
+</SwatchGrid>

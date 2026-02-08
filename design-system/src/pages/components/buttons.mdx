@@ -1,0 +1,103 @@
+---
+title: Buttons
+---
+
+import { ComponentPreview } from "../../components/ComponentPreview"
+
+# Buttons
+
+The D8 Baseline uses several button variants — all are `border: none; background: none` by default with hover states.
+
+## Window Controls
+
+Minimize, Maximize, Close — arranged in a horizontal row at the top-right of the titlebar.
+
+<ComponentPreview label="Window Controls (dark bg)">
+  <div style={{ background: "oklch(0.35 0.06 250)", borderRadius: 8, padding: "8px 12px", display: "inline-flex", gap: 2 }}>
+    {[
+      { label: "Min", el: <svg width={10} height={10} viewBox="0 0 10 1" fill="currentColor" stroke="none"><rect width="10" height="1" /></svg> },
+      { label: "Max", el: <svg width={10} height={10} viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth={1}><rect x="0.5" y="0.5" width="9" height="9" /></svg> },
+      { label: "Close", el: <svg width={10} height={10} viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth={1.2}><line x1="0" y1="0" x2="10" y2="10" /><line x1="10" y1="0" x2="0" y2="10" /></svg> },
+    ].map((btn) => (
+      <button key={btn.label} type="button" style={{ width: 36, height: 26, borderRadius: 8, border: "none", background: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "oklch(1 0 0 / 0.4)" }}>
+        {btn.el}
+      </button>
+    ))}
+  </div>
+</ComponentPreview>
+
+### Specs
+
+| Property | Value |
+|----------|-------|
+| Size | `36×26px` |
+| Border radius | `8px` |
+| Color | `oklch(1 0 0 / 0.4)` |
+| Hover bg | `oklch(1 0 0 / 0.1)` |
+| Hover color | `oklch(1 0 0 / 0.7)` |
+| Close hover bg | `oklch(0.577 0.245 27.325)` |
+| Close hover color | `#fff` |
+
+## Navigation Buttons
+
+Back, Forward, Refresh — left side of titlebar.
+
+<ComponentPreview label="Nav Buttons (dark bg)">
+  <div style={{ background: "oklch(0.35 0.06 250)", borderRadius: 8, padding: "8px 12px", display: "inline-flex", gap: 1 }}>
+    {[
+      <svg key="b" width={10} height={10} viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth={1.5}><polyline points="6.5,2 3.5,5 6.5,8" /></svg>,
+      <svg key="f" width={10} height={10} viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth={1.5}><polyline points="3.5,2 6.5,5 3.5,8" /></svg>,
+      <svg key="r" width={11} height={11} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7" /><polyline points="21 3 21 9 15 9" /></svg>,
+    ].map((icon, i) => (
+      <button key={i} type="button" style={{ width: 28, height: 26, borderRadius: 8, border: "none", background: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "oklch(1 0 0 / 0.35)" }}>
+        {icon}
+      </button>
+    ))}
+  </div>
+</ComponentPreview>
+
+### Specs
+
+| Property | Value |
+|----------|-------|
+| Size | `28×26px` |
+| Border radius | `8px` |
+| Color | `oklch(1 0 0 / 0.35)` |
+| Hover bg | `oklch(1 0 0 / 0.1)` |
+| Hover color | `oklch(1 0 0 / 0.7)` |
+
+## Workspace Controls
+
+Edit and Add buttons in the workspace bar.
+
+| Property | Value |
+|----------|-------|
+| Size | `24×24px` |
+| Border radius | `8px` |
+| Color | `oklch(1 0 0 / 0.25)` |
+| Hover bg | `oklch(1 0 0 / 0.1)` |
+| Hover color | `oklch(1 0 0 / 0.5)` |
+
+## Tab Close Button
+
+Appears on hover inside sidebar tabs.
+
+| Property | Value |
+|----------|-------|
+| Size | `16×16px` |
+| Border radius | `6px` |
+| Icon size | `7×7px` |
+| Visibility | `display: none` → `flex` on parent `:hover` |
+
+## Ephemeral Clear Button
+
+"Clear" text + broom icon.
+
+| Property | Value |
+|----------|-------|
+| Font size | `9px` |
+| Font weight | `500` |
+| Padding | `2px 6px` |
+| Border radius | `6px` |
+| Color | `oklch(1 0 0 / 0.25)` |
+| Hover color | `oklch(1 0 0 / 0.5)` |

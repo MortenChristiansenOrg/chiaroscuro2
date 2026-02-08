@@ -1,0 +1,68 @@
+---
+title: Tabs
+---
+
+import { ComponentPreview } from "../../components/ComponentPreview"
+
+# Tabs
+
+Pill-shaped sidebar tabs with favicon, label, and close button.
+
+## States
+
+<ComponentPreview label="Tab States (dark bg)">
+  <div style={{ background: "oklch(0.35 0.06 250)", borderRadius: 12, padding: 12, width: 230, fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
+    {[
+      { active: false, hover: false, label: "Default" },
+      { active: false, hover: true, label: "Hovered" },
+      { active: true, hover: false, label: "Active" },
+    ].map((state) => (
+      <div
+        key={state.label}
+        style={{
+          display: "flex", alignItems: "center", gap: 10,
+          padding: "5px 12px", margin: "1px 6px", borderRadius: 20,
+          background: state.active ? "oklch(1 0 0 / 0.22)" : state.hover ? "oklch(1 0 0 / 0.1)" : "none",
+          boxShadow: state.active ? "0 1px 4px oklch(0 0 0 / 0.05)" : "none",
+          cursor: "pointer",
+        }}
+      >
+        <div style={{ width: 16, height: 16, borderRadius: "50%", background: "oklch(0.22 0 0)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontWeight: 600, color: "#fff", fontFamily: "'DM Sans', sans-serif" }}>G</div>
+        <span style={{ fontSize: 12.5, color: state.active ? "oklch(1 0 0 / 0.95)" : state.hover ? "oklch(1 0 0 / 0.75)" : "oklch(1 0 0 / 0.55)", fontWeight: state.active ? 500 : 400, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {state.label} — GitHub
+        </span>
+      </div>
+    ))}
+  </div>
+</ComponentPreview>
+
+## Specs
+
+| Property | Value |
+|----------|-------|
+| Padding | `5px 12px` |
+| Margin | `1px 6px` |
+| Border radius | `20px` (pill) |
+| Favicon | `16×16px`, `border-radius: 50%` |
+| Text size | `12.5px` |
+| Gap | `10px` |
+| Default text color | `oklch(1 0 0 / 0.55)` |
+| Hover bg | `oklch(1 0 0 / 0.1)` |
+| Hover text | `oklch(1 0 0 / 0.75)` |
+| Active bg | `oklch(1 0 0 / 0.22)` |
+| Active text | `oklch(1 0 0 / 0.95)`, weight `500` |
+| Active shadow | `0 1px 4px oklch(0 0 0 / 0.05)` |
+| Transition | `all 0.15s` |
+
+## Ephemeral Tabs
+
+Ephemeral tabs have dimmer text:
+
+| Property | Value |
+|----------|-------|
+| Default text | `oklch(1 0 0 / 0.35)` |
+| Hover text | `oklch(1 0 0 / 0.55)` |
+
+## Folder Children
+
+Tabs inside a folder group use `padding-left: 28px` to indent.

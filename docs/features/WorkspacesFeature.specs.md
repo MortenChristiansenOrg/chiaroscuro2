@@ -4,7 +4,7 @@
 
 The Workspaces feature lets you organize your browsing into separate named workspaces, each with its own set of tabs (including tab ordering and folder layout).
 
-Workspaces are primarily managed through the Sidebar workspace switcher (icons along the top). The active workspace determines which tabs appear in the Sidebar tab list.
+Workspaces are primarily managed through the Sidebar workspace switcher (icons along the bottom). The active workspace determines which tabs appear in the Sidebar tab list.
 
 See also: `TabsFeature.specs.md` for details on the tab list UI (persistent vs ephemeral tabs, folders, and tab ordering).
 
@@ -22,14 +22,14 @@ See also: `TabsFeature.specs.md` for details on the tab list UI (persistent vs e
 - The app always has at least one workspace.
 - Workspaces can be created, updated (name/icon/color), and deleted.
 - Deleting the last workspace is not allowed.
-- Workspace definitions and tab state are persisted to SQLite and restored on startup.
+- Workspace definitions and tab state are persisted to the database and restored on startup.
 
 ### Workspace activation
 
 - Switching workspace updates:
   - the active workspace state in the UI, and
   - the Sidebar tab list to show the workspace's tabs and folders.
-- The browser chrome updates the workspace accent color when the active workspace changes.
+- The browser chrome updates the workspace background color when the active workspace changes.
 
 ### Tab state persistence
 

@@ -15,7 +15,10 @@
     "format": "biome format --write .",
     "typecheck": "tsc --build",
     "dev:win": "./scripts/dev-win.sh",
-    "verify": "./scripts/verify-all.sh"
+    "verify": "./scripts/verify-all.sh",
+    "docs:dev": "vite --config design-system/vite.config.ts",
+    "docs:build": "vite build --config design-system/vite.config.ts",
+    "docs:preview": "vite preview --config design-system/vite.config.ts"
   },
   "dependencies": {
     "electron-updater": "^6.6.2",
@@ -27,6 +30,8 @@
   },
   "devDependencies": {
     "@biomejs/biome": "^1.9.4",
+    "@mdx-js/react": "^3.1.1",
+    "@mdx-js/rollup": "^3.1.1",
     "@playwright/test": "^1.52.0",
     "@tailwindcss/vite": "^4.1.8",
     "@testing-library/jest-dom": "^6.6.3",
@@ -40,9 +45,15 @@
     "electron-builder": "^26.0.12",
     "electron-vite": "^5.0.0",
     "jsdom": "^26.1.0",
+    "rehype-pretty-code": "^0.14.1",
+    "remark-frontmatter": "^5.0.0",
+    "remark-gfm": "^4.0.1",
+    "remark-mdx-frontmatter": "^5.2.0",
+    "shiki": "^3.22.0",
     "tailwind-merge": "^3.3.0",
     "tailwindcss": "^4.1.8",
     "typescript": "^5.8.3",
-    "vitest": "^3.2.4"
+    "vitest": "^3.2.4",
+    "wouter": "^3.9.0"
   }
 }

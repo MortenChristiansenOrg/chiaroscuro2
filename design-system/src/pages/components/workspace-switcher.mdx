@@ -1,0 +1,76 @@
+---
+title: Workspace Switcher
+---
+
+import { ComponentPreview } from "../../components/ComponentPreview"
+
+# Workspace Switcher
+
+The workspace bar sits at the bottom of the sidebar. Contains colored bubble buttons for each workspace, plus edit and add controls.
+
+## Workspace Bubbles
+
+<ComponentPreview label="Workspace Bubbles (dark bg)">
+  <div style={{ background: "oklch(0.35 0.06 250)", borderRadius: 8, padding: 12, display: "inline-flex", gap: 6, alignItems: "center" }}>
+    {[
+      { letter: "W", color: "oklch(0.6 0.12 230)", active: true },
+      { letter: "P", color: "oklch(0.6 0.12 340)", active: false },
+      { letter: "S", color: "oklch(0.6 0.12 130)", active: false },
+    ].map((ws) => (
+      <button
+        key={ws.letter}
+        type="button"
+        style={{
+          width: 24, height: 24, borderRadius: "50%", border: "none",
+          background: ws.color, color: "#fff",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 10, fontWeight: 600, cursor: "pointer",
+          transform: ws.active ? "scale(1.08)" : "none",
+          boxShadow: ws.active ? `0 0 0 2px ${ws.color.replace(")", " / 0.4)")}` : "none",
+        }}
+      >
+        {ws.letter}
+      </button>
+    ))}
+  </div>
+</ComponentPreview>
+
+## Bubble Specs
+
+| Property | Value |
+|----------|-------|
+| Size | `24×24px` |
+| Border radius | `50%` |
+| Font size | `10px` |
+| Font weight | `600` |
+| Color | `#fff` |
+| Transition | `all 0.2s` |
+
+### Colors
+
+| Workspace | Background |
+|-----------|------------|
+| Work (c1) | `oklch(0.6 0.12 230)` |
+| Personal (c2) | `oklch(0.6 0.12 340)` |
+| Side (c3) | `oklch(0.6 0.12 130)` |
+
+### States
+
+| State | Effect |
+|-------|--------|
+| Hover | `transform: scale(1.12)` |
+| Active | `transform: scale(1.08)`, `box-shadow: 0 0 0 2px <color> / 0.4` |
+
+## Workspace Bar Layout
+
+| Property | Value |
+|----------|-------|
+| Container | `display: flex; align-items: center` |
+| Gap | `6px` |
+| Padding | `10px 12px` |
+| Position | `margin-top: auto` (pushed to bottom) |
+| Controls gap | `2px`, `margin-left: auto` |
+
+## Controls
+
+Edit (pencil) and Add (plus) buttons at the right end of the bar. See [Buttons](/components/buttons) for specs.

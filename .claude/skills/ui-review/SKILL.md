@@ -5,28 +5,46 @@ description: Review the app's UI/UX by launching it, taking screenshots, checkin
 
 # Goal
 
-Perform a comprehensive UI/UX review of the running Chiaroscuro app using Chrome DevTools MCP. Verify behavior, visual quality, UX, and error-free operation.
+Perform a comprehensive UI/UX review of the running Chiaroscuro app **or the design system website** using Chrome DevTools MCP. Verify behavior, visual quality, UX, and error-free operation.
 
 ## Invocation
 
 - `/ui-review` — Full app review
 - `/ui-review <feature-or-area>` — Focused review (e.g., `/ui-review tabs`, `/ui-review settings`)
+- `/ui-review design-system` — Full design system website review
+- `/ui-review design-system <page>` — Focused review (e.g., `/ui-review design-system colors`)
+
+## Review Targets
+
+There are two review targets with different launch procedures:
+
+|               | **App**                                 | **Design System**              |
+| ------------- | --------------------------------------- | ------------------------------ |
+| What          | Electron browser app                    | Vite-served documentation site |
+| URL           | Electron window (no URL)                | `http://<wsl-ip>:5200`         |
+| Launch        | `launch-app.sh`                         | `launch-docs.sh`               |
+| Teardown      | `teardown-app.sh`                       | `teardown-docs.sh`             |
+| Browser       | Electron (built-in)                     | Edge with CDP                  |
+| Build         | `electron-vite build` + sync to Windows | `bun run docs:dev --host`      |
+| Window chrome | Yes (custom title bar)                  | No                             |
+
+Both targets use the same CDP proxy and virtual desktop isolation.
 
 ## Prerequisites
 
-Chrome DevTools MCP is configured globally at `http://127.0.0.1:9222`. The Electron app must be running with `--remote-debugging-port=9222`.
+Chrome DevTools MCP is configured globally at `http://127.0.0.1:9222`. The target must be running with `--remote-debugging-port=9222`.
 
 ## WSL Environment Setup
 
-This project runs in WSL2. Electron must launch on the Windows host. WSL2 uses NAT networking so it can't reach Windows' `127.0.0.1` directly — a two-hop CDP proxy bridges this gap.
+This project runs in WSL2. The browser (Electron or Edge) must launch on the Windows host. WSL2 uses NAT networking so it can't reach Windows' `127.0.0.1` directly — a two-hop CDP proxy bridges this gap.
 
 **Architecture:**
 
 ```
-Chrome DevTools MCP → WSL 127.0.0.1:9222 → [cdp-proxy] → Windows 0.0.0.0:9223 → 127.0.0.1:9222 (Electron CDP)
+Chrome DevTools MCP → WSL 127.0.0.1:9222 → [cdp-proxy] → Windows 0.0.0.0:9223 → 127.0.0.1:9222 (Browser CDP)
 ```
 
-### Starting the app
+### Starting the app (Electron)
 
 The launcher handles everything: build, sync, launch on separate virtual desktop, start CDP proxy.
 
@@ -35,18 +53,32 @@ The launcher handles everything: build, sync, launch on separate virtual desktop
 .claude/skills/ui-review/scripts/launch-app.sh --rebuild # force rebuild
 ```
 
-If the app is already running with CDP and just needs the proxy:
+### Starting the design system (Edge)
+
+The launcher starts the Vite dev server with `--host` (so Windows can reach WSL), opens Edge with CDP, and starts the proxy.
+
+```bash
+.claude/skills/ui-review/scripts/launch-docs.sh
+```
+
+### Stopping
+
+After the review, tear down everything:
+
+```bash
+# For app reviews:
+.claude/skills/ui-review/scripts/teardown-app.sh
+
+# For design system reviews:
+.claude/skills/ui-review/scripts/teardown-docs.sh
+```
+
+### Shared infrastructure
+
+If the app/browser is already running with CDP and just needs the proxy:
 
 ```bash
 node .claude/skills/ui-review/scripts/cdp-proxy.mjs &
-```
-
-### Stopping the app
-
-After the review is complete, tear down everything (Electron, CDP proxy, virtual desktop):
-
-```bash
-.claude/skills/ui-review/scripts/teardown-app.sh
 ```
 
 ### One-time setup (optional, for virtual desktop isolation)
@@ -65,19 +97,25 @@ curl -s http://127.0.0.1:9222/json/version
 
 ### Phase 0: Connect
 
-1. Run `check-cdp.sh` to verify the app is reachable
-2. If not reachable, run `launch-app.sh` and wait for confirmation
+1. Run `check-cdp.sh` to verify the target is reachable
+2. If not reachable, run the appropriate launch script and wait for confirmation:
+   - **App:** `launch-app.sh`
+   - **Design system:** `launch-docs.sh`
 3. Use `mcp__chrome-devtools__list_pages` to enumerate open pages
-4. Use `mcp__chrome-devtools__select_page` to pick the main app window
+4. Use `mcp__chrome-devtools__select_page` to pick the correct page
+   - **App:** Select the main app window
+   - **Design system:** Select the tab showing `localhost:5200`
 5. Take an initial screenshot to confirm connection
 
-If the review was invoked with a specific feature/area, navigate to the relevant view before proceeding.
+If the review was invoked with a specific feature/area/page, navigate to the relevant view before proceeding.
+
+**Design system navigation:** Use `mcp__chrome-devtools__navigate_page` to go to specific pages (e.g., `http://<wsl-ip>:5200/colors`), or click sidebar links.
 
 ### Phase 1: Behavior Verification
 
 Verify that implemented features work correctly.
 
-**For each feature or area under review:**
+**For app reviews:**
 
 1. **Read the spec** — Check `docs/features/` for the relevant spec file
 2. **Walk through workflows** — Execute each workflow from the spec:
@@ -86,6 +124,16 @@ Verify that implemented features work correctly.
    - Verify expected outcomes match spec requirements
 3. **Test edge cases** — Empty states, long text, rapid interactions
 4. **Test keyboard shortcuts** — Verify any shortcuts defined in the spec
+
+**For design system reviews:**
+
+1. **Check route coverage** — Verify all routes in `design-system/src/routes.ts` are navigable
+2. **Walk through pages** — Visit each page via sidebar navigation:
+   - Verify content renders (MDX, code blocks, examples)
+   - Check interactive components (previews, toggles, swatches)
+   - Verify code syntax highlighting works
+3. **Test sidebar navigation** — Active state, group headers, scroll behavior
+4. **Test theme toggle** — Light/dark mode switching, persistence
 
 **Tools to use:**
 
@@ -112,6 +160,13 @@ Evaluate visual quality. Apply the principles from the `frontend-design` skill.
    mcp__chrome-devtools__resize_page width=1280 height=720
    ```
 
+**Design system specific:**
+
+- Verify color swatches render correctly and show accurate values
+- Check component previews match actual app component appearance
+- Verify code blocks have proper syntax highlighting
+- Check MDX prose styling (headings, lists, links, tables)
+
 ### Phase 3: UX Review
 
 Evaluate interaction quality and efficiency.
@@ -123,6 +178,12 @@ Evaluate interaction quality and efficiency.
 5. **Error states** — What happens on invalid input? Network failure? Empty data?
 6. **Navigation flow** — Is it clear where you are? Can you go back? Breadcrumbs or other wayfinding?
 7. **Keyboard navigation** — Can primary workflows be completed without mouse?
+
+**Design system specific:**
+
+- Is the sidebar navigation intuitive? Are pages grouped logically?
+- Can users quickly find the component/token they need?
+- Are examples copy-pasteable and clearly presented?
 
 ### Phase 4: Error Audit
 
@@ -160,22 +221,24 @@ mcp__chrome-devtools__list_network_requests
 
 1. **Performance feel** — Does the UI feel snappy? Any visible jank or delayed renders? Use `performance_start_trace` if something feels slow.
 2. **State persistence** — Navigate away and back. Is state preserved correctly?
-3. **Window chrome integration** — Does the custom title bar work? Minimize/maximize/close? Draggable regions?
+3. **Window chrome integration** — _(App only)_ Does the custom title bar work? Minimize/maximize/close? Draggable regions?
 
 ### Phase 6: Teardown
 
-After collecting all findings, tear down the app and proxy:
+After collecting all findings, tear down:
 
 ```bash
+# App:
 .claude/skills/ui-review/scripts/teardown-app.sh
-```
 
-This kills Electron, both CDP proxy hops, and removes the virtual desktop.
+# Design system:
+.claude/skills/ui-review/scripts/teardown-docs.sh
+```
 
 ## Output Format
 
 ```markdown
-# UI Review: <area or "Full App">
+# UI Review: <area or "Full App" or "Design System" or "Design System: <page>">
 
 ## Summary
 
@@ -229,3 +292,4 @@ Reference screenshots taken during review (saved to scratchpad directory).
 - Check both light and dark mode if supported: `mcp__chrome-devtools__emulate colorScheme="dark"`
 - Use `includePreservedMessages=true` on console messages to catch errors from previous navigations
 - If the app has multiple windows, review each one via `list_pages` + `select_page`
+- For design system reviews, check each page in the sidebar — don't just review the landing page

@@ -1,0 +1,95 @@
+---
+title: Shadows & Effects
+---
+
+import { ComponentPreview } from "../components/ComponentPreview"
+
+# Shadows & Effects
+
+## Box Shadows
+
+| Shadow | Usage |
+|--------|-------|
+| `0 1px 4px oklch(0 0 0 / 0.05)` | Active tab |
+| `0 1px 8px oklch(0 0 0 / 0.08)` | Content panel |
+| `0 4px 20px oklch(0.5 0 0 / 0.08)` | Card hover |
+| `0 0 0 2px oklch(0.6 0.12 230 / 0.4)` | Active workspace ring |
+
+<ComponentPreview label="Shadow Samples">
+  <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
+    {[
+      { shadow: "0 1px 4px oklch(0 0 0 / 0.05)", label: "Tab" },
+      { shadow: "0 1px 8px oklch(0 0 0 / 0.08)", label: "Content" },
+      { shadow: "0 4px 20px oklch(0.5 0 0 / 0.08)", label: "Card hover" },
+      { shadow: "0 0 0 2px oklch(0.6 0.12 230 / 0.4)", label: "WS ring" },
+    ].map((item) => (
+      <div key={item.label} style={{ textAlign: "center" }}>
+        <div
+          style={{
+            width: 64, height: 48, borderRadius: 12,
+            background: "white",
+            boxShadow: item.shadow,
+          }}
+        />
+        <div style={{ fontSize: 10, color: "oklch(0.5 0 0)", marginTop: 6 }}>{item.label}</div>
+      </div>
+    ))}
+  </div>
+</ComponentPreview>
+
+## Backdrop Filter
+
+| Value | Usage |
+|-------|-------|
+| `blur(12px)` | Titlebar, body backdrop |
+| `blur(40px)` | Heavier blur variants (other designs) |
+
+The D8 Baseline uses a consistent `blur(12px)` for all glass surfaces.
+
+## Animations
+
+### URL Pill — Spinning Gradient Border
+
+```css
+@property --url-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.url-pill::before {
+  background: conic-gradient(from var(--url-angle),
+    oklch(0.65 0.15 270 / 0) 0%,
+    oklch(0.65 0.15 270 / 0.8) 10%,
+    oklch(0.65 0.15 270 / 0) 22%,
+    transparent 22%);
+  animation: url-spin 2.5s linear infinite;
+}
+```
+
+Uses `@property` for animatable CSS custom properties with a conic gradient masked to the border.
+
+### Hover Transitions
+
+Most interactive elements use `transition: all 0.15s`. Workspace bubbles use `0.2s`. Cards add `transform: translateY(-1px)` on hover.
+
+### Tooltip Animation
+
+```css
+@keyframes tip-in {
+  from { opacity: 0; scale: 0.96; }
+  to { opacity: 1; scale: 1; }
+}
+```
+
+12ms ease-in entrance.
+
+## Transparency Layers
+
+The D8 design layers transparency:
+
+1. **Wallpaper**: Opaque gradient background
+2. **Glass body**: `oklch(0.45 0.04 250 / 0.12)` with `backdrop-filter: blur(12px)`
+3. **Interactive hover**: `oklch(1 0 0 / 0.1)` on top of glass
+4. **Active state**: `oklch(1 0 0 / 0.22)` on top of glass
+5. **Content panel**: `oklch(0.995 0 0)` — nearly opaque white

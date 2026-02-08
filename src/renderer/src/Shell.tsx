@@ -1,4 +1,6 @@
 import { type ComponentType, useEffect } from "react";
+import { DesignMockups } from "./DesignMockups";
+import { TooltipLayer } from "./TooltipLayer";
 
 type EventSubscriber = (
   onEvent: (name: string, callback: (payload: unknown) => void) => () => void,
@@ -30,11 +32,9 @@ export function Shell() {
   }, []);
 
   return (
-    <div className="flex h-screen flex-col bg-background text-foreground">
-      {features.map((f) => f.Chrome && <f.Chrome key={f.name} />)}
-      <div className="flex flex-1 items-center justify-center">
-        <h1 className="text-4xl font-bold">Chiaroscuro</h1>
-      </div>
-    </div>
+    <>
+      <DesignMockups />
+      <TooltipLayer />
+    </>
   );
 }
