@@ -10,35 +10,38 @@ All colors use `oklch(L C H / alpha)`. No hex, rgb, or hsl. The color system has
 
 ## Glass Context (Chrome UI)
 
-The chrome renders over a semi-transparent background that reveals the OS window acrylic effect, with `backdrop-filter: blur(0.75rem)`. All chrome colors are white or near-white at varying opacities.
+The chrome renders over a semi-transparent background that reveals the OS window acrylic effect, with `backdrop-filter: blur(var(--glass-backdrop-blur))`. All chrome colors are white or near-white at varying opacities.
 
 <SwatchGrid>
-  <ColorSwatch name="Glass Background" color="oklch(0.45 0.04 250 / 0.12)" />
-  <ColorSwatch name="Hover Surface" color="oklch(1 0 0 / 0.1)" />
-  <ColorSwatch name="Active Surface" color="oklch(1 0 0 / 0.22)" />
-  <ColorSwatch name="Subtle Surface" color="oklch(1 0 0 / 0.06)" />
-  <ColorSwatch name="Border" color="oklch(1 0 0 / 0.07)" />
+  <ColorSwatch name="Glass Background" color="var(--glass-bg)" value="--glass-bg" />
+  <ColorSwatch name="Hover Surface" color="var(--glass-hover)" value="--glass-hover" />
+  <ColorSwatch name="Active Surface" color="var(--glass-active)" value="--glass-active" />
+  <ColorSwatch name="Subtle Surface" color="var(--glass-subtle)" value="--glass-subtle" />
+  <ColorSwatch name="Pressed Surface" color="var(--glass-pressed)" value="--glass-pressed" />
+  <ColorSwatch name="Border" color="var(--glass-border)" value="--glass-border" />
 </SwatchGrid>
 
 ## Text Colors (on glass)
 
 <SwatchGrid>
-  <ColorSwatch name="Primary Text (0.95)" color="oklch(1 0 0 / 0.95)" />
-  <ColorSwatch name="Default Text (0.55)" color="oklch(1 0 0 / 0.55)" />
-  <ColorSwatch name="Muted Text (0.4)" color="oklch(1 0 0 / 0.4)" />
-  <ColorSwatch name="Hint Text (0.25)" color="oklch(1 0 0 / 0.25)" />
+  <ColorSwatch name="Primary Text" color="var(--glass-text-primary)" value="--glass-text-primary" />
+  <ColorSwatch name="Default Text" color="var(--glass-text-default)" value="--glass-text-default" />
+  <ColorSwatch name="Hover Text" color="var(--glass-text-hover)" value="--glass-text-hover" />
+  <ColorSwatch name="Muted Text" color="var(--glass-text-muted)" value="--glass-text-muted" />
+  <ColorSwatch name="Hint Text" color="var(--glass-text-hint)" value="--glass-text-hint" />
+  <ColorSwatch name="Pressed Text" color="var(--glass-text-pressed)" value="--glass-text-pressed" />
 </SwatchGrid>
 
 ## Content Context (Opaque Panels)
 
-Inside content panels (near-white `oklch(0.995 0 0)` background):
+Inside content panels (`var(--content-bg)` background):
 
 <SwatchGrid>
-  <ColorSwatch name="Text Primary" color="oklch(0.15 0 0)" />
-  <ColorSwatch name="Text Secondary" color="oklch(0.5 0 0)" />
-  <ColorSwatch name="Text Muted" color="oklch(0.6 0 0)" />
-  <ColorSwatch name="Border" color="oklch(0.92 0 0)" />
-  <ColorSwatch name="Background" color="oklch(0.995 0 0)" />
+  <ColorSwatch name="Text Primary" color="var(--foreground)" value="--foreground" />
+  <ColorSwatch name="Text Secondary" color="var(--content-text-secondary)" value="--content-text-secondary" />
+  <ColorSwatch name="Text Muted" color="var(--content-text-muted)" value="--content-text-muted" />
+  <ColorSwatch name="Border" color="var(--border)" value="--border" />
+  <ColorSwatch name="Background" color="var(--content-bg)" value="--content-bg" />
 </SwatchGrid>
 
 ## Workspace Accent Colors
@@ -47,9 +50,9 @@ Each workspace has a user-chosen accent color exposed as `var(--accent-hue)` —
 
 | Role | Value | Usage |
 |------|-------|-------|
-| Accent solid | `oklch(0.65 0.15 var(--accent-hue))` | Focus rings, active indicators |
-| Accent muted | `oklch(0.65 0.15 var(--accent-hue) / 0.4)` | Workspace ring, subtle highlights |
-| Accent glow | `oklch(0.65 0.15 var(--accent-hue) / 0.8)` | Loading gradient, animated borders |
+| Accent solid | `oklch(var(--accent-L) var(--accent-C) var(--accent-hue))` | Focus rings, active indicators |
+| Accent muted | `oklch(var(--accent-L) var(--accent-C) var(--accent-hue) / 0.4)` | Workspace ring, subtle highlights |
+| Accent glow | `oklch(var(--accent-L) var(--accent-C) var(--accent-hue) / 0.8)` | Loading gradient, animated borders |
 
 ### Curated Accent Palette
 
@@ -72,8 +75,8 @@ Users pick from a predefined set of hues. All share `L=0.65, C=0.15` for consist
 Only two non-accent semantic colors exist. Both are fixed — they don't shift per workspace.
 
 <SwatchGrid>
-  <ColorSwatch name="Destructive" color="oklch(0.577 0.245 27.325)" />
-  <ColorSwatch name="Warning" color="oklch(0.75 0.15 85)" />
+  <ColorSwatch name="Destructive" color="var(--destructive)" value="--destructive" />
+  <ColorSwatch name="Warning" color="var(--color-warning)" value="--color-warning" />
 </SwatchGrid>
 
 ## Window Background
@@ -81,14 +84,14 @@ Only two non-accent semantic colors exist. Both are fixed — they don't shift p
 The window background is semi-transparent with no gradient, allowing the OS acrylic/vibrancy effect to show through:
 
 ```css
-background: oklch(0.35 0.06 250 / 0.65);
+background: var(--window-bg);
 ```
 
 ## Rules
 
 1. **No new colors without a role.** Every color must map to a role in the tables above. If you need a color that doesn't fit, add the role first.
 2. **Opacity over new lightness.** In the glass context, adjust opacity of white rather than introducing new lightness values. This ensures the acrylic effect bleeds through consistently.
-3. **3-state text brightness.** Interactive text uses three states: default (`0.55`) → hover (`0.75`) → active (`0.95`). This progression must be consistent across all glass UI text.
+3. **3-state text brightness.** Interactive text uses three states: default (`--glass-text-default`) → hover (`--glass-text-hover`) → active (`--glass-text-primary`). This progression must be consistent across all glass UI text.
 4. **Window background is not a design surface.** Never place text directly on the window background. All text must be on a glass or content surface.
 5. **Color is accent-only.** The chrome UI is achromatic by default — white text, white/transparent backgrounds, no hue. Color appears only through the accent system or the destructive semantic.
 6. **Never hardcode accent hues.** Always derive accent colors from `var(--accent-hue)`.

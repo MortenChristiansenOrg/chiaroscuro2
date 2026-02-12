@@ -10,20 +10,20 @@ Every interactive element must communicate its state. Feedback should be immedia
 
 All interactive elements on glass surfaces follow this progression:
 
-| State | Background | Text opacity | Shadow | Additional |
-|-------|-----------|-------------|--------|------------|
-| Default | transparent | `0.55` | none | — |
-| Hover | `oklch(1 0 0 / 0.1)` | `0.75` | none | cursor: pointer |
-| Active/Pressed | `oklch(1 0 0 / 0.16)` | `0.85` | none | — |
-| Selected | `oklch(1 0 0 / 0.22)` | `0.95` | `0 1px 4px oklch(0 0 0 / 0.05)` | font-weight: 500 |
-| Disabled | transparent | `0.25` | none | cursor: default, no hover effect |
-| Focus-visible | current bg | current text | none | `outline: 2px solid oklch(0.65 0.15 var(--accent-hue)); outline-offset: 2px` |
+| State | Background | Text | Shadow | Additional |
+|-------|-----------|------|--------|------------|
+| Default | transparent | `var(--glass-text-default)` | none | — |
+| Hover | `var(--glass-hover)` | `var(--glass-text-hover)` | none | cursor: pointer |
+| Active/Pressed | `var(--glass-pressed)` | `var(--glass-text-pressed)` | none | — |
+| Selected | `var(--glass-active)` | `var(--glass-text-primary)` | `var(--shadow-subtle)` | font-weight: 500 |
+| Disabled | transparent | `var(--glass-text-hint)` | none | cursor: default, no hover effect |
+| Focus-visible | current bg | current text | none | `outline: 2px solid oklch(var(--accent-L) var(--accent-C) var(--accent-hue)); outline-offset: 2px` |
 
 ## Interaction Rules
 
 1. **Every clickable element must have a hover state.** No exceptions. If it responds to click, it must respond to hover. This includes icons, close buttons, and tiny controls.
 2. **Hover background must cover the full click target.** Don't hover-highlight just the icon — highlight the entire clickable area including padding.
-3. **Close buttons: neutral default, destructive on hover.** Close/delete buttons render in muted text color by default. On hover, they shift to `oklch(0.577 0.245 27.325)`.
+3. **Close buttons: neutral default, destructive on hover.** Close/delete buttons render in muted text color by default. On hover, they shift to `var(--destructive)`.
 4. **Close buttons: hidden by default, visible on parent hover.** Tab close buttons and row-level dismiss buttons are hidden until the user hovers the parent element. Exception: items with unsaved changes should always show their close indicator.
 5. **Tooltip on every icon-only button.** If a button has no visible text label, it must have a tooltip via `data-tip`. Tooltip delay: 400ms.
 6. **Active state on press.** On `mousedown`/`pointerdown`, immediately show the active state. Don't wait for `click`.

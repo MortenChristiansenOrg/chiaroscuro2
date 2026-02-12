@@ -10,21 +10,21 @@ All buttons follow the [state ladder](/interaction) — transparent default, hov
 
 ## Icon Buttons
 
-Minimum visual size: `1.5rem × 1.5rem`. Must have `aria-label` and `data-tip` for tooltip.
+Minimum visual size: `var(--click-target-min)`. Must have `aria-label` and `data-tip` for tooltip.
 
 ### Window Controls
 
 Minimize, Maximize, Close — arranged in a horizontal row at the top-right of the titlebar.
 
 <ComponentPreview label="Window Controls (dark bg)">
-  <div style={{ background: "oklch(0.35 0.06 250)", borderRadius: 8, padding: "8px 12px", display: "inline-flex", gap: 2 }}>
+  <div style={{ background: "var(--window-bg)", borderRadius: 8, padding: "8px 12px", display: "inline-flex", gap: 2 }}>
     {[
-      { label: "Min", el: <svg width={10} height={10} viewBox="0 0 10 1" fill="currentColor" stroke="none"><rect width="10" height="1" /></svg> },
-      { label: "Max", el: <svg width={10} height={10} viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth={1}><rect x="0.5" y="0.5" width="9" height="9" /></svg> },
-      { label: "Close", el: <svg width={10} height={10} viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth={1.2}><line x1="0" y1="0" x2="10" y2="10" /><line x1="10" y1="0" x2="0" y2="10" /></svg> },
+      { label: "Min", cls: "fa-solid fa-minus" },
+      { label: "Max", cls: "fa-regular fa-square" },
+      { label: "Close", cls: "fa-solid fa-xmark" },
     ].map((btn) => (
-      <button key={btn.label} type="button" style={{ width: 36, height: 26, borderRadius: 8, border: "none", background: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "oklch(1 0 0 / 0.4)" }}>
-        {btn.el}
+      <button key={btn.label} type="button" style={{ width: 36, height: 26, borderRadius: "var(--radius-md)", border: "none", background: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--glass-text-muted)" }}>
+        <i className={btn.cls} style={{ fontSize: 10 }} />
       </button>
     ))}
   </div>
@@ -32,26 +32,26 @@ Minimize, Maximize, Close — arranged in a horizontal row at the top-right of t
 
 | Property | Token/Value |
 |----------|-------------|
-| Border radius | `--radius-md` (0.5rem) |
-| Default text | `oklch(1 0 0 / 0.4)` (muted) |
-| Hover bg | `oklch(1 0 0 / 0.1)` (hover surface) |
-| Hover text | `oklch(1 0 0 / 0.75)` |
-| Close hover bg | `oklch(0.577 0.245 27.325)` (destructive) |
-| Transition | `background-color 150ms ease-out, color 150ms ease-out` |
+| Border radius | `--radius-md` |
+| Default text | `var(--glass-text-muted)` |
+| Hover bg | `var(--glass-hover)` |
+| Hover text | `var(--glass-text-hover)` |
+| Close hover bg | `var(--destructive)` |
+| Transition | `background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out)` |
 
 ### Navigation Buttons
 
 Back, Forward, Refresh — left side of titlebar.
 
 <ComponentPreview label="Nav Buttons (dark bg)">
-  <div style={{ background: "oklch(0.35 0.06 250)", borderRadius: 8, padding: "8px 12px", display: "inline-flex", gap: 1 }}>
+  <div style={{ background: "var(--window-bg)", borderRadius: 8, padding: "8px 12px", display: "inline-flex", gap: 1 }}>
     {[
-      <svg key="b" width={10} height={10} viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth={1.5}><polyline points="6.5,2 3.5,5 6.5,8" /></svg>,
-      <svg key="f" width={10} height={10} viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth={1.5}><polyline points="3.5,2 6.5,5 3.5,8" /></svg>,
-      <svg key="r" width={11} height={11} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7" /><polyline points="21 3 21 9 15 9" /></svg>,
-    ].map((icon, i) => (
-      <button key={i} type="button" style={{ width: 28, height: 26, borderRadius: 8, border: "none", background: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "oklch(1 0 0 / 0.4)" }}>
-        {icon}
+      { label: "Back", cls: "fa-solid fa-chevron-left" },
+      { label: "Forward", cls: "fa-solid fa-chevron-right" },
+      { label: "Refresh", cls: "fa-solid fa-rotate-right" },
+    ].map((btn) => (
+      <button key={btn.label} type="button" style={{ width: 28, height: 26, borderRadius: "var(--radius-md)", border: "none", background: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--glass-text-muted)" }}>
+        <i className={btn.cls} style={{ fontSize: 10 }} />
       </button>
     ))}
   </div>
@@ -61,10 +61,10 @@ Back, Forward, Refresh — left side of titlebar.
 
 Close/delete buttons follow a special pattern:
 - **Default:** muted text color, hidden until parent hover
-- **Hover:** destructive color `oklch(0.577 0.245 27.325)`
-- **Border radius:** `--radius-sm` (0.375rem)
+- **Hover:** destructive color `var(--destructive)`
+- **Border radius:** `--radius-sm`
 - Exception: items with unsaved changes always show their close indicator
 
 ### Workspace Controls
 
-Edit and Add buttons in the workspace bar. `1.5rem × 1.5rem`, `--radius-md`.
+Edit and Add buttons in the workspace bar. `var(--click-target-min)`, `--radius-md`.

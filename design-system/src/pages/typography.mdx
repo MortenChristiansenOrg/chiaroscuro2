@@ -31,19 +31,19 @@ Sizes in rem. Chrome context uses the compact end; content context uses the full
 ## Samples
 
 <ComponentPreview label="Hero Heading">
-  <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-    <h1 style={{ fontSize: '2.25rem', fontWeight: 600, lineHeight: 1.15, letterSpacing: '-0.02em', color: "oklch(0.15 0 0)" }}>
+  <div style={{ fontFamily: "var(--font-sans)" }}>
+    <h1 style={{ fontSize: 'var(--text-xl)', fontWeight: 600, lineHeight: 1.15, letterSpacing: '-0.02em', color: "var(--foreground)" }}>
       Hero heading at --text-xl
     </h1>
   </div>
 </ComponentPreview>
 
 <ComponentPreview label="UI Text Scale">
-  <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", display: "flex", flexDirection: "column", gap: 8 }}>
-    <span style={{ fontSize: '0.75rem', fontWeight: 500, color: "oklch(0.15 0 0)" }}>Active Tab — --text-base / 500</span>
-    <span style={{ fontSize: '0.75rem', fontWeight: 400, color: "oklch(0.5 0 0)" }}>Inactive Tab — --text-base / 400</span>
-    <span style={{ fontSize: '0.6875rem', letterSpacing: '0.01em', color: "oklch(0.5 0 0)" }}>URL Text — --text-sm</span>
-    <span style={{ fontSize: '0.5625rem', fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.1em", color: "oklch(0.5 0 0)" }}>Section Label — --text-xs / 500</span>
+  <div style={{ fontFamily: "var(--font-sans)", display: "flex", flexDirection: "column", gap: 8 }}>
+    <span style={{ fontSize: 'var(--text-base)', fontWeight: 500, color: "var(--foreground)" }}>Active Tab — --text-base / 500</span>
+    <span style={{ fontSize: 'var(--text-base)', fontWeight: 400, color: "var(--content-text-secondary)" }}>Inactive Tab — --text-base / 400</span>
+    <span style={{ fontSize: 'var(--text-sm)', letterSpacing: '0.01em', color: "var(--content-text-secondary)" }}>URL Text — --text-sm</span>
+    <span style={{ fontSize: 'var(--text-xs)', fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.1em", color: "var(--content-text-secondary)" }}>Section Label — --text-xs / 500</span>
   </div>
 </ComponentPreview>
 

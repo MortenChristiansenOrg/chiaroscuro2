@@ -69,10 +69,11 @@ function ContentArea() {
   return (
     <div
       ref={ref}
-      className="relative flex-1 rounded-lg m-[5px] overflow-hidden"
+      className="relative flex-1 rounded-lg overflow-hidden"
       style={{
-        boxShadow: "0 1px 8px oklch(0 0 0 / 0.08)",
-        background: "oklch(0.995 0 0)",
+        margin: "var(--content-inset)",
+        boxShadow: "var(--shadow-medium)",
+        background: "var(--content-bg)",
       }}
     >
       {!activeTabId && (
@@ -112,8 +113,8 @@ export function Shell() {
       <div
         className="flex flex-1 overflow-hidden"
         style={{
-          background: "oklch(0.45 0.04 250 / 0.12)",
-          backdropFilter: "blur(12px)",
+          background: "var(--glass-bg)",
+          backdropFilter: "blur(var(--glass-backdrop-blur))",
         }}
       >
         {features.map((f) => f.Sidebar && <f.Sidebar key={`sidebar-${f.name}`} />)}

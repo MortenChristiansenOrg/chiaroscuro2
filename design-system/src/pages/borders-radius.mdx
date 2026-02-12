@@ -19,22 +19,22 @@ import { ComponentPreview } from "../components/ComponentPreview"
 <ComponentPreview label="Radius Scale">
   <div style={{ display: "flex", gap: 16, alignItems: "end" }}>
     {[
-      { r: 6, label: "--radius-sm" },
-      { r: 8, label: "--radius-md" },
-      { r: 12, label: "--radius-lg" },
-      { r: 20, label: "--radius-pill" },
-      { r: 9999, label: "--radius-full" },
+      { r: "var(--radius-sm)", label: "--radius-sm" },
+      { r: "var(--radius-md)", label: "--radius-md" },
+      { r: "var(--radius-lg)", label: "--radius-lg" },
+      { r: "var(--radius-pill)", label: "--radius-pill" },
+      { r: "var(--radius-full)", label: "--radius-full" },
     ].map((item) => (
       <div key={item.label} style={{ textAlign: "center" }}>
         <div
           style={{
             width: 48, height: 48,
             borderRadius: item.r,
-            background: "oklch(0.45 0.04 250 / 0.25)",
-            border: "1px solid oklch(0.5 0 0 / 0.2)",
+            background: "var(--glass-bg)",
+            border: "1px solid var(--glass-border)",
           }}
         />
-        <div style={{ fontSize: 10, color: "oklch(0.5 0 0)", marginTop: 4 }}>{item.label}</div>
+        <div style={{ fontSize: 10, color: "var(--content-text-secondary)", marginTop: 4 }}>{item.label}</div>
       </div>
     ))}
   </div>
@@ -42,11 +42,11 @@ import { ComponentPreview } from "../components/ComponentPreview"
 
 ## Border Styles
 
-On glass surfaces, borders use `oklch(1 0 0 / 0.07)`. On content surfaces, borders use `oklch(0.92 0 0)`. Adjust opacity, not lightness.
+On glass surfaces, borders use `var(--glass-border)`. On content surfaces, borders use `var(--border)`. Adjust opacity, not lightness.
 
 ## Rules
 
 1. **Children are rounder than parents (or equal).** If a container has `--radius-lg`, items inside it should use `--radius-md` or smaller. This creates visual nesting.
 2. **Inner radius = outer radius − padding.** When an element with border-radius contains a child that also has border-radius, the inner radius should be reduced by the padding between them to maintain optically consistent curves. If the padding exceeds the outer radius, the inner radius can be `--radius-sm` or zero.
 3. **Borders are 1px only.** All borders are `1px solid`. Thicker borders are reserved for focus indicators (`2px outline`). Never use 3px+ borders.
-4. **Border opacity over border color.** On glass surfaces, borders use `oklch(1 0 0 / 0.07)`. On content surfaces, borders use `oklch(0.92 0 0)`. Adjust opacity, not lightness.
+4. **Border opacity over border color.** On glass surfaces, borders use `var(--glass-border)`. On content surfaces, borders use `var(--border)`. Adjust opacity, not lightness.

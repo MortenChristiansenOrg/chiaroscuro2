@@ -10,10 +10,10 @@ The workspace bar sits at the bottom of the sidebar. Contains colored bubble but
 
 ## Workspace Bubbles
 
-Each bubble uses the workspace's accent color derived from `var(--accent-hue)`. All accent colors share `L=0.65, C=0.15` for consistent vibrancy.
+Each bubble uses the workspace's accent color derived from `var(--accent-hue)`. All accent colors share `L=var(--accent-L), C=var(--accent-C)` for consistent vibrancy.
 
 <ComponentPreview label="Workspace Bubbles (dark bg)">
-  <div style={{ background: "oklch(0.35 0.06 250)", borderRadius: 8, padding: 12, display: "inline-flex", gap: 6, alignItems: "center" }}>
+  <div style={{ background: "var(--window-bg)", borderRadius: "var(--radius-md)", padding: 12, display: "inline-flex", gap: 6, alignItems: "center" }}>
     {[
       { letter: "W", hue: 230, active: true },
       { letter: "P", hue: 350, active: false },
@@ -23,7 +23,7 @@ Each bubble uses the workspace's accent color derived from `var(--accent-hue)`. 
         key={ws.letter}
         type="button"
         style={{
-          width: 24, height: 24, borderRadius: "50%", border: "none",
+          width: 24, height: 24, borderRadius: "var(--radius-full)", border: "none",
           background: `oklch(0.65 0.15 ${ws.hue})`, color: "#fff",
           display: "flex", alignItems: "center", justifyContent: "center",
           fontSize: 10, fontWeight: 600, cursor: "pointer",
@@ -41,11 +41,11 @@ Each bubble uses the workspace's accent color derived from `var(--accent-hue)`. 
 
 | Property | Token/Value |
 |----------|-------------|
-| Size | `1.5rem × 1.5rem` |
-| Border radius | `--radius-full` (50%) |
+| Size | `var(--click-target-min)` |
+| Border radius | `--radius-full` |
 | Font size | `--text-xs`-equivalent (10px), weight 600 |
-| Background | `oklch(0.65 0.15 <hue>)` (accent solid) |
-| Transition | `transform 200ms ease-in-out` |
+| Background | `oklch(var(--accent-L) var(--accent-C) <hue>)` |
+| Transition | `transform var(--duration-normal) var(--ease-in-out)` |
 
 ## Curated Accent Palette
 
@@ -56,7 +56,7 @@ See [Colors](/colors) for the full palette. Available hues: Iris (270), Ocean (2
 | State | Effect |
 |-------|--------|
 | Hover | `transform: scale(1.12)` |
-| Active | `transform: scale(1.08)`, Ring shadow: `0 0 0 2px oklch(0.65 0.15 <hue> / 0.4)` |
+| Active | `transform: scale(1.08)`, Ring shadow: `0 0 0 2px oklch(var(--accent-L) var(--accent-C) <hue> / 0.4)` |
 
 ## Workspace Bar Layout
 

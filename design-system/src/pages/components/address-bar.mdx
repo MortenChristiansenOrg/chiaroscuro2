@@ -9,25 +9,22 @@ import { ComponentPreview } from "../../components/ComponentPreview"
 The URL "pill" sits centered in the titlebar with an animated loading border and a copy button.
 
 <ComponentPreview label="URL Pill (dark bg)">
-  <div style={{ background: "oklch(0.35 0.06 250)", borderRadius: 8, padding: "12px 20px", display: "flex", justifyContent: "center" }}>
+  <div style={{ background: "var(--window-bg)", borderRadius: "var(--radius-md)", padding: "12px 20px", display: "flex", justifyContent: "center" }}>
     <div style={{
       display: "flex", alignItems: "center", gap: 2,
-      fontSize: '0.6875rem', color: "oklch(1 0 0 / 0.5)",
-      padding: "3px 4px 3px 14px", borderRadius: 12,
-      background: "oklch(1 0 0 / 0.08)",
-      fontFamily: "'Plus Jakarta Sans', sans-serif",
+      fontSize: 'var(--text-sm)', color: "var(--glass-text-default)",
+      padding: "3px 4px 3px 14px", borderRadius: "var(--radius-lg)",
+      background: "var(--glass-subtle)",
+      fontFamily: "var(--font-sans)",
     }}>
       <span style={{ userSelect: "all" }}>localhost:5173</span>
       <button type="button" style={{
-        width: 22, height: 22, borderRadius: 8,
+        width: 22, height: 22, borderRadius: "var(--radius-md)",
         border: "none", background: "none", cursor: "pointer",
         display: "flex", alignItems: "center", justifyContent: "center",
-        color: "oklch(1 0 0 / 0.3)",
+        color: "var(--glass-text-hint)",
       }}>
-        <svg width={11} height={11} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={1}>
-          <rect x="3.5" y="3.5" width="7" height="7" rx="1" />
-          <path d="M8.5,3.5V2a1 1 0 00-1-1H2a1 1 0 00-1 1v5.5a1 1 0 001 1h1.5" />
-        </svg>
+        <i className="fa-regular fa-copy" style={{ fontSize: 10 }} />
       </button>
     </div>
   </div>
@@ -38,11 +35,11 @@ The URL "pill" sits centered in the titlebar with an animated loading border and
 | Property | Token/Value |
 |----------|-------------|
 | Position | Absolute center in titlebar |
-| Border radius | `--radius-lg` (0.75rem) |
-| Background | `oklch(1 0 0 / 0.08)` (subtle surface) |
-| Hover bg | `oklch(1 0 0 / 0.1)` (hover surface) |
-| Font size | `--text-sm` (0.6875rem) |
-| Color | `oklch(1 0 0 / 0.55)` (default text) |
+| Border radius | `--radius-lg` |
+| Background | `var(--glass-subtle)` |
+| Hover bg | `var(--glass-hover)` |
+| Font size | `--text-sm` |
+| Color | `var(--glass-text-default)` |
 
 ## Behavior
 
@@ -55,7 +52,7 @@ Uses `@property --url-angle` with a `conic-gradient` masked to the border edge. 
 
 | Property | Value |
 |----------|-------|
-| Gradient color | Accent glow: `oklch(0.65 0.15 var(--accent-hue) / 0.8)` |
+| Gradient color | Accent glow: `oklch(var(--accent-L) var(--accent-C) var(--accent-hue) / 0.8)` |
 | Animation | `url-spin 2.5s linear infinite` |
 
 ## Copy Button
@@ -64,6 +61,6 @@ Uses `@property --url-angle` with a `conic-gradient` masked to the border edge. 
 |----------|-------------|
 | Size | `1.375rem × 1.375rem` |
 | Border radius | `--radius-md` |
-| Default color | `oklch(1 0 0 / 0.4)` (muted) |
-| Hover bg | `oklch(1 0 0 / 0.1)` (hover surface) |
-| Hover color | `oklch(1 0 0 / 0.75)` |
+| Default color | `var(--glass-text-muted)` |
+| Hover bg | `var(--glass-hover)` |
+| Hover color | `var(--glass-text-hover)` |

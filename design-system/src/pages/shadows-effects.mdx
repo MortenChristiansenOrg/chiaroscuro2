@@ -8,26 +8,26 @@ import { ComponentPreview } from "../components/ComponentPreview"
 
 ## Shadow Scale
 
-| Level | Value | Usage |
-|-------|-------|-------|
-| None | — | Default state of most elements |
-| Subtle | `0 1px 4px oklch(0 0 0 / 0.05)` | Active/selected elements on glass |
-| Medium | `0 1px 0.5rem oklch(0 0 0 / 0.08)` | Content panel, dropdown menus |
-| Elevated | `0 0.25rem 1.25rem oklch(0 0 0 / 0.08)` | Cards on hover, floating panels |
-| Ring | `0 0 0 2px oklch(0.65 0.15 var(--accent-hue) / 0.4)` | Active workspace indicator |
+| Level | Token | Value | Usage |
+|-------|-------|-------|-------|
+| None | — | — | Default state of most elements |
+| Subtle | `--shadow-subtle` | `0 1px 4px oklch(0 0 0 / 0.05)` | Active/selected elements on glass |
+| Medium | `--shadow-medium` | `0 1px 0.5rem oklch(0 0 0 / 0.08)` | Content panel, dropdown menus |
+| Elevated | `--shadow-elevated` | `0 0.25rem 1.25rem oklch(0 0 0 / 0.08)` | Cards on hover, floating panels |
+| Ring | — | `0 0 0 2px oklch(0.65 0.15 var(--accent-hue) / 0.4)` | Active workspace indicator |
 
 <ComponentPreview label="Shadow Samples">
   <div style={{ display: "flex", gap: 24, flexWrap: "wrap" }}>
     {[
-      { shadow: "0 1px 4px oklch(0 0 0 / 0.05)", label: "Subtle" },
-      { shadow: "0 1px 8px oklch(0 0 0 / 0.08)", label: "Medium" },
-      { shadow: "0 4px 20px oklch(0 0 0 / 0.08)", label: "Elevated" },
+      { shadow: "var(--shadow-subtle)", label: "Subtle" },
+      { shadow: "var(--shadow-medium)", label: "Medium" },
+      { shadow: "var(--shadow-elevated)", label: "Elevated" },
       { shadow: "0 0 0 2px oklch(0.65 0.15 270 / 0.4)", label: "Ring" },
     ].map((item) => (
       <div key={item.label} style={{ textAlign: "center" }}>
         <div
           style={{
-            width: 64, height: 48, borderRadius: 12,
+            width: 64, height: 48, borderRadius: "var(--radius-lg)",
             background: "var(--card)",
             boxShadow: item.shadow,
           }}
@@ -40,19 +40,19 @@ import { ComponentPreview } from "../components/ComponentPreview"
 
 ## Backdrop Filter
 
-All glass surfaces use a single blur value: `backdrop-filter: blur(0.75rem)`. Don't vary it — inconsistent blur distances make the glass look broken.
+All glass surfaces use a single blur value: `backdrop-filter: blur(var(--glass-backdrop-blur))`. Don't vary it — inconsistent blur distances make the glass look broken.
 
 ## Transparency Layers
 
 The browser UI is composed of three visual layers:
 
 1. **Window background** — Semi-transparent background revealing the OS acrylic effect. Purely decorative. No interactive elements.
-2. **Glass** — Titlebar, sidebar, overlays. Translucent with `backdrop-filter: blur(0.75rem)`. Contains all browser chrome.
-3. **Content** — Near-opaque panel (`oklch(0.995 0 0)`) for web pages. Inset from the glass with slight margin and rounded corners.
+2. **Glass** — Titlebar, sidebar, overlays. Translucent with `backdrop-filter: blur(var(--glass-backdrop-blur))`. Contains all browser chrome.
+3. **Content** — Near-opaque panel (`var(--content-bg)`) for web pages. Inset from the glass with slight margin and rounded corners.
 
 ## Rules
 
 1. **Shadows are earned.** Most elements have no shadow at rest. Shadows appear on selection, hover-lift, or elevation (floating panels). Don't add shadows for decoration.
 2. **Glass surfaces don't get shadows.** The glass effect (transparency + blur) already creates depth. Adding box-shadow to glass elements creates visual conflict. Exception: the content panel, which is opaque and benefits from a subtle shadow.
 3. **Shadow direction: top-light.** All shadows assume light from above (positive Y offset). Never use negative Y offset or left/right-only shadows.
-4. **Backdrop blur: `blur(0.75rem)` standard.** All glass surfaces use this single blur value.
+4. **Backdrop blur: `blur(var(--glass-backdrop-blur))` standard.** All glass surfaces use this single blur value.

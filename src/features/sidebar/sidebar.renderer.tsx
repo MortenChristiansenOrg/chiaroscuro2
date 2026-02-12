@@ -94,9 +94,9 @@ function TabItem({
         gap: 10,
         padding: "5px 12px",
         margin: "1px 6px",
-        borderRadius: 20,
-        background: isActive ? "oklch(1 0 0 / 0.22)" : undefined,
-        boxShadow: isActive ? "0 1px 4px oklch(0 0 0 / 0.05)" : undefined,
+        borderRadius: "var(--radius-pill)",
+        background: isActive ? "var(--glass-active)" : undefined,
+        boxShadow: isActive ? "var(--shadow-subtle)" : undefined,
       }}
       onClick={handleClick}
       onKeyDown={(e) => e.key === "Enter" && handleClick()}
@@ -110,10 +110,10 @@ function TabItem({
         style={{
           fontSize: "12.5px",
           color: isActive
-            ? "oklch(1 0 0 / 0.95)"
+            ? "var(--glass-text-primary)"
             : isEphemeral
               ? "oklch(1 0 0 / 0.35)"
-              : "oklch(1 0 0 / 0.55)",
+              : "var(--glass-text-default)",
           fontWeight: isActive ? 500 : undefined,
         }}
       >
@@ -125,8 +125,8 @@ function TabItem({
         style={{
           width: 16,
           height: 16,
-          borderRadius: 6,
-          color: "oklch(1 0 0 / 0.3)",
+          borderRadius: "var(--radius-sm)",
+          color: "var(--glass-text-hint)",
           marginLeft: "auto",
         }}
         onClick={handleClose}
@@ -199,7 +199,7 @@ export function SidebarPanel() {
   return (
     <div
       className="flex flex-col overflow-y-auto shrink-0"
-      style={{ width: 230, padding: "5px 0 0" }}
+      style={{ width: "var(--sidebar-width)", padding: "5px 0 0" }}
     >
       {/* Bookmarked section */}
       {bookmarked.length > 0 && (
@@ -209,7 +209,7 @@ export function SidebarPanel() {
               fontSize: 9,
               textTransform: "uppercase",
               letterSpacing: "0.1em",
-              color: "oklch(1 0 0 / 0.3)",
+              color: "var(--glass-text-hint)",
               padding: "10px 14px 3px",
               fontWeight: 500,
             }}
@@ -229,7 +229,7 @@ export function SidebarPanel() {
             className="flex items-center"
             style={{ gap: 8, padding: "6px 8px 4px 14px", margin: "2px 0" }}
           >
-            <div style={{ flex: 1, height: 1, background: "oklch(1 0 0 / 0.07)" }} />
+            <div style={{ flex: 1, height: 1, background: "var(--glass-border)" }} />
             <button
               type="button"
               className="flex items-center cursor-pointer transition-all"
@@ -237,7 +237,7 @@ export function SidebarPanel() {
                 gap: 4,
                 border: "none",
                 background: "none",
-                color: "oklch(1 0 0 / 0.25)",
+                color: "var(--glass-text-hint)",
                 fontSize: 9,
                 fontWeight: 500,
                 fontFamily: "inherit",

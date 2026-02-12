@@ -11,14 +11,14 @@ Content cards in the content panel. Each has an image placeholder, title, and de
 <ComponentPreview label="Card">
   <div style={{ maxWidth: 240 }}>
     <div style={{
-      borderRadius: 12, overflow: "hidden",
-      border: "1px solid oklch(0.92 0 0)",
-      cursor: "pointer", fontFamily: "'Plus Jakarta Sans', sans-serif",
+      borderRadius: "var(--radius-lg)", overflow: "hidden",
+      border: "1px solid var(--border)",
+      cursor: "pointer", fontFamily: "var(--font-sans)",
     }}>
       <div style={{ height: 120, background: "linear-gradient(135deg, oklch(0.92 0.02 200), oklch(0.88 0.03 250))" }} />
-      <div style={{ padding: "0.875rem 1rem" }}>
-        <h3 style={{ fontSize: '0.875rem', fontWeight: 500, marginBottom: 4, letterSpacing: '-0.01em' }}>Light & Shadow</h3>
-        <p style={{ fontSize: '0.75rem', color: "oklch(0.5 0 0)", lineHeight: 1.6, margin: 0 }}>Exploring the interplay of illumination and darkness.</p>
+      <div style={{ padding: "var(--text-md) 1rem" }}>
+        <h3 style={{ fontSize: 'var(--text-md)', fontWeight: 500, marginBottom: 4, letterSpacing: '-0.01em' }}>Light & Shadow</h3>
+        <p style={{ fontSize: 'var(--text-base)', color: "var(--content-text-secondary)", lineHeight: 1.6, margin: 0 }}>Exploring the interplay of illumination and darkness.</p>
       </div>
     </div>
   </div>
@@ -28,15 +28,15 @@ Content cards in the content panel. Each has an image placeholder, title, and de
 
 | Property | Token/Value |
 |----------|-------------|
-| Border radius | `--radius-lg` (0.75rem) |
-| Border | `1px solid oklch(0.92 0 0)` (content border) |
-| Title | `--text-md` (0.875rem), weight 500 |
-| Description | `--text-base` (0.75rem), `oklch(0.5 0 0)` (text secondary), `line-height: 1.6` |
+| Border radius | `--radius-lg` |
+| Border | `1px solid var(--border)` |
+| Title | `--text-md`, weight 500 |
+| Description | `--text-base`, `var(--content-text-secondary)`, `line-height: 1.6` |
 
 ## Hover State
 
 | Property | Value |
 |----------|-------|
-| Shadow | Elevated: `0 0.25rem 1.25rem oklch(0 0 0 / 0.08)` |
+| Shadow | `var(--shadow-elevated)` |
 | Transform | `translateY(-0.0625rem)` (1px max hover lift) |
-| Transition | `transform 150ms ease-out, box-shadow 150ms ease-out` |
+| Transition | `transform var(--duration-fast) var(--ease-out), box-shadow var(--duration-fast) var(--ease-out)` |

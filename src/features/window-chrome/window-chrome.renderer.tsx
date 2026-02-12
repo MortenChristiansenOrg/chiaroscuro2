@@ -166,12 +166,12 @@ const navBtnStyle: React.CSSProperties = {
   justifyContent: "center",
   width: 28,
   height: 26,
-  borderRadius: 8,
+  borderRadius: "var(--radius-md)",
   border: "none",
   background: "none",
   cursor: "pointer",
-  color: "oklch(1 0 0 / 0.55)",
-  transition: "all 0.15s",
+  color: "var(--glass-text-default)",
+  transition: "all var(--duration-fast)",
 };
 
 function NavButtons() {
@@ -180,7 +180,7 @@ function NavButtons() {
       <button
         type="button"
         style={navBtnStyle}
-        className="hover:bg-[oklch(1_0_0_/_0.1)] hover:text-[oklch(1_0_0_/_0.7)]"
+        className="hover:bg-glass-hover hover:text-glass-text-hover"
         onClick={() => sendCommand(WINDOW_GO_BACK)}
         aria-label="Go back"
         data-tip="Back"
@@ -190,7 +190,7 @@ function NavButtons() {
       <button
         type="button"
         style={navBtnStyle}
-        className="hover:bg-[oklch(1_0_0_/_0.1)] hover:text-[oklch(1_0_0_/_0.7)]"
+        className="hover:bg-glass-hover hover:text-glass-text-hover"
         onClick={() => sendCommand(WINDOW_GO_FORWARD)}
         aria-label="Go forward"
         data-tip="Forward"
@@ -200,7 +200,7 @@ function NavButtons() {
       <button
         type="button"
         style={navBtnStyle}
-        className="hover:bg-[oklch(1_0_0_/_0.1)] hover:text-[oklch(1_0_0_/_0.7)]"
+        className="hover:bg-glass-hover hover:text-glass-text-hover"
         onClick={() => sendCommand(WINDOW_RELOAD)}
         aria-label="Reload"
         data-tip="Reload"
@@ -263,10 +263,10 @@ function UrlPill() {
         style={{
           gap: 2,
           fontSize: 11,
-          color: "oklch(1 0 0 / 0.7)",
+          color: "var(--glass-text-hover)",
           padding: "3px 4px 3px 14px",
-          borderRadius: 12,
-          background: "oklch(1 0 0 / 0.08)",
+          borderRadius: "var(--radius-lg)",
+          background: "var(--glass-subtle)",
         }}
       >
         <span className="select-all truncate" style={{ maxWidth: 300 }}>
@@ -278,11 +278,11 @@ function UrlPill() {
           style={{
             width: 22,
             height: 22,
-            borderRadius: 8,
+            borderRadius: "var(--radius-md)",
             border: "none",
             background: "none",
             cursor: "pointer",
-            color: copied ? "oklch(1 0 0 / 0.75)" : "oklch(1 0 0 / 0.5)",
+            color: copied ? "var(--glass-text-hover)" : "var(--glass-text-default)",
           }}
           onClick={handleCopy}
           aria-label={copied ? "Copied!" : "Copy URL"}
@@ -342,8 +342,8 @@ export function TitleBar() {
       style={
         {
           WebkitAppRegion: "drag",
-          background: "oklch(0.45 0.04 250 / 0.12)",
-          backdropFilter: "blur(12px)",
+          background: "var(--glass-bg)",
+          backdropFilter: "blur(var(--glass-backdrop-blur))",
         } as React.CSSProperties
       }
       onDoubleClick={() => sendCommand(WINDOW_MAXIMIZE_RESTORE)}
