@@ -6,9 +6,13 @@ import { ComponentPreview } from "../../components/ComponentPreview"
 
 # Buttons
 
-The D8 Baseline uses several button variants — all are `border: none; background: none` by default with hover states.
+All buttons follow the [state ladder](/interaction) — transparent default, hover surface on hover, active surface on press.
 
-## Window Controls
+## Icon Buttons
+
+Minimum visual size: `1.5rem × 1.5rem`. Must have `aria-label` and `data-tip` for tooltip.
+
+### Window Controls
 
 Minimize, Maximize, Close — arranged in a horizontal row at the top-right of the titlebar.
 
@@ -26,19 +30,16 @@ Minimize, Maximize, Close — arranged in a horizontal row at the top-right of t
   </div>
 </ComponentPreview>
 
-### Specs
+| Property | Token/Value |
+|----------|-------------|
+| Border radius | `--radius-md` (0.5rem) |
+| Default text | `oklch(1 0 0 / 0.4)` (muted) |
+| Hover bg | `oklch(1 0 0 / 0.1)` (hover surface) |
+| Hover text | `oklch(1 0 0 / 0.75)` |
+| Close hover bg | `oklch(0.577 0.245 27.325)` (destructive) |
+| Transition | `background-color 150ms ease-out, color 150ms ease-out` |
 
-| Property | Value |
-|----------|-------|
-| Size | `36×26px` |
-| Border radius | `8px` |
-| Color | `oklch(1 0 0 / 0.4)` |
-| Hover bg | `oklch(1 0 0 / 0.1)` |
-| Hover color | `oklch(1 0 0 / 0.7)` |
-| Close hover bg | `oklch(0.577 0.245 27.325)` |
-| Close hover color | `#fff` |
-
-## Navigation Buttons
+### Navigation Buttons
 
 Back, Forward, Refresh — left side of titlebar.
 
@@ -49,55 +50,21 @@ Back, Forward, Refresh — left side of titlebar.
       <svg key="f" width={10} height={10} viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth={1.5}><polyline points="3.5,2 6.5,5 3.5,8" /></svg>,
       <svg key="r" width={11} height={11} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7" /><polyline points="21 3 21 9 15 9" /></svg>,
     ].map((icon, i) => (
-      <button key={i} type="button" style={{ width: 28, height: 26, borderRadius: 8, border: "none", background: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "oklch(1 0 0 / 0.35)" }}>
+      <button key={i} type="button" style={{ width: 28, height: 26, borderRadius: 8, border: "none", background: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "oklch(1 0 0 / 0.4)" }}>
         {icon}
       </button>
     ))}
   </div>
 </ComponentPreview>
 
-### Specs
+### Close Buttons
 
-| Property | Value |
-|----------|-------|
-| Size | `28×26px` |
-| Border radius | `8px` |
-| Color | `oklch(1 0 0 / 0.35)` |
-| Hover bg | `oklch(1 0 0 / 0.1)` |
-| Hover color | `oklch(1 0 0 / 0.7)` |
+Close/delete buttons follow a special pattern:
+- **Default:** muted text color, hidden until parent hover
+- **Hover:** destructive color `oklch(0.577 0.245 27.325)`
+- **Border radius:** `--radius-sm` (0.375rem)
+- Exception: items with unsaved changes always show their close indicator
 
-## Workspace Controls
+### Workspace Controls
 
-Edit and Add buttons in the workspace bar.
-
-| Property | Value |
-|----------|-------|
-| Size | `24×24px` |
-| Border radius | `8px` |
-| Color | `oklch(1 0 0 / 0.25)` |
-| Hover bg | `oklch(1 0 0 / 0.1)` |
-| Hover color | `oklch(1 0 0 / 0.5)` |
-
-## Tab Close Button
-
-Appears on hover inside sidebar tabs.
-
-| Property | Value |
-|----------|-------|
-| Size | `16×16px` |
-| Border radius | `6px` |
-| Icon size | `7×7px` |
-| Visibility | `display: none` → `flex` on parent `:hover` |
-
-## Ephemeral Clear Button
-
-"Clear" text + broom icon.
-
-| Property | Value |
-|----------|-------|
-| Font size | `9px` |
-| Font weight | `500` |
-| Padding | `2px 6px` |
-| Border radius | `6px` |
-| Color | `oklch(1 0 0 / 0.25)` |
-| Hover color | `oklch(1 0 0 / 0.5)` |
+Edit and Add buttons in the workspace bar. `1.5rem × 1.5rem`, `--radius-md`.

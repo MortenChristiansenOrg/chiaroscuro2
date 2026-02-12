@@ -16,14 +16,7 @@
   font-family: "Plus Jakarta Sans", sans-serif;
   color: oklch(0.15 0 0);
   -webkit-font-smoothing: antialiased;
-  background: linear-gradient(
-    150deg,
-    oklch(0.45 0.09 270) 0%,
-    oklch(0.38 0.08 250) 30%,
-    oklch(0.33 0.09 230) 55%,
-    oklch(0.4 0.07 200) 80%,
-    oklch(0.42 0.06 260) 100%
-  );
+  background: oklch(0.35 0.06 250 / 0.65);
   border-radius: 12px;
   overflow: hidden;
   scrollbar-width: thin;

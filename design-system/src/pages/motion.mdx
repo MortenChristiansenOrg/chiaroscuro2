@@ -1,0 +1,60 @@
+---
+title: Motion & Animation
+---
+
+# Motion & Animation
+
+Animation serves comprehension — it shows cause and effect. It should never be decorative or draw attention to itself.
+
+## Timing Tokens
+
+| Token | Duration | Easing | Usage |
+|-------|----------|--------|-------|
+| `--duration-instant` | `100ms` | `ease-out` | Opacity toggles, focus ring appearance |
+| `--duration-fast` | `150ms` | `ease-out` | Hover state transitions (bg, text color, opacity) |
+| `--duration-normal` | `200ms` | `ease-in-out` | Panel slides, dropdown opening, state changes |
+| `--duration-slow` | `300ms` | `ease-in-out` | Complex transitions (sidebar collapse, modal entrance) |
+| `--duration-enter` | `200ms` | `cubic-bezier(0, 0, 0.2, 1)` | Overlays entering (ease-out / decelerate) |
+| `--duration-exit` | `150ms` | `cubic-bezier(0.4, 0, 1, 1)` | Overlays leaving (ease-in / accelerate) |
+
+## Rules
+
+1. **Only animate `transform` and `opacity`.** These are GPU-composited and run at 60fps. Never animate `width`, `height`, `padding`, `margin`, `top`, `left`, or `border-radius` — they trigger layout reflow.
+2. **Entrances are slower than exits.** Users need time to notice something appearing. Disappearances can be faster because attention is already elsewhere.
+3. **Hover = `--duration-fast`.** All hover state changes (background, text brightness, icon opacity) use 150ms ease-out. No exceptions.
+4. **Overlays scale in from 0.96.** Command palette, tooltips, and dropdowns enter with `transform: scale(0.96)` → `scale(1)` combined with `opacity: 0` → `1`.
+5. **No transition on `all`.** Always specify the exact properties being transitioned: `transition: background-color 150ms ease-out, color 150ms ease-out`.
+6. **Respect `prefers-reduced-motion`.** Wrap all transitions in `@media (prefers-reduced-motion: no-preference)` or use Tailwind's `motion-safe:` variant. Under reduced-motion, transitions become instant (0ms) and keyframe animations are suppressed.
+7. **Loading animations are an exception.** The URL pill's spinning gradient and skeleton loaders may run continuously. They communicate ongoing activity and don't count as decorative animation.
+8. **Hover lift = `translateY(-0.0625rem)` max.** Cards and elevated elements can rise slightly on hover. Keep it to 1px equivalent.
+9. **No bounce, no spring.** Browser chrome is a tool. Springy, bouncy animations belong in consumer apps. Use linear or standard easing only.
+
+## URL Pill — Spinning Gradient Border
+
+```css
+@property --url-angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+
+.url-pill::before {
+  background: conic-gradient(from var(--url-angle),
+    oklch(0.65 0.15 270 / 0) 0%,
+    oklch(0.65 0.15 270 / 0.8) 10%,
+    oklch(0.65 0.15 270 / 0) 22%,
+    transparent 22%);
+  animation: url-spin 2.5s linear infinite;
+}
+```
+
+## Tooltip Animation
+
+```css
+@keyframes tip-in {
+  from { opacity: 0; scale: 0.96; }
+  to { opacity: 1; scale: 1; }
+}
+```
+
+Enter with `--duration-enter`, exit with `--duration-exit`.

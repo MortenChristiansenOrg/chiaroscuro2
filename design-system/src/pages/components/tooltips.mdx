@@ -4,7 +4,7 @@ title: Tooltips
 
 # Tooltips
 
-Tooltips use a `[data-tip]` attribute system — any element with `data-tip="text"` gets a tooltip on hover after a 500ms delay.
+Tooltips use a `[data-tip]` attribute system — any element with `data-tip="text"` gets a tooltip on hover.
 
 ## Implementation
 
@@ -12,30 +12,22 @@ A `TooltipLayer` component listens to global `mouseover` events, finds the neare
 
 ## Visual Specs
 
-| Property | Value |
-|----------|-------|
+| Property | Token/Value |
+|----------|-------------|
 | Background | `oklch(0.16 0 0 / 0.92)` |
-| Backdrop filter | `blur(12px)` |
+| Backdrop filter | `blur(0.75rem)` |
 | Color | `oklch(0.88 0 0)` |
-| Font size | `11px` |
-| Font weight | `500` |
+| Font size | `--text-sm` (0.6875rem) |
+| Font weight | 500 |
 | Letter spacing | `0.01em` |
-| Padding | `4px 10px` |
-| Border radius | `7px` |
-| Position | Fixed, centered below trigger (or above if near viewport bottom) |
-| Delay | `500ms` |
-| Animation | `tip-in 0.12s ease` — fade+scale from 0.96 to 1 |
-| z-index | `99999` |
+| Border radius | `--radius-sm` (0.375rem) |
+| Delay | `400ms` |
 
-## Usage
+## Animation
 
-```html
-<button data-tip="Copy URL">…</button>
-```
-
-No wrapper component needed — just add the attribute.
-
-## Animation Keyframes
+Follows the [overlay pattern](/motion):
+- Enter with `--duration-enter` (200ms) at `scale(0.96)` → `scale(1)`, `opacity: 0` → `1`
+- Exit with `--duration-exit` (150ms), reverse
 
 ```css
 @keyframes tip-in {
@@ -43,3 +35,15 @@ No wrapper component needed — just add the attribute.
   to { opacity: 1; scale: 1; }
 }
 ```
+
+## Usage
+
+```html
+<button data-tip="Copy URL">...</button>
+```
+
+No wrapper component needed — just add the attribute. Every icon-only button must have `data-tip`.
+
+## Positioning
+
+Fixed, centered below trigger. Flips above if near viewport bottom. Does not trap focus.

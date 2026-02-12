@@ -12,7 +12,7 @@ The URL "pill" sits centered in the titlebar with an animated loading border and
   <div style={{ background: "oklch(0.35 0.06 250)", borderRadius: 8, padding: "12px 20px", display: "flex", justifyContent: "center" }}>
     <div style={{
       display: "flex", alignItems: "center", gap: 2,
-      fontSize: 11, color: "oklch(1 0 0 / 0.5)",
+      fontSize: '0.6875rem', color: "oklch(1 0 0 / 0.5)",
       padding: "3px 4px 3px 14px", borderRadius: 12,
       background: "oklch(1 0 0 / 0.08)",
       fontFamily: "'Plus Jakarta Sans', sans-serif",
@@ -35,36 +35,35 @@ The URL "pill" sits centered in the titlebar with an animated loading border and
 
 ## Pill Container
 
-| Property | Value |
-|----------|-------|
-| Position | Absolute center (`left: 50%; top: 50%; transform: translate(-50%, -50%)`) |
-| Padding | `3px 4px 3px 14px` |
-| Border radius | `12px` |
-| Background | `oklch(1 0 0 / 0.08)` |
-| Hover bg | `oklch(1 0 0 / 0.14)` |
-| Font size | `11px` |
-| Color | `oklch(1 0 0 / 0.5)` |
+| Property | Token/Value |
+|----------|-------------|
+| Position | Absolute center in titlebar |
+| Border radius | `--radius-lg` (0.75rem) |
+| Background | `oklch(1 0 0 / 0.08)` (subtle surface) |
+| Hover bg | `oklch(1 0 0 / 0.1)` (hover surface) |
+| Font size | `--text-sm` (0.6875rem) |
+| Color | `oklch(1 0 0 / 0.55)` (default text) |
+
+## Behavior
+
+- **Select-all on focus.** When the URL bar gains focus, all text is selected so the user can immediately type a replacement.
+- **Monospace for URL display.** Uses `--font-mono` (JetBrains Mono) for the URL text.
 
 ## Animated Loading Border
 
-Uses `@property --url-angle` with a `conic-gradient` masked to only show the border edge:
+Uses `@property --url-angle` with a `conic-gradient` masked to the border edge. See [Motion & Animation](/motion) for the spinning gradient implementation.
 
 | Property | Value |
 |----------|-------|
-| `::before` inset | `-1.5px` |
-| `::before` border-radius | `13.5px` |
-| `::before` padding | `1.5px` (creates the border width) |
-| Gradient color | `oklch(0.65 0.15 270 / 0.8)` (accent glow) |
-| Gradient arc | `0%→10%→22%` (small bright arc) |
+| Gradient color | Accent glow: `oklch(0.65 0.15 var(--accent-hue) / 0.8)` |
 | Animation | `url-spin 2.5s linear infinite` |
-| Mask | XOR composite to cut out the fill, leaving only border |
 
 ## Copy Button
 
-| Property | Value |
-|----------|-------|
-| Size | `22×22px` |
-| Border radius | `8px` |
-| Color | `oklch(1 0 0 / 0.3)` |
-| Hover bg | `oklch(1 0 0 / 0.12)` |
-| Hover color | `oklch(1 0 0 / 0.65)` |
+| Property | Token/Value |
+|----------|-------------|
+| Size | `1.375rem × 1.375rem` |
+| Border radius | `--radius-md` |
+| Default color | `oklch(1 0 0 / 0.4)` (muted) |
+| Hover bg | `oklch(1 0 0 / 0.1)` (hover surface) |
+| Hover color | `oklch(1 0 0 / 0.75)` |

@@ -1,0 +1,22 @@
+---
+title: Layout Composition
+---
+
+# Layout Composition
+
+## The Three Layers
+
+The browser UI is composed of three visual layers:
+
+1. **Window background** — Semi-transparent background revealing the OS acrylic effect. Purely decorative. No interactive elements.
+2. **Glass** — Titlebar, sidebar, overlays. Translucent. Contains all browser chrome.
+3. **Content** — Opaque panel for web pages. Inset from the glass with a slight margin and rounded corners. This is where the user's attention should be.
+
+## Structural Rules
+
+1. **Content area gets all available space.** Sidebar and titlebar are fixed-size. Content area is `flex: 1`. Never let chrome UI grow at the expense of content.
+2. **Sidebar width: `15rem`.** Fixed. May be collapsible (hidden entirely, no narrow rail). When hidden, content takes full width.
+3. **Content inset: `0.5rem` margin from glass edges.** The content panel floats slightly inside the glass body, revealing the glass at the edges. This creates the distinctive Chiaroscuro depth effect.
+4. **Titlebar height: `2.5rem`.** Fixed. Contains the drag region, navigation buttons, URL bar, and window controls.
+5. **Scrolling: sidebar only.** The titlebar and workspace bar are fixed. The tab list between them scrolls. Content area scrolling is handled by the web page inside the WebContentsView.
+6. **Z-index discipline.** Overlays (command palette, tooltips, context menus) live above everything. Define layers: `base: 0`, `content: 1`, `chrome: 10`, `overlay: 100`, `tooltip: 1000`. Never use arbitrary z-index values.

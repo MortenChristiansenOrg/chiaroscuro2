@@ -6,97 +6,91 @@ import { ColorSwatch, SwatchGrid } from "../components/ColorSwatch"
 
 # Colors
 
-All colors use the oklch color space for perceptual uniformity. The palette is split between mockup-specific "glass" colors and the shadcn semantic token system.
+All colors use `oklch(L C H / alpha)`. No hex, rgb, or hsl. The color system has two contexts: **glass** (browser chrome over the window background) and **content** (opaque panels for web content and settings). There is no dark mode — the glass chrome is always dark (light text on translucent dark), and content panels are always light.
 
-## Glass UI Colors
+## Glass Context (Chrome UI)
 
-Used in the browser chrome — titlebar, sidebar, and overlays on top of the wallpaper gradient.
+The chrome renders over a semi-transparent background that reveals the OS window acrylic effect, with `backdrop-filter: blur(0.75rem)`. All chrome colors are white or near-white at varying opacities.
 
 <SwatchGrid>
   <ColorSwatch name="Glass Background" color="oklch(0.45 0.04 250 / 0.12)" />
-  <ColorSwatch name="Glass Hover" color="oklch(1 0 0 / 0.1)" />
-  <ColorSwatch name="Glass Active" color="oklch(1 0 0 / 0.22)" />
-  <ColorSwatch name="Glass Border" color="oklch(1 0 0 / 0.07)" />
-  <ColorSwatch name="Glass Subtle" color="oklch(1 0 0 / 0.08)" />
-  <ColorSwatch name="Glass Strong" color="oklch(1 0 0 / 0.14)" />
+  <ColorSwatch name="Hover Surface" color="oklch(1 0 0 / 0.1)" />
+  <ColorSwatch name="Active Surface" color="oklch(1 0 0 / 0.22)" />
+  <ColorSwatch name="Subtle Surface" color="oklch(1 0 0 / 0.06)" />
+  <ColorSwatch name="Border" color="oklch(1 0 0 / 0.07)" />
 </SwatchGrid>
 
 ## Text Colors (on glass)
 
 <SwatchGrid>
-  <ColorSwatch name="Primary Text" color="oklch(1 0 0 / 0.95)" />
-  <ColorSwatch name="Secondary Text" color="oklch(1 0 0 / 0.55)" />
-  <ColorSwatch name="Muted Text" color="oklch(1 0 0 / 0.35)" />
-  <ColorSwatch name="Hint Text" color="oklch(1 0 0 / 0.25)" />
-  <ColorSwatch name="Label Text" color="oklch(1 0 0 / 0.3)" />
+  <ColorSwatch name="Primary Text (0.95)" color="oklch(1 0 0 / 0.95)" />
+  <ColorSwatch name="Default Text (0.55)" color="oklch(1 0 0 / 0.55)" />
+  <ColorSwatch name="Muted Text (0.4)" color="oklch(1 0 0 / 0.4)" />
+  <ColorSwatch name="Hint Text (0.25)" color="oklch(1 0 0 / 0.25)" />
 </SwatchGrid>
 
-## Accent & Semantic
+## Content Context (Opaque Panels)
+
+Inside content panels (near-white `oklch(0.995 0 0)` background):
 
 <SwatchGrid>
-  <ColorSwatch name="Accent Glow" color="oklch(0.65 0.15 270)" />
-  <ColorSwatch name="Destructive / Close" color="oklch(0.577 0.245 27.325)" />
-  <ColorSwatch name="Loading Gradient" color="oklch(0.65 0.15 270 / 0.8)" />
+  <ColorSwatch name="Text Primary" color="oklch(0.15 0 0)" />
+  <ColorSwatch name="Text Secondary" color="oklch(0.5 0 0)" />
+  <ColorSwatch name="Text Muted" color="oklch(0.6 0 0)" />
+  <ColorSwatch name="Border" color="oklch(0.92 0 0)" />
+  <ColorSwatch name="Background" color="oklch(0.995 0 0)" />
 </SwatchGrid>
 
-## Workspace Colors
+## Workspace Accent Colors
+
+Each workspace has a user-chosen accent color exposed as `var(--accent-hue)` — a single hue value. The chrome UI is deliberately achromatic so any accent harmonizes.
+
+| Role | Value | Usage |
+|------|-------|-------|
+| Accent solid | `oklch(0.65 0.15 var(--accent-hue))` | Focus rings, active indicators |
+| Accent muted | `oklch(0.65 0.15 var(--accent-hue) / 0.4)` | Workspace ring, subtle highlights |
+| Accent glow | `oklch(0.65 0.15 var(--accent-hue) / 0.8)` | Loading gradient, animated borders |
+
+### Curated Accent Palette
+
+Users pick from a predefined set of hues. All share `L=0.65, C=0.15` for consistent vibrancy and accessibility.
 
 <SwatchGrid>
-  <ColorSwatch name="Workspace 1" color="oklch(0.6 0.12 230)" />
-  <ColorSwatch name="Workspace 2" color="oklch(0.6 0.12 340)" />
-  <ColorSwatch name="Workspace 3" color="oklch(0.6 0.12 130)" />
+  <ColorSwatch name="Iris (270)" color="oklch(0.65 0.15 270)" />
+  <ColorSwatch name="Ocean (230)" color="oklch(0.65 0.15 230)" />
+  <ColorSwatch name="Teal (195)" color="oklch(0.65 0.15 195)" />
+  <ColorSwatch name="Jade (160)" color="oklch(0.65 0.15 160)" />
+  <ColorSwatch name="Lime (130)" color="oklch(0.65 0.15 130)" />
+  <ColorSwatch name="Amber (85)" color="oklch(0.65 0.15 85)" />
+  <ColorSwatch name="Coral (45)" color="oklch(0.65 0.15 45)" />
+  <ColorSwatch name="Rose (350)" color="oklch(0.65 0.15 350)" />
+  <ColorSwatch name="Berry (320)" color="oklch(0.65 0.15 320)" />
 </SwatchGrid>
 
-## Favicon Palette
+## Semantic Colors
+
+Only two non-accent semantic colors exist. Both are fixed — they don't shift per workspace.
 
 <SwatchGrid>
-  <ColorSwatch name="Gmail" color="oklch(0.58 0.18 28)" />
-  <ColorSwatch name="Calendar" color="oklch(0.52 0.14 255)" />
-  <ColorSwatch name="Slack" color="oklch(0.52 0.1 320)" />
-  <ColorSwatch name="GitHub" color="oklch(0.22 0 0)" />
-  <ColorSwatch name="Figma" color="oklch(0.5 0.18 350)" />
-  <ColorSwatch name="Docs" color="oklch(0.52 0.12 255)" />
-  <ColorSwatch name="Notion" color="oklch(0.3 0 0)" />
-  <ColorSwatch name="Linear" color="oklch(0.5 0.15 270)" />
-  <ColorSwatch name="Reddit" color="oklch(0.55 0.2 35)" />
-  <ColorSwatch name="Wikipedia" color="oklch(0.75 0 0)" />
+  <ColorSwatch name="Destructive" color="oklch(0.577 0.245 27.325)" />
+  <ColorSwatch name="Warning" color="oklch(0.75 0.15 85)" />
 </SwatchGrid>
 
-## Wallpaper Gradient
+## Window Background
 
-Background gradient behind the glass UI:
+The window background is semi-transparent with no gradient, allowing the OS acrylic/vibrancy effect to show through:
 
 ```css
-background: linear-gradient(150deg,
-  oklch(0.45 0.09 270) 0%,
-  oklch(0.38 0.08 250) 30%,
-  oklch(0.33 0.09 230) 55%,
-  oklch(0.40 0.07 200) 80%,
-  oklch(0.42 0.06 260) 100%);
+background: oklch(0.35 0.06 250 / 0.65);
 ```
 
-## Shadcn Semantic Tokens
+## Rules
 
-The app also uses shadcn/ui's CSS variable system for standard UI components. See `main.css` `:root` and `.dark` blocks for the full set (background, foreground, card, popover, primary, secondary, muted, accent, destructive, border, input, ring, sidebar variants).
-
-| Token | Light | Dark |
-|-------|-------|------|
-| `--background` | `oklch(1 0 0 / 0.7)` | `oklch(0.145 0 0)` |
-| `--foreground` | `oklch(0.145 0 0)` | `oklch(0.985 0 0)` |
-| `--primary` | `oklch(0.205 0 0)` | `oklch(0.985 0 0)` |
-| `--muted` | `oklch(0.97 0 0)` | `oklch(0.269 0 0)` |
-| `--border` | `oklch(0.922 0 0)` | `oklch(0.269 0 0)` |
-| `--destructive` | `oklch(0.577 0.245 27.325)` | `oklch(0.396 0.141 25.723)` |
-
-## Content Colors
-
-Used inside the white content panel for page mock content:
-
-<SwatchGrid>
-  <ColorSwatch name="Page Text" color="oklch(0.15 0 0)" />
-  <ColorSwatch name="Page Secondary" color="oklch(0.5 0 0)" />
-  <ColorSwatch name="Page Muted" color="oklch(0.6 0 0)" />
-  <ColorSwatch name="Page Border" color="oklch(0.92 0 0)" />
-  <ColorSwatch name="Hero Accent" color="oklch(0.45 0.06 145)" />
-  <ColorSwatch name="Content BG" color="oklch(0.995 0 0)" />
-</SwatchGrid>
+1. **No new colors without a role.** Every color must map to a role in the tables above. If you need a color that doesn't fit, add the role first.
+2. **Opacity over new lightness.** In the glass context, adjust opacity of white rather than introducing new lightness values. This ensures the acrylic effect bleeds through consistently.
+3. **3-state text brightness.** Interactive text uses three states: default (`0.55`) → hover (`0.75`) → active (`0.95`). This progression must be consistent across all glass UI text.
+4. **Window background is not a design surface.** Never place text directly on the window background. All text must be on a glass or content surface.
+5. **Color is accent-only.** The chrome UI is achromatic by default — white text, white/transparent backgrounds, no hue. Color appears only through the accent system or the destructive semantic.
+6. **Never hardcode accent hues.** Always derive accent colors from `var(--accent-hue)`.
+7. **Accent sparingly.** Use accent for focus rings, active workspace indicators, loading animations, and primary action buttons. Don't use it for backgrounds, text, or borders in normal states.
+8. **No dark mode.** Single appearance. Glass chrome is dark by nature. Content panels are always light.

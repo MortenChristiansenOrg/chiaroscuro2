@@ -6,66 +6,52 @@ import { ComponentPreview } from "../components/ComponentPreview"
 
 # Typography
 
-## Font Stacks
+## Font Stack
 
-| Role | Family | Fallback |
-|------|--------|----------|
-| Primary UI | Plus Jakarta Sans | sans-serif |
-| Labels & Small Text | DM Sans | sans-serif |
-| Code / Mono | JetBrains Mono | monospace |
+| Family | Variable | Usage |
+|--------|----------|-------|
+| Plus Jakarta Sans | `--font-sans` | All UI text: tabs, labels, headings, body |
+| JetBrains Mono | `--font-mono` | Code, URLs, keyboard shortcuts |
+
+Only two font families. No DM Sans — Plus Jakarta Sans covers all UI needs.
 
 ## Size Scale
 
-All sizes from the D8 mockup:
+Sizes in rem. Chrome context uses the compact end; content context uses the full range.
 
-| Token | Size | Usage |
-|-------|------|-------|
-| `page-hero-h1` | 36px | Page hero headings |
-| `page-nav-title` | 20px | Navigation title |
-| `page-card-h3` | 14px | Card headings |
-| `page-body` | 13.5px | Hero description text |
-| `tab-text` | 12.5px | Sidebar tab labels |
-| `tab-small` | 12px | Smaller tab variants |
-| `url-text` | 11px | URL bar, page links |
-| `favicon-text` | 10px | Pinned icon favicon text |
-| `label` | 9px | Section labels (BOOKMARKED, etc.) |
-| `ws-label` | 10px | Workspace bubble text |
-| `eph-clear` | 9px | "Clear" button text |
-| `switcher-label` | 7px | Smallest text (design switcher) |
-| `favicon-char` | 8px | Favicon character |
-
-## Weights
-
-| Weight | Value | Usage |
-|--------|-------|-------|
-| Regular | 400 | Body text, inactive tabs |
-| Medium | 500 | Active tabs, labels, section headers |
-| Semibold | 600 | Favicon characters, workspace bubbles |
-
-## Letter Spacing
-
-| Value | Usage |
-|-------|-------|
-| `-0.01em` | Page nav title |
-| `0.02em` | URL text, clear button |
-| `0.1em` | Section labels, page links |
-| `0.15em` | Page section labels |
+| Token | Size | Weight | Tracking | Usage |
+|-------|------|--------|----------|-------|
+| `--text-xs` | `0.5625rem` (9px) | 500 | `0.1em` | Section labels, uppercase tags |
+| `--text-sm` | `0.6875rem` (11px) | 400 | `0.01em` | URL text, secondary info, metadata |
+| `--text-base` | `0.75rem` (12px) | 400 | `0` | Tab text, sidebar items, default chrome text |
+| `--text-md` | `0.875rem` (14px) | 500 | `-0.01em` | Card titles, section headings in content |
+| `--text-lg` | `1.25rem` (20px) | 600 | `-0.015em` | Page titles in content areas |
+| `--text-xl` | `2.25rem` (36px) | 600 | `-0.02em` | Hero headings (rare — content pages only) |
 
 ## Samples
 
 <ComponentPreview label="Hero Heading">
   <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
-    <h1 style={{ fontSize: 36, fontWeight: 400, lineHeight: 1.15, color: "oklch(0.15 0 0)" }}>
-      A curated space<br /><em style={{ color: "oklch(0.45 0.06 145)" }}>for visual art</em>
+    <h1 style={{ fontSize: '2.25rem', fontWeight: 600, lineHeight: 1.15, letterSpacing: '-0.02em', color: "oklch(0.15 0 0)" }}>
+      Hero heading at --text-xl
     </h1>
   </div>
 </ComponentPreview>
 
 <ComponentPreview label="UI Text Scale">
   <div style={{ fontFamily: "'Plus Jakarta Sans', sans-serif", display: "flex", flexDirection: "column", gap: 8 }}>
-    <span style={{ fontSize: 12.5, fontWeight: 500, color: "oklch(0.15 0 0)" }}>Active Tab — 12.5px / 500</span>
-    <span style={{ fontSize: 12.5, fontWeight: 400, color: "oklch(0.5 0 0)" }}>Inactive Tab — 12.5px / 400</span>
-    <span style={{ fontSize: 11, color: "oklch(0.5 0 0)" }}>URL Text — 11px</span>
-    <span style={{ fontSize: 9, fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.1em", color: "oklch(0.5 0 0)" }}>Section Label — 9px / 500</span>
+    <span style={{ fontSize: '0.75rem', fontWeight: 500, color: "oklch(0.15 0 0)" }}>Active Tab — --text-base / 500</span>
+    <span style={{ fontSize: '0.75rem', fontWeight: 400, color: "oklch(0.5 0 0)" }}>Inactive Tab — --text-base / 400</span>
+    <span style={{ fontSize: '0.6875rem', letterSpacing: '0.01em', color: "oklch(0.5 0 0)" }}>URL Text — --text-sm</span>
+    <span style={{ fontSize: '0.5625rem', fontWeight: 500, textTransform: "uppercase", letterSpacing: "0.1em", color: "oklch(0.5 0 0)" }}>Section Label — --text-xs / 500</span>
   </div>
 </ComponentPreview>
+
+## Rules
+
+1. **Maximum 3 sizes per context.** Chrome UI should use at most `--text-xs`, `--text-sm`, and `--text-base`. Content panels add `--text-md` and `--text-lg`. `--text-xl` is reserved for heroes.
+2. **Two weights in chrome: 400 and 500.** Regular for default state, medium for active/emphasized. Use 600 only in content headings or tiny dense text (workspace bubble letters) where extra weight aids legibility.
+3. **Tracking scales inversely with size.** Large text gets negative tracking (tighter). Small text gets positive tracking (looser, especially with `text-transform: uppercase`). Non-negotiable for readability.
+4. **Line height.** Chrome elements: `1` or `1.15` (single-line, vertically centered via flex). Content body text: `1.6`–`1.7`. Never specify line-height on chrome UI elements that use flex centering.
+5. **No font-size below `0.5625rem` (9px).** Anything smaller is illegible at standard DPI and fails accessibility.
+6. **Monospace for literal content only.** URLs, code snippets, keyboard shortcut hints. Never for labels or body text.

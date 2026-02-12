@@ -32,21 +32,53 @@ export const routes: Route[] = [
   },
   {
     path: "/borders-radius",
-    title: "Borders & Radius",
+    title: "Geometry & Borders",
     group: "Foundations",
     component: lazy(() => import("./pages/borders-radius.mdx")),
   },
   {
     path: "/shadows-effects",
-    title: "Shadows & Effects",
+    title: "Shadows & Depth",
     group: "Foundations",
     component: lazy(() => import("./pages/shadows-effects.mdx")),
+  },
+  {
+    path: "/motion",
+    title: "Motion & Animation",
+    group: "Foundations",
+    component: lazy(() => import("./pages/motion.mdx")),
   },
   {
     path: "/icons",
     title: "Icons",
     group: "Foundations",
     component: lazy(() => import("./pages/icons.mdx")),
+  },
+
+  // Behavior
+  {
+    path: "/interaction",
+    title: "Interaction Feedback",
+    group: "Behavior",
+    component: lazy(() => import("./pages/interaction.mdx")),
+  },
+  {
+    path: "/keyboard-focus",
+    title: "Keyboard & Focus",
+    group: "Behavior",
+    component: lazy(() => import("./pages/keyboard-focus.mdx")),
+  },
+  {
+    path: "/accessibility",
+    title: "Accessibility",
+    group: "Behavior",
+    component: lazy(() => import("./pages/accessibility.mdx")),
+  },
+  {
+    path: "/layout",
+    title: "Layout Composition",
+    group: "Behavior",
+    component: lazy(() => import("./pages/layout.mdx")),
   },
 
   // Components

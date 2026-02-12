@@ -10,54 +10,42 @@ The sidebar is the primary navigation surface. It contains pinned tabs (icon str
 
 1. **Pinned strip** — horizontal row of favicon-only buttons
 2. **"Bookmarked" label** — section header
-3. **Tab list** — bookmarked tabs with optional folders
+3. **Tab list** — bookmarked tabs with optional folders (scrollable)
 4. **Ephemeral divider** — line + "Clear" button
-5. **Ephemeral tabs** — dimmer styling
+5. **Ephemeral tabs** — dimmer styling (`0.4` text opacity)
 6. **Workspace bar** — workspace bubbles + edit/add controls (anchored to bottom)
 
-## Container Specs
+## Layout
 
-| Property | Value |
-|----------|-------|
-| Width | `230px` |
-| Padding | `5px 0 0` |
+| Property | Token/Value |
+|----------|-------------|
+| Width | `14.375rem` (230px), fixed |
 | Background | Transparent (inherits glass body) |
-| Overflow | `overflow-y: auto` |
+| Overflow | `overflow-y: auto` (tab list only) |
+| Titlebar and workspace bar | Fixed, not scrollable |
 
 ## Section Labels
 
-| Property | Value |
-|----------|-------|
-| Font size | `9px` |
-| Transform | `uppercase` |
-| Letter spacing | `0.1em` |
-| Font weight | `500` |
-| Color | `oklch(1 0 0 / 0.3)` |
-| Padding | `10px 14px 3px` |
+Follow the [component pattern](/interaction):
+- `--text-xs` size, `text-transform: uppercase`, tracking `0.1em`, weight 500
+- Muted text color (`0.4` opacity on glass)
+- No interactive behavior — pure hierarchy markers
 
 ## Folder Headers
 
-| Property | Value |
-|----------|-------|
-| Font size | `11px` |
-| Font weight | `500` |
-| Color | `oklch(1 0 0 / 0.35)` |
-| Closed color | `oklch(1 0 0 / 0.25)` |
-| Padding | `4px 14px` |
-| Margin | `0 6px` |
-| Gap | `7px` (icon + text) |
+| Property | Token/Value |
+|----------|-------------|
+| Font size | `--text-sm` (0.6875rem) |
+| Font weight | 500 |
+| Default color | `oklch(1 0 0 / 0.4)` (muted) |
+| Closed color | `oklch(1 0 0 / 0.25)` (hint) |
 | Icons | ChevDown/ChevRight + FolderOpen/Folder |
-
-## Ephemeral Divider
-
-A horizontal line with a "Clear" button at the right end:
-
-| Property | Value |
-|----------|-------|
-| Line | `1px` height, `oklch(1 0 0 / 0.07)` |
-| Container padding | `6px 8px 4px 14px` |
-| Clear button | `9px`, weight `500`, `oklch(1 0 0 / 0.25)` |
+| Keyboard | `→` expand, `←` collapse |
 
 ## Separator Lines
 
-Between sections: `height: 1px`, `oklch(1 0 0 / 0.07)`, `margin: 4px 14px`.
+Between sections: `height: 1px`, `oklch(1 0 0 / 0.07)` (border color).
+
+## Collapsing
+
+Sidebar may be collapsible — hidden entirely, no narrow icon-rail. When hidden, content takes full width. (Collapse behavior is an [unresolved question](/layout).)

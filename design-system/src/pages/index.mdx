@@ -2,23 +2,29 @@
 title: Overview
 ---
 
-import { AppMockup } from "../components/AppMockup"
+import { AppMockup } from "../components/AppMockup";
 
 # Chiaroscuro Design System
 
-The visual language for Chiaroscuro — a personal browser built on Electron. This system documents design tokens, patterns, and components extracted from the D8 "Baseline" mockup.
+Rules and principles for building the Chiaroscuro browser UI. This document is the canonical reference — all UI code must conform to it. When in doubt, follow the rule. When a rule doesn't cover a situation, follow the nearest principle and flag the gap.
 
 ## Design Philosophy
 
-- **Glassmorphism**: Translucent layers with backdrop blur over a gradient wallpaper
-- **oklch color space**: All colors defined in oklch for perceptual uniformity
-- **Pill-shaped elements**: Tabs, URL bar, and workspace bubbles use generous border-radius
-- **Subtle depth**: Minimal box-shadows, hover lifts, and animated borders
-- **Plus Jakarta Sans**: Primary UI typeface with DM Sans for labels
+Chiaroscuro is a personal browser. Its chrome should disappear — web content is the main character, browser UI is the stage. Every pixel of chrome must justify its existence.
+
+**Core principles:**
+
+1. **Glassmorphism with restraint.** Translucent layers over a semi-transparent background that reveals the OS window acrylic effect, with backdrop blur. The glass creates depth without heaviness. Never stack more than one translucent layer — it muddies readability.
+2. **OKLCH everywhere.** All colors in oklch for perceptual uniformity. No hex, rgb, or hsl.
+3. **Soft geometry.** Pill shapes for interactive elements (tabs, URL bar), rounded rects for containers. Never sharp corners in the chrome UI.
+4. **Quiet until needed.** Default states are subdued. Elements reveal themselves through interaction — hover brightens, focus highlights, active promotes.
+5. **Density over sprawl.** Browser chrome should be compact. Prefer smaller text, tighter spacing, and fewer visual elements. Every saved pixel goes to web content.
+6. **Keyboard-first.** Every action reachable by keyboard. Mouse is a convenience, not a requirement.
 
 ## Reference Design
 
-The "Baseline" mockup — the chosen direction for implementation.
+The reference design for the application. Eventually it will use actual components from the application
+but initially it is a hard-coded mockup.
 
 <div className="my-8 rounded-xl border border-border overflow-hidden shadow-lg">
   <AppMockup />
@@ -26,6 +32,8 @@ The "Baseline" mockup — the chosen direction for implementation.
 
 ## Structure
 
-**Foundations** — Color palette, typography, spacing, borders, shadows, and icons extracted from the mockup CSS.
+**Foundations** — [Color](/colors), [typography](/typography), [spacing](/spacing), [borders & radius](/borders-radius), [shadows & depth](/shadows-effects), [motion & animation](/motion), and [icons](/icons).
 
-**Components** — Individual UI elements (buttons, tabs, sidebar, address bar, cards, tooltips, workspace switcher) shown in isolation with their token values.
+**Behavior** — [Interaction feedback](/interaction), [keyboard & focus](/keyboard-focus), [accessibility](/accessibility), and [layout composition](/layout).
+
+**Components** — Individual UI elements ([buttons](/components/buttons), [tabs](/components/tabs), [sidebar](/components/sidebar), [address bar](/components/address-bar), [cards](/components/cards), [tooltips](/components/tooltips), [workspace switcher](/components/workspace-switcher)) shown in isolation with their token values.
