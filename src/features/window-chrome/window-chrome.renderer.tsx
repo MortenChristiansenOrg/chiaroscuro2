@@ -1,16 +1,23 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { Tab } from "../tabs/tabs.shared";
+import { useTabsStore } from "../tabs/tabs.store";
 import type { WindowChromeCommands } from "./window-chrome.shared";
 import {
   WINDOW_CLOSE,
   WINDOW_COPY_ADDRESS,
+  WINDOW_GO_BACK,
+  WINDOW_GO_FORWARD,
   WINDOW_MAXIMIZE_RESTORE,
   WINDOW_MINIMIZE,
+  WINDOW_RELOAD,
 } from "./window-chrome.shared";
 import { useWindowChromeStore } from "./window-chrome.store";
 
-function sendCommand(name: string & keyof WindowChromeCommands) {
-  window.chiaroscuro.sendCommand(name, undefined);
+function sendCommand(name: string & keyof WindowChromeCommands, payload?: unknown) {
+  window.chiaroscuro.sendCommand(name, payload ?? undefined);
 }
+
+// ── SVG Icons ───────────────────────────────────────────────────
 
 function MinimizeIcon() {
   return (
@@ -69,12 +76,61 @@ function CloseIcon() {
   );
 }
 
+function BackIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      width="10"
+      height="10"
+      viewBox="0 0 10 10"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.3"
+    >
+      <polyline points="6,1 2,5 6,9" />
+    </svg>
+  );
+}
+
+function ForwardIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      width="10"
+      height="10"
+      viewBox="0 0 10 10"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.3"
+    >
+      <polyline points="4,1 8,5 4,9" />
+    </svg>
+  );
+}
+
+function RefreshIcon() {
+  return (
+    <svg
+      aria-hidden="true"
+      width="10"
+      height="10"
+      viewBox="0 0 10 10"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.2"
+    >
+      <path d="M8,3 A3.5,3.5 0 1,1 5,1.5" />
+      <polyline points="8,0.5 8,3.5 5,3.5" />
+    </svg>
+  );
+}
+
 function CopyIcon() {
   return (
     <svg
       aria-hidden="true"
-      width="12"
-      height="12"
+      width="9"
+      height="9"
       viewBox="0 0 12 12"
       fill="none"
       stroke="currentColor"
@@ -90,8 +146,8 @@ function CheckIcon() {
   return (
     <svg
       aria-hidden="true"
-      width="12"
-      height="12"
+      width="9"
+      height="9"
       viewBox="0 0 12 12"
       fill="none"
       stroke="currentColor"
@@ -102,7 +158,65 @@ function CheckIcon() {
   );
 }
 
-function CopyAddressButton() {
+// ── Components ──────────────────────────────────────────────────
+
+const navBtnStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  width: 28,
+  height: 26,
+  borderRadius: 8,
+  border: "none",
+  background: "none",
+  cursor: "pointer",
+  color: "oklch(1 0 0 / 0.55)",
+  transition: "all 0.15s",
+};
+
+function NavButtons() {
+  return (
+    <div className="flex" style={{ gap: 1, paddingLeft: 8 }}>
+      <button
+        type="button"
+        style={navBtnStyle}
+        className="hover:bg-[oklch(1_0_0_/_0.1)] hover:text-[oklch(1_0_0_/_0.7)]"
+        onClick={() => sendCommand(WINDOW_GO_BACK)}
+        aria-label="Go back"
+        data-tip="Back"
+      >
+        <BackIcon />
+      </button>
+      <button
+        type="button"
+        style={navBtnStyle}
+        className="hover:bg-[oklch(1_0_0_/_0.1)] hover:text-[oklch(1_0_0_/_0.7)]"
+        onClick={() => sendCommand(WINDOW_GO_FORWARD)}
+        aria-label="Go forward"
+        data-tip="Forward"
+      >
+        <ForwardIcon />
+      </button>
+      <button
+        type="button"
+        style={navBtnStyle}
+        className="hover:bg-[oklch(1_0_0_/_0.1)] hover:text-[oklch(1_0_0_/_0.7)]"
+        onClick={() => sendCommand(WINDOW_RELOAD)}
+        aria-label="Reload"
+        data-tip="Reload"
+      >
+        <RefreshIcon />
+      </button>
+    </div>
+  );
+}
+
+function UrlPill() {
+  const activeTabId = useTabsStore((s) => s.activeTabId);
+  const activeTab: Tab | undefined = useTabsStore((s) =>
+    s.activeTabId ? s.tabs.get(s.activeTabId) : undefined,
+  );
+  const isLoading = useWindowChromeStore((s) => s.loadingTabs.size > 0);
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(null);
 
@@ -113,23 +227,71 @@ function CopyAddressButton() {
     [],
   );
 
-  const handleClick = useCallback(() => {
+  const handleCopy = useCallback(() => {
     sendCommand(WINDOW_COPY_ADDRESS);
     setCopied(true);
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => setCopied(false), 1500);
   }, []);
 
+  if (!activeTab) return null;
+
+  let displayUrl = activeTab.url;
+  try {
+    const parsed = new URL(activeTab.url);
+    displayUrl = parsed.hostname + (parsed.pathname !== "/" ? parsed.pathname : "");
+  } catch {
+    // keep raw url
+  }
+
   return (
-    <button
-      type="button"
-      onClick={handleClick}
-      className="flex h-8 w-10 items-center justify-center text-foreground/60 hover:bg-foreground/10 active:bg-foreground/15 hover:text-foreground transition-colors"
-      aria-label={copied ? "Copied!" : "Copy address"}
-      data-tip={copied ? "Copied!" : "Copy address"}
-    >
-      {copied ? <CheckIcon /> : <CopyIcon />}
-    </button>
+    <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+      {/* Loading spinner ring */}
+      {isLoading && (
+        <div
+          className="absolute inset-[-2px] animate-spin"
+          style={{
+            borderRadius: 14,
+            background:
+              "conic-gradient(from 0deg, oklch(0.65 0.15 250), oklch(0.65 0.15 250 / 0) 120deg)",
+          }}
+        />
+      )}
+      {/* Pill */}
+      <div
+        className="relative flex items-center transition-colors"
+        style={{
+          gap: 2,
+          fontSize: 11,
+          color: "oklch(1 0 0 / 0.7)",
+          padding: "3px 4px 3px 14px",
+          borderRadius: 12,
+          background: "oklch(1 0 0 / 0.08)",
+        }}
+      >
+        <span className="select-all truncate" style={{ maxWidth: 300 }}>
+          {displayUrl}
+        </span>
+        <button
+          type="button"
+          className="flex items-center justify-center transition-all"
+          style={{
+            width: 22,
+            height: 22,
+            borderRadius: 8,
+            border: "none",
+            background: "none",
+            cursor: "pointer",
+            color: copied ? "oklch(1 0 0 / 0.75)" : "oklch(1 0 0 / 0.5)",
+          }}
+          onClick={handleCopy}
+          aria-label={copied ? "Copied!" : "Copy URL"}
+          data-tip={copied ? "Copied!" : "Copy URL"}
+        >
+          {copied ? <CheckIcon /> : <CopyIcon />}
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -138,8 +300,6 @@ function WindowControls() {
 
   return (
     <div className="flex items-center">
-      <CopyAddressButton />
-
       <button
         type="button"
         onClick={() => sendCommand(WINDOW_MINIMIZE)}
@@ -173,28 +333,33 @@ function WindowControls() {
   );
 }
 
-function LoadingIndicator() {
-  const isLoading = useWindowChromeStore((s) => s.loadingTabs.size > 0);
-  if (!isLoading) return null;
-
-  return (
-    <div className="absolute bottom-0 left-0 right-0 h-0.5 overflow-hidden bg-foreground/5">
-      <div className="h-full w-1/3 animate-pulse bg-primary/60 rounded-full" />
-    </div>
-  );
-}
-
 const isMac = typeof window !== "undefined" && window.chiaroscuro?.getPlatformName() === "darwin";
 
 export function TitleBar() {
   return (
     <div
-      className="relative flex h-8 select-none items-center bg-background/80 backdrop-blur-sm"
-      style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
+      className="relative flex h-9 select-none items-center shrink-0"
+      style={
+        {
+          WebkitAppRegion: "drag",
+          background: "oklch(0.45 0.04 250 / 0.12)",
+          backdropFilter: "blur(12px)",
+        } as React.CSSProperties
+      }
       onDoubleClick={() => sendCommand(WINDOW_MAXIMIZE_RESTORE)}
     >
       {/* macOS: traffic lights are on left, leave space */}
       {isMac && <div className="w-[70px] shrink-0" />}
+
+      {/* Nav buttons */}
+      <div style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
+        <NavButtons />
+      </div>
+
+      {/* URL pill (centered) */}
+      <div style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
+        <UrlPill />
+      </div>
 
       {/* Flexible spacer */}
       <div className="flex-1 min-w-0" />
@@ -205,8 +370,6 @@ export function TitleBar() {
           <WindowControls />
         </div>
       )}
-
-      <LoadingIndicator />
     </div>
   );
 }

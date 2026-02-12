@@ -6,5 +6,6 @@ interface Window {
     sendCommand: (name: string, payload: unknown) => Promise<unknown>;
     onEvent: (name: string, callback: (payload: unknown) => void) => () => void;
     getPlatformName: () => string;
+    signalReady: () => void;
   };
 }

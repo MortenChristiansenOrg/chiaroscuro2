@@ -7,9 +7,12 @@ import { register, start, stripTrackingParams } from "./window-chrome.main";
 import {
   WINDOW_CLOSE,
   WINDOW_COPY_ADDRESS,
+  WINDOW_GO_BACK,
+  WINDOW_GO_FORWARD,
   WINDOW_MAXIMIZED_CHANGED,
   WINDOW_MAXIMIZE_RESTORE,
   WINDOW_MINIMIZE,
+  WINDOW_RELOAD,
   type WindowChromeCommands,
   type WindowChromeEvents,
 } from "./window-chrome.shared";
@@ -31,9 +34,22 @@ function createMockPlatform(overrides: Partial<Platform> = {}): Platform {
     activateTab: vi.fn(),
     navigateTab: vi.fn(),
     getTabUrl: vi.fn(() => undefined),
+    getTabTitle: vi.fn(() => undefined),
+    getTabFavicon: vi.fn(() => undefined),
+    setTabBounds: vi.fn(),
+    hideTab: vi.fn(),
+    showTab: vi.fn(),
+    hideAllTabs: vi.fn(),
+    onTabEvent: vi.fn(() => () => {}),
+    goBack: vi.fn(),
+    goForward: vi.fn(),
+    reload: vi.fn(),
+    canGoBack: vi.fn(() => false),
+    canGoForward: vi.fn(() => false),
     createIsolatedSession: vi.fn(),
     registerShortcut: vi.fn(),
     unregisterShortcut: vi.fn(),
+    hookWebContents: vi.fn(),
     openExternal: vi.fn(),
     readClipboard: vi.fn(() => ""),
     writeClipboard: vi.fn(),
@@ -143,6 +159,24 @@ describe("window-chrome commands", () => {
     expect(platform.minimizeWindow).not.toHaveBeenCalled();
     expect(platform.maximizeWindow).not.toHaveBeenCalled();
     expect(platform.closeWindow).not.toHaveBeenCalled();
+  });
+
+  it("go-back delegates to platform.goBack", async () => {
+    const { commands, platform } = setup();
+    await commands.send(WINDOW_GO_BACK, undefined);
+    expect(platform.goBack).toHaveBeenCalledWith(TAB_ID);
+  });
+
+  it("go-forward delegates to platform.goForward", async () => {
+    const { commands, platform } = setup();
+    await commands.send(WINDOW_GO_FORWARD, undefined);
+    expect(platform.goForward).toHaveBeenCalledWith(TAB_ID);
+  });
+
+  it("reload delegates to platform.reload", async () => {
+    const { commands, platform } = setup();
+    await commands.send(WINDOW_RELOAD, undefined);
+    expect(platform.reload).toHaveBeenCalledWith(TAB_ID);
   });
 });
 

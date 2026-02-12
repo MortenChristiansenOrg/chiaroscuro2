@@ -1,0 +1,156 @@
+import { useCallback, useEffect, useRef } from "react";
+import { useTabsStore } from "../tabs/tabs.store";
+import { useCommandPaletteStore } from "./command-palette.store";
+
+function sendCommand(name: string, payload: unknown) {
+  window.chiaroscuro.sendCommand(name, payload);
+}
+
+// ── Bang providers ──────────────────────────────────────────────
+const BANG_PROVIDERS: Record<string, string> = {
+  "!g": "https://www.google.com/search?q=",
+  "!d": "https://duckduckgo.com/?q=",
+  "!gh": "https://github.com/search?q=",
+  "!yt": "https://www.youtube.com/results?search_query=",
+  "!w": "https://en.wikipedia.org/w/index.php?search=",
+};
+
+export function resolveInput(input: string): string {
+  const trimmed = input.trim();
+  if (!trimmed) return "";
+
+  // Bang at start: !g query
+  const bangStartMatch = trimmed.match(/^(![\w]+)\s+(.+)/);
+  if (bangStartMatch?.[1] && bangStartMatch[2]) {
+    const provider = BANG_PROVIDERS[bangStartMatch[1]];
+    if (provider) return provider + encodeURIComponent(bangStartMatch[2]);
+  }
+
+  // Bang at end: query !g
+  const bangEndMatch = trimmed.match(/^(.+)\s+(![\w]+)$/);
+  if (bangEndMatch?.[1] && bangEndMatch[2]) {
+    const provider = BANG_PROVIDERS[bangEndMatch[2]];
+    if (provider) return provider + encodeURIComponent(bangEndMatch[1]);
+  }
+
+  // Has explicit protocol
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed)) {
+    return trimmed;
+  }
+
+  // Looks like a URL (has dot, no spaces)
+  if (trimmed.includes(".") && !trimmed.includes(" ")) {
+    return `https://${trimmed}`;
+  }
+
+  // Default: DuckDuckGo search
+  return `https://duckduckgo.com/?q=${encodeURIComponent(trimmed)}`;
+}
+
+export function CommandPaletteOverlay() {
+  const open = useCommandPaletteStore((s) => s.open);
+  const activeTabId = useTabsStore((s) => s.activeTabId);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (open) {
+      // Focus input after render
+      requestAnimationFrame(() => inputRef.current?.focus());
+    }
+  }, [open]);
+
+  const handleClose = useCallback(() => {
+    sendCommand("command-palette:hide", undefined);
+  }, []);
+
+  const handleSubmit = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "Escape") {
+        handleClose();
+        return;
+      }
+
+      if (e.key !== "Enter") return;
+
+      const value = inputRef.current?.value;
+      if (!value) return;
+
+      const url = resolveInput(value);
+      if (!url) return;
+
+      if (e.ctrlKey || e.metaKey) {
+        // Ctrl+Enter: navigate current tab
+        if (activeTabId) {
+          sendCommand("tabs:navigate", { tabId: activeTabId, url });
+        } else {
+          sendCommand("tabs:create", { url });
+        }
+      } else {
+        // Enter: new tab
+        sendCommand("tabs:create", { url });
+      }
+
+      sendCommand("command-palette:hide", undefined);
+      if (inputRef.current) inputRef.current.value = "";
+    },
+    [activeTabId, handleClose],
+  );
+
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 flex items-start justify-center z-50"
+      style={{
+        background: "oklch(0 0 0 / 0.4)",
+        backdropFilter: "blur(4px)",
+        paddingTop: "20vh",
+      }}
+      onClick={handleClose}
+      onKeyDown={() => {}}
+    >
+      <div
+        className="flex flex-col"
+        style={{
+          width: 560,
+          background: "oklch(0.2 0.02 250 / 0.9)",
+          borderRadius: 16,
+          border: "1px solid oklch(1 0 0 / 0.1)",
+          boxShadow: "0 8px 40px oklch(0 0 0 / 0.3)",
+          backdropFilter: "blur(20px)",
+        }}
+        onClick={(e) => e.stopPropagation()}
+        onKeyDown={() => {}}
+      >
+        <input
+          ref={inputRef}
+          type="text"
+          placeholder="Search or enter URL..."
+          className="w-full outline-none"
+          style={{
+            background: "transparent",
+            color: "oklch(1 0 0 / 0.9)",
+            fontSize: 16,
+            padding: "16px 20px",
+            border: "none",
+            fontFamily: "inherit",
+          }}
+          onKeyDown={handleSubmit}
+          autoComplete="off"
+          spellCheck={false}
+        />
+        <div
+          className="flex items-center justify-between"
+          style={{
+            padding: "8px 20px 12px",
+            fontSize: 11,
+            color: "oklch(1 0 0 / 0.3)",
+            borderTop: "1px solid oklch(1 0 0 / 0.06)",
+          }}
+        >
+          <span>Enter = new tab &middot; Ctrl+Enter = current tab &middot; Esc = close</span>
+        </div>
+      </div>
+    </div>
+  );
+}

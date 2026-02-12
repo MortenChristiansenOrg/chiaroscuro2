@@ -1,8 +1,24 @@
 import path from "node:path";
-import { BrowserWindow, Menu, app } from "electron";
+import { BrowserWindow, Menu, app, ipcMain } from "electron";
 import { CommandBus } from "../bus/command-bus";
 import { EventBus } from "../bus/event-bus";
 import { bridgeBusToIpc } from "../bus/ipc-main-bridge";
+import type { MergeRegistries } from "../bus/types";
+import {
+  register as registerCommandPalette,
+  start as startCommandPalette,
+} from "../features/command-palette/command-palette.main";
+import type {
+  CommandPaletteCommands,
+  CommandPaletteEvents,
+} from "../features/command-palette/command-palette.shared";
+import {
+  register as registerSidebar,
+  start as startSidebar,
+} from "../features/sidebar/sidebar.main";
+import type { SidebarCommands, SidebarEvents } from "../features/sidebar/sidebar.shared";
+import { register as registerTabs, start as startTabs } from "../features/tabs/tabs.main";
+import type { TabsCommands, TabsEvents } from "../features/tabs/tabs.shared";
 import {
   register as registerWindowChrome,
   start as startWindowChrome,
@@ -11,21 +27,38 @@ import type {
   WindowChromeCommands,
   WindowChromeEvents,
 } from "../features/window-chrome/window-chrome.shared";
+import {
+  register as registerWorkspaces,
+  start as startWorkspaces,
+} from "../features/workspaces/workspaces.main";
+import type {
+  WorkspacesCommands,
+  WorkspacesEvents,
+} from "../features/workspaces/workspaces.shared";
 import { ElectronPlatform } from "../platform/electron";
-import type { TabId, WindowId } from "../shared/types";
+import type { TabId, WindowId, WorkspaceId } from "../shared/types";
 
 Menu.setApplicationMenu(null);
 
 const iconFile = process.platform === "win32" ? "icon.ico" : "icon.png";
 const iconPath = path.join(__dirname, "../../resources", iconFile);
 
-// ── Bus instances ────────────────────────────────────────────────
-const commands = new CommandBus<WindowChromeCommands>();
-const events = new EventBus<WindowChromeEvents>();
+// ── Merged bus types ──────────────────────────────────────────────
+type AllCommands = MergeRegistries<
+  [WindowChromeCommands, TabsCommands, WorkspacesCommands, SidebarCommands, CommandPaletteCommands]
+>;
 
-// ── App state (temporary until window/tabs features own this) ───
+type AllEvents = MergeRegistries<
+  [WindowChromeEvents, TabsEvents, WorkspacesEvents, SidebarEvents, CommandPaletteEvents]
+>;
+
+const commands = new CommandBus<AllCommands>();
+const events = new EventBus<AllEvents>();
+
+// ── App state ───────────────────────────────────────────────────
 let activeWindowId: WindowId | undefined;
 let activeTabId: TabId | undefined;
+let activeWorkspaceId: WorkspaceId | undefined;
 
 const platform = new ElectronPlatform(() => activeWindowId);
 
@@ -42,11 +75,12 @@ function createWindow(): void {
     },
   });
 
-  // Track as active window (temporary — a window manager feature would own this)
   activeWindowId = String(win.id) as WindowId;
 
-  // Bridge bus ↔ IPC
   bridgeBusToIpc(commands, events, () => BrowserWindow.getAllWindows());
+
+  // Hook BrowserWindow webContents for shortcut support
+  platform.hookWebContents(win.webContents);
 
   // Sync maximize state from native events
   win.on("maximize", () => {
@@ -63,18 +97,40 @@ function createWindow(): void {
   }
 }
 
-const deps = {
+// biome-ignore lint/suspicious/noExplicitAny: bus types are narrowed per-feature
+const deps: any = {
   commands,
   events,
   platform,
   getActiveWindowId: () => activeWindowId,
   getActiveTabId: () => activeTabId,
+  setActiveTabId: (id: TabId | undefined) => {
+    activeTabId = id;
+  },
+  getActiveWorkspaceId: () => activeWorkspaceId,
+  setActiveWorkspaceId: (id: WorkspaceId) => {
+    activeWorkspaceId = id;
+  },
 };
 
 app.whenReady().then(() => {
+  // Phase 1: register all command handlers
   registerWindowChrome(deps);
+  registerTabs(deps);
+  registerWorkspaces(deps);
+  registerSidebar(deps);
+  registerCommandPalette(deps);
+
   createWindow();
-  startWindowChrome(deps);
+
+  // Phase 2: wait for renderer subscriptions, then emit initial state
+  ipcMain.once("renderer:ready", () => {
+    startWorkspaces(deps);
+    startWindowChrome(deps);
+    startTabs(deps);
+    startSidebar(deps);
+    startCommandPalette(deps);
+  });
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {

@@ -19,7 +19,17 @@ export function TooltipLayer() {
 
   useEffect(() => {
     const show = (el: Element) => {
-      if (el === targetRef.current) return;
+      const text = el.getAttribute("data-tip");
+      if (!text) {
+        if (targetRef.current) hide();
+        return;
+      }
+
+      // Same element — update text in-place if data-tip changed (e.g. Maximize → Restore)
+      if (el === targetRef.current) {
+        setTip((prev) => (prev && prev.text !== text ? { ...prev, text } : prev));
+        return;
+      }
 
       window.clearTimeout(timerRef.current);
 
@@ -28,12 +38,6 @@ export function TooltipLayer() {
         targetRef.current.removeAttribute("aria-describedby");
       }
       targetRef.current = el;
-
-      const text = el.getAttribute("data-tip");
-      if (!text) {
-        setTip(null);
-        return;
-      }
 
       timerRef.current = window.setTimeout(() => {
         const r = el.getBoundingClientRect();
@@ -76,13 +80,20 @@ export function TooltipLayer() {
       hide();
     };
 
+    // Dismiss tooltip on click
+    const onDown = () => {
+      hide();
+    };
+
     document.addEventListener("mouseover", onOver, true);
     document.addEventListener("mouseleave", hide);
+    document.addEventListener("mousedown", onDown, true);
     document.addEventListener("focusin", onFocusIn, true);
     document.addEventListener("focusout", onFocusOut, true);
     return () => {
       document.removeEventListener("mouseover", onOver, true);
       document.removeEventListener("mouseleave", hide);
+      document.removeEventListener("mousedown", onDown, true);
       document.removeEventListener("focusin", onFocusIn, true);
       document.removeEventListener("focusout", onFocusOut, true);
       window.clearTimeout(timerRef.current);

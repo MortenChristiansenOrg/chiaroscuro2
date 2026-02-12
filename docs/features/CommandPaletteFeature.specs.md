@@ -16,7 +16,7 @@ This is the primary navigation interface — there is no persistent address bar.
 
 ## Terminology
 
-- **Command palette**: the command input UI (Arc-style, invoked via Ctrl-K).
+- **Command palette**: the command input UI (Arc-style, invoked via T).
 - **Command**: the text entered into the command palette.
 - **Search provider**: a bang keyword that routes a query to a specific service (e.g. `!g` for Google, `!gh` for GitHub).
 - **Built-in page**: an app-defined page like `chiaroscuro://settings`.
@@ -66,7 +66,7 @@ This is the primary navigation interface — there is no persistent address bar.
 
 This feature uses the following shortcuts:
 
-- **Ctrl-K**: Show command palette.
+- **Ctrl-T**: Show command palette.
 
 In command palette:
 
@@ -94,6 +94,5 @@ In command palette:
 
 ## Unresolved Issues
 
-- **Ctrl-K conflict**: Some web apps use Ctrl-K for their own command palettes or link insertion. Need to decide if the browser shortcut should always take precedence or if there should be a way to pass it through to the page.
 - **Suggestion ranking**: How should suggestions be ranked? By recency, frequency, or a combined score? Need to define the ranking algorithm.
 - **Quick actions**: The spec mentions quick actions but doesn't enumerate them. Need to define the initial set of actions available in the palette.

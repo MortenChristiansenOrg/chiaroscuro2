@@ -20,6 +20,11 @@ export const api = {
 
   /** Get current platform */
   getPlatformName: (): string => process.platform,
+
+  /** Signal that renderer subscriptions are ready for events */
+  signalReady: (): void => {
+    ipcRenderer.send("renderer:ready");
+  },
 };
 
 export type PreloadApi = typeof api;

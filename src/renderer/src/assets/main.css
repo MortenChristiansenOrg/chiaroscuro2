@@ -6,6 +6,14 @@
 html,
 body {
   background: transparent !important;
+  height: 100%;
+  overflow: hidden;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
 }
 
 :root {
