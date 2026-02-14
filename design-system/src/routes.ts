@@ -11,6 +11,14 @@ export const routes: Route[] = [
   // Overview
   { path: "/", title: "Overview", component: lazy(() => import("./pages/index.mdx")) },
 
+  // Guides
+  {
+    path: "/component-guide",
+    title: "Component Guide",
+    group: "Guides",
+    component: lazy(() => import("./pages/component-guide.mdx")),
+  },
+
   // Foundations
   {
     path: "/colors",
