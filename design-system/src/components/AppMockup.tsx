@@ -1,3 +1,4 @@
+import { Icon } from "@/components/Icon";
 import "../assets/app-mockup.css";
 
 /* ═══════════════════════════════════════
@@ -7,13 +8,13 @@ function WC() {
   return (
     <div className="wc">
       <button type="button" data-tip="Minimize">
-        <i className="fa-solid fa-minus" />
+        <Icon name="minus" />
       </button>
       <button type="button" data-tip="Maximize">
-        <i className="fa-regular fa-square" />
+        <Icon name="square" style="regular" />
       </button>
       <button type="button" className="close" data-tip="Close">
-        <i className="fa-solid fa-xmark" />
+        <Icon name="xmark" />
       </button>
     </div>
   );
@@ -94,19 +95,19 @@ export function AppMockup() {
       <div className="titlebar">
         <div className="nav-btns">
           <button type="button" data-tip="Back">
-            <i className="fa-solid fa-chevron-left" />
+            <Icon name="chevron-left" />
           </button>
           <button type="button" data-tip="Forward">
-            <i className="fa-solid fa-chevron-right" />
+            <Icon name="chevron-right" />
           </button>
           <button type="button" data-tip="Refresh">
-            <i className="fa-solid fa-rotate-right" />
+            <Icon name="rotate-right" />
           </button>
         </div>
         <div className="url-pill">
           <span className="url-text">localhost:5173</span>
           <button type="button" className="url-copy" data-tip="Copy URL">
-            <i className="fa-regular fa-copy" />
+            <Icon name="copy" style="regular" />
           </button>
         </div>
         <WC />
@@ -129,19 +130,19 @@ export function AppMockup() {
             <RF c="fav-gh">G</RF>
             <span className="t">GitHub — chiaroscuro2</span>
             <button type="button" className="tab-close" data-tip="Close tab">
-              <i className="fa-solid fa-xmark" />
+              <Icon name="xmark" />
             </button>
           </div>
           <div className="tab">
             <RF c="fav-fig">F</RF>
             <span className="t">Figma — UI Kit</span>
             <button type="button" className="tab-close" data-tip="Close tab">
-              <i className="fa-solid fa-xmark" />
+              <Icon name="xmark" />
             </button>
           </div>
           <div className="folder-hd">
-            <i className="fa-solid fa-chevron-down" />
-            <i className="fa-solid fa-folder-open" />
+            <Icon name="chevron-down" />
+            <Icon name="folder-open" />
             Research
           </div>
           <div className="folder-children">
@@ -149,48 +150,48 @@ export function AppMockup() {
               <RF c="fav-doc">D</RF>
               <span className="t">Electron Docs</span>
               <button type="button" className="tab-close" data-tip="Close tab">
-                <i className="fa-solid fa-xmark" />
+                <Icon name="xmark" />
               </button>
             </div>
             <div className="tab">
               <RF c="fav-not">N</RF>
               <span className="t">Notion — Notes</span>
               <button type="button" className="tab-close" data-tip="Close tab">
-                <i className="fa-solid fa-xmark" />
+                <Icon name="xmark" />
               </button>
             </div>
           </div>
           <div className="folder-hd closed">
-            <i className="fa-solid fa-chevron-right" />
-            <i className="fa-solid fa-folder" />
+            <Icon name="chevron-right" />
+            <Icon name="folder" />
             Archive
           </div>
           <div className="tab">
             <RF c="fav-lin">L</RF>
             <span className="t">Linear — Sprint Board</span>
             <button type="button" className="tab-close" data-tip="Close tab">
-              <i className="fa-solid fa-xmark" />
+              <Icon name="xmark" />
             </button>
           </div>
           <div className="eph-section">
             <div className="eph-divider">
               <div className="eph-line" />
               <button type="button" className="eph-clear" data-tip="Clear ephemeral tabs">
-                Clear <i className="fa-solid fa-broom" />
+                Clear <Icon name="broom" />
               </button>
             </div>
             <div className="tab">
               <RF c="fav-red">R</RF>
               <span className="t">Reddit — r/webdev</span>
               <button type="button" className="tab-close" data-tip="Close tab">
-                <i className="fa-solid fa-xmark" />
+                <Icon name="xmark" />
               </button>
             </div>
             <div className="tab">
               <RF c="fav-wk">W</RF>
               <span className="t">Wikipedia — Chiaroscuro</span>
               <button type="button" className="tab-close" data-tip="Close tab">
-                <i className="fa-solid fa-xmark" />
+                <Icon name="xmark" />
               </button>
             </div>
           </div>
@@ -208,10 +209,10 @@ export function AppMockup() {
             </div>
             <div className="ws-ctrls">
               <button type="button" className="ws-ctrl" data-tip="Edit workspace">
-                <i className="fa-solid fa-pencil" />
+                <Icon name="pencil" />
               </button>
               <button type="button" className="ws-ctrl ws-add" data-tip="Add workspace">
-                <i className="fa-solid fa-plus" />
+                <Icon name="plus" />
               </button>
             </div>
           </div>

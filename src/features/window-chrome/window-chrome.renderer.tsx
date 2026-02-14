@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Icon } from "../../renderer/src/components/Icon";
 import type { Tab } from "../tabs/tabs.shared";
 import { useTabsStore } from "../tabs/tabs.store";
 import type { WindowChromeCommands } from "./window-chrome.shared";
@@ -43,7 +44,7 @@ export function NavButtons() {
         aria-label="Go back"
         data-tip="Back"
       >
-        <i className="fa-solid fa-chevron-left" style={{ fontSize: "var(--icon-size-default)" }} />
+        <Icon name="chevron-left" css={{ fontSize: "var(--icon-size-default)" }} />
       </button>
       <button
         type="button"
@@ -53,7 +54,7 @@ export function NavButtons() {
         aria-label="Go forward"
         data-tip="Forward"
       >
-        <i className="fa-solid fa-chevron-right" style={{ fontSize: "var(--icon-size-default)" }} />
+        <Icon name="chevron-right" css={{ fontSize: "var(--icon-size-default)" }} />
       </button>
       <button
         type="button"
@@ -63,7 +64,7 @@ export function NavButtons() {
         aria-label="Reload"
         data-tip="Reload"
       >
-        <i className="fa-solid fa-rotate-right" style={{ fontSize: "var(--icon-size-default)" }} />
+        <Icon name="rotate-right" css={{ fontSize: "var(--icon-size-default)" }} />
       </button>
     </div>
   );
@@ -164,15 +165,17 @@ export function UrlPill() {
           aria-label={copied ? "Copied!" : "Copy URL"}
           data-tip={copied ? "Copied!" : "Copy URL"}
         >
-          <i
-            className={copied ? "fa-solid fa-check" : "fa-regular fa-copy"}
-            style={{
-              fontSize: "var(--icon-size-default)",
-              ...(copied
-                ? { animation: "copy-confirm var(--duration-normal) var(--ease-out)" }
-                : {}),
-            }}
-          />
+          {copied ? (
+            <Icon
+              name="check"
+              css={{
+                fontSize: "var(--icon-size-default)",
+                animation: "copy-confirm var(--duration-normal) var(--ease-out)",
+              }}
+            />
+          ) : (
+            <Icon name="copy" style="regular" css={{ fontSize: "var(--icon-size-default)" }} />
+          )}
         </button>
       </div>
     </div>
@@ -204,7 +207,7 @@ export function WindowControls() {
         aria-label="Minimize"
         data-tip="Minimize"
       >
-        <i className="fa-solid fa-minus" style={{ fontSize: "var(--icon-size-default)" }} />
+        <Icon name="minus" css={{ fontSize: "var(--icon-size-default)" }} />
       </button>
 
       <button
@@ -216,12 +219,9 @@ export function WindowControls() {
         data-tip={maximized ? "Restore" : "Maximize"}
       >
         {maximized ? (
-          <i
-            className="fa-solid fa-window-restore"
-            style={{ fontSize: "var(--icon-size-default)" }}
-          />
+          <Icon name="window-restore" css={{ fontSize: "var(--icon-size-default)" }} />
         ) : (
-          <i className="fa-regular fa-square" style={{ fontSize: "var(--icon-size-default)" }} />
+          <Icon name="square" style="regular" css={{ fontSize: "var(--icon-size-default)" }} />
         )}
       </button>
 
@@ -233,7 +233,7 @@ export function WindowControls() {
         aria-label="Close"
         data-tip="Close"
       >
-        <i className="fa-solid fa-xmark" style={{ fontSize: "var(--icon-size-default)" }} />
+        <Icon name="xmark" css={{ fontSize: "var(--icon-size-default)" }} />
       </button>
     </div>
   );

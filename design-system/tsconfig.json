@@ -22,6 +22,7 @@
     "../src/renderer/src/env.d.ts",
     "../src/renderer/src/Shell.tsx",
     "../src/renderer/src/components/TooltipLayer.tsx",
+    "../src/renderer/src/components/Icon.tsx",
     "../src/features/**/*.renderer.tsx",
     "../src/features/**/*.store.ts",
     "../src/features/**/*.shared.ts"

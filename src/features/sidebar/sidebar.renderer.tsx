@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Icon } from "../../renderer/src/components/Icon";
 import type { TabId, WorkspaceId } from "../../shared/types";
 import type { Tab } from "../tabs/tabs.shared";
 import { useTabsStore } from "../tabs/tabs.store";
@@ -120,7 +121,7 @@ export function TabItem({
         aria-label="Close tab"
         data-tip="Close tab"
       >
-        <i className="fa-solid fa-xmark" style={{ fontSize: 10 }} />
+        <Icon name="xmark" css={{ fontSize: 10 }} />
       </button>
     </div>
   );
@@ -277,7 +278,7 @@ export function SidebarPanel() {
               onClick={handleClearEphemeral}
               data-tip="Clear ephemeral tabs"
             >
-              Clear <i className="fa-solid fa-broom" />
+              Clear <Icon name="broom" />
             </button>
           </div>
           {ephemeral.map((tab) => (

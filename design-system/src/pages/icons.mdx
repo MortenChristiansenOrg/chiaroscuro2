@@ -3,17 +3,13 @@ title: Icons
 ---
 
 import { ComponentPreview } from "../components/ComponentPreview"
+import { Icon } from "@/components/Icon"
 
 # Icons
 
-Use **Font Awesome 7 Free** for all icons. No inline SVGs, no custom icon components. Icons inherit `color` from their parent and scale with `font-size`.
+All icons must use the typed `<Icon>` component. Bare `<i>` FA classes are caught by the lint check.
 
-**CDN (design system site):**
-```html
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/7.0.1/css/all.min.css" />
-```
-
-**App (Electron):** install `@fortawesome/fontawesome-free` via npm/bun and import `@fortawesome/fontawesome-free/css/all.min.css` in the renderer entry.
+Use **Font Awesome 7 Free** for all icons. No inline SVGs. Icons inherit `color` from their parent and scale with `font-size`.
 
 ## Available Styles (Free)
 
@@ -28,12 +24,12 @@ Use **Font Awesome 7 Free** for all icons. No inline SVGs, no custom icon compon
 <ComponentPreview label="Navigation">
   <div style={{ display: "flex", gap: 24, alignItems: "center", color: "var(--foreground)" }}>
     {[
-      { label: "Back", cls: "fa-solid fa-chevron-left" },
-      { label: "Forward", cls: "fa-solid fa-chevron-right" },
-      { label: "Refresh", cls: "fa-solid fa-rotate-right" },
+      { label: "Back", name: "chevron-left" },
+      { label: "Forward", name: "chevron-right" },
+      { label: "Refresh", name: "rotate-right" },
     ].map((ico) => (
       <div key={ico.label} style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-        <i className={ico.cls} style={{ fontSize: 14 }} />
+        <Icon name={ico.name} css={{ fontSize: 14 }} />
         <span style={{ fontSize: 10, color: "var(--muted-foreground)" }}>{ico.label}</span>
       </div>
     ))}
@@ -44,17 +40,22 @@ Use **Font Awesome 7 Free** for all icons. No inline SVGs, no custom icon compon
 
 <ComponentPreview label="Window Controls">
   <div style={{ display: "flex", gap: 24, alignItems: "center", color: "var(--foreground)" }}>
-    {[
-      { label: "Copy", cls: "fa-regular fa-copy" },
-      { label: "Minimize", cls: "fa-solid fa-minus" },
-      { label: "Maximize", cls: "fa-regular fa-square" },
-      { label: "Close", cls: "fa-solid fa-xmark" },
-    ].map((ico) => (
-      <div key={ico.label} style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-        <i className={ico.cls} style={{ fontSize: 14 }} />
-        <span style={{ fontSize: 10, color: "var(--muted-foreground)" }}>{ico.label}</span>
-      </div>
-    ))}
+    <div style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+      <Icon name="copy" style="regular" css={{ fontSize: 14 }} />
+      <span style={{ fontSize: 10, color: "var(--muted-foreground)" }}>Copy</span>
+    </div>
+    <div style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+      <Icon name="minus" css={{ fontSize: 14 }} />
+      <span style={{ fontSize: 10, color: "var(--muted-foreground)" }}>Minimize</span>
+    </div>
+    <div style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+      <Icon name="square" style="regular" css={{ fontSize: 14 }} />
+      <span style={{ fontSize: 10, color: "var(--muted-foreground)" }}>Maximize</span>
+    </div>
+    <div style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+      <Icon name="xmark" css={{ fontSize: 14 }} />
+      <span style={{ fontSize: 10, color: "var(--muted-foreground)" }}>Close</span>
+    </div>
   </div>
 </ComponentPreview>
 
@@ -63,16 +64,16 @@ Use **Font Awesome 7 Free** for all icons. No inline SVGs, no custom icon compon
 <ComponentPreview label="UI Icons">
   <div style={{ display: "flex", gap: 24, alignItems: "center", color: "var(--foreground)" }}>
     {[
-      { label: "ChevDown", cls: "fa-solid fa-chevron-down" },
-      { label: "ChevRight", cls: "fa-solid fa-chevron-right" },
-      { label: "Folder", cls: "fa-solid fa-folder" },
-      { label: "FolderOpen", cls: "fa-solid fa-folder-open" },
-      { label: "Pencil", cls: "fa-solid fa-pencil" },
-      { label: "Plus", cls: "fa-solid fa-plus" },
-      { label: "Broom", cls: "fa-solid fa-broom" },
+      { label: "ChevDown", name: "chevron-down" },
+      { label: "ChevRight", name: "chevron-right" },
+      { label: "Folder", name: "folder" },
+      { label: "FolderOpen", name: "folder-open" },
+      { label: "Pencil", name: "pencil" },
+      { label: "Plus", name: "plus" },
+      { label: "Broom", name: "broom" },
     ].map((ico) => (
       <div key={ico.label} style={{ textAlign: "center", display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
-        <i className={ico.cls} style={{ fontSize: 14 }} />
+        <Icon name={ico.name} css={{ fontSize: 14 }} />
         <span style={{ fontSize: 10, color: "var(--muted-foreground)" }}>{ico.label}</span>
       </div>
     ))}
@@ -81,16 +82,22 @@ Use **Font Awesome 7 Free** for all icons. No inline SVGs, no custom icon compon
 
 ## Usage
 
-```html
-<!-- Basic icon -->
-<i class="fa-solid fa-chevron-left"></i>
+```tsx
+{/* Basic icon (defaults to solid) */}
+<Icon name="chevron-left" />
 
-<!-- Sized via font-size -->
-<i class="fa-solid fa-folder" style="font-size: 0.625rem"></i>
+{/* Sized via css prop */}
+<Icon name="folder" css={{ fontSize: "0.625rem" }} />
 
-<!-- Icon button (must have aria-label + data-tip) -->
+{/* Regular style */}
+<Icon name="copy" style="regular" />
+
+{/* Brands */}
+<Icon name="github" style="brands" />
+
+{/* Icon button (must have aria-label + data-tip) */}
 <button aria-label="Close tab" data-tip="Close tab">
-  <i class="fa-solid fa-xmark"></i>
+  <Icon name="xmark" />
 </button>
 ```
 
@@ -100,7 +107,7 @@ Every icon-only button must have `aria-label` and `data-tip` for the tooltip. Mi
 
 ## Sizing
 
-Icons inherit `font-size`. Default UI icon size is `0.625rem` (10px). Use `font-size` on the `<i>` element or let it inherit from the parent.
+Icons inherit `font-size`. Default UI icon size is `0.625rem` (10px). Use the `css` prop or let it inherit from the parent.
 
 | Context | Size |
 |---------|------|

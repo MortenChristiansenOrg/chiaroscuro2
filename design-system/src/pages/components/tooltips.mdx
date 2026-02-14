@@ -3,6 +3,8 @@ title: Tooltips
 ---
 
 import { ComponentPreview } from "../../components/ComponentPreview"
+import { TooltipPreview } from "../../components/TooltipPreview"
+import { Icon } from "@/components/Icon"
 
 # Tooltips
 
@@ -14,12 +16,23 @@ Simple atomic component — a single text container rendered as a fixed-position
 
 ## Visual Preview
 
+Hover the buttons below to see live tooltips with a 400ms delay.
+
 <ComponentPreview label="Tooltip (dark bg)">
-  <div style={{ background: "var(--window-bg)", borderRadius: 8, padding: "32px 48px", display: "inline-flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-    <div style={{ background: "oklch(0.16 0 0 / 0.92)", backdropFilter: "blur(var(--glass-backdrop-blur))", color: "oklch(0.88 0 0)", fontSize: "var(--text-sm)", fontWeight: 500, letterSpacing: "0.01em", borderRadius: "var(--radius-sm)", padding: "4px 8px" }}>
-      Copy URL
-    </div>
-    <span style={{ color: "var(--glass-text-hint)", fontSize: "var(--text-sm)" }}>tooltip label</span>
+  <div style={{ background: "var(--window-bg)", borderRadius: 8, padding: "32px 48px", display: "inline-flex", alignItems: "center", gap: 16, fontFamily: "var(--font-sans)" }}>
+    <TooltipPreview>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button data-tip="Copy URL" className="focus-ring bg-transparent text-glass-text-muted hover:bg-glass-hover hover:text-glass-text-hover active:bg-glass-pressed active:text-glass-text-pressed" style={{ width: "var(--click-target-min)", height: "var(--click-target-min)", display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: "var(--radius-md)", border: "none", cursor: "pointer" }} aria-label="Copy URL">
+          <Icon name="copy" style="regular" css={{ fontSize: "var(--icon-size-default)" }} />
+        </button>
+        <button data-tip="Open in new tab" className="focus-ring bg-transparent text-glass-text-muted hover:bg-glass-hover hover:text-glass-text-hover active:bg-glass-pressed active:text-glass-text-pressed" style={{ width: "var(--click-target-min)", height: "var(--click-target-min)", display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: "var(--radius-md)", border: "none", cursor: "pointer" }} aria-label="Open in new tab">
+          <Icon name="arrow-up-right-from-square" css={{ fontSize: "var(--icon-size-default)" }} />
+        </button>
+        <button data-tip="Settings" className="focus-ring bg-transparent text-glass-text-muted hover:bg-glass-hover hover:text-glass-text-hover active:bg-glass-pressed active:text-glass-text-pressed" style={{ width: "var(--click-target-min)", height: "var(--click-target-min)", display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: "var(--radius-md)", border: "none", cursor: "pointer" }} aria-label="Settings">
+          <Icon name="gear" css={{ fontSize: "var(--icon-size-default)" }} />
+        </button>
+      </div>
+    </TooltipPreview>
   </div>
 </ComponentPreview>
 
