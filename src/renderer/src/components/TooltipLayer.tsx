@@ -41,15 +41,18 @@ export function TooltipLayer() {
 
       timerRef.current = window.setTimeout(() => {
         const r = el.getBoundingClientRect();
-        const above = r.bottom + 32 > window.innerHeight;
+        const edgePad = 16; // 1rem distance from any application edge
+        const above = r.bottom + 32 > window.innerHeight - edgePad;
         el.setAttribute("aria-describedby", idRef.current);
         setTip({
           text,
-          x: Math.max(8, Math.min(window.innerWidth - 8, r.left + r.width / 2)),
-          y: above ? r.top - 6 : r.bottom + 6,
+          x: Math.max(edgePad, Math.min(window.innerWidth - edgePad, r.left + r.width / 2)),
+          y: above
+            ? Math.max(edgePad, r.top - 6)
+            : Math.min(window.innerHeight - edgePad, r.bottom + 6),
           above,
         });
-      }, 500);
+      }, 400);
     };
 
     const hide = () => {
@@ -115,9 +118,9 @@ export function TooltipLayer() {
         left: tip.x,
         transform: `translateX(-50%)${tip.above ? " translateY(-100%)" : ""}`,
         padding: "4px 10px",
-        borderRadius: 7,
+        borderRadius: "var(--radius-sm)",
         background: "oklch(0.16 0 0 / 0.92)",
-        backdropFilter: "blur(12px)",
+        backdropFilter: "blur(var(--glass-backdrop-blur))",
         color: "oklch(0.88 0 0)",
         fontSize: 11,
         fontWeight: 500,
@@ -128,7 +131,7 @@ export function TooltipLayer() {
         overflow: "hidden",
         textOverflow: "ellipsis",
         pointerEvents: "none",
-        zIndex: 99999,
+        zIndex: "var(--z-tooltip)" as unknown as number,
         animation: "tip-in 0.12s ease",
       }}
     >

@@ -25,12 +25,20 @@ interface Deps {
 
 let isOpen = false;
 
-export function register({ commands, events, platform, getActiveTabId }: Deps): void {
+export function register({
+  commands,
+  events,
+  platform,
+  getActiveWindowId,
+  getActiveTabId,
+}: Deps): void {
   commands.handle(COMMAND_PALETTE_SHOW, async () => {
     if (isOpen) return;
     isOpen = true;
     const tabId = getActiveTabId();
     if (tabId) platform.hideTab(tabId);
+    const windowId = getActiveWindowId();
+    if (windowId) platform.focusShell(windowId);
     events.emit(COMMAND_PALETTE_SHOWN, undefined);
   });
 

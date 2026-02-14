@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useTabsStore } from "../tabs/tabs.store";
 import { useCommandPaletteStore } from "./command-palette.store";
 
@@ -51,25 +51,52 @@ export function CommandPaletteOverlay() {
   const open = useCommandPaletteStore((s) => s.open);
   const activeTabId = useTabsStore((s) => s.activeTabId);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [visible, setVisible] = useState(false);
+  const [closing, setClosing] = useState(false);
 
   useEffect(() => {
     if (open) {
-      // Focus input after render
+      setVisible(true);
+      setClosing(false);
       requestAnimationFrame(() => inputRef.current?.focus());
+      return;
     }
-  }, [open]);
+    if (!visible) return;
+    // Play exit animation then unmount
+    setClosing(true);
+    const timer = setTimeout(() => {
+      setVisible(false);
+      setClosing(false);
+    }, 150); // --duration-exit
+    return () => clearTimeout(timer);
+  }, [open, visible]);
 
   const handleClose = useCallback(() => {
     sendCommand("command-palette:hide", undefined);
   }, []);
 
+  // Global Esc handler — works even if input loses focus
+  useEffect(() => {
+    if (!visible || closing) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") handleClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [visible, closing, handleClose]);
+
+  // Focus trap — nothing else should be focusable while palette is open
+  useEffect(() => {
+    if (!visible || closing) return;
+    const input = inputRef.current;
+    if (!input) return;
+    const refocus = () => requestAnimationFrame(() => input.focus());
+    input.addEventListener("blur", refocus);
+    return () => input.removeEventListener("blur", refocus);
+  }, [visible, closing]);
+
   const handleSubmit = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === "Escape") {
-        handleClose();
-        return;
-      }
-
       if (e.key !== "Enter") return;
 
       const value = inputRef.current?.value;
@@ -93,19 +120,21 @@ export function CommandPaletteOverlay() {
       sendCommand("command-palette:hide", undefined);
       if (inputRef.current) inputRef.current.value = "";
     },
-    [activeTabId, handleClose],
+    [activeTabId],
   );
 
-  if (!open) return null;
+  if (!visible) return null;
 
   return (
     <div
-      className="fixed inset-0 flex items-start justify-center"
+      className="fixed inset-0 flex items-center justify-center"
       style={{
         zIndex: "var(--z-overlay)" as unknown as number,
         background: "oklch(0 0 0 / 0.4)",
         backdropFilter: "blur(4px)",
-        paddingTop: "20vh",
+        animation: closing
+          ? "backdrop-out 150ms cubic-bezier(0.4, 0, 1, 1) forwards"
+          : "backdrop-in 200ms cubic-bezier(0, 0, 0.2, 1)",
       }}
       onClick={handleClose}
       onKeyDown={() => {}}
@@ -123,6 +152,9 @@ export function CommandPaletteOverlay() {
           border: "1px solid var(--glass-border)",
           boxShadow: "var(--shadow-elevated)",
           backdropFilter: "blur(var(--glass-backdrop-blur))",
+          animation: closing
+            ? "palette-out 150ms cubic-bezier(0.4, 0, 1, 1) forwards"
+            : "palette-in 200ms cubic-bezier(0, 0, 0.2, 1)",
         }}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={() => {}}

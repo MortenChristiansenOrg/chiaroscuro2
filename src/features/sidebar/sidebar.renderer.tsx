@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { TabId, WorkspaceId } from "../../shared/types";
 import type { Tab } from "../tabs/tabs.shared";
 import { useTabsStore } from "../tabs/tabs.store";
@@ -55,10 +55,12 @@ function TabItem({
   tab,
   isActive,
   isEphemeral,
+  exiting,
 }: {
   tab: Tab;
   isActive: boolean;
   isEphemeral: boolean;
+  exiting?: boolean;
 }) {
   const handleClick = useCallback(() => {
     sendCommand("tabs:activate", { tabId: tab.id });
@@ -77,11 +79,15 @@ function TabItem({
       className="group flex items-center cursor-pointer transition-all focus-ring hover:bg-glass-hover hover:text-glass-text-hover active:bg-glass-pressed active:text-glass-text-pressed"
       style={{
         gap: 10,
-        padding: "0.25rem 0.75rem",
-        margin: "1px 0.375rem",
-        borderRadius: "var(--radius-pill)",
+        padding: "0.375rem 0.75rem",
+        margin: "2px 0.375rem",
+        borderRadius: "var(--radius-md)",
         background: isActive ? "var(--glass-active)" : undefined,
         boxShadow: isActive ? "var(--shadow-subtle)" : undefined,
+        pointerEvents: exiting ? "none" : undefined,
+        animation: exiting
+          ? "tab-out 150ms cubic-bezier(0.4, 0, 1, 1) forwards"
+          : "tab-in 200ms cubic-bezier(0, 0, 0.2, 1)",
       }}
       onClick={handleClick}
       onKeyDown={(e) => e.key === "Enter" && handleClick()}
@@ -101,10 +107,10 @@ function TabItem({
       </span>
       <button
         type="button"
-        className="hidden group-hover:flex items-center justify-center shrink-0 bg-transparent text-glass-text-hint transition-all focus-ring hover:text-destructive"
+        className="flex opacity-0 group-hover:opacity-100 items-center justify-center shrink-0 bg-transparent text-glass-text-hint transition-all focus-ring hover:text-glass-text-hover"
         style={{
-          width: 16,
-          height: 16,
+          width: 20,
+          height: 20,
           borderRadius: "var(--radius-sm)",
           marginLeft: "auto",
           cursor: "pointer",
@@ -114,7 +120,7 @@ function TabItem({
         aria-label="Close tab"
         data-tip="Close tab"
       >
-        <i className="fa-solid fa-xmark" style={{ fontSize: 7 }} />
+        <i className="fa-solid fa-xmark" style={{ fontSize: 10 }} />
       </button>
     </div>
   );
@@ -172,19 +178,45 @@ export function SidebarPanel() {
   const workspaces = useWorkspacesStore((s) => s.workspaces);
   const activeWorkspaceId = useWorkspacesStore((s) => s.activeWorkspaceId);
 
+  // Track exiting tabs for exit animation
+  const prevTabsRef = useRef(new Map<TabId, Tab>());
+  const [exitingTabs, setExitingTabs] = useState<Tab[]>([]);
+
+  useEffect(() => {
+    const prev = prevTabsRef.current;
+    const removed: Tab[] = [];
+    for (const [id, tab] of prev) {
+      if (!tabs.has(id)) removed.push(tab);
+    }
+    prevTabsRef.current = new Map(tabs);
+    if (removed.length === 0) return;
+    setExitingTabs(removed);
+    const timer = setTimeout(() => setExitingTabs([]), 150);
+    return () => clearTimeout(timer);
+  }, [tabs]);
+
   const { bookmarked, ephemeral } = useMemo(() => {
     const all = [...tabs.values()].filter((t) => t.workspaceId === activeWorkspaceId);
+    const exitingInWorkspace = exitingTabs.filter((t) => t.workspaceId === activeWorkspaceId);
     return {
-      bookmarked: all.filter((t) => t.bookmarked),
-      ephemeral: all.filter((t) => !t.bookmarked),
+      bookmarked: [
+        ...all.filter((t) => t.bookmarked),
+        ...exitingInWorkspace.filter((t) => t.bookmarked),
+      ],
+      ephemeral: [
+        ...all.filter((t) => !t.bookmarked),
+        ...exitingInWorkspace.filter((t) => !t.bookmarked),
+      ],
     };
-  }, [tabs, activeWorkspaceId]);
+  }, [tabs, activeWorkspaceId, exitingTabs]);
 
   const handleClearEphemeral = useCallback(() => {
     if (activeWorkspaceId) {
       sendCommand("tabs:clear-ephemeral", { workspaceId: activeWorkspaceId });
     }
   }, [activeWorkspaceId]);
+
+  const exitingIds = useMemo(() => new Set(exitingTabs.map((t) => t.id)), [exitingTabs]);
 
   if (!visible) return null;
 
@@ -209,7 +241,13 @@ export function SidebarPanel() {
             Bookmarked
           </div>
           {bookmarked.map((tab) => (
-            <TabItem key={tab.id} tab={tab} isActive={tab.id === activeTabId} isEphemeral={false} />
+            <TabItem
+              key={tab.id}
+              tab={tab}
+              isActive={tab.id === activeTabId}
+              isEphemeral={false}
+              exiting={exitingIds.has(tab.id)}
+            />
           ))}
         </>
       )}
@@ -243,7 +281,13 @@ export function SidebarPanel() {
             </button>
           </div>
           {ephemeral.map((tab) => (
-            <TabItem key={tab.id} tab={tab} isActive={tab.id === activeTabId} isEphemeral={true} />
+            <TabItem
+              key={tab.id}
+              tab={tab}
+              isActive={tab.id === activeTabId}
+              isEphemeral={true}
+              exiting={exitingIds.has(tab.id)}
+            />
           ))}
         </>
       )}

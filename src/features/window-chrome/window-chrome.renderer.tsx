@@ -104,54 +104,54 @@ function UrlPill() {
 
   return (
     <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
-      {/* Loading spinner ring */}
+      {/* Loading spinner ring — conic-gradient masked to border edge */}
       {isLoading && (
         <div
-          className="absolute inset-[-2px] animate-spin"
+          className="absolute inset-0 pointer-events-none"
           style={{
-            borderRadius: 14,
+            borderRadius: "var(--radius-lg)",
+            padding: 2,
             background:
-              "conic-gradient(from 0deg, oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250) / 0.8), oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250) / 0) 120deg)",
+              "conic-gradient(from var(--url-angle), oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250) / 0) 0%, oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250) / 0.8) 10%, oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250) / 0) 22%, transparent 22%)",
+            mask: "linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)",
+            maskComposite: "exclude",
+            WebkitMaskComposite: "xor",
+            animation: "url-spin 2.5s linear infinite",
           }}
         />
       )}
-      {/* Pill */}
-      <div
-        className="relative flex items-center transition-colors"
+      {/* Pill — entire pill is clickable to copy */}
+      <button
+        type="button"
+        className="relative flex items-center transition-colors cursor-pointer focus-ring hover:bg-glass-hover"
         style={{
           gap: 2,
           fontSize: "var(--text-sm)",
           fontFamily: "var(--font-mono)",
           color: "var(--glass-text-default)",
-          padding: "3px 4px 3px 14px",
+          padding: "3px 10px 3px 14px",
           borderRadius: "var(--radius-lg)",
           background: "var(--glass-subtle)",
+          border: "none",
         }}
+        onClick={handleCopy}
+        aria-label={copied ? "Copied!" : "Copy URL"}
+        data-tip={copied ? "Copied!" : "Copy URL"}
       >
-        <span className="select-all truncate" style={{ maxWidth: 300 }}>
+        <span className="truncate" style={{ maxWidth: 300 }}>
           {displayUrl}
         </span>
-        <button
-          type="button"
-          className={`focus-ring flex items-center justify-center bg-transparent transition-all hover:bg-glass-hover hover:text-glass-text-hover ${copied ? "text-glass-text-hover" : "text-glass-text-muted"}`}
-          style={{
-            width: 22,
-            height: 22,
-            borderRadius: "var(--radius-md)",
-            border: "none",
-            cursor: "pointer",
-          }}
-          onClick={handleCopy}
-          aria-label={copied ? "Copied!" : "Copy URL"}
-          data-tip={copied ? "Copied!" : "Copy URL"}
+        <span
+          className={`flex items-center justify-center shrink-0 transition-all ${copied ? "text-glass-text-hover" : "text-glass-text-muted"}`}
+          style={{ width: 22, height: 22 }}
         >
           {copied ? (
             <i className="fa-solid fa-check" style={{ fontSize: "var(--icon-size-default)" }} />
           ) : (
             <i className="fa-regular fa-copy" style={{ fontSize: "var(--icon-size-default)" }} />
           )}
-        </button>
-      </div>
+        </span>
+      </button>
     </div>
   );
 }
