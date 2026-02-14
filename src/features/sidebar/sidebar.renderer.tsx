@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useMemo, useState } from "react";
 import type { TabId, WorkspaceId } from "../../shared/types";
 import type { Tab } from "../tabs/tabs.shared";
 import { useTabsStore } from "../tabs/tabs.store";
@@ -7,22 +7,6 @@ import { useSidebarStore } from "./sidebar.store";
 
 function sendCommand(name: string, payload: unknown) {
   window.chiaroscuro.sendCommand(name, payload);
-}
-
-function CloseIconSmall() {
-  return (
-    <svg
-      aria-hidden="true"
-      width="7"
-      height="7"
-      viewBox="0 0 7 7"
-      stroke="currentColor"
-      strokeWidth="1.2"
-    >
-      <line x1="0" y1="0" x2="7" y2="7" />
-      <line x1="7" y1="0" x2="0" y2="7" />
-    </svg>
-  );
 }
 
 function Favicon({ tab }: { tab: Tab }) {
@@ -43,13 +27,14 @@ function Favicon({ tab }: { tab: Tab }) {
 
   return (
     <div
-      className="shrink-0 flex items-center justify-center rounded-full text-white"
+      className="shrink-0 flex items-center justify-center rounded-full"
       style={{
         width: 16,
         height: 16,
         fontSize: 8,
         fontWeight: 600,
-        fontFamily: "'DM Sans', sans-serif",
+        fontFamily: "var(--font-sans)",
+        color: "oklch(1 0 0)",
         background: `oklch(0.55 0.15 ${hue})`,
       }}
     >
@@ -89,11 +74,11 @@ function TabItem({
 
   return (
     <div
-      className="group flex items-center cursor-pointer transition-all"
+      className="group flex items-center cursor-pointer transition-all focus-ring hover:bg-glass-hover hover:text-glass-text-hover active:bg-glass-pressed active:text-glass-text-pressed"
       style={{
         gap: 10,
-        padding: "5px 12px",
-        margin: "1px 6px",
+        padding: "0.25rem 0.75rem",
+        margin: "1px 0.375rem",
         borderRadius: "var(--radius-pill)",
         background: isActive ? "var(--glass-active)" : undefined,
         boxShadow: isActive ? "var(--shadow-subtle)" : undefined,
@@ -106,14 +91,9 @@ function TabItem({
     >
       <Favicon tab={tab} />
       <span
-        className="flex-1 min-w-0 truncate"
+        className={`flex-1 min-w-0 truncate group-hover:text-glass-text-hover group-active:text-glass-text-pressed ${isActive ? "text-glass-text-primary" : isEphemeral ? "text-glass-text-muted" : "text-glass-text-default"}`}
         style={{
-          fontSize: "12.5px",
-          color: isActive
-            ? "var(--glass-text-primary)"
-            : isEphemeral
-              ? "oklch(1 0 0 / 0.35)"
-              : "var(--glass-text-default)",
+          fontSize: "var(--text-base)",
           fontWeight: isActive ? 500 : undefined,
         }}
       >
@@ -121,18 +101,20 @@ function TabItem({
       </span>
       <button
         type="button"
-        className="hidden group-hover:flex items-center justify-center shrink-0 transition-all"
+        className="hidden group-hover:flex items-center justify-center shrink-0 bg-transparent text-glass-text-hint transition-all focus-ring hover:text-destructive"
         style={{
           width: 16,
           height: 16,
           borderRadius: "var(--radius-sm)",
-          color: "var(--glass-text-hint)",
           marginLeft: "auto",
+          cursor: "pointer",
+          border: "none",
         }}
         onClick={handleClose}
         aria-label="Close tab"
+        data-tip="Close tab"
       >
-        <CloseIconSmall />
+        <i className="fa-solid fa-xmark" style={{ fontSize: 7 }} />
       </button>
     </div>
   );
@@ -149,24 +131,34 @@ function WorkspaceBubble({
     sendCommand("workspaces:switch", { workspaceId: workspace.id });
   }, [workspace.id]);
 
+  // Build the ring shadow using oklch with proper syntax
+  const activeRing = workspace.color.startsWith("oklch(")
+    ? `0 0 0 2px oklch(${workspace.color.slice(5, -1)} / 0.4)`
+    : `0 0 0 2px ${workspace.color}66`;
+
+  const [hovered, setHovered] = useState(false);
+
   return (
     <button
       type="button"
-      className="flex items-center justify-center cursor-pointer transition-all"
+      className="flex items-center justify-center cursor-pointer focus-ring"
       style={{
         width: 24,
         height: 24,
-        borderRadius: "50%",
+        borderRadius: "var(--radius-full)",
         border: "none",
         fontSize: 10,
         fontWeight: 600,
         background: workspace.color,
-        color: "#fff",
-        transform: isActive ? "scale(1.08)" : undefined,
-        boxShadow: isActive ? `0 0 0 2px ${workspace.color.replace(")", " / 0.4)")}` : undefined,
+        color: "oklch(1 0 0)",
+        transform: isActive ? "scale(1.08)" : hovered ? "scale(1.12)" : undefined,
+        boxShadow: isActive ? activeRing : undefined,
+        transition: "transform var(--duration-normal) var(--ease-in-out)",
       }}
       onClick={handleClick}
       data-tip={workspace.name}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
     >
       {workspace.initial}
     </button>
@@ -206,10 +198,10 @@ export function SidebarPanel() {
         <>
           <div
             style={{
-              fontSize: 9,
+              fontSize: "var(--text-xs)",
               textTransform: "uppercase",
               letterSpacing: "0.1em",
-              color: "var(--glass-text-hint)",
+              color: "var(--glass-text-muted)",
               padding: "10px 14px 3px",
               fontWeight: 500,
             }}
@@ -232,21 +224,20 @@ export function SidebarPanel() {
             <div style={{ flex: 1, height: 1, background: "var(--glass-border)" }} />
             <button
               type="button"
-              className="flex items-center cursor-pointer transition-all"
+              className="flex items-center cursor-pointer bg-transparent text-glass-text-hint transition-all focus-ring hover:bg-glass-hover hover:text-glass-text-hover"
               style={{
                 gap: 4,
                 border: "none",
-                background: "none",
-                color: "var(--glass-text-hint)",
-                fontSize: 9,
+                fontSize: "var(--text-xs)",
                 fontWeight: 500,
                 fontFamily: "inherit",
                 padding: "2px 6px",
-                borderRadius: 6,
+                borderRadius: "var(--radius-sm)",
                 whiteSpace: "nowrap",
                 letterSpacing: "0.02em",
               }}
               onClick={handleClearEphemeral}
+              data-tip="Clear ephemeral tabs"
             >
               Clear
             </button>
@@ -261,8 +252,8 @@ export function SidebarPanel() {
       <div className="flex-1" />
 
       {/* Workspace bar */}
-      <div className="flex items-center" style={{ gap: 6, padding: "10px 12px" }}>
-        <div className="flex" style={{ gap: 6 }}>
+      <div className="flex items-center" style={{ gap: "0.375rem", padding: "10px 12px" }}>
+        <div className="flex" style={{ gap: "0.375rem" }}>
           {workspaces.map((ws) => (
             <WorkspaceBubble key={ws.id} workspace={ws} isActive={ws.id === activeWorkspaceId} />
           ))}

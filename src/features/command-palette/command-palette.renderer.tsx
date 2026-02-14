@@ -100,8 +100,9 @@ export function CommandPaletteOverlay() {
 
   return (
     <div
-      className="fixed inset-0 flex items-start justify-center z-50"
+      className="fixed inset-0 flex items-start justify-center"
       style={{
+        zIndex: "var(--z-overlay)" as unknown as number,
         background: "oklch(0 0 0 / 0.4)",
         backdropFilter: "blur(4px)",
         paddingTop: "20vh",
@@ -111,13 +112,17 @@ export function CommandPaletteOverlay() {
     >
       <div
         className="flex flex-col"
+        // biome-ignore lint/a11y/useSemanticElements: overlay handles backdrop click
+        role="dialog"
+        aria-label="Command palette"
+        aria-modal="true"
         style={{
           width: 560,
-          background: "oklch(0.2 0.02 250 / 0.9)",
-          borderRadius: 16,
-          border: "1px solid oklch(1 0 0 / 0.1)",
-          boxShadow: "0 8px 40px oklch(0 0 0 / 0.3)",
-          backdropFilter: "blur(20px)",
+          background: "var(--glass-bg)",
+          borderRadius: "var(--radius-xl)",
+          border: "1px solid var(--glass-border)",
+          boxShadow: "var(--shadow-elevated)",
+          backdropFilter: "blur(var(--glass-backdrop-blur))",
         }}
         onClick={(e) => e.stopPropagation()}
         onKeyDown={() => {}}
@@ -126,11 +131,11 @@ export function CommandPaletteOverlay() {
           ref={inputRef}
           type="text"
           placeholder="Search or enter URL..."
-          className="w-full outline-none"
+          className="w-full outline-none placeholder:text-glass-text-hint"
           style={{
             background: "transparent",
-            color: "oklch(1 0 0 / 0.9)",
-            fontSize: 16,
+            color: "var(--glass-text-primary)",
+            fontSize: "var(--text-md)",
             padding: "16px 20px",
             border: "none",
             fontFamily: "inherit",
@@ -143,9 +148,9 @@ export function CommandPaletteOverlay() {
           className="flex items-center justify-between"
           style={{
             padding: "8px 20px 12px",
-            fontSize: 11,
-            color: "oklch(1 0 0 / 0.3)",
-            borderTop: "1px solid oklch(1 0 0 / 0.06)",
+            fontSize: "var(--text-sm)",
+            color: "var(--glass-text-hint)",
+            borderTop: "1px solid var(--glass-border)",
           }}
         >
           <span>Enter = new tab &middot; Ctrl+Enter = current tab &middot; Esc = close</span>
