@@ -19,15 +19,16 @@ Animation serves comprehension — it shows cause and effect. It should never be
 
 ## Rules
 
-1. **Only animate `transform` and `opacity`.** These are GPU-composited and run at 60fps. Never animate `width`, `height`, `padding`, `margin`, `top`, `left`, or `border-radius` — they trigger layout reflow.
-2. **Entrances are slower than exits.** Users need time to notice something appearing. Disappearances can be faster because attention is already elsewhere.
-3. **Hover = `--duration-fast`.** All hover state changes (background, text brightness, icon opacity) use 150ms ease-out. No exceptions.
-4. **Overlays scale in from 0.96.** Command palette, tooltips, and dropdowns enter with `transform: scale(0.96)` → `scale(1)` combined with `opacity: 0` → `1`.
-5. **No transition on `all`.** Always specify the exact properties being transitioned: `transition: background-color 150ms ease-out, color 150ms ease-out`.
-6. **Respect `prefers-reduced-motion`.** Wrap all transitions in `@media (prefers-reduced-motion: no-preference)` or use Tailwind's `motion-safe:` variant. Under reduced-motion, transitions become instant (0ms) and keyframe animations are suppressed.
-7. **Loading animations are an exception.** The URL pill's spinning gradient and skeleton loaders may run continuously. They communicate ongoing activity and don't count as decorative animation.
-8. **Hover lift = `translateY(-0.0625rem)` max.** Cards and elevated elements can rise slightly on hover. Keep it to 1px equivalent.
-9. **No bounce, no spring.** Browser chrome is a tool. Springy, bouncy animations belong in consumer apps. Use linear or standard easing only.
+1. **Nothing appears or disappears instantly.** All elements that enter or leave the screen must animate. Instant appearance/disappearance is jarring. Use `--duration-enter` for entrances and `--duration-exit` for exits at minimum.
+2. **Only animate `transform` and `opacity`.** These are GPU-composited and run at 60fps. Never animate `width`, `height`, `padding`, `margin`, `top`, `left`, or `border-radius` — they trigger layout reflow.
+3. **Entrances are slower than exits.** Users need time to notice something appearing. Disappearances can be faster because attention is already elsewhere.
+4. **Hover = `--duration-fast`.** All hover state changes (background, text brightness, icon opacity) use 150ms ease-out. No exceptions.
+5. **Overlays scale in from 0.96.** Command palette, tooltips, and dropdowns enter with `transform: scale(0.96)` → `scale(1)` combined with `opacity: 0` → `1`.
+6. **No transition on `all`.** Always specify the exact properties being transitioned: `transition: background-color 150ms ease-out, color 150ms ease-out`.
+7. **Respect `prefers-reduced-motion`.** Wrap all transitions in `@media (prefers-reduced-motion: no-preference)` or use Tailwind's `motion-safe:` variant. Under reduced-motion, transitions become instant (0ms) and keyframe animations are suppressed.
+8. **Loading animations are an exception.** The URL pill's spinning gradient and skeleton loaders may run continuously. They communicate ongoing activity and don't count as decorative animation.
+9. **Hover lift = `translateY(-0.0625rem)` max.** Cards and elevated elements can rise slightly on hover. Keep it to 1px equivalent.
+10. **No bounce, no spring.** Browser chrome is a tool. Springy, bouncy animations belong in consumer apps. Use linear or standard easing only.
 
 ## URL Pill — Spinning Gradient Border
 

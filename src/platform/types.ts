@@ -41,6 +41,14 @@ export interface Platform {
   unregisterShortcut(accelerator: string): void;
   hookWebContents(webContents: unknown): void;
 
+  // Focus
+  focusShell(windowId: WindowId): void;
+
+  // Tooltip overlay
+  initTooltipOverlay(windowId: WindowId): void;
+  showTooltip(opts: { text: string; x: number; y: number; width: number; height: number }): void;
+  hideTooltip(): void;
+
   // Shell / clipboard
   openExternal(url: string): Promise<void>;
   readClipboard(): string;

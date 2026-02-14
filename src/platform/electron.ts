@@ -53,9 +53,19 @@ function matchesInput(parsed: ParsedAccelerator, input: Electron.Input): boolean
   );
 }
 
+// Minimal HTML for the tooltip popup — transparent bg, matching app styling
+const TOOLTIP_HTML = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+*{margin:0;padding:0}html,body{background:transparent;overflow:hidden}
+#t{display:inline-block;padding:4px 10px;border-radius:6px;background:rgb(28,28,28,.94);
+color:rgb(210,210,210);font:500 11px/1.4 system-ui,-apple-system,sans-serif;
+letter-spacing:.01em;white-space:nowrap}
+.a{animation:i .12s ease}@keyframes i{from{opacity:0;transform:scale(.96)}}
+</style></head><body><span id="t"></span></body></html>`;
+
 export class ElectronPlatform implements Platform {
   private shortcuts = new Map<string, { parsed: ParsedAccelerator; callback: () => void }>();
   private views = new Map<TabId, WebContentsView>();
+  private tooltipWin: BrowserWindow | null = null;
 
   constructor(private getActiveWindowId: () => WindowId | undefined) {}
 
@@ -107,6 +117,9 @@ export class ElectronPlatform implements Platform {
 
     const tabId = crypto.randomUUID() as TabId;
     const view = new WebContentsView();
+
+    // Match the CSS border-radius of the content area (--radius = 0.5rem = 8px)
+    view.setBorderRadius(8);
 
     this.views.set(tabId, view);
     win.contentView.addChildView(view);
@@ -227,6 +240,13 @@ export class ElectronPlatform implements Platform {
     throw new Error("Not implemented: createIsolatedSession");
   }
 
+  // ── Focus ──────────────────────────────────────────────────────
+
+  focusShell(windowId?: WindowId): void {
+    const win = this.getWin(windowId);
+    if (win) win.webContents.focus();
+  }
+
   // ── Keyboard shortcuts ──────────────────────────────────────────
 
   registerShortcut(accelerator: string, callback: () => void): void {
@@ -251,6 +271,61 @@ export class ElectronPlatform implements Platform {
         }
       }
     });
+  }
+
+  // ── Tooltip overlay ────────────────────────────────────────────
+
+  initTooltipOverlay(windowId: WindowId): void {
+    const parent = this.getWin(windowId);
+    if (!parent) return;
+
+    this.tooltipWin = new BrowserWindow({
+      parent,
+      frame: false,
+      transparent: true,
+      focusable: false,
+      skipTaskbar: true,
+      resizable: false,
+      show: false,
+      hasShadow: false,
+      webPreferences: { sandbox: true },
+    });
+    this.tooltipWin.setIgnoreMouseEvents(true);
+    this.tooltipWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(TOOLTIP_HTML)}`);
+
+    // Hide tooltip when parent moves/resizes (coordinates become stale)
+    parent.on("move", () => this.hideTooltip());
+    parent.on("resize", () => this.hideTooltip());
+  }
+
+  showTooltip(opts: {
+    text: string;
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }): void {
+    const win = this.getWin();
+    if (!win || !this.tooltipWin) return;
+
+    const cb = win.getContentBounds();
+
+    this.tooltipWin.setBounds({
+      x: Math.round(cb.x + opts.x),
+      y: Math.round(cb.y + opts.y),
+      width: Math.round(opts.width),
+      height: Math.round(opts.height),
+    });
+    this.tooltipWin.webContents.executeJavaScript(
+      `var t=document.getElementById('t');t.textContent=${JSON.stringify(opts.text)};t.className='';void t.offsetWidth;t.className='a';`,
+    );
+    this.tooltipWin.showInactive();
+  }
+
+  hideTooltip(): void {
+    if (this.tooltipWin?.isVisible()) {
+      this.tooltipWin.hide();
+    }
   }
 
   // ── Shell / clipboard ───────────────────────────────────────────

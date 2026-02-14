@@ -2,40 +2,35 @@
 title: Workspace Switcher
 ---
 
-import { ComponentPreview } from "../../components/ComponentPreview"
+import { LivePreview } from "../../components/LivePreview"
+import { WorkspaceBubble } from "@features/sidebar/sidebar.renderer"
+import { DEMO_WORKSPACES, workspaceId } from "../../lib/demo-data"
 
 # Workspace Switcher
 
 The workspace bar sits at the bottom of the sidebar. Contains colored bubble buttons for each workspace, plus edit and add controls.
 
+---
+
+## Anatomy
+
+- **Bubble row** — horizontal list of colored circle buttons, one per workspace
+- **Edit button** — icon button to enter workspace management mode
+- **Add button** — icon button to create a new workspace
+
+---
+
 ## Workspace Bubbles
 
 Each bubble uses the workspace's accent color derived from `var(--accent-hue)`. All accent colors share `L=var(--accent-L), C=var(--accent-C)` for consistent vibrancy.
 
-<ComponentPreview label="Workspace Bubbles (dark bg)">
-  <div style={{ background: "var(--window-bg)", borderRadius: "var(--radius-md)", padding: 12, display: "inline-flex", gap: 6, alignItems: "center" }}>
-    {[
-      { letter: "W", hue: 230, active: true },
-      { letter: "P", hue: 350, active: false },
-      { letter: "S", hue: 160, active: false },
-    ].map((ws) => (
-      <button
-        key={ws.letter}
-        type="button"
-        style={{
-          width: 24, height: 24, borderRadius: "var(--radius-full)", border: "none",
-          background: `oklch(0.65 0.15 ${ws.hue})`, color: "#fff",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: 10, fontWeight: 600, cursor: "pointer",
-          transform: ws.active ? "scale(1.08)" : "none",
-          boxShadow: ws.active ? `0 0 0 2px oklch(0.65 0.15 ${ws.hue} / 0.4)` : "none",
-        }}
-      >
-        {ws.letter}
-      </button>
+<LivePreview label="Workspace Bubbles (dark bg)">
+  <div style={{ padding: 12, display: "inline-flex", gap: 6, alignItems: "center" }}>
+    {DEMO_WORKSPACES.map((ws) => (
+      <WorkspaceBubble key={ws.id} workspace={ws} isActive={ws.id === workspaceId("ws-work")} />
     ))}
   </div>
-</ComponentPreview>
+</LivePreview>
 
 ## Bubble Specs
 
@@ -51,18 +46,85 @@ Each bubble uses the workspace's accent color derived from `var(--accent-hue)`. 
 
 See [Colors](/colors) for the full palette. Available hues: Iris (270), Ocean (230), Teal (195), Jade (160), Lime (130), Amber (85), Coral (45), Rose (350), Berry (320).
 
+---
+
 ## States
 
 | State | Effect |
 |-------|--------|
+| Default | No transform, no ring |
 | Hover | `transform: scale(1.12)` |
-| Active | `transform: scale(1.08)`, Ring shadow: `0 0 0 2px oklch(var(--accent-L) var(--accent-C) <hue> / 0.4)` |
+| Active (current workspace) | `transform: scale(1.08)`, Ring shadow: `0 0 0 2px oklch(var(--accent-L) var(--accent-C) <hue> / 0.4)` |
+| Focus-visible | `outline: 2px solid accent; outline-offset: 2px` |
+| Disabled | `opacity: 0.4`, `cursor: default` |
 
-## Workspace Bar Layout
+---
+
+## Behavior
+
+- **Click:** switches to the clicked workspace immediately.
+- **Tooltip:** each bubble shows workspace name on hover. Delay: 400ms.
+- **Edit button:** opens workspace management panel.
+- **Add button:** creates a new workspace with a default accent color.
+- **No drag:** bubbles are not draggable (reorder via edit mode only).
+
+---
+
+## Animation & Motion
+
+Scale transform on hover and active states:
+
+```css
+transition: transform var(--duration-normal) var(--ease-in-out);
+```
+
+- **Hover:** scale `1 -> 1.12`.
+- **Active:** scale `1 -> 1.08` + ring shadow fade-in.
+- **`prefers-reduced-motion`:** transitions degrade to instant (`duration: 0`).
+
+---
+
+## Keyboard & Focus
+
+- **Tab:** moves focus into the workspace bar zone.
+- **Left / Right arrow:** moves focus between bubbles within the bar.
+- **Enter:** activates the focused bubble (switches workspace).
+- **Focus ring:** `:focus-visible` only — `2px solid accent`, `outline-offset: 2px`.
+- **Tab order:** all bubbles are native `<button>` elements, no `tabindex` needed.
+
+---
+
+## Accessibility
+
+- **`aria-label`:** required on each bubble (e.g., `aria-label="Work workspace"`).
+- **`aria-current="true"`:** set on the active workspace bubble.
+- **Semantic HTML:** use `<button type="button">`, never `<div>`.
+- **Touch target:** minimum `var(--click-target-min)` (24px) in both dimensions.
+- **Contrast:** accent backgrounds against white text must meet 3:1 minimum. The curated palette ensures this.
+
+---
+
+## Layout & Composition
 
 | Property | Token/Value |
 |----------|-------------|
-| Gap | `0.375rem` (related) |
-| Position | `margin-top: auto` (pushed to bottom) |
+| Position | `margin-top: auto` (anchored to bottom of sidebar) |
+| Gap | `0.375rem` (related spacing) |
 | Controls | Edit + Add buttons, `margin-left: auto` |
-| Keyboard | `←`/`→` to switch between workspaces |
+| Direction | horizontal, `display: flex`, `align-items: center` |
+
+- Sidebar collapse hides the workspace bar entirely.
+- No z-index concerns — sits in normal flow within sidebar.
+
+---
+
+## Related
+
+- [Sidebar](/components/sidebar) — parent container; workspace bar anchored to its bottom
+- [Buttons](/components/buttons) — edit/add controls follow icon button specs
+- [Colors](/colors) — curated accent palette definitions
+- [Tooltips](/components/tooltips) — required on each bubble
+- [Interaction Feedback](/interaction) — state ladder reference
+- [Motion & Animation](/motion) — duration and easing tokens
+- [Keyboard & Focus](/keyboard-focus) — focus zone model
+- [Accessibility](/accessibility) — contrast and ARIA requirements

@@ -1,0 +1,183 @@
+---
+title: Command Palette
+---
+
+import { LivePreview } from "../../components/LivePreview"
+import { CommandPaletteOverlay } from "@features/command-palette/command-palette.renderer"
+
+# Command Palette
+
+Ctrl+K overlay for URL entry and search with bang shortcuts (!g, !d, !gh, !yt, !w). Acts as the primary navigation surface — replaces the traditional address bar for input.
+
+## Anatomy
+
+1. **Backdrop scrim** — full-screen overlay that dims and blurs the page behind
+2. **Dialog container** — centered glass panel housing input and hints
+3. **Input field** — auto-focused text input for URL or search query
+4. **Hint bar** — bottom section showing keyboard shortcuts and bang prefix help
+
+---
+
+## Visual Preview
+
+<LivePreview
+  label="Command Palette (dark bg)"
+  stores={{
+    commandPalette: { open: true },
+  }}
+>
+  <div style={{ position: "relative", height: 280, overflow: "hidden", transform: "translate(0)" }}>
+    <CommandPaletteOverlay />
+  </div>
+</LivePreview>
+
+---
+
+## Visual Specs
+
+### Backdrop Scrim
+
+| Property | Token/Value |
+|----------|-------------|
+| Background | `oklch(0 0 0 / 0.4)` |
+| Backdrop filter | `blur(4px)` |
+| Position | `fixed`, covers full viewport |
+| Z-index | `var(--z-overlay)` |
+
+### Dialog Container
+
+| Property | Token/Value |
+|----------|-------------|
+| Width | `560px` |
+| Background | `var(--glass-bg)` |
+| Border radius | `var(--radius-xl)` |
+| Border | `1px solid var(--glass-border)` |
+| Box shadow | `var(--shadow-elevated)` |
+| Backdrop filter | `blur(var(--glass-backdrop-blur))` |
+
+### Input Field
+
+| Property | Token/Value |
+|----------|-------------|
+| Font size | `var(--text-md)` |
+| Color | `var(--glass-text-primary)` |
+| Placeholder color | `var(--glass-text-hint)` |
+| Padding | `14px 18px` |
+| Font family | `var(--font-sans)` |
+
+### Hint Bar
+
+| Property | Token/Value |
+|----------|-------------|
+| Font size | `var(--text-sm)` |
+| Color | `var(--glass-text-hint)` |
+| Padding | `8px 18px` |
+| Separator | `1px solid var(--glass-border)` |
+
+---
+
+## States
+
+Command palette is binary — open or closed. When open, input is always focused.
+
+| State | Visibility | Input | Trigger |
+|-------|-----------|-------|---------|
+| Closed | not rendered | — | default state |
+| Open | rendered with backdrop + dialog | auto-focused | Ctrl+K |
+
+No hover, disabled, or selected states on the palette itself. Standard input caret and selection states apply to the text field.
+
+---
+
+## Variants
+
+N/A — single variant. The command palette has one visual treatment across all contexts.
+
+---
+
+## Behavior
+
+- **Open:** Ctrl+K opens the palette from anywhere in the app
+- **Dismiss:** Escape key or clicking the backdrop scrim closes the palette
+- **Submit (new tab):** Enter opens the URL or search in a new tab
+- **Submit (current tab):** Ctrl+Enter navigates the current tab
+- **Bang search:** prefix input with a bang shortcut to route to a specific search engine
+  - `!g` — Google
+  - `!d` — DuckDuckGo
+  - `!gh` — GitHub
+  - `!yt` — YouTube
+  - `!w` — Wikipedia
+- **Auto-focus:** input receives focus immediately on open; no manual click needed
+- **No persistence:** input value is cleared on close
+
+---
+
+## Animation & Motion
+
+Follows the [overlay enter/exit pattern](/motion).
+
+| Animation | Duration | Easing | Details |
+|-----------|----------|--------|---------|
+| Backdrop fade-in | `var(--duration-enter)` | `var(--ease-out)` | `opacity: 0` -> `1` |
+| Dialog scale entrance | `var(--duration-enter)` | `var(--ease-out)` | `scale(0.96)` -> `scale(1)`, `opacity: 0` -> `1` |
+| Backdrop fade-out | `var(--duration-exit)` | `var(--ease-out)` | `opacity: 1` -> `0` |
+| Dialog scale exit | `var(--duration-exit)` | `var(--ease-out)` | `scale(1)` -> `scale(0.96)`, `opacity: 1` -> `0` |
+| `prefers-reduced-motion` | `0` | — | all transitions instant |
+
+```css
+@keyframes palette-in {
+  from { opacity: 0; scale: 0.96; }
+  to { opacity: 1; scale: 1; }
+}
+```
+
+---
+
+## Keyboard & Focus
+
+| Key | Action |
+|-----|--------|
+| Ctrl+K | Opens the command palette |
+| Escape | Closes the command palette |
+| Enter | Submits input — opens in new tab |
+| Ctrl+Enter | Submits input — navigates current tab |
+
+- **Auto-focus:** input is focused immediately on open, no Tab press needed
+- **Focus trap:** single-input dialog — focus stays on the input field (no Tab cycling needed)
+- **Focus return:** on close, focus returns to the previously focused element
+
+---
+
+## Accessibility
+
+- **`role="dialog"`** on the dialog container
+- **`aria-label="Command palette"`** on the dialog
+- **`aria-modal="true"`** to indicate modal behavior
+- **Focus trap:** single focusable element (input), focus cannot escape to page behind
+- **Escape dismissal:** standard dialog dismiss pattern
+- **Contrast:** `var(--glass-text-primary)` on `var(--glass-bg)` meets 4.5:1; hint text `var(--glass-text-hint)` meets 3:1 for supplementary text
+- **Screen reader:** backdrop click triggers same close as Escape — no hidden dismiss mechanism
+
+---
+
+## Layout & Composition
+
+| Property | Value |
+|----------|-------|
+| Position | `fixed`, full viewport overlay |
+| Alignment | centered horizontally and vertically |
+| Z-index | `var(--z-overlay)` |
+| Responsive | dialog stays `560px`; shrinks with viewport padding on narrow screens |
+
+- Scrim covers entire viewport including titlebar area.
+- Dialog is positioned independently of any parent layout — rendered as a portal.
+
+---
+
+## Related
+
+- [Address Bar](/components/address-bar) — displays the current URL; command palette is the input counterpart
+- [Tabs](/components/tabs) — Enter creates a new tab, Ctrl+Enter navigates current tab
+- [Motion & Animation](/motion) — overlay enter/exit pattern
+- [Keyboard & Focus](/keyboard-focus) — focus trap model
+- [Accessibility](/accessibility) — dialog ARIA pattern

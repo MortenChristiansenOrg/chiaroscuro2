@@ -50,6 +50,7 @@ function createMockPlatform(overrides: Partial<Platform> = {}): Platform {
     registerShortcut: vi.fn(),
     unregisterShortcut: vi.fn(),
     hookWebContents: vi.fn(),
+    focusShell: vi.fn(),
     openExternal: vi.fn(),
     readClipboard: vi.fn(() => ""),
     writeClipboard: vi.fn(),

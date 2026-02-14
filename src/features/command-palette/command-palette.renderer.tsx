@@ -147,7 +147,7 @@ export function CommandPaletteOverlay() {
         aria-modal="true"
         style={{
           width: 560,
-          background: "var(--glass-bg)",
+          background: "oklch(0.18 0.02 250 / 0.82)",
           borderRadius: "var(--radius-xl)",
           border: "1px solid var(--glass-border)",
           boxShadow: "var(--shadow-elevated)",

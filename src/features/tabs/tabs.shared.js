@@ -1,0 +1,14 @@
+// ── Command names ────────────────────────────────────────────────
+export const TABS_CREATE = "tabs:create";
+export const TABS_CLOSE = "tabs:close";
+export const TABS_ACTIVATE = "tabs:activate";
+export const TABS_NAVIGATE = "tabs:navigate";
+export const TABS_TOGGLE_BOOKMARK = "tabs:toggle-bookmark";
+export const TABS_CLEAR_EPHEMERAL = "tabs:clear-ephemeral";
+export const TABS_REPORT_CONTENT_BOUNDS = "tabs:report-content-bounds";
+// ── Event names ──────────────────────────────────────────────────
+export const TABS_CREATED = "tabs:created";
+export const TABS_CLOSED = "tabs:closed";
+export const TABS_ACTIVATED = "tabs:activated";
+export const TABS_UPDATED = "tabs:updated";
+export const TABS_LIST_CHANGED = "tabs:list-changed";

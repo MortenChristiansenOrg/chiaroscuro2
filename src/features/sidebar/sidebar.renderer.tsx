@@ -9,7 +9,7 @@ function sendCommand(name: string, payload: unknown) {
   window.chiaroscuro.sendCommand(name, payload);
 }
 
-function Favicon({ tab }: { tab: Tab }) {
+export function Favicon({ tab }: { tab: Tab }) {
   if (tab.favicon) {
     return (
       <img
@@ -43,7 +43,7 @@ function Favicon({ tab }: { tab: Tab }) {
   );
 }
 
-function hashToHue(str: string): number {
+export function hashToHue(str: string): number {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
@@ -51,7 +51,7 @@ function hashToHue(str: string): number {
   return Math.abs(hash) % 360;
 }
 
-function TabItem({
+export function TabItem({
   tab,
   isActive,
   isEphemeral,
@@ -126,7 +126,7 @@ function TabItem({
   );
 }
 
-function WorkspaceBubble({
+export function WorkspaceBubble({
   workspace,
   isActive,
 }: {
@@ -277,7 +277,7 @@ export function SidebarPanel() {
               onClick={handleClearEphemeral}
               data-tip="Clear ephemeral tabs"
             >
-              Clear
+              Clear <i className="fa-solid fa-broom" />
             </button>
           </div>
           {ephemeral.map((tab) => (

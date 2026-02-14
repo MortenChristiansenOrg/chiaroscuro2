@@ -2,13 +2,26 @@
 title: Tooltips
 ---
 
+import { ComponentPreview } from "../../components/ComponentPreview"
+
 # Tooltips
 
-Tooltips use a `[data-tip]` attribute system — any element with `data-tip="text"` gets a tooltip on hover.
+Tooltips use a `[data-tip]` attribute system — any element with `data-tip="text"` gets a tooltip on hover. A floating label, no arrow.
 
-## Implementation
+## Anatomy
 
-A `TooltipLayer` component listens to global `mouseover` events, finds the nearest `[data-tip]` ancestor, and renders a positioned portal.
+Simple atomic component — a single text container rendered as a fixed-position portal by `TooltipLayer`. No arrow, no close button, no interactive content.
+
+## Visual Preview
+
+<ComponentPreview label="Tooltip (dark bg)">
+  <div style={{ background: "var(--window-bg)", borderRadius: 8, padding: "32px 48px", display: "inline-flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+    <div style={{ background: "oklch(0.16 0 0 / 0.92)", backdropFilter: "blur(var(--glass-backdrop-blur))", color: "oklch(0.88 0 0)", fontSize: "var(--text-sm)", fontWeight: 500, letterSpacing: "0.01em", borderRadius: "var(--radius-sm)", padding: "4px 8px" }}>
+      Copy URL
+    </div>
+    <span style={{ color: "var(--glass-text-hint)", fontSize: "var(--text-sm)" }}>tooltip label</span>
+  </div>
+</ComponentPreview>
 
 ## Visual Specs
 
@@ -21,13 +34,38 @@ A `TooltipLayer` component listens to global `mouseover` events, finds the neare
 | Font weight | 500 |
 | Letter spacing | `0.01em` |
 | Border radius | `--radius-sm` |
+| Padding | `4px 8px` |
 | Delay | `400ms` |
+
+## States
+
+Tooltips are non-interactive. Two states only:
+
+| State | Visibility | Trigger |
+|-------|-----------|---------|
+| Hidden | not rendered | default |
+| Visible | rendered + animated in | hover or focus on `[data-tip]` element after 400ms delay |
+
+No hover, active, disabled, or selected states — the tooltip itself is never interactive.
+
+## Implementation
+
+A `TooltipLayer` component listens to global `mouseover` events, finds the nearest `[data-tip]` ancestor, and renders a positioned portal.
+
+## Behavior
+
+- **Appear:** shows after 400ms hover delay on any `[data-tip]` element
+- **Dismiss:** hidden immediately on `mouseleave`, `click`, or `scroll`
+- **Follow target:** tooltip is positioned relative to the trigger element, not the cursor
+- **No interaction:** tooltip content is not selectable, clickable, or focusable
+- **No overflow:** text is single-line, no truncation expected (keep labels short)
 
 ## Animation
 
 Follows the [overlay pattern](/motion):
-- Enter with `--duration-enter` at `scale(0.96)` → `scale(1)`, `opacity: 0` → `1`
+- Enter with `--duration-enter` at `scale(0.96)` -> `scale(1)`, `opacity: 0` -> `1`
 - Exit with `--duration-exit`, reverse
+- `prefers-reduced-motion`: degrades to instant (duration: 0)
 
 ```css
 @keyframes tip-in {
@@ -35,6 +73,32 @@ Follows the [overlay pattern](/motion):
   to { opacity: 1; scale: 1; }
 }
 ```
+
+## Keyboard & Focus
+
+- **Focus trigger:** tooltip appears on `focusin` of a `[data-tip]` element (same delay as hover)
+- **Focus dismiss:** tooltip hidden on `focusout`
+- **Not focusable:** the tooltip itself is never in the tab order
+- **No key bindings:** no Escape handling needed (tooltip is non-interactive)
+
+## Accessibility
+
+- **`role="tooltip"`** on the tooltip element
+- **`aria-describedby`** on the trigger element, pointing to the tooltip's `id`
+- **Not focusable:** tooltip is supplementary text, not an interactive element
+- **Contrast:** text `oklch(0.88 0 0)` on `oklch(0.16 0 0 / 0.92)` bg exceeds 4.5:1
+- **No live region:** tooltip appearance is already announced via `aria-describedby` association
+
+## Layout & Composition
+
+| Property | Value |
+|----------|-------|
+| Positioning | `position: fixed`, portal rendered outside component tree |
+| Alignment | centered horizontally below trigger |
+| Flip | repositions above trigger if near viewport bottom |
+| Z-index | `var(--z-tooltip)` |
+
+No responsive behavior — tooltips size to content and are viewport-aware via flip logic.
 
 ## Usage
 
@@ -44,6 +108,11 @@ Follows the [overlay pattern](/motion):
 
 No wrapper component needed — just add the attribute. Every icon-only button must have `data-tip`.
 
-## Positioning
+---
 
-Fixed, centered below trigger. Flips above if near viewport bottom. Does not trap focus.
+## Related
+
+- [Buttons](/components/buttons) — all icon-only buttons require a tooltip via `data-tip`
+- [Interaction Feedback](/interaction) — state ladder (tooltip is non-interactive exception)
+- [Motion & Animation](/motion) — overlay enter/exit pattern
+- [Accessibility](/accessibility) — ARIA tooltip pattern

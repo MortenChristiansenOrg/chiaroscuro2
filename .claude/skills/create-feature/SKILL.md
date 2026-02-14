@@ -166,6 +166,20 @@ Create `src/features/<feature-name>/<feature>.renderer.tsx` (if feature has UI):
 - Components are exported for Shell.tsx or other features to import
 - No business logic in components — delegate to commands
 
+**Design system compliance** — read `src/renderer/src/assets/tokens.css` for available tokens. All UI must follow these rules:
+
+- **Icons:** Font Awesome 7 Free only (`<i className="fa-solid fa-icon-name" />`). No inline SVGs. Import is already in `main.tsx` via `@fortawesome/fontawesome-free/css/all.min.css`.
+- **Color context:** Chrome/overlay UI uses glass tokens (`--glass-text-*`, `--glass-hover`, `--glass-active`, etc.). Content panel UI uses content tokens (`--content-bg`, `--foreground`, `--border`, etc.). Never mix contexts.
+- **State ladder:** All interactive elements must implement: default → hover (`--glass-hover` / `--glass-text-hover`) → active/pressed (`--glass-pressed` / `--glass-text-pressed`). Use Tailwind classes: `hover:bg-glass-hover hover:text-glass-text-hover active:bg-glass-pressed active:text-glass-text-pressed`.
+- **Typography:** Use token vars (`--text-xs`, `--text-sm`, `--text-base`, `--text-md`). Max 3 sizes per component. Fonts: `--font-sans` for UI, `--font-mono` for code/URLs.
+- **Spacing:** Use rem or token vars, not hardcoded px. Gap tokens: `0.375rem` (related), `0.75rem` (section).
+- **Border radius:** Use `--radius-sm`, `--radius-md`, `--radius-lg`, `--radius-xl`, `--radius-pill`, `--radius-full`. Children rounder than parents.
+- **Shadows:** Only on elevated/active elements. Use `--shadow-subtle`, `--shadow-medium`, `--shadow-elevated`.
+- **Motion:** Transitions use `--duration-fast` / `--duration-normal` + `--ease-out` / `--ease-in-out`. Overlays enter with scale 0.96→1. Never animate layout properties.
+- **Z-index:** `--z-base` (0), `--z-content` (1), `--z-chrome` (10), `--z-overlay` (100), `--z-tooltip` (1000).
+- **Tooltips:** Every icon-only button must have `data-tip="label"` and `aria-label`.
+- **Click targets:** Minimum `--click-target-min` (1.5rem / 24px) for all interactive elements.
+
 ---
 
 ### Step 8: Write Tests
@@ -196,7 +210,53 @@ Launch sub-agents in parallel for:
 
 ---
 
-### Step 10: Verify Implementation
+### Step 10: Document Components in Design System
+
+If the feature introduces new UI components visible to the user, create or update design system documentation.
+
+**When to create a new component page:**
+- The feature adds a distinct, reusable UI element (e.g., a panel, dialog, bar, list)
+- The component has its own visual specs, states, or interaction patterns
+
+**When to update an existing page:**
+- The feature adds a variant or state to an existing component (e.g., a new button type, a new tab state)
+
+**Creating a new component page** — `design-system/src/pages/components/<component-name>.mdx`:
+
+Read `design-system/src/pages/component-guide.mdx` for the full 12-section template. Every component page must include applicable sections from:
+
+1. **Overview** — one-line description + where it appears
+2. **Anatomy** — structural breakdown of sub-elements (composite components)
+3. **Visual Preview** — `<ComponentPreview>` block with real tokens on dark bg (`var(--window-bg)`) for chrome components or content bg for content components
+4. **Visual Specs** — token table: size, padding, gap, radius, bg, text, font, shadow, backdrop
+5. **States** — full state ladder table (default, hover, active/pressed, selected, disabled, focus-visible) with tokens per state
+6. **Variants** — if multiple types/modes exist
+7. **Behavior** — click actions, reveal patterns, dismiss rules, overflow, loading
+8. **Animation & Motion** — transitions, enter/exit, `prefers-reduced-motion` fallback
+9. **Keyboard & Focus** — focus zone, key bindings, focus return, tab order
+10. **Accessibility** — contrast, touch targets, ARIA, semantic HTML, live regions
+11. **Layout & Composition** — parent, positioning, z-index, responsive
+12. **Related** — links to other component/foundation pages
+
+Use `import { ComponentPreview } from "../../components/ComponentPreview"` for previews.
+
+**Add the route** in `design-system/src/routes.ts`:
+```ts
+{
+  path: "/components/<component-name>",
+  title: "<Component Name>",
+  group: "Components",
+  component: lazy(() => import("./pages/components/<component-name>.mdx")),
+},
+```
+
+**Verify docs build:** `bun run docs:build` should succeed with no errors.
+
+**Skip this step** if the feature is main-process-only or adds no new visible UI components.
+
+---
+
+### Step 11: Verify Implementation
 
 Run all checks:
 
@@ -218,7 +278,7 @@ Fix any failures before proceeding.
 
 ---
 
-### Step 11: UI Review
+### Step 12: UI Review
 
 If the feature has renderer UI (`<feature>.renderer.tsx`), perform a visual and behavioral review using the `ui-review` skill.
 
@@ -237,7 +297,7 @@ Invoke `/ui-review <feature-name>` (which launches the app, connects via CDP, an
 
 ---
 
-### Step 12: Architecture Conformance Review
+### Step 13: Architecture Conformance Review
 
 Launch a sub-agent to review the completed feature against the project architecture. This agent should read `SPEC.md` and verify:
 
@@ -271,6 +331,21 @@ Launch a sub-agent to review the completed feature against the project architect
 - [ ] No Electron dependency in tests
 - [ ] Command handling and event emission verified
 
+**Design system compliance:**
+- [ ] All icons use Font Awesome 7 Free (`<i>` elements) — no inline SVGs
+- [ ] Colors reference design tokens from `tokens.css` — no hardcoded oklch/hex/rgb values
+- [ ] Correct color context used (glass tokens for chrome/overlay, content tokens for panels)
+- [ ] Full state ladder implemented on interactive elements (default → hover → active/pressed)
+- [ ] Typography uses token vars (`--text-xs` through `--text-md`, `--font-sans`, `--font-mono`)
+- [ ] Spacing uses rem or token vars, not hardcoded px
+- [ ] Border radius uses token vars (`--radius-sm` through `--radius-full`)
+- [ ] Z-index uses layered tokens (`--z-base` through `--z-tooltip`)
+- [ ] Icon-only buttons have both `data-tip` and `aria-label`
+- [ ] Interactive elements meet `--click-target-min` (24px) minimum size
+- [ ] Component doc exists in `design-system/src/pages/components/` (if new visible component)
+- [ ] Component doc follows 12-section guide from `component-guide.mdx`
+- [ ] Component route added to `design-system/src/routes.ts`
+
 **Technology best practices:**
 - [ ] React 19 patterns (no deprecated APIs)
 - [ ] TypeScript strict mode compliance
@@ -302,5 +377,6 @@ When complete, summarize:
 - Files created
 - Commands and events registered
 - Test results
+- Design system docs created/updated (if applicable)
 - UI review results (if applicable) and changes made
 - Architecture review status

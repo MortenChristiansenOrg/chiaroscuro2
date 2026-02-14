@@ -19,6 +19,8 @@ import {
 import type { SidebarCommands, SidebarEvents } from "../features/sidebar/sidebar.shared";
 import { register as registerTabs, start as startTabs } from "../features/tabs/tabs.main";
 import type { TabsCommands, TabsEvents } from "../features/tabs/tabs.shared";
+import { register as registerTooltip } from "../features/tooltip/tooltip.main";
+import type { TooltipCommands, TooltipEvents } from "../features/tooltip/tooltip.shared";
 import {
   register as registerWindowChrome,
   start as startWindowChrome,
@@ -45,11 +47,25 @@ const iconPath = path.join(__dirname, "../../resources", iconFile);
 
 // ── Merged bus types ──────────────────────────────────────────────
 type AllCommands = MergeRegistries<
-  [WindowChromeCommands, TabsCommands, WorkspacesCommands, SidebarCommands, CommandPaletteCommands]
+  [
+    WindowChromeCommands,
+    TabsCommands,
+    WorkspacesCommands,
+    SidebarCommands,
+    CommandPaletteCommands,
+    TooltipCommands,
+  ]
 >;
 
 type AllEvents = MergeRegistries<
-  [WindowChromeEvents, TabsEvents, WorkspacesEvents, SidebarEvents, CommandPaletteEvents]
+  [
+    WindowChromeEvents,
+    TabsEvents,
+    WorkspacesEvents,
+    SidebarEvents,
+    CommandPaletteEvents,
+    TooltipEvents,
+  ]
 >;
 
 const commands = new CommandBus<AllCommands>();
@@ -120,8 +136,10 @@ app.whenReady().then(() => {
   registerWorkspaces(deps);
   registerSidebar(deps);
   registerCommandPalette(deps);
+  registerTooltip(deps);
 
   createWindow();
+  if (activeWindowId) platform.initTooltipOverlay(activeWindowId);
 
   // Phase 2: wait for renderer subscriptions, then emit initial state
   ipcMain.once("renderer:ready", () => {

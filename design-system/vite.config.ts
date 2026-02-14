@@ -30,6 +30,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@/": `${resolve(__dirname, "../src/renderer/src")}/`,
+      "@features/": `${resolve(__dirname, "../src/features")}/`,
       "@docs/": `${resolve(__dirname, "src")}/`,
     },
   },

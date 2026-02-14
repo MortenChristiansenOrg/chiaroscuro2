@@ -21,6 +21,7 @@
     "docs:preview": "vite preview --config design-system/vite.config.ts"
   },
   "dependencies": {
+    "@fortawesome/fontawesome-free": "^7.2.0",
     "electron-updater": "^6.6.2",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",

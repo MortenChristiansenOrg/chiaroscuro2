@@ -2,11 +2,15 @@
 title: Sidebar
 ---
 
+import { LivePreview } from "../../components/LivePreview"
+import { SidebarPanel } from "@features/sidebar/sidebar.renderer"
+import { DEMO_TABS, DEMO_WORKSPACES, makeDemoTabMap, tabId, workspaceId } from "../../lib/demo-data"
+
 # Sidebar
 
 The sidebar is the primary navigation surface. It contains pinned tabs (icon strip), bookmarked tabs, folder groups, ephemeral tabs, and the workspace bar.
 
-## Structure (top to bottom)
+## Anatomy (top to bottom)
 
 1. **Pinned strip** — horizontal row of favicon-only buttons
 2. **"Bookmarked" label** — section header
@@ -15,7 +19,22 @@ The sidebar is the primary navigation surface. It contains pinned tabs (icon str
 5. **Ephemeral tabs** — dimmer styling (`var(--glass-text-muted)`)
 6. **Workspace bar** — workspace bubbles + edit/add controls (anchored to bottom)
 
-## Layout
+## Visual Preview
+
+<LivePreview
+  label="Sidebar (dark bg)"
+  stores={{
+    tabs: { tabs: makeDemoTabMap(), activeTabId: tabId("tab-github") },
+    workspaces: { workspaces: DEMO_WORKSPACES, activeWorkspaceId: workspaceId("ws-work") },
+    sidebar: { visible: true },
+  }}
+>
+  <div style={{ width: 230, height: 380, overflow: "hidden", display: "flex" }}>
+    <SidebarPanel />
+  </div>
+</LivePreview>
+
+## Visual Specs
 
 | Property | Token/Value |
 |----------|-------------|
@@ -24,14 +43,14 @@ The sidebar is the primary navigation surface. It contains pinned tabs (icon str
 | Overflow | `overflow-y: auto` (tab list only) |
 | Titlebar and workspace bar | Fixed, not scrollable |
 
-## Section Labels
+### Section Labels
 
 Follow the [component pattern](/interaction):
 - `--text-xs` size, `text-transform: uppercase`, tracking `0.1em`, weight 500
 - Color: `var(--glass-text-muted)`
 - No interactive behavior — pure hierarchy markers
 
-## Folder Headers
+### Folder Headers
 
 | Property | Token/Value |
 |----------|-------------|
@@ -40,12 +59,82 @@ Follow the [component pattern](/interaction):
 | Default color | `var(--glass-text-muted)` |
 | Closed color | `var(--glass-text-hint)` |
 | Icons | ChevDown/ChevRight + FolderOpen/Folder |
-| Keyboard | `→` expand, `←` collapse |
 
-## Separator Lines
+### Separator Lines
 
 Between sections: `height: 1px`, `var(--glass-border)`.
 
-## Collapsing
+## States
 
-Sidebar may be collapsible — hidden entirely, no narrow icon-rail. When hidden, content takes full width. (Collapse behavior is an [unresolved question](/layout).)
+The sidebar itself has two states:
+
+| State | Description |
+|-------|-------------|
+| Visible | Default. Full width, all sections shown. |
+| Hidden | Sidebar collapsed entirely. Content takes full width. No icon-rail. |
+
+Sub-element states (tabs, workspace bubbles, folder headers) are documented in their respective pages: [Tabs](/components/tabs), [Workspace Switcher](/components/workspace-switcher).
+
+## Behavior
+
+- **Collapse toggle** — a global shortcut or button hides the sidebar entirely (no narrow icon-rail mode). Content area expands to fill. Collapse behavior is an [unresolved question](/layout).
+- **Scrolling** — only the tab list (bookmarked + folders) scrolls. Pinned strip, section labels, and workspace bar remain fixed.
+- **Workspace switching** — clicking a workspace bubble swaps the bookmarked + ephemeral tab lists. Pinned tabs persist across workspaces.
+- **Folder expand/collapse** — click or keyboard (`Right` expand, `Left` collapse) toggles folder children visibility.
+- **Tab actions** — click to navigate, middle-click or close button to close. Close button reveals on parent hover. See [Tabs](/components/tabs).
+- **Drag reorder** — tabs and folders are reorderable via drag. Drop target highlight follows glass-hover style.
+- **"Clear" button** — clears all ephemeral tabs in the current workspace.
+
+## Animation & Motion
+
+| Transition | Properties | Duration | Easing |
+|------------|-----------|----------|--------|
+| Sidebar collapse/expand | TBD (width or transform) | `--duration-normal` | `--ease-in-out` |
+| Folder expand/collapse | `height`, `opacity` | `--duration-fast` | `--ease-out` |
+| Tab drag | `translateY(-1px)` lift + shadow | `--duration-fast` | `--ease-out` |
+| Scroll | Native smooth scroll | — | — |
+
+All transitions respect `prefers-reduced-motion` (instant/static fallback).
+
+## Keyboard & Focus
+
+The sidebar is a **focus zone**. `Tab` moves focus into/out of the sidebar; arrow keys navigate within.
+
+| Key | Action |
+|-----|--------|
+| `Up` / `Down` | Move between tabs in the list |
+| `Right` | Expand folder |
+| `Left` | Collapse folder |
+| `Enter` | Activate focused tab |
+| `Delete` | Close focused tab |
+| `Home` / `End` | Jump to first / last tab |
+
+Focus return: when the sidebar hides, focus moves to the content area. When a tab is closed, focus moves to the next tab (or previous if last).
+
+## Accessibility
+
+- **Landmark**: `<nav aria-label="Sidebar">` wrapping the entire sidebar
+- **Tab list**: `role="listbox"` or semantic `<ul>`, each tab as `role="option"` / `<li>`
+- **Active tab**: `aria-current="page"` on the selected tab
+- **Folders**: `aria-expanded="true|false"` on folder headers
+- **Pinned tabs**: icon-only buttons require `aria-label` with page title
+- **Contrast**: glass text at default opacity meets 3:1 chrome interactive threshold
+- **Touch targets**: all interactive elements meet `var(--click-target-min)` (24px)
+
+## Layout & Composition
+
+| Property | Value |
+|----------|-------|
+| Parent | Window chrome, left of content area |
+| Position | Fixed left column, full height minus titlebar |
+| Width | `var(--sidebar-width)`, not resizable |
+| Z-index | Base layer (below overlays like command palette) |
+| Responsive | Collapsible — hidden entirely when toggled, content fills remaining width |
+
+## Related
+
+- [Tabs](/components/tabs) — tab item states, types, close button behavior
+- [Workspace Switcher](/components/workspace-switcher) — workspace bar bubbles and controls
+- [Buttons](/components/buttons) — close buttons, workspace edit/add buttons
+- [Interaction Rules](/interaction) — state ladder, progressive disclosure
+- [Keyboard & Focus](/keyboard-focus) — focus zone model

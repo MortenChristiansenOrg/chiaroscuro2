@@ -32,7 +32,7 @@ const navBtnStyle: React.CSSProperties = {
     "background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out)",
 };
 
-function NavButtons() {
+export function NavButtons() {
   return (
     <div className="flex" style={{ gap: 1, paddingLeft: 8 }}>
       <button
@@ -69,7 +69,7 @@ function NavButtons() {
   );
 }
 
-function UrlPill() {
+export function UrlPill() {
   const activeTabId = useTabsStore((s) => s.activeTabId);
   const activeTab: Tab | undefined = useTabsStore((s) =>
     s.activeTabId ? s.tabs.get(s.activeTabId) : undefined,
@@ -120,38 +120,61 @@ function UrlPill() {
           }}
         />
       )}
-      {/* Pill — entire pill is clickable to copy */}
-      <button
-        type="button"
-        className="relative flex items-center transition-colors cursor-pointer focus-ring hover:bg-glass-hover"
-        style={{
-          gap: 2,
-          fontSize: "var(--text-sm)",
-          fontFamily: "var(--font-mono)",
-          color: "var(--glass-text-default)",
-          padding: "3px 10px 3px 14px",
-          borderRadius: "var(--radius-lg)",
-          background: "var(--glass-subtle)",
-          border: "none",
-        }}
-        onClick={handleCopy}
-        aria-label={copied ? "Copied!" : "Copy URL"}
-        data-tip={copied ? "Copied!" : "Copy URL"}
+      {/* Pill container — needs explicit no-drag so button receives mouse events */}
+      <div
+        className="relative flex items-center"
+        style={
+          {
+            gap: 2,
+            fontSize: "var(--text-sm)",
+            fontFamily: "var(--font-mono)",
+            color: "var(--glass-text-default)",
+            padding: "3px 4px 3px 14px",
+            borderRadius: "var(--radius-lg)",
+            background: "var(--glass-subtle)",
+            WebkitAppRegion: "no-drag",
+          } as React.CSSProperties
+        }
       >
         <span className="truncate" style={{ maxWidth: 300 }}>
           {displayUrl}
         </span>
-        <span
-          className={`flex items-center justify-center shrink-0 transition-all ${copied ? "text-glass-text-hover" : "text-glass-text-muted"}`}
-          style={{ width: 22, height: 22 }}
+        <button
+          type="button"
+          className={`focus-ring flex items-center justify-center shrink-0 cursor-pointer ${
+            copied
+              ? ""
+              : "text-glass-text-muted hover:bg-glass-hover hover:text-glass-text-hover active:bg-glass-pressed active:text-glass-text-pressed"
+          }`}
+          style={{
+            width: 22,
+            height: 22,
+            borderRadius: "var(--radius-md)",
+            border: "none",
+            background: copied
+              ? "oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250) / 0.12)"
+              : "transparent",
+            color: copied
+              ? "oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250))"
+              : undefined,
+            transition:
+              "background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out)",
+          }}
+          onClick={handleCopy}
+          aria-label={copied ? "Copied!" : "Copy URL"}
+          data-tip={copied ? "Copied!" : "Copy URL"}
         >
-          {copied ? (
-            <i className="fa-solid fa-check" style={{ fontSize: "var(--icon-size-default)" }} />
-          ) : (
-            <i className="fa-regular fa-copy" style={{ fontSize: "var(--icon-size-default)" }} />
-          )}
-        </span>
-      </button>
+          <i
+            className={copied ? "fa-solid fa-check" : "fa-regular fa-copy"}
+            style={{
+              fontSize: "var(--icon-size-default)",
+              ...(copied
+                ? { animation: "copy-confirm var(--duration-normal) var(--ease-out)" }
+                : {}),
+            }}
+          />
+        </button>
+      </div>
     </div>
   );
 }
@@ -168,7 +191,7 @@ const winCtrlStyle: React.CSSProperties = {
     "background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out)",
 };
 
-function WindowControls() {
+export function WindowControls() {
   const maximized = useWindowChromeStore((s) => s.maximized);
 
   return (

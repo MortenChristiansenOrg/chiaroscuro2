@@ -29,7 +29,7 @@ export function signalReady(): void {
   window.chiaroscuro.signalReady();
 }
 
-function ContentArea() {
+export function ContentArea() {
   const ref = useRef<HTMLDivElement>(null);
   const activeTabId = useTabsStore((s) => s.activeTabId);
 
@@ -37,13 +37,12 @@ function ContentArea() {
     const el = ref.current;
     if (!el) return;
     const rect = el.getBoundingClientRect();
-    // Convert CSS px to device px for Electron's setBounds
-    const dpr = window.devicePixelRatio;
+    // setBounds expects CSS px (DIPs), same as getBoundingClientRect
     window.chiaroscuro.sendCommand("tabs:report-content-bounds", {
-      x: Math.round(rect.left * dpr),
-      y: Math.round(rect.top * dpr),
-      width: Math.round(rect.width * dpr),
-      height: Math.round(rect.height * dpr),
+      x: Math.round(rect.left),
+      y: Math.round(rect.top),
+      width: Math.round(rect.width),
+      height: Math.round(rect.height),
     });
   }, []);
 
@@ -71,15 +70,15 @@ function ContentArea() {
       ref={ref}
       className="relative flex-1 rounded-lg overflow-hidden"
       style={{
-        margin: "var(--content-inset)",
+        margin: "0 var(--content-inset) var(--content-inset)",
         boxShadow: "var(--shadow-medium)",
-        background: "var(--content-bg)",
+        background: activeTabId ? "var(--content-bg)" : "oklch(1 0 0 / 0.08)",
       }}
     >
       {!activeTabId && (
         <div
           className="absolute inset-0 flex items-center justify-center select-none"
-          style={{ color: "oklch(0 0 0 / 0.18)" }}
+          style={{ color: "oklch(1 0 0 / 0.35)" }}
         >
           <span style={{ fontSize: 13, letterSpacing: "0.01em" }}>
             Press{" "}
@@ -87,8 +86,8 @@ function ContentArea() {
               style={{
                 padding: "1px 6px",
                 borderRadius: 5,
-                border: "1px solid oklch(0 0 0 / 0.12)",
-                background: "oklch(0 0 0 / 0.04)",
+                border: "1px solid oklch(1 0 0 / 0.15)",
+                background: "oklch(1 0 0 / 0.06)",
                 fontSize: 12,
                 fontFamily: "inherit",
               }}

@@ -115,21 +115,27 @@ export const routes: Route[] = [
     component: lazy(() => import("./pages/components/address-bar.mdx")),
   },
   {
-    path: "/components/cards",
-    title: "Cards",
-    group: "Components",
-    component: lazy(() => import("./pages/components/cards.mdx")),
-  },
-  {
     path: "/components/tooltips",
     title: "Tooltips",
     group: "Components",
     component: lazy(() => import("./pages/components/tooltips.mdx")),
   },
   {
+    path: "/components/command-palette",
+    title: "Command Palette",
+    group: "Components",
+    component: lazy(() => import("./pages/components/command-palette.mdx")),
+  },
+  {
     path: "/components/workspace-switcher",
     title: "Workspace Switcher",
     group: "Components",
     component: lazy(() => import("./pages/components/workspace-switcher.mdx")),
+  },
+  {
+    path: "/components/web-content-host",
+    title: "Web Content Host",
+    group: "Components",
+    component: lazy(() => import("./pages/components/web-content-host.mdx")),
   },
 ];
