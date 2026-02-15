@@ -22,17 +22,21 @@ function sendCommand<K extends keyof WindowChromeCommands>(
 
 // ── Components ──────────────────────────────────────────────────
 
-const navBtnStyle: React.CSSProperties = {
+const btnBaseStyle: React.CSSProperties = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  width: 28,
-  height: 26,
-  borderRadius: "var(--radius-md)",
   border: "none",
   cursor: "pointer",
   transition:
     "background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out)",
+};
+
+const navBtnStyle: React.CSSProperties = {
+  ...btnBaseStyle,
+  width: 28,
+  height: 26,
+  borderRadius: "var(--radius-md)",
 };
 
 const navBtnClass =
@@ -191,15 +195,9 @@ export function UrlPill() {
 }
 
 const winCtrlStyle: React.CSSProperties = {
-  display: "flex",
+  ...btnBaseStyle,
   width: 36,
   height: 26,
-  alignItems: "center",
-  justifyContent: "center",
-  border: "none",
-  cursor: "pointer",
-  transition:
-    "background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out)",
 };
 
 export function WindowControls() {
@@ -211,7 +209,7 @@ export function WindowControls() {
         type="button"
         onClick={() => sendCommand(WINDOW_MINIMIZE)}
         style={winCtrlStyle}
-        className="focus-ring bg-transparent text-glass-text-muted hover:bg-glass-hover hover:text-glass-text-hover active:bg-glass-pressed active:text-glass-text-pressed"
+        className={navBtnClass}
         aria-label="Minimize"
         data-tip="Minimize"
       >
@@ -222,7 +220,7 @@ export function WindowControls() {
         type="button"
         onClick={() => sendCommand(WINDOW_MAXIMIZE_RESTORE)}
         style={winCtrlStyle}
-        className="focus-ring bg-transparent text-glass-text-muted hover:bg-glass-hover hover:text-glass-text-hover active:bg-glass-pressed active:text-glass-text-pressed"
+        className={navBtnClass}
         aria-label={maximized ? "Restore" : "Maximize"}
         data-tip={maximized ? "Restore" : "Maximize"}
       >
@@ -271,10 +269,8 @@ export function TitleBar() {
         <NavButtons />
       </div>
 
-      {/* URL pill (centered) */}
-      <div style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
-        <UrlPill />
-      </div>
+      {/* URL pill (centered — no-drag is on UrlPill's inner container) */}
+      <UrlPill />
 
       {/* Flexible spacer */}
       <div className="flex-1 min-w-0" />
