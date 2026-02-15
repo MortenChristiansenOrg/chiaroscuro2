@@ -79,7 +79,10 @@ export function subscribeToEvents(
       for (const tab of tabList) {
         next.set(tab.id, tab);
       }
-      useTabsStore.setState({ tabs: next });
+      useTabsStore.setState((state) => ({
+        tabs: next,
+        activeTabId: state.activeTabId && next.has(state.activeTabId) ? state.activeTabId : null,
+      }));
     }),
   );
 

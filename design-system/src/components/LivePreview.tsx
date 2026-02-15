@@ -26,6 +26,7 @@ export function LivePreview({
   label?: string;
   stores?: StoreOverrides;
 }) {
+  // biome-ignore lint/correctness/useExhaustiveDependencies: stores are static in MDX previews
   useEffect(() => {
     if (stores?.tabs) useTabsStore.setState(stores.tabs);
     if (stores?.workspaces) useWorkspacesStore.setState(stores.workspaces as never);
@@ -42,7 +43,7 @@ export function LivePreview({
       if (stores?.windowChrome)
         useWindowChromeStore.setState({ maximized: false, loadingTabs: new Set() });
     };
-  }, [stores]);
+  }, []);
 
   return (
     <ComponentPreview label={label}>

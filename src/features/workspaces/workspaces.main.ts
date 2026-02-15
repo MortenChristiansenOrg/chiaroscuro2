@@ -30,10 +30,10 @@ interface Deps {
 }
 
 // Shared state exposed via accessor for cross-feature queries
-let _workspaces: Map<WorkspaceId, Workspace> | undefined;
+const _workspaces = new Map<WorkspaceId, Workspace>();
 
 export function getWorkspace(id: WorkspaceId): Workspace | undefined {
-  return _workspaces?.get(id);
+  return _workspaces.get(id);
 }
 
 export function register(deps: Deps): void {
@@ -47,16 +47,15 @@ export function register(deps: Deps): void {
     setActiveWorkspaceId,
   } = deps;
 
-  const workspaces = new Map<WorkspaceId, Workspace>();
-  _workspaces = workspaces;
+  _workspaces.clear();
 
   function emitListChanged(): void {
-    events.emit(WORKSPACES_LIST_CHANGED, { workspaces: [...workspaces.values()] });
+    events.emit(WORKSPACES_LIST_CHANGED, { workspaces: [..._workspaces.values()] });
   }
 
   commands.handle(WORKSPACES_SWITCH, async (payload) => {
     const { workspaceId } = payload;
-    const ws = workspaces.get(workspaceId);
+    const ws = _workspaces.get(workspaceId);
     if (!ws) return;
 
     const previousWsId = getActiveWorkspaceId() ?? null;
@@ -64,7 +63,7 @@ export function register(deps: Deps): void {
 
     // Save current ws active tab
     if (previousWsId) {
-      const prevWs = workspaces.get(previousWsId);
+      const prevWs = _workspaces.get(previousWsId);
       if (prevWs) {
         prevWs.activeTabId = getActiveTabId() ?? null;
       }
@@ -96,7 +95,7 @@ export function register(deps: Deps): void {
       initial: payload.icon, // backward compat until renderer migrates to icon
       activeTabId: null,
     };
-    workspaces.set(id, ws);
+    _workspaces.set(id, ws);
     events.emit(WORKSPACES_CREATED, { workspace: ws });
     emitListChanged();
     return id;
@@ -116,11 +115,11 @@ export function start(deps: Deps): void {
     initial: "W", // backward compat until renderer migrates to icon
     activeTabId: null,
   };
-  _workspaces?.set(defaultId, defaultWs);
+  _workspaces.set(defaultId, defaultWs);
   setActiveWorkspaceId(defaultId);
 
   events.emit(WORKSPACES_CREATED, { workspace: defaultWs });
   events.emit(WORKSPACES_LIST_CHANGED, {
-    workspaces: _workspaces ? [..._workspaces.values()] : [],
+    workspaces: [..._workspaces.values()],
   });
 }

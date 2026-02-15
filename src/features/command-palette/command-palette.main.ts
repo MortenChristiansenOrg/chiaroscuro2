@@ -84,7 +84,7 @@ export function register({
   });
 
   platform.registerShortcut("CommandOrControl+T", () => {
-    commands.send(COMMAND_PALETTE_TOGGLE, undefined).catch(() => {});
+    commands.send(COMMAND_PALETTE_TOGGLE, undefined).catch(console.error);
   });
 }
 

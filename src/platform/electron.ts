@@ -18,6 +18,12 @@ function parseAccelerator(accelerator: string): ParsedAccelerator {
     switch (part) {
       case "commandorcontrol":
       case "cmdorctrl":
+        if (process.platform === "darwin") {
+          result.meta = true;
+        } else {
+          result.ctrl = true;
+        }
+        break;
       case "control":
       case "ctrl":
         result.ctrl = true;
@@ -190,8 +196,7 @@ export class ElectronPlatform implements Platform {
       win.contentView.removeChildView(view);
     }
 
-    // Destroy webContents by closing the view
-    (view.webContents as { destroy?: () => void }).destroy?.();
+    await view.webContents.close({ waitForBeforeUnload: true });
     this.views.delete(tabId);
   }
 

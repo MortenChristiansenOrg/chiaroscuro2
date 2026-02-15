@@ -214,8 +214,8 @@ export function register(deps: Deps): void {
     }
 
     const wasActive = getActiveTabId() === tabId;
-    tabs.delete(tabId);
     await platform.closeTab(tabId);
+    tabs.delete(tabId);
 
     let activatedTabId: TabId | null = null;
     if (wasActive) {
@@ -307,7 +307,7 @@ export function register(deps: Deps): void {
   });
 
   platform.registerShortcut("CommandOrControl+B", () => {
-    commands.send(TABS_TOGGLE_BOOKMARK, {}).catch(() => {});
+    commands.send(TABS_TOGGLE_BOOKMARK, {}).catch(console.error);
   });
 }
 

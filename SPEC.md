@@ -507,7 +507,6 @@ Git tag (v1.0.0) → GitHub Actions → Build artifacts → GitHub Releases
 - **State management**: Zustand v5, one store per feature. Inline selectors (`useStore(s => s.field)`) work with React Compiler. Avoid auto-generated selectors (`.use.bears()`). Use `useShallow` for multi-field.
 - **Tab lifecycle**: Three-tier (active → suspended → evicted). Configurable thresholds in Settings. Screenshot + nav history preserved on eviction, `navigationHistory.restore()` on focus.
 - **Multi-window**: Main-process authoritative, single bus, renderer projections via IPC. Pinned tabs global + reparented between windows. `electron-window-state` for persistence.
-- **Storage**: RxDB (free Filesystem RxStorage) for structured data, JSON for settings. No SQL. All local-only by default; optional Convex sync for selected data (future).
 - **Optimistic UI**: Selective — sidebar toggle/drag are renderer-only; tab activate/bookmark toggle are optimistic+confirm; tab create/close wait for main. `_optimistic` layer in Zustand for reconciliation.
 - **Sidebar composition**: Direct imports (Option A). Matches existing cross-feature store import pattern. Migrate to slots only if plugin system is added.
 - **Performance baselines**: Cold start < 2s, memory/tab < 80MB, command palette < 50ms, IPC < 1ms, tab switch < 100ms

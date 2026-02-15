@@ -46,7 +46,13 @@ export function subscribeToEvents(
   unsubs.push(
     onEvent(WORKSPACES_LIST_CHANGED, (payload) => {
       const { workspaces } = payload as WorkspacesListChangedEvent;
-      useWorkspacesStore.setState({ workspaces });
+      useWorkspacesStore.setState((state) => ({
+        workspaces,
+        activeWorkspaceId:
+          state.activeWorkspaceId && workspaces.some((w) => w.id === state.activeWorkspaceId)
+            ? state.activeWorkspaceId
+            : (workspaces[0]?.id ?? null),
+      }));
     }),
   );
 

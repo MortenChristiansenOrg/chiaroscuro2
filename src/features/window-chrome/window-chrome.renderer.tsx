@@ -14,7 +14,7 @@ import {
 import { useWindowChromeStore } from "./window-chrome.store";
 
 function sendCommand(name: string & keyof WindowChromeCommands, payload?: unknown) {
-  window.chiaroscuro.sendCommand(name, payload ?? undefined);
+  window.chiaroscuro.sendCommand(name, payload);
 }
 
 // ── Components ──────────────────────────────────────────────────
