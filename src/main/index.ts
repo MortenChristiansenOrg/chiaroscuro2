@@ -189,8 +189,8 @@ app.whenReady().then(async () => {
   ipcMain.once("renderer:ready", async () => {
     await startWorkspaces(deps);
     startWindowChrome(deps);
-    await startTabs(deps);
-    await startPinnedTabs(deps);
+    const restoredTabs = await startTabs(deps);
+    await startPinnedTabs(deps, restoredTabs);
     startSidebar(deps);
     await startCommandPalette(deps);
   });

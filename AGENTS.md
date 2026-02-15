@@ -23,6 +23,8 @@
 - `bun run dev:win` — build in WSL, run Electron natively on Windows
 - `bun run verify` — run all checks (typecheck + lint + tests)
 
+The UI must adhere to the design system defined in the companion website found in the design-system folder.
+
 For each logically distinct part of the UI, separate it into a React component. Add a page for the component in the design system and make sure the component follow all the requirements from the design system. The component pages in the design system must map to actual components, not just conceptual components.
 
 # Verification

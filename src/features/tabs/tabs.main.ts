@@ -365,16 +365,22 @@ export function register(deps: Deps): void {
   });
 }
 
-export async function start(deps: Deps): Promise<void> {
+/** Returns oldId→newId and url→newId maps for cross-feature ID reconciliation */
+export async function start(
+  deps: Deps,
+): Promise<{ idMap: Map<TabId, TabId>; urlMap: Map<string, TabId> }> {
   const { dataStore, platform, getActiveWindowId, getActiveWorkspaceId } = deps;
   const tabsCollection: Collection<PersistedTab> = dataStore.collection("tabs");
 
+  const idMap = new Map<TabId, TabId>(); // old persisted ID → new platform ID
+  const urlMap = new Map<string, TabId>(); // url → new platform ID
+
   // Restore persisted tabs
   const persisted = await tabsCollection.findMany({});
-  if (persisted.length === 0) return;
+  if (persisted.length === 0) return { idMap, urlMap };
 
   const windowId = getActiveWindowId();
-  if (!windowId) return;
+  if (!windowId) return { idMap, urlMap };
 
   const now = Date.now();
 
@@ -388,7 +394,7 @@ export async function start(deps: Deps): Promise<void> {
     }
   }
 
-  if (toRestore.length === 0) return;
+  if (toRestore.length === 0) return { idMap, urlMap };
 
   // Recreate tabs from persisted data
   const activeWsId = getActiveWorkspaceId();
@@ -412,6 +418,8 @@ export async function start(deps: Deps): Promise<void> {
 
       if (!_tabs) continue;
       _tabs.set(tabId, tab);
+      idMap.set(pt.id as TabId, tabId);
+      urlMap.set(pt.url, tabId);
 
       // Update persisted doc with new tabId (platform assigns new IDs)
       await tabsCollection.remove(pt.id).catch(() => {});
@@ -439,6 +447,8 @@ export async function start(deps: Deps): Promise<void> {
   if (_tabs) {
     deps.events.emit(TABS_LIST_CHANGED, { tabs: [..._tabs.values()] });
   }
+
+  return { idMap, urlMap };
 }
 
 export function getTabsForWorkspace(workspaceId: WorkspaceId): Tab[] {

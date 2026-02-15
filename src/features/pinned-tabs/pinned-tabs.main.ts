@@ -126,7 +126,10 @@ export function register(deps: Deps): void {
   });
 }
 
-export async function start(deps: Deps): Promise<void> {
+export async function start(
+  deps: Deps,
+  restoredTabs?: { idMap: Map<TabId, TabId>; urlMap: Map<string, TabId> },
+): Promise<void> {
   const { dataStore, events } = deps;
   const pinnedCollection: Collection<PersistedPinnedTab> = dataStore.collection("pinned-tabs");
 
@@ -135,14 +138,35 @@ export async function start(deps: Deps): Promise<void> {
   });
 
   for (const pp of persisted) {
+    const oldId = pp.id as TabId;
+    // Try ID map first (same restart), then URL map (multiple restarts)
+    const newId = restoredTabs?.idMap.get(oldId) ?? restoredTabs?.urlMap.get(pp.url) ?? oldId;
+    if (newId === oldId && restoredTabs && !restoredTabs.idMap.has(oldId)) {
+      // Pinned tab has no matching restored tab — skip stale entry
+      pinnedCollection.remove(oldId).catch(() => {});
+      continue;
+    }
     const pt: PinnedTab = {
-      id: pp.id as TabId,
+      id: newId,
       url: pp.url,
       title: pp.title,
       favicon: pp.favicon,
       order: pp.order,
     };
     _pinnedTabs.set(pt.id, pt);
+
+    // Update persisted record if ID changed
+    if (newId !== oldId) {
+      pinnedCollection.remove(oldId).catch(() => {});
+      const updated: PersistedPinnedTab = {
+        id: newId,
+        url: pt.url,
+        title: pt.title,
+        favicon: pt.favicon,
+        order: pt.order,
+      };
+      pinnedCollection.insert(updated).catch(console.error);
+    }
   }
 
   if (_pinnedTabs.size > 0) {

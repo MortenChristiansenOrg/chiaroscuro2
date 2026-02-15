@@ -127,6 +127,12 @@ export const routes: Route[] = [
     component: lazy(() => import("./pages/components/command-palette.mdx")),
   },
   {
+    path: "/components/pinned-tabs",
+    title: "Pinned Tabs",
+    group: "Components",
+    component: lazy(() => import("./pages/components/pinned-tabs.mdx")),
+  },
+  {
     path: "/components/workspace-switcher",
     title: "Workspace Switcher",
     group: "Components",

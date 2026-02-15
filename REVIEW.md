@@ -87,3 +87,4 @@ None. No console errors, warnings, or failed network requests.
    Check for confirm prompt when deleting workspace
    Workspace favicon support
    No hover feedback when hovering over pinned tab
+   UI review should check if components are in the design system where it can evaluate them in isolation.

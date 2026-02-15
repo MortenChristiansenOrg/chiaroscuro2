@@ -281,7 +281,7 @@ export function TabItem({
   );
 }
 
-function PinnedTabsStrip({
+export function PinnedTabsStrip({
   pinnedTabs,
   tabs,
   activeTabId,
@@ -305,13 +305,13 @@ function PinnedTabsStrip({
           <button
             key={pt.id}
             type="button"
-            className="flex flex-1 items-center justify-center cursor-pointer hover:bg-glass-hover focus-ring"
+            className={`flex flex-1 items-center justify-center cursor-pointer transition-colors focus-ring ${isActive ? "" : "bg-glass-subtle hover:bg-glass-hover active:bg-glass-pressed"}`}
             style={{
               height: 32,
               minWidth: 0,
               borderRadius: "var(--radius-md)",
               border: "none",
-              background: isActive ? "var(--glass-active)" : "var(--glass-subtle)",
+              background: isActive ? "var(--glass-active)" : undefined,
               boxShadow: isActive ? "var(--shadow-subtle)" : undefined,
             }}
             onClick={() => sendCommand(PINNED_TABS_ACTIVATE, { tabId: pt.id })}
