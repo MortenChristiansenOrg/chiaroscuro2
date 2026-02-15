@@ -14,7 +14,7 @@ Settings are saved to a JSON file on disk and restored when the app starts.
 
 ## Requirements
 
-- The app must provide a settings page at `chiaroscuro://settings`.
+- The app must provide a built-in settings page at `/settings`.
 - Saving settings must persist them to a JSON file on disk.
 - Settings saved on disk must be restored on startup.
 - The settings page must allow editing the user agent string.
@@ -26,7 +26,7 @@ Settings are saved to a JSON file on disk and restored when the app starts.
 
 ### Open settings
 
-- Navigate to `chiaroscuro://settings` (via command palette or direct URL).
+- Navigate to `/settings` (via command palette or `settings:open` command).
 - The settings page opens inside a tab.
 
 ### Save settings

@@ -1,0 +1,28 @@
+---
+title: Keyboard & Focus
+---
+
+# Keyboard & Focus
+
+## Navigation Model
+
+The UI has distinct **focus zones**. `Tab` moves between zones, arrow keys navigate within a zone.
+
+| Zone | Elements | Internal navigation |
+|------|----------|-------------------|
+| Titlebar | Back, Forward, Refresh, URL bar, window controls | `Tab` between groups, arrow keys within |
+| Sidebar tab list | Tabs, folders | `↑`/`↓` to move, `→` to expand folder, `←` to collapse |
+| Sidebar workspace bar | Workspace bubbles | `←`/`→` to switch |
+| Content area | Web page (delegated to WebContentsView) | Standard web navigation |
+| Overlays | Command palette, context menus | `↑`/`↓` to navigate, `Enter` to select, `Escape` to dismiss |
+
+## Rules
+
+1. **`Tab` = zone-to-zone. Arrows = within-zone.** This matches ARIA composite widget patterns (tablists, menus, toolbars). Never require multiple `Tab` presses to traverse a long list of tabs — `Tab` should skip the whole sidebar list after one stop.
+2. **`Escape` always dismisses.** Any overlay, dropdown, or modal must close on `Escape`. After dismissal, return focus to the element that triggered the overlay.
+3. **Focus return is mandatory.** When a popover, modal, or palette closes, focus must return to the trigger element. If the trigger no longer exists (e.g., deleted tab), focus the nearest logical element.
+4. **`Enter` and `Space` activate.** All custom interactive elements (not native `<button>`) must respond to both `Enter` and `Space`. Prefer native `<button>` elements to avoid this problem entirely.
+5. **Visible focus indicator.** Use `:focus-visible` (not `:focus`) to show a `2px solid oklch(0.65 0.15 var(--accent-hue))` outline with `2px` offset. This accent-colored ring has sufficient contrast against both glass and content backgrounds.
+6. **Skip redundant focus stops.** If an element is purely decorative or its action is also available via a parent click target, remove it from tab order with `tabindex="-1"`.
+7. **Type-ahead in lists.** In the sidebar tab list and command palette, typing characters should filter or jump to matching items. Don't require the user to reach for a separate search field if context allows inline filtering.
+8. **No focus traps except modals.** Only true modals (where the user *must* make a decision) should trap focus. The command palette is a modal and traps focus. Tooltips and dropdowns do not trap focus.

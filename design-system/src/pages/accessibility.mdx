@@ -1,0 +1,29 @@
+---
+title: Accessibility
+---
+
+# Accessibility
+
+We target the aspects of accessibility that affect all users, especially those with mild impairments that they may not identify as disabilities (aging eyes, bright environments, motor precision).
+
+## Contrast
+
+1. **Minimum `4.5:1` for text in content panels.** Standard WCAG AA for normal-sized text on opaque backgrounds. Use an OKLCH contrast checker — lightness difference alone is insufficient.
+2. **Minimum `3:1` for chrome text against composite background.** Glass text contrast is measured against the *effective* background (window background + acrylic + glass layers composited). With the semi-transparent window background and glass overlay, effective background lightness ≈ `0.35`. White text at `0.55` opacity on this composite must meet `3:1` for normal text.
+3. **Interactive elements: `3:1` against adjacent colors.** Buttons, form controls, and focus indicators must have `3:1` contrast with their surroundings.
+4. **Minimum text opacity on glass: `0.4`.** The `0.25` "hint" text role is reserved for decorative/placeholder content that is not required for comprehension. Any text that conveys meaning must be `0.4` or above.
+
+## Touch & Motor
+
+5. **Minimum click target: `1.5rem × 1.5rem` (24px).** Even if the visual element is smaller, the clickable area (via padding) must be at least 24px in both dimensions.
+6. **No time-limited interactions.** Don't auto-dismiss notifications or tooltips that contain actionable content. Passive toasts may auto-dismiss after 5+ seconds, but must be dismissable by click.
+
+## Reduced Motion
+
+7. **Honor `prefers-reduced-motion: reduce`.** Under this preference, all transitions become instant (duration: 0). Keyframe animations are paused or replaced with static states. The only exception: loading indicators that communicate ongoing processes.
+
+## Screen Readers
+
+8. **ARIA labels on icon-only buttons.** Every `<button>` without visible text must have `aria-label`.
+9. **Live regions for dynamic content.** Tab count changes, workspace switches, and command palette results should use `aria-live="polite"` so screen readers announce updates without interrupting.
+10. **Semantic markup.** Use `<nav>` for navigation, `<main>` for content, `<button>` for actions, `<dialog>` for modals. Don't substitute `<div>` with click handlers when a native element exists.

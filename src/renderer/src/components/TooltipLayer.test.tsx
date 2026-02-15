@@ -1,10 +1,18 @@
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TooltipLayer } from "./TooltipLayer";
+
+// Mock window.chiaroscuro.sendCommand
+const mockSendCommand = vi.fn(() => Promise.resolve());
+Object.defineProperty(window, "chiaroscuro", {
+  value: { sendCommand: mockSendCommand },
+  writable: true,
+});
 
 describe("TooltipLayer", () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    mockSendCommand.mockClear();
   });
 
   afterEach(() => {
@@ -12,12 +20,14 @@ describe("TooltipLayer", () => {
     cleanup();
   });
 
-  it("renders nothing when no tooltip is active", () => {
-    const { container } = render(<TooltipLayer />);
-    expect(container.innerHTML).toBe("");
+  it("renders hidden aria element", () => {
+    render(<TooltipLayer />);
+    const el = document.querySelector("[role=tooltip]");
+    expect(el).toBeTruthy();
+    expect(el?.textContent).toBe("");
   });
 
-  it("shows tooltip after hovering a data-tip element", () => {
+  it("sends tooltip:show after hovering a data-tip element", () => {
     render(
       <div>
         <button type="button" data-tip="Hello tooltip">
@@ -30,16 +40,18 @@ describe("TooltipLayer", () => {
     const btn = screen.getByText("Hover me");
     fireEvent.mouseOver(btn);
 
-    // Not shown before delay
-    expect(screen.queryByText("Hello tooltip")).toBeNull();
+    // Not sent before delay
+    expect(mockSendCommand).not.toHaveBeenCalledWith("tooltip:show", expect.anything());
 
-    // Advance past the 500ms delay
-    act(() => vi.advanceTimersByTime(500));
+    vi.advanceTimersByTime(500);
 
-    expect(screen.getByText("Hello tooltip")).toBeTruthy();
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      "tooltip:show",
+      expect.objectContaining({ text: "Hello tooltip" }),
+    );
   });
 
-  it("hides tooltip on mouseleave", () => {
+  it("sends tooltip:hide on mouseleave", () => {
     render(
       <div>
         <button type="button" data-tip="Bye tooltip">
@@ -51,14 +63,14 @@ describe("TooltipLayer", () => {
 
     const btn = screen.getByText("Hover me");
     fireEvent.mouseOver(btn);
-    act(() => vi.advanceTimersByTime(500));
-    expect(screen.getByText("Bye tooltip")).toBeTruthy();
+    vi.advanceTimersByTime(500);
+    mockSendCommand.mockClear();
 
     fireEvent.mouseLeave(document);
-    expect(screen.queryByText("Bye tooltip")).toBeNull();
+    expect(mockSendCommand).toHaveBeenCalledWith("tooltip:hide", undefined);
   });
 
-  it("does not show tooltip if mouse moves away before delay", () => {
+  it("does not send tooltip:show if mouse moves away before delay", () => {
     render(
       <div>
         <button type="button" data-tip="No show">
@@ -70,51 +82,11 @@ describe("TooltipLayer", () => {
 
     const btn = screen.getByText("Hover me");
     fireEvent.mouseOver(btn);
-
-    // Move away before 500ms
-    act(() => vi.advanceTimersByTime(200));
+    vi.advanceTimersByTime(200);
     fireEvent.mouseLeave(document);
 
-    act(() => vi.advanceTimersByTime(500));
-    expect(screen.queryByText("No show")).toBeNull();
-  });
-
-  it("positions tooltip above when element is near bottom of viewport", () => {
-    render(
-      <div>
-        <button type="button" data-tip="Above me">
-          Bottom button
-        </button>
-        <TooltipLayer />
-      </div>,
-    );
-
-    const btn = screen.getByText("Bottom button");
-    // Mock getBoundingClientRect to simulate element near bottom
-    vi.spyOn(btn, "getBoundingClientRect").mockReturnValue({
-      top: 750,
-      bottom: 780,
-      left: 100,
-      right: 200,
-      width: 100,
-      height: 30,
-      x: 100,
-      y: 750,
-      toJSON: () => {},
-    });
-
-    const originalInnerHeight = window.innerHeight;
-    // Set viewport height small enough that bottom + 32 > innerHeight
-    Object.defineProperty(window, "innerHeight", { value: 800, writable: true });
-
-    fireEvent.mouseOver(btn);
-    act(() => vi.advanceTimersByTime(500));
-
-    const tooltip = screen.getByText("Above me");
-    // translateY(-100%) means positioned above
-    expect(tooltip.style.transform).toContain("translateY(-100%)");
-
-    Object.defineProperty(window, "innerHeight", { value: originalInnerHeight, writable: true });
+    vi.advanceTimersByTime(500);
+    expect(mockSendCommand).not.toHaveBeenCalledWith("tooltip:show", expect.anything());
   });
 
   it("switches tooltip when moving between data-tip elements", () => {
@@ -131,14 +103,18 @@ describe("TooltipLayer", () => {
     );
 
     fireEvent.mouseOver(screen.getByText("Btn1"));
-    act(() => vi.advanceTimersByTime(500));
-    expect(screen.getByText("First")).toBeTruthy();
+    vi.advanceTimersByTime(500);
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      "tooltip:show",
+      expect.objectContaining({ text: "First" }),
+    );
 
+    mockSendCommand.mockClear();
     fireEvent.mouseOver(screen.getByText("Btn2"));
-
-    // After delay, new tooltip replaces old
-    act(() => vi.advanceTimersByTime(500));
-    expect(screen.getByText("Second")).toBeTruthy();
-    expect(screen.queryByText("First")).toBeNull();
+    vi.advanceTimersByTime(500);
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      "tooltip:show",
+      expect.objectContaining({ text: "Second" }),
+    );
   });
 });

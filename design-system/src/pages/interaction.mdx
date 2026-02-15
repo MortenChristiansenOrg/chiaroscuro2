@@ -1,0 +1,43 @@
+---
+title: Interaction Feedback
+---
+
+# Interaction Feedback
+
+Every interactive element must communicate its state. Feedback should be immediate and unambiguous.
+
+## State Ladder
+
+All interactive elements on glass surfaces follow this progression:
+
+| State | Background | Text | Shadow | Additional |
+|-------|-----------|------|--------|------------|
+| Default | transparent | `var(--glass-text-default)` | none | — |
+| Hover | `var(--glass-hover)` | `var(--glass-text-hover)` | none | cursor: pointer |
+| Active/Pressed | `var(--glass-pressed)` | `var(--glass-text-pressed)` | none | — |
+| Selected | `var(--glass-active)` | `var(--glass-text-primary)` | `var(--shadow-subtle)` | font-weight: 500 |
+| Disabled | transparent | `var(--glass-text-hint)` | none | cursor: default, no hover effect |
+| Focus-visible | current bg | current text | none | `outline: 2px solid oklch(var(--accent-L) var(--accent-C) var(--accent-hue)); outline-offset: 2px` |
+
+## Interaction Rules
+
+1. **Every clickable element must have a hover state.** No exceptions. If it responds to click, it must respond to hover. This includes icons, close buttons, and tiny controls.
+2. **Hover background must cover the full click target.** Don't hover-highlight just the icon — highlight the entire clickable area including padding.
+3. **Close buttons: neutral default, destructive on hover.** Close/delete buttons render in muted text color by default. On hover, they shift to `var(--destructive)`.
+4. **Close buttons: hidden by default, visible on parent hover.** Tab close buttons and row-level dismiss buttons are hidden until the user hovers the parent element. Exception: items with unsaved changes should always show their close indicator.
+5. **Tooltip on every icon-only button.** If a button has no visible text label, it must have a tooltip via `data-tip`. Tooltip delay: 400ms.
+6. **Active state on press.** On `mousedown`/`pointerdown`, immediately show the active state. Don't wait for `click`.
+7. **Drag affordance.** Draggable elements subtly elevate on grab (`translateY(-1px)`, light shadow). `cursor: grab` at rest, `cursor: grabbing` while dragging.
+
+## Reducing Interaction Cost
+
+Every unnecessary click, keypress, or eye-movement is friction. Optimize for the fewest interactions to complete any task.
+
+1. **Auto-focus the obvious next input.** When the command palette opens, focus the search field. When a dialog opens, focus the primary action or the first input.
+2. **Select-all on focus for editable fields.** When the URL bar or a rename field gains focus, select all text so the user can immediately type a replacement.
+3. **Dismiss on outside click.** Any floating UI (dropdown, palette, popover) should dismiss when the user clicks outside it.
+4. **Collapse multi-step into single-step.** If an action requires "click to select, then click to activate" — collapse it to a single click.
+5. **Intelligent defaults.** Pre-fill values when possible. A "new workspace" dialog should suggest a name based on context.
+6. **Escape as universal "nevermind."** `Escape` should cleanly abort and restore the previous state. No confirmation dialogs for aborting.
+7. **No confirmation for reversible actions.** Closing a tab doesn't need confirmation — there's an undo mechanism. Reserve confirmations for destructive, irreversible actions.
+8. **Progressive disclosure in lists.** Show the most important content first. Secondary actions appear on hover or focus.

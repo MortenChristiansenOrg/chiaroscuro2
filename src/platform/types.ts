@@ -1,4 +1,6 @@
-import type { TabId, WindowId } from "../shared/types";
+import type { Bounds, TabId, WindowId } from "../shared/types";
+
+export type { Bounds };
 
 export interface Platform {
   // Window management
@@ -13,16 +15,33 @@ export interface Platform {
   // Tab/WebContentsView management
   createTab(windowId: WindowId, url: string): Promise<TabId>;
   closeTab(tabId: TabId): Promise<void>;
-  activateTab(windowId: WindowId, tabId: TabId): Promise<void>;
   navigateTab(tabId: TabId, url: string): Promise<void>;
   getTabUrl(tabId: TabId): string | undefined;
+  getTabTitle(tabId: TabId): string | undefined;
+  setTabBounds(tabId: TabId, bounds: Bounds): void;
+  hideTab(tabId: TabId): void;
+  hideAllTabs(): void;
+  onTabEvent(tabId: TabId, event: string, callback: (...args: unknown[]) => void): () => void;
 
-  // Session isolation
-  createIsolatedSession(tabId: TabId): Promise<void>;
+  // Tab navigation
+  goBack(tabId: TabId): void;
+  goForward(tabId: TabId): void;
+  reload(tabId: TabId): void;
+  canGoBack(tabId: TabId): boolean;
+  canGoForward(tabId: TabId): boolean;
 
   // Keyboard shortcuts
   registerShortcut(accelerator: string, callback: () => void): void;
   unregisterShortcut(accelerator: string): void;
+  hookWebContents(webContents: unknown): void;
+
+  // Focus
+  focusShell(windowId: WindowId): void;
+
+  // Tooltip overlay
+  initTooltipOverlay(windowId: WindowId): void;
+  showTooltip(opts: { text: string; x: number; y: number; width: number; height: number }): void;
+  hideTooltip(): void;
 
   // Shell / clipboard
   openExternal(url: string): Promise<void>;

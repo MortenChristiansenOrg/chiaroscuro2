@@ -2,40 +2,83 @@
 title: Tooltips
 ---
 
+import { ComponentPreview } from "../../components/ComponentPreview"
+import { TooltipPreview } from "../../components/TooltipPreview"
+import { Icon } from "@/components/Icon"
+
 # Tooltips
 
-Tooltips use a `[data-tip]` attribute system — any element with `data-tip="text"` gets a tooltip on hover after a 500ms delay.
+Tooltips use a `[data-tip]` attribute system — any element with `data-tip="text"` gets a tooltip on hover. A floating label, no arrow.
+
+## Anatomy
+
+Simple atomic component — a single text container rendered as a fixed-position portal by `TooltipLayer`. No arrow, no close button, no interactive content.
+
+## Visual Preview
+
+Hover the buttons below to see live tooltips with a 400ms delay.
+
+<ComponentPreview label="Tooltip (dark bg)">
+  <div style={{ background: "var(--window-bg)", borderRadius: 8, padding: "32px 48px", display: "inline-flex", alignItems: "center", gap: 16, fontFamily: "var(--font-sans)" }}>
+    <TooltipPreview>
+      <div style={{ display: "flex", gap: 8 }}>
+        <button data-tip="Copy URL" className="focus-ring bg-transparent text-glass-text-muted hover:bg-glass-hover hover:text-glass-text-hover active:bg-glass-pressed active:text-glass-text-pressed" style={{ width: "var(--click-target-min)", height: "var(--click-target-min)", display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: "var(--radius-md)", border: "none", cursor: "pointer" }} aria-label="Copy URL">
+          <Icon name="copy" style="regular" css={{ fontSize: "var(--icon-size-default)" }} />
+        </button>
+        <button data-tip="Open in new tab" className="focus-ring bg-transparent text-glass-text-muted hover:bg-glass-hover hover:text-glass-text-hover active:bg-glass-pressed active:text-glass-text-pressed" style={{ width: "var(--click-target-min)", height: "var(--click-target-min)", display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: "var(--radius-md)", border: "none", cursor: "pointer" }} aria-label="Open in new tab">
+          <Icon name="arrow-up-right-from-square" css={{ fontSize: "var(--icon-size-default)" }} />
+        </button>
+        <button data-tip="Settings" className="focus-ring bg-transparent text-glass-text-muted hover:bg-glass-hover hover:text-glass-text-hover active:bg-glass-pressed active:text-glass-text-pressed" style={{ width: "var(--click-target-min)", height: "var(--click-target-min)", display: "inline-flex", alignItems: "center", justifyContent: "center", borderRadius: "var(--radius-md)", border: "none", cursor: "pointer" }} aria-label="Settings">
+          <Icon name="gear" css={{ fontSize: "var(--icon-size-default)" }} />
+        </button>
+      </div>
+    </TooltipPreview>
+  </div>
+</ComponentPreview>
+
+## Visual Specs
+
+| Property | Token/Value |
+|----------|-------------|
+| Background | `oklch(0.16 0 0 / 0.92)` |
+| Backdrop filter | `blur(var(--glass-backdrop-blur))` |
+| Color | `oklch(0.88 0 0)` |
+| Font size | `--text-sm` |
+| Font weight | 500 |
+| Letter spacing | `0.01em` |
+| Border radius | `--radius-sm` |
+| Padding | `4px 8px` |
+| Delay | `400ms` |
+
+## States
+
+Tooltips are non-interactive. Two states only:
+
+| State | Visibility | Trigger |
+|-------|-----------|---------|
+| Hidden | not rendered | default |
+| Visible | rendered + animated in | hover or focus on `[data-tip]` element after 400ms delay |
+
+No hover, active, disabled, or selected states — the tooltip itself is never interactive.
 
 ## Implementation
 
 A `TooltipLayer` component listens to global `mouseover` events, finds the nearest `[data-tip]` ancestor, and renders a positioned portal.
 
-## Visual Specs
+## Behavior
 
-| Property | Value |
-|----------|-------|
-| Background | `oklch(0.16 0 0 / 0.92)` |
-| Backdrop filter | `blur(12px)` |
-| Color | `oklch(0.88 0 0)` |
-| Font size | `11px` |
-| Font weight | `500` |
-| Letter spacing | `0.01em` |
-| Padding | `4px 10px` |
-| Border radius | `7px` |
-| Position | Fixed, centered below trigger (or above if near viewport bottom) |
-| Delay | `500ms` |
-| Animation | `tip-in 0.12s ease` — fade+scale from 0.96 to 1 |
-| z-index | `99999` |
+- **Appear:** shows after 400ms hover delay on any `[data-tip]` element
+- **Dismiss:** hidden immediately on `mouseleave`, `click`, or `scroll`
+- **Follow target:** tooltip is positioned relative to the trigger element, not the cursor
+- **No interaction:** tooltip content is not selectable, clickable, or focusable
+- **No overflow:** text is single-line, no truncation expected (keep labels short)
 
-## Usage
+## Animation
 
-```html
-<button data-tip="Copy URL">…</button>
-```
-
-No wrapper component needed — just add the attribute.
-
-## Animation Keyframes
+Follows the [overlay pattern](/motion):
+- Enter with `--duration-enter` at `scale(0.96)` -> `scale(1)`, `opacity: 0` -> `1`
+- Exit with `--duration-exit`, reverse
+- `prefers-reduced-motion`: degrades to instant (duration: 0)
 
 ```css
 @keyframes tip-in {
@@ -43,3 +86,46 @@ No wrapper component needed — just add the attribute.
   to { opacity: 1; scale: 1; }
 }
 ```
+
+## Keyboard & Focus
+
+- **Focus trigger:** tooltip appears on `focusin` of a `[data-tip]` element (same delay as hover)
+- **Focus dismiss:** tooltip hidden on `focusout`
+- **Not focusable:** the tooltip itself is never in the tab order
+- **No key bindings:** no Escape handling needed (tooltip is non-interactive)
+
+## Accessibility
+
+- **`role="tooltip"`** on the tooltip element
+- **`aria-describedby`** on the trigger element, pointing to the tooltip's `id`
+- **Not focusable:** tooltip is supplementary text, not an interactive element
+- **Contrast:** text `oklch(0.88 0 0)` on `oklch(0.16 0 0 / 0.92)` bg exceeds 4.5:1
+- **No live region:** tooltip appearance is already announced via `aria-describedby` association
+
+## Layout & Composition
+
+| Property | Value |
+|----------|-------|
+| Positioning | `position: fixed`, portal rendered outside component tree |
+| Alignment | centered horizontally below trigger |
+| Flip | repositions above trigger if near viewport bottom |
+| Z-index | `var(--z-tooltip)` |
+
+No responsive behavior — tooltips size to content and are viewport-aware via flip logic.
+
+## Usage
+
+```html
+<button data-tip="Copy URL">...</button>
+```
+
+No wrapper component needed — just add the attribute. Every icon-only button must have `data-tip`.
+
+---
+
+## Related
+
+- [Buttons](/components/buttons) — all icon-only buttons require a tooltip via `data-tip`
+- [Interaction Feedback](/interaction) — state ladder (tooltip is non-interactive exception)
+- [Motion & Animation](/motion) — overlay enter/exit pattern
+- [Accessibility](/accessibility) — ARIA tooltip pattern

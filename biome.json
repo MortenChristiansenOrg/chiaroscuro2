@@ -38,7 +38,8 @@
       "out/",
       "node_modules/",
       "src/renderer/src/components/ui/",
-      "design-system/dist/"
+      "design-system/dist/",
+      "**/*.generated.ts"
     ]
   }
 }

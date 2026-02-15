@@ -93,3 +93,4 @@ out/
 
 
 .env.local
+.agent-project

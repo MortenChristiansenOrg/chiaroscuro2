@@ -2,102 +2,149 @@
 title: Buttons
 ---
 
-import { ComponentPreview } from "../../components/ComponentPreview"
+import { LivePreview } from "../../components/LivePreview"
+import { WindowControls, NavButtons } from "@features/window-chrome/window-chrome.renderer"
 
 # Buttons
 
-The D8 Baseline uses several button variants — all are `border: none; background: none` by default with hover states.
+All buttons follow the [state ladder](/interaction) — transparent default, hover surface on hover, active surface on press.
 
-## Window Controls
+## Icon Buttons
+
+Minimum visual size: `var(--click-target-min)`. Must have `aria-label` and `data-tip` for tooltip.
+
+### Window Controls
 
 Minimize, Maximize, Close — arranged in a horizontal row at the top-right of the titlebar.
 
-<ComponentPreview label="Window Controls (dark bg)">
-  <div style={{ background: "oklch(0.35 0.06 250)", borderRadius: 8, padding: "8px 12px", display: "inline-flex", gap: 2 }}>
-    {[
-      { label: "Min", el: <svg width={10} height={10} viewBox="0 0 10 1" fill="currentColor" stroke="none"><rect width="10" height="1" /></svg> },
-      { label: "Max", el: <svg width={10} height={10} viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth={1}><rect x="0.5" y="0.5" width="9" height="9" /></svg> },
-      { label: "Close", el: <svg width={10} height={10} viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth={1.2}><line x1="0" y1="0" x2="10" y2="10" /><line x1="10" y1="0" x2="0" y2="10" /></svg> },
-    ].map((btn) => (
-      <button key={btn.label} type="button" style={{ width: 36, height: 26, borderRadius: 8, border: "none", background: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "oklch(1 0 0 / 0.4)" }}>
-        {btn.el}
-      </button>
-    ))}
+<LivePreview label="Window Controls (dark bg)">
+  <div style={{ padding: "8px 12px", display: "inline-flex" }}>
+    <WindowControls />
   </div>
-</ComponentPreview>
+</LivePreview>
 
-### Specs
+| Property | Token/Value |
+|----------|-------------|
+| Border radius | `--radius-md` |
+| Default text | `var(--glass-text-muted)` |
+| Hover bg | `var(--glass-hover)` |
+| Hover text | `var(--glass-text-hover)` |
+| Close hover bg | `var(--destructive)` |
+| Transition | `background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out)` |
 
-| Property | Value |
-|----------|-------|
-| Size | `36×26px` |
-| Border radius | `8px` |
-| Color | `oklch(1 0 0 / 0.4)` |
-| Hover bg | `oklch(1 0 0 / 0.1)` |
-| Hover color | `oklch(1 0 0 / 0.7)` |
-| Close hover bg | `oklch(0.577 0.245 27.325)` |
-| Close hover color | `#fff` |
-
-## Navigation Buttons
+### Navigation Buttons
 
 Back, Forward, Refresh — left side of titlebar.
 
-<ComponentPreview label="Nav Buttons (dark bg)">
-  <div style={{ background: "oklch(0.35 0.06 250)", borderRadius: 8, padding: "8px 12px", display: "inline-flex", gap: 1 }}>
-    {[
-      <svg key="b" width={10} height={10} viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth={1.5}><polyline points="6.5,2 3.5,5 6.5,8" /></svg>,
-      <svg key="f" width={10} height={10} viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth={1.5}><polyline points="3.5,2 6.5,5 3.5,8" /></svg>,
-      <svg key="r" width={11} height={11} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round"><path d="M21 12a9 9 0 1 1-3-6.7" /><polyline points="21 3 21 9 15 9" /></svg>,
-    ].map((icon, i) => (
-      <button key={i} type="button" style={{ width: 28, height: 26, borderRadius: 8, border: "none", background: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "oklch(1 0 0 / 0.35)" }}>
-        {icon}
-      </button>
-    ))}
+<LivePreview label="Nav Buttons (dark bg)">
+  <div style={{ padding: "8px 12px", display: "inline-flex" }}>
+    <NavButtons />
   </div>
-</ComponentPreview>
+</LivePreview>
 
-### Specs
+### Close Buttons
 
-| Property | Value |
-|----------|-------|
-| Size | `28×26px` |
-| Border radius | `8px` |
-| Color | `oklch(1 0 0 / 0.35)` |
-| Hover bg | `oklch(1 0 0 / 0.1)` |
-| Hover color | `oklch(1 0 0 / 0.7)` |
+Close/delete buttons follow a special pattern:
+- **Default:** muted text color, hidden until parent hover
+- **Hover:** destructive color `var(--destructive)`
+- **Border radius:** `--radius-sm`
+- Exception: items with unsaved changes always show their close indicator
 
-## Workspace Controls
+### Workspace Controls
 
-Edit and Add buttons in the workspace bar.
+Edit and Add buttons in the workspace bar. `var(--click-target-min)`, `--radius-md`.
 
-| Property | Value |
-|----------|-------|
-| Size | `24×24px` |
-| Border radius | `8px` |
-| Color | `oklch(1 0 0 / 0.25)` |
-| Hover bg | `oklch(1 0 0 / 0.1)` |
-| Hover color | `oklch(1 0 0 / 0.5)` |
+---
 
-## Tab Close Button
+## States
 
-Appears on hover inside sidebar tabs.
+Full state ladder for icon buttons. All variants follow the same progression unless noted.
 
-| Property | Value |
-|----------|-------|
-| Size | `16×16px` |
-| Border radius | `6px` |
-| Icon size | `7×7px` |
-| Visibility | `display: none` → `flex` on parent `:hover` |
+| State | Background | Text | Additional |
+|-------|-----------|------|------------|
+| Default | `transparent` | `var(--glass-text-muted)` | — |
+| Hover | `var(--glass-hover)` | `var(--glass-text-hover)` | `cursor: pointer` |
+| Active / Pressed | `var(--glass-pressed)` | `var(--glass-text-pressed)` | immediate on `pointerdown` |
+| Disabled | `transparent` | `var(--glass-text-hint)` | `cursor: default`, no hover |
+| Focus-visible | current bg | current text | `outline: 2px solid accent; outline-offset: 2px` |
 
-## Ephemeral Clear Button
+**Close button exception:** hover bg is `transparent`, hover text is `var(--destructive)`. No glass-hover background.
 
-"Clear" text + broom icon.
+**Disabled nav buttons:** Back is disabled when no history; Forward is disabled when at head of history.
 
-| Property | Value |
-|----------|-------|
-| Font size | `9px` |
-| Font weight | `500` |
-| Padding | `2px 6px` |
-| Border radius | `6px` |
-| Color | `oklch(1 0 0 / 0.25)` |
-| Hover color | `oklch(1 0 0 / 0.5)` |
+---
+
+## Behavior
+
+- **Click:** triggers the button's command (navigate, minimize, close, etc.)
+- **Tooltip:** every icon button requires `data-tip` attribute. Delay: 400ms.
+- **Close button reveal:** hidden by default, visible on parent element hover. Exception: unsaved-change indicator always visible.
+- **Window close:** no confirmation unless unsaved data exists.
+- **Nav disabled:** Back/Forward render as disabled when history stack is empty in that direction.
+- **No drag:** buttons are not draggable.
+- **No overflow:** icon-only, no text truncation concern.
+
+---
+
+## Animation & Motion
+
+All state transitions use:
+
+```css
+transition: background-color var(--duration-fast) var(--ease-out),
+            color var(--duration-fast) var(--ease-out);
+```
+
+- **Close button reveal:** `opacity 0 -> 1` on parent hover, same `--duration-fast` / `--ease-out`.
+- **No keyframe animations** — buttons have no loading or spinning states.
+- **`prefers-reduced-motion`:** transitions degrade to instant (`duration: 0`).
+
+---
+
+## Keyboard & Focus
+
+- **Focus zone:** buttons belong to the focus zone of their parent region (titlebar, sidebar, workspace bar).
+- **Tab:** moves focus between zones. Arrow keys move between sibling buttons within a zone.
+- **Enter / Space:** activates the focused button (same as click).
+- **Focus ring:** `:focus-visible` only — `2px solid accent`, `outline-offset: 2px`.
+- **Tab order:** all buttons are natively focusable (`<button>`), no `tabindex` needed.
+- **Focus return:** after action completes, focus stays on the button (window controls may lose focus if window state changes).
+
+---
+
+## Accessibility
+
+- **`aria-label`:** required on every icon-only button (e.g., `aria-label="Close tab"`).
+- **Semantic HTML:** use `<button type="button">`, never `<div>` or `<span>`.
+- **Touch target:** minimum `var(--click-target-min)` (1.5rem / 24px) in both dimensions. Visual hit area may be larger via padding.
+- **Contrast:** glass text muted (`opacity >= 0.4`) meets 3:1 for chrome interactive elements. Hover/active states exceed 3:1.
+- **Disabled state:** use `disabled` attribute, not `aria-disabled`, so the button is removed from tab order.
+- **No live regions:** button actions don't require `aria-live` announcements.
+
+---
+
+## Layout & Composition
+
+| Placement | Parent | Positioning | Details |
+|-----------|--------|-------------|---------|
+| Window controls | Titlebar (right) | flex, flow | horizontal row, `gap: 2px` |
+| Nav buttons | Titlebar (left) | flex, flow | horizontal row, `gap: 1px` |
+| Close buttons | Tab / sidebar item | absolute (within relative parent) | right-aligned, vertically centered |
+| Workspace controls | Workspace bar | flex, flow | bottom of sidebar |
+
+- Buttons size to content (icon + padding); no stretch.
+- No z-index concerns — buttons sit in normal flow within their parent.
+- Sidebar collapse hides workspace controls entirely.
+
+---
+
+## Related
+
+- [Tooltips](/components/tooltips) — required on every icon-only button
+- [Tabs](/components/tabs) — contains close buttons; tab state ladder inherits from here
+- [Workspace Switcher](/components/workspace-switcher) — contains edit/add buttons
+- [Sidebar](/components/sidebar) — parent container for close + workspace buttons
+- [Interaction Feedback](/interaction) — state ladder and interaction rules
+- [Motion & Animation](/motion) — duration and easing tokens
+- [Keyboard & Focus](/keyboard-focus) — focus zone model
+- [Accessibility](/accessibility) — contrast and ARIA requirements

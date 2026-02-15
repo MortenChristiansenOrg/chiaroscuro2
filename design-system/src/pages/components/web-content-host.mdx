@@ -1,0 +1,146 @@
+---
+title: Web Content Host
+---
+
+import { LivePreview } from "../../components/LivePreview"
+import { ContentArea } from "@/Shell"
+
+# Web Content Host
+
+The content area where web pages render. An Electron `WebContentsView` occupies this region; the React side provides the container, reports its bounds, and shows an empty state when no tab is active.
+
+## Anatomy
+
+1. **Container** — rounded, inset panel with shadow; flex-grows to fill remaining space beside the sidebar.
+2. **Web content** — native `WebContentsView` positioned by main process to match container bounds.
+3. **Empty state** — centered hint text shown when no tab is active.
+
+---
+
+## Visual Preview
+
+### With Active Tab (website loaded)
+
+<LivePreview label="Content Host — active tab">
+  <div style={{ display: "flex", height: 200 }}>
+    <div
+      style={{
+        flex: 1,
+        borderRadius: "var(--radius-lg)",
+        overflow: "hidden",
+        margin: "0 var(--content-inset) var(--content-inset)",
+        boxShadow: "var(--shadow-medium)",
+        background: "var(--content-bg)",
+      }}
+    >
+      <iframe
+        src="https://example.com"
+        title="Example website"
+        style={{ width: "100%", height: "100%", border: "none" }}
+      />
+    </div>
+  </div>
+</LivePreview>
+
+### Empty State (no active tab)
+
+<LivePreview label="Content Host — empty state">
+  <div style={{ display: "flex", height: 200 }}>
+    <ContentArea />
+  </div>
+</LivePreview>
+
+---
+
+## Visual Specs
+
+### Container
+
+| Property | Active Tab | Empty (no tab) |
+|----------|-----------|----------------|
+| Background | `var(--content-bg)` — opaque white | `oklch(1 0 0 / 0.08)` — semi-transparent glass |
+| Border radius | `--radius-lg` (via `rounded-lg`) | same |
+| Shadow | `var(--shadow-medium)` | same |
+| Margin | `0 var(--content-inset) var(--content-inset)` — no top (header provides spacing) | same |
+| Overflow | `hidden` (clips WebContentsView corners) | same |
+| Flex | `flex: 1` — fills remaining horizontal space | same |
+
+### Empty State Text
+
+| Property | Value |
+|----------|-------|
+| Color | `oklch(1 0 0 / 0.35)` — light on dark glass |
+| Font size | `13px` |
+| Letter spacing | `0.01em` |
+| User select | `none` |
+
+### Empty State Kbd
+
+| Property | Value |
+|----------|-------|
+| Padding | `1px 6px` |
+| Border radius | `5px` |
+| Border | `1px solid oklch(1 0 0 / 0.15)` |
+| Background | `oklch(1 0 0 / 0.06)` |
+| Font size | `12px` |
+
+---
+
+## States
+
+| State | Visual |
+|-------|--------|
+| No active tab | Semi-transparent glass bg (`oklch(1 0 0 / 0.08)`), light hint text centered |
+| Active tab | Opaque white bg (`--content-bg`), `WebContentsView` fills container |
+| Loading | Loading state handled by address bar spinner; content host unchanged |
+
+---
+
+## Behavior
+
+- **Bounds reporting.** A `ResizeObserver` + `window.resize` listener reports the container's `getBoundingClientRect()` to main process via `tabs:report-content-bounds`.
+- **WebContentsView positioning.** Main process calls `view.setBounds()` using the reported CSS-pixel rect, converting to physical pixels with `devicePixelRatio`.
+- **Show/hide, not create/destroy.** Tab switching toggles `view.setVisible()` — views are reused, not recreated.
+- **Corner clipping.** Container uses `overflow: hidden` + `border-radius` so the native view's corners appear rounded. `View.setBorderRadius()` (Electron 33+) also available.
+
+---
+
+## Animation & Motion
+
+| Property | Transition |
+|----------|------------|
+| None | Container has no transitions — it's a static frame. Loading feedback lives in the [Address Bar](/components/address-bar). |
+
+---
+
+## Keyboard & Focus
+
+- Content host itself is not focusable — focus passes through to the `WebContentsView`.
+- **Ctrl+T** opens a new tab (shows content, hides empty state).
+- **Ctrl+W** closes active tab (may reveal empty state).
+
+---
+
+## Accessibility
+
+- Container is a presentational `<div>` — no ARIA role needed.
+- Empty state hint text is `select-none` but visible to screen readers.
+- `WebContentsView` manages its own accessibility tree.
+
+---
+
+## Layout & Composition
+
+- Lives inside the Shell body flex row, after the [Sidebar](/components/sidebar).
+- `flex: 1` with `overflow: hidden` and `position: relative`.
+- Margin from `--content-inset` (`0.5rem`) provides breathing room between content and window edge.
+- Z-index: `--z-content` (`1`), below chrome (`10`) and overlays (`100`).
+
+---
+
+## Related
+
+- [Sidebar](/components/sidebar) — adjacent sibling in the flex layout
+- [Tabs](/components/tabs) — selecting a tab activates the content host
+- [Address Bar](/components/address-bar) — displays URL and loading state for the active content
+- [Layout Composition](/layout) — overall shell structure

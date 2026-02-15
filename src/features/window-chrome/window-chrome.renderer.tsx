@@ -1,108 +1,93 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Icon } from "../../renderer/src/components/Icon";
+import { useTabsStore } from "../tabs/tabs.store";
 import type { WindowChromeCommands } from "./window-chrome.shared";
 import {
   WINDOW_CLOSE,
   WINDOW_COPY_ADDRESS,
+  WINDOW_GO_BACK,
+  WINDOW_GO_FORWARD,
   WINDOW_MAXIMIZE_RESTORE,
   WINDOW_MINIMIZE,
+  WINDOW_RELOAD,
 } from "./window-chrome.shared";
 import { useWindowChromeStore } from "./window-chrome.store";
 
-function sendCommand(name: string & keyof WindowChromeCommands) {
-  window.chiaroscuro.sendCommand(name, undefined);
+function sendCommand<K extends keyof WindowChromeCommands>(
+  name: K,
+  payload?: WindowChromeCommands[K]["payload"],
+) {
+  window.chiaroscuro.sendCommand(name, payload);
 }
 
-function MinimizeIcon() {
+// ── Components ──────────────────────────────────────────────────
+
+const btnBaseStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  border: "none",
+  cursor: "pointer",
+  transition:
+    "background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out)",
+};
+
+const navBtnStyle: React.CSSProperties = {
+  ...btnBaseStyle,
+  width: 28,
+  height: 26,
+  borderRadius: "var(--radius-md)",
+};
+
+const navBtnClass =
+  "focus-ring bg-transparent text-glass-text-muted hover:bg-glass-hover hover:text-glass-text-hover active:bg-glass-pressed active:text-glass-text-pressed";
+
+export function NavButtons() {
   return (
-    <svg aria-hidden="true" width="10" height="1" viewBox="0 0 10 1" fill="currentColor">
-      <rect width="10" height="1" />
-    </svg>
+    <div className="flex" style={{ gap: "0.0625rem", paddingLeft: "0.5rem" }}>
+      <button
+        type="button"
+        style={navBtnStyle}
+        className={navBtnClass}
+        onClick={() => sendCommand(WINDOW_GO_BACK)}
+        aria-label="Go back"
+        data-tip="Back"
+      >
+        <Icon name="chevron-left" css={{ fontSize: "var(--icon-size-default)" }} />
+      </button>
+      <button
+        type="button"
+        style={navBtnStyle}
+        className={navBtnClass}
+        onClick={() => sendCommand(WINDOW_GO_FORWARD)}
+        aria-label="Go forward"
+        data-tip="Forward"
+      >
+        <Icon name="chevron-right" css={{ fontSize: "var(--icon-size-default)" }} />
+      </button>
+      <button
+        type="button"
+        style={navBtnStyle}
+        className={navBtnClass}
+        onClick={() => sendCommand(WINDOW_RELOAD)}
+        aria-label="Reload"
+        data-tip="Reload"
+      >
+        <Icon name="rotate-right" css={{ fontSize: "var(--icon-size-default)" }} />
+      </button>
+    </div>
   );
 }
 
-function MaximizeIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      width="10"
-      height="10"
-      viewBox="0 0 10 10"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1"
-    >
-      <rect x="0.5" y="0.5" width="9" height="9" />
-    </svg>
+export function UrlPill() {
+  const url = useTabsStore((s) => {
+    const tab = s.activeTabId ? s.tabs.get(s.activeTabId) : undefined;
+    return tab?.url ?? "";
+  });
+  const activeTabId = useTabsStore((s) => s.activeTabId);
+  const isLoading = useWindowChromeStore(
+    (s) => activeTabId != null && s.loadingTabs.has(activeTabId),
   );
-}
-
-function RestoreIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      width="10"
-      height="10"
-      viewBox="0 0 10 10"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1"
-    >
-      <rect x="0.5" y="2.5" width="7" height="7" />
-      <polyline points="2.5,2.5 2.5,0.5 9.5,0.5 9.5,7.5 7.5,7.5" />
-    </svg>
-  );
-}
-
-function CloseIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      width="10"
-      height="10"
-      viewBox="0 0 10 10"
-      stroke="currentColor"
-      strokeWidth="1.2"
-    >
-      <line x1="0" y1="0" x2="10" y2="10" />
-      <line x1="10" y1="0" x2="0" y2="10" />
-    </svg>
-  );
-}
-
-function CopyIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      width="12"
-      height="12"
-      viewBox="0 0 12 12"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1"
-    >
-      <rect x="3.5" y="3.5" width="7" height="7" rx="1" />
-      <path d="M8.5,3.5 L8.5,2 C8.5,1.45 8.05,1 7.5,1 L2,1 C1.45,1 1,1.45 1,2 L1,7.5 C1,8.05 1.45,8.5 2,8.5 L3.5,8.5" />
-    </svg>
-  );
-}
-
-function CheckIcon() {
-  return (
-    <svg
-      aria-hidden="true"
-      width="12"
-      height="12"
-      viewBox="0 0 12 12"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-    >
-      <polyline points="2.5,6 5,9 9.5,3" />
-    </svg>
-  );
-}
-
-function CopyAddressButton() {
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(null);
 
@@ -113,73 +98,149 @@ function CopyAddressButton() {
     [],
   );
 
-  const handleClick = useCallback(() => {
+  const handleCopy = useCallback(() => {
     sendCommand(WINDOW_COPY_ADDRESS);
     setCopied(true);
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => setCopied(false), 1500);
   }, []);
 
+  if (!url) return null;
+
+  let displayUrl = url;
+  try {
+    const parsed = new URL(url);
+    displayUrl = parsed.hostname + (parsed.pathname !== "/" ? parsed.pathname : "");
+  } catch {
+    // keep raw url
+  }
+
   return (
-    <button
-      type="button"
-      onClick={handleClick}
-      className="flex h-8 w-10 items-center justify-center text-foreground/60 hover:bg-foreground/10 active:bg-foreground/15 hover:text-foreground transition-colors"
-      aria-label={copied ? "Copied!" : "Copy address"}
-      data-tip={copied ? "Copied!" : "Copy address"}
-    >
-      {copied ? <CheckIcon /> : <CopyIcon />}
-    </button>
+    <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+      {/* Loading spinner ring — conic-gradient masked to border edge */}
+      {isLoading && (
+        <div
+          className="absolute inset-0 pointer-events-none"
+          style={{
+            borderRadius: "var(--radius-lg)",
+            padding: 2,
+            background:
+              "conic-gradient(from var(--url-angle), oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250) / 0) 0%, oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250) / 0.8) 10%, oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250) / 0) 22%, transparent 22%)",
+            mask: "linear-gradient(oklch(1 0 0) 0 0) content-box, linear-gradient(oklch(1 0 0) 0 0)",
+            maskComposite: "exclude",
+            WebkitMaskComposite: "xor",
+            animation: "url-spin 2.5s linear infinite",
+          }}
+        />
+      )}
+      {/* Pill container — needs explicit no-drag so button receives mouse events */}
+      <div
+        className="relative flex items-center"
+        style={
+          {
+            gap: "0.125rem",
+            fontSize: "var(--text-sm)",
+            fontFamily: "var(--font-mono)",
+            color: "var(--glass-text-default)",
+            padding: "0.1875rem 0.25rem 0.1875rem 0.875rem",
+            borderRadius: "var(--radius-lg)",
+            background: "var(--glass-subtle)",
+            WebkitAppRegion: "no-drag",
+          } as React.CSSProperties
+        }
+      >
+        <span className="truncate" style={{ maxWidth: 300 }}>
+          {displayUrl}
+        </span>
+        <button
+          type="button"
+          className={`focus-ring flex items-center justify-center shrink-0 cursor-pointer ${
+            copied
+              ? ""
+              : "text-glass-text-muted hover:bg-glass-hover hover:text-glass-text-hover active:bg-glass-pressed active:text-glass-text-pressed"
+          }`}
+          style={{
+            width: 24,
+            height: 24,
+            borderRadius: "var(--radius-md)",
+            border: "none",
+            background: copied
+              ? "oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250) / 0.12)"
+              : "transparent",
+            color: copied
+              ? "oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250))"
+              : undefined,
+            transition:
+              "background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out)",
+          }}
+          onClick={handleCopy}
+          aria-label={copied ? "Copied!" : "Copy URL"}
+          data-tip={copied ? "Copied!" : "Copy URL"}
+        >
+          {copied ? (
+            <Icon
+              name="check"
+              css={{
+                fontSize: "var(--icon-size-default)",
+                animation: "copy-confirm var(--duration-normal) var(--ease-out)",
+              }}
+            />
+          ) : (
+            <Icon name="copy" style="regular" css={{ fontSize: "var(--icon-size-default)" }} />
+          )}
+        </button>
+      </div>
+    </div>
   );
 }
 
-function WindowControls() {
+const winCtrlStyle: React.CSSProperties = {
+  ...btnBaseStyle,
+  width: 36,
+  height: 26,
+};
+
+export function WindowControls() {
   const maximized = useWindowChromeStore((s) => s.maximized);
 
   return (
     <div className="flex items-center">
-      <CopyAddressButton />
-
       <button
         type="button"
         onClick={() => sendCommand(WINDOW_MINIMIZE)}
-        className="flex h-8 w-12 items-center justify-center text-foreground/60 hover:bg-foreground/10 active:bg-foreground/15 hover:text-foreground transition-colors"
+        style={winCtrlStyle}
+        className={navBtnClass}
         aria-label="Minimize"
         data-tip="Minimize"
       >
-        <MinimizeIcon />
+        <Icon name="minus" css={{ fontSize: "var(--icon-size-default)" }} />
       </button>
 
       <button
         type="button"
         onClick={() => sendCommand(WINDOW_MAXIMIZE_RESTORE)}
-        className="flex h-8 w-12 items-center justify-center text-foreground/60 hover:bg-foreground/10 active:bg-foreground/15 hover:text-foreground transition-colors"
+        style={winCtrlStyle}
+        className={navBtnClass}
         aria-label={maximized ? "Restore" : "Maximize"}
         data-tip={maximized ? "Restore" : "Maximize"}
       >
-        {maximized ? <RestoreIcon /> : <MaximizeIcon />}
+        {maximized ? (
+          <Icon name="window-restore" css={{ fontSize: "var(--icon-size-default)" }} />
+        ) : (
+          <Icon name="square" style="regular" css={{ fontSize: "var(--icon-size-default)" }} />
+        )}
       </button>
 
       <button
         type="button"
         onClick={() => sendCommand(WINDOW_CLOSE)}
-        className="flex h-8 w-12 items-center justify-center text-foreground/60 hover:bg-destructive active:bg-destructive/80 hover:text-white transition-colors"
+        style={winCtrlStyle}
+        className="focus-ring bg-transparent text-glass-text-muted hover:bg-destructive hover:text-glass-text-primary active:bg-destructive/80"
         aria-label="Close"
         data-tip="Close"
       >
-        <CloseIcon />
+        <Icon name="xmark" css={{ fontSize: "var(--icon-size-default)" }} />
       </button>
-    </div>
-  );
-}
-
-function LoadingIndicator() {
-  const isLoading = useWindowChromeStore((s) => s.loadingTabs.size > 0);
-  if (!isLoading) return null;
-
-  return (
-    <div className="absolute bottom-0 left-0 right-0 h-0.5 overflow-hidden bg-foreground/5">
-      <div className="h-full w-1/3 animate-pulse bg-primary/60 rounded-full" />
     </div>
   );
 }
@@ -189,12 +250,27 @@ const isMac = typeof window !== "undefined" && window.chiaroscuro?.getPlatformNa
 export function TitleBar() {
   return (
     <div
-      className="relative flex h-8 select-none items-center bg-background/80 backdrop-blur-sm"
-      style={{ WebkitAppRegion: "drag" } as React.CSSProperties}
+      className="relative flex select-none items-center shrink-0"
+      style={
+        {
+          height: "var(--titlebar-height)",
+          WebkitAppRegion: "drag",
+          background: "var(--glass-bg)",
+          backdropFilter: "blur(var(--glass-backdrop-blur))",
+        } as React.CSSProperties
+      }
       onDoubleClick={() => sendCommand(WINDOW_MAXIMIZE_RESTORE)}
     >
       {/* macOS: traffic lights are on left, leave space */}
       {isMac && <div className="w-[70px] shrink-0" />}
+
+      {/* Nav buttons */}
+      <div style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
+        <NavButtons />
+      </div>
+
+      {/* URL pill (centered — no-drag is on UrlPill's inner container) */}
+      <UrlPill />
 
       {/* Flexible spacer */}
       <div className="flex-1 min-w-0" />
@@ -205,8 +281,6 @@ export function TitleBar() {
           <WindowControls />
         </div>
       )}
-
-      <LoadingIndicator />
     </div>
   );
 }

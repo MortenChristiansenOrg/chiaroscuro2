@@ -2,69 +2,144 @@
 title: Address Bar
 ---
 
-import { ComponentPreview } from "../../components/ComponentPreview"
+import { LivePreview } from "../../components/LivePreview"
+import { UrlPill } from "@features/window-chrome/window-chrome.renderer"
+import { DEMO_TABS, makeDemoTabMap, tabId } from "../../lib/demo-data"
 
 # Address Bar
 
 The URL "pill" sits centered in the titlebar with an animated loading border and a copy button.
 
-<ComponentPreview label="URL Pill (dark bg)">
-  <div style={{ background: "oklch(0.35 0.06 250)", borderRadius: 8, padding: "12px 20px", display: "flex", justifyContent: "center" }}>
-    <div style={{
-      display: "flex", alignItems: "center", gap: 2,
-      fontSize: 11, color: "oklch(1 0 0 / 0.5)",
-      padding: "3px 4px 3px 14px", borderRadius: 12,
-      background: "oklch(1 0 0 / 0.08)",
-      fontFamily: "'Plus Jakarta Sans', sans-serif",
-    }}>
-      <span style={{ userSelect: "all" }}>localhost:5173</span>
-      <button type="button" style={{
-        width: 22, height: 22, borderRadius: 8,
-        border: "none", background: "none", cursor: "pointer",
-        display: "flex", alignItems: "center", justifyContent: "center",
-        color: "oklch(1 0 0 / 0.3)",
-      }}>
-        <svg width={11} height={11} viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth={1}>
-          <rect x="3.5" y="3.5" width="7" height="7" rx="1" />
-          <path d="M8.5,3.5V2a1 1 0 00-1-1H2a1 1 0 00-1 1v5.5a1 1 0 001 1h1.5" />
-        </svg>
-      </button>
-    </div>
+## Anatomy
+
+1. **Pill container** — rounded background housing URL and button
+2. **URL text** — monospace text with select-all behavior
+3. **Copy button** — icon-only button to copy URL to clipboard
+4. **Loading ring** — conic-gradient border animation shown during page load
+
+---
+
+## Visual Preview
+
+<LivePreview
+  label="URL Pill (dark bg)"
+  stores={{
+    tabs: { tabs: makeDemoTabMap(), activeTabId: tabId("tab-github") },
+  }}
+>
+  <div style={{ position: "relative", padding: "12px 20px", height: 48 }}>
+    <UrlPill />
   </div>
-</ComponentPreview>
+</LivePreview>
 
-## Pill Container
+---
+
+## Visual Specs
+
+### Pill Container
+
+| Property | Token/Value |
+|----------|-------------|
+| Position | Absolute center in titlebar |
+| Border radius | `--radius-lg` |
+| Background | `var(--glass-subtle)` |
+| Hover bg | `var(--glass-hover)` |
+| Font size | `--text-sm` |
+| Color | `var(--glass-text-default)` |
+
+### Copy Button
+
+| Property | Token/Value |
+|----------|-------------|
+| Size | `1.375rem x 1.375rem` |
+| Border radius | `--radius-md` |
+| Default color | `var(--glass-text-muted)` |
+| Hover bg | `var(--glass-hover)` |
+| Hover color | `var(--glass-text-hover)` |
+
+### Animated Loading Border
 
 | Property | Value |
 |----------|-------|
-| Position | Absolute center (`left: 50%; top: 50%; transform: translate(-50%, -50%)`) |
-| Padding | `3px 4px 3px 14px` |
-| Border radius | `12px` |
-| Background | `oklch(1 0 0 / 0.08)` |
-| Hover bg | `oklch(1 0 0 / 0.14)` |
-| Font size | `11px` |
-| Color | `oklch(1 0 0 / 0.5)` |
-
-## Animated Loading Border
-
-Uses `@property --url-angle` with a `conic-gradient` masked to only show the border edge:
-
-| Property | Value |
-|----------|-------|
-| `::before` inset | `-1.5px` |
-| `::before` border-radius | `13.5px` |
-| `::before` padding | `1.5px` (creates the border width) |
-| Gradient color | `oklch(0.65 0.15 270 / 0.8)` (accent glow) |
-| Gradient arc | `0%→10%→22%` (small bright arc) |
+| Gradient color | Accent glow: `oklch(var(--accent-L) var(--accent-C) var(--accent-hue) / 0.8)` |
 | Animation | `url-spin 2.5s linear infinite` |
-| Mask | XOR composite to cut out the fill, leaving only border |
+| Technique | `@property --url-angle` with `conic-gradient` masked to border edge |
 
-## Copy Button
+---
+
+## States
+
+| State | Pill | Copy Button | Additional |
+|-------|------|-------------|------------|
+| Default | `var(--glass-subtle)` bg | `var(--glass-text-muted)` icon | idle, no border animation |
+| Hover (pill) | `var(--glass-hover)` bg | unchanged | cursor: pointer |
+| Loading | `var(--glass-subtle)` bg | unchanged | spinning conic-gradient border ring |
+| Copied | unchanged | icon swaps to `fa-check`, accent color, accent bg at 12% opacity, scale-pop animation | check icon shown for 1.5s, then reverts to copy icon |
+| Hover (copy btn) | unchanged | `var(--glass-hover)` bg, `var(--glass-text-hover)` icon | cursor: pointer |
+
+---
+
+## Behavior
+
+- **Select-all on focus.** When the URL bar gains focus, all text is selected so the user can immediately type a replacement.
+- **Monospace for URL display.** Uses `--font-mono` (JetBrains Mono) for the URL text.
+- **Copy to clipboard.** Copy button writes current URL to clipboard and shows check icon confirmation.
+- **No drag.** Pill is not draggable.
+
+---
+
+## Animation & Motion
+
+Uses `@property --url-angle` with a `conic-gradient` masked to the border edge. See [Motion & Animation](/motion) for the spinning gradient implementation.
+
+| Animation | Duration | Easing | Details |
+|-----------|----------|--------|---------|
+| Loading spinner | `2.5s` | `linear` | `url-spin` keyframe, infinite loop, conic-gradient rotates `--url-angle` |
+| Copy confirmation | `1.5s` | — | icon swaps `fa-copy` -> `fa-check`, `copy-confirm` scale-pop (`--duration-normal`, `--ease-out`), accent color + 12% accent bg, reverts after timeout |
+| State transitions | `var(--duration-fast)` | `var(--ease-out)` | background-color, color |
+| `prefers-reduced-motion` | `0` | — | spinner pauses, transitions instant |
+
+---
+
+## Keyboard & Focus
+
+- **Pill itself:** not directly keyboard-focusable (click-only interaction for URL selection).
+- **Copy button:** natively focusable `<button>`, reachable via Tab.
+- **Enter / Space:** activates copy button when focused.
+- **Focus ring:** `:focus-visible` on copy button — `2px solid accent`, `outline-offset: 2px`.
+- **Focus return:** focus stays on copy button after copy action.
+
+---
+
+## Accessibility
+
+- **`aria-label`:** required on copy button (e.g., `aria-label="Copy URL"`).
+- **Copy confirmation:** tooltip/`aria-live="polite"` announces "Copied" after clipboard write.
+- **Semantic HTML:** copy uses `<button type="button">`, URL text in a `<span>`.
+- **Touch target:** copy button meets `var(--click-target-min)` (1.375rem padded to 1.5rem).
+- **Contrast:** glass text default meets 4.5:1 for body text; muted icon meets 3:1 for interactive elements.
+
+---
+
+## Layout & Composition
 
 | Property | Value |
 |----------|-------|
-| Size | `22×22px` |
-| Border radius | `8px` |
-| Color | `oklch(1 0 0 / 0.3)` |
-| Hover bg | `oklch(1 0 0 / 0.12)` |
-| Hover color | `oklch(1 0 0 / 0.65)` |
+| Position | Absolute center in titlebar (flex: 1, centered content) |
+| Z-index | None — within normal chrome flow |
+| Resize | Pill truncates URL with ellipsis when titlebar narrows |
+| Minimum width | Copy button + padding always visible; URL truncates first |
+
+- Pill sits between nav buttons (left) and window controls (right) in the titlebar flex layout.
+- Loading ring is a pseudo-element on the pill container, no extra DOM node.
+
+---
+
+## Related
+
+- [Buttons](/components/buttons) — copy button follows icon button specs
+- [Tooltips](/components/tooltips) — copy confirmation tooltip
+- [Motion & Animation](/motion) — spinning gradient tokens and implementation
+- [Interaction Feedback](/interaction) — state ladder
+- [Keyboard & Focus](/keyboard-focus) — focus zone model
+- [Accessibility](/accessibility) — ARIA and contrast requirements

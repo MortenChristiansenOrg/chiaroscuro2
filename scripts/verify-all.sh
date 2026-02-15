@@ -21,6 +21,14 @@ fail() {
   FAILED=1
 }
 
+# Icon usage lint
+step "Icon usage (no bare FA classes)"
+if ./scripts/check-icon-usage.sh 2>&1; then
+  pass "Icon usage"
+else
+  fail "Icon usage"
+fi
+
 # Type checking
 step "Type checking (tsc --build)"
 if bun run typecheck 2>&1; then

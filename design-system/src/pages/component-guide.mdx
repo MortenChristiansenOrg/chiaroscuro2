@@ -1,0 +1,235 @@
+---
+title: Component Guide
+---
+
+# Component Documentation Guide
+
+A checklist of sections to include when documenting a component in this design system. Not every section applies to every component — the table below each heading indicates which component types need it.
+
+The goal: force yourself to consider every design system rule so nothing gets missed. If a section doesn't apply, skip it. If it applies but you have no answer yet, add it with "TBD" so it's visibly incomplete.
+
+---
+
+## 1. Overview
+
+A one-line description of what the component is and where it appears. Link to the parent component or layout region it belongs to.
+
+> *Example: "Pill-shaped sidebar tabs. Each is a list item with favicon, label, and close button."*
+
+| Component type | Required? |
+|----------------|-----------|
+| All | Yes |
+
+---
+
+## 2. Anatomy
+
+A top-to-bottom or left-to-right breakdown of the component's parts. Use a numbered or bulleted list. Name each sub-element — these names become the vocabulary for the rest of the page.
+
+For composite components (sidebar, workspace bar), this is the structural outline. For atomic components (button, tooltip), this may be a single sentence.
+
+| Component type | Required? |
+|----------------|-----------|
+| Composite (sidebar, workspace bar) | Yes — full structural breakdown |
+| Atomic with sub-elements (tab, address bar) | Yes — list the parts |
+| Simple atomic (button, tooltip) | Optional — a sentence in the overview suffices |
+
+---
+
+## 3. Visual Preview
+
+A `<ComponentPreview>` block showing the component rendered with real tokens. Show the default state at minimum. If the component has multiple variants, show the most common one here and save the rest for the **Variants** or **States** section.
+
+Previews should use a dark background (`var(--window-bg)`) to match the actual chrome context, or a content background for content-panel components.
+
+| Component type | Required? |
+|----------------|-----------|
+| All visible components | Yes |
+| Structural/layout-only (not directly visible) | No |
+
+---
+
+## 4. Visual Specs
+
+A token table covering the component's geometry and visual properties. Columns: **Property** and **Token/Value**. Reference design tokens wherever possible — raw values only when no token exists.
+
+Properties to consider:
+
+| Property | Relevant token pages |
+|----------|---------------------|
+| Width / height / min size | [Spacing](/spacing) — `--click-target-min` for interactive elements |
+| Padding / gap | [Spacing](/spacing) — gap for siblings, padding for containers |
+| Border radius | [Geometry](/borders-radius) — children rounder than parents |
+| Border | [Geometry](/borders-radius) — 1px borders only |
+| Background | [Colors](/colors) — glass vs content context |
+| Text color | [Colors](/colors) — use the correct context's text scale |
+| Font size / weight | [Typography](/typography) — max 3 sizes per context |
+| Letter spacing | [Typography](/typography) |
+| Shadow | [Shadows](/shadows-effects) — shadows are earned |
+| Backdrop filter | [Shadows](/shadows-effects) |
+
+| Component type | Required? |
+|----------------|-----------|
+| All | Yes |
+
+---
+
+## 5. States
+
+Show every state the component supports from the [state ladder](/interaction):
+
+1. **Default** — resting appearance
+2. **Hover** — `cursor: pointer`, hover surface
+3. **Active / Pressed** — on `mousedown`, immediate feedback
+4. **Selected** — currently active item (if applicable)
+5. **Disabled** — `cursor: default`, no hover, hint-level text
+6. **Focus-visible** — keyboard focus ring (accent color, 2px, offset 2px)
+
+For each applicable state, provide a token table with **Background**, **Text**, **Shadow**, and any additional changes (weight, transform, etc.). Include a `<ComponentPreview>` showing the states side by side when practical.
+
+**Close button sub-state:** If the component contains a close/dismiss button, document its reveal-on-parent-hover and destructive-on-own-hover behavior per the [interaction rules](/interaction).
+
+| Component type | Required? |
+|----------------|-----------|
+| Interactive (buttons, tabs, inputs) | Yes — full state ladder |
+| Hoverable but not selectable (cards, links) | Yes — default + hover + active |
+| Non-interactive (labels, dividers) | No |
+
+---
+
+## 6. Variants
+
+If the component has multiple types, modes, or visual variations, document each with a table showing how it differs from the base. Examples: tab types (pinned / bookmarked / ephemeral), button types (window controls / nav / close).
+
+Cross-reference the variant rules with the [color context](/colors) they belong to (glass vs content).
+
+| Component type | Required? |
+|----------------|-----------|
+| Components with distinct types or modes | Yes |
+| Single-variant components | No |
+
+---
+
+## 7. Behavior
+
+Document interactive behavior that goes beyond the state ladder. Think about:
+
+- **Trigger actions** — what happens on click, double-click, right-click, long-press?
+- **Reveal patterns** — elements that appear on hover/focus (close buttons, secondary actions) per [progressive disclosure](/interaction)
+- **Auto-focus** — does this component receive focus when it appears? Does it select-all?
+- **Dismiss** — if it's an overlay, does it close on outside-click and Escape?
+- **Drag** — is this draggable? What's the grab affordance? Drop targets?
+- **Overflow** — text truncation with ellipsis? Scrollable regions?
+- **Loading** — does this component have a loading state? Animated indicator?
+
+| Component type | Required? |
+|----------------|-----------|
+| Interactive components | Yes |
+| Purely presentational | No |
+
+---
+
+## 8. Animation & Motion
+
+Document all transitions and keyframe animations. Reference tokens from [Motion & Animation](/motion).
+
+**Checklist:**
+- [ ] State transitions: which properties animate? (`background-color`, `color`, `opacity`, `transform` only — never animate layout properties)
+- [ ] Duration + easing: use `--duration-*` and `--ease-*` tokens
+- [ ] Overlay enter/exit: if it's a floating element, use the scale pattern (`0.96 → 1`)
+- [ ] Drag animation: if draggable, `translateY(-1px)` lift + shadow on grab
+- [ ] Loading animation: spinning gradient, skeleton pulse, etc.
+- [ ] `prefers-reduced-motion`: all of the above must degrade to instant/static under this preference
+
+| Component type | Required? |
+|----------------|-----------|
+| Components with transitions or animations | Yes |
+| Static components | No — but confirm the component truly has no transitions, not even hover |
+
+---
+
+## 9. Keyboard & Focus
+
+Document how the component participates in keyboard navigation per [Keyboard & Focus](/keyboard-focus).
+
+**Checklist:**
+- [ ] **Focus zone membership** — which focus zone does this component belong to? Tab navigates between zones; arrow keys navigate within.
+- [ ] **Key bindings** — arrow keys, Enter, Space, Escape, Delete, type-ahead. List each key and its action.
+- [ ] **Focus return** — when the component closes or deactivates, where does focus go?
+- [ ] **Tab order** — does this component need `tabindex`? If so, what value?
+- [ ] **Focus ring** — uses `:focus-visible` with accent outline (inherited from global styles, but note any exceptions)
+
+| Component type | Required? |
+|----------------|-----------|
+| Focusable / interactive components | Yes |
+| Non-focusable (decorative, layout) | No |
+
+---
+
+## 10. Accessibility
+
+Document accessibility considerations per the [Accessibility](/accessibility) page.
+
+**Checklist:**
+- [ ] **Contrast** — does the component meet `4.5:1` (content) or `3:1` (chrome/interactive)? If glass text, is opacity ≥ `0.4` for meaningful content?
+- [ ] **Touch target** — is the click area at least `1.5rem × 1.5rem` (24px)?
+- [ ] **ARIA** — `aria-label` on icon-only buttons, `aria-current` on active nav items, `role` attributes if using non-semantic elements
+- [ ] **Live regions** — does this component change dynamically in ways screen readers should announce? Use `aria-live="polite"`
+- [ ] **Semantic HTML** — is the right element used (`<button>`, `<nav>`, `<dialog>`, etc.)?
+
+| Component type | Required? |
+|----------------|-----------|
+| Interactive components | Yes — full checklist |
+| Visible but non-interactive | Contrast + semantic markup only |
+| Invisible / structural | No |
+
+---
+
+## 11. Layout & Composition
+
+Describe where the component sits in the layout hierarchy and how it relates to its container.
+
+**Checklist:**
+- [ ] **Parent** — what contains this component? (titlebar, sidebar, content panel, overlay)
+- [ ] **Positioning** — fixed, sticky, absolute, or flow? Reference [Layout Composition](/layout)
+- [ ] **Sizing** — does it stretch to fill, have a fixed size, or size to content?
+- [ ] **Z-index** — if it overlaps other elements, which layer? Follow the z-index discipline from [Layout](/layout)
+- [ ] **Responsive behavior** — how does it adapt when the container resizes? What happens when the sidebar collapses?
+
+| Component type | Required? |
+|----------------|-----------|
+| Components with non-trivial positioning | Yes |
+| Simple flow elements | Parent reference only |
+
+---
+
+## 12. Related Components
+
+Link to other component pages that this component uses, contains, or is commonly paired with. Also link to any foundation or behavior pages that are especially relevant.
+
+> *Example: "Close button behavior defined in [Buttons](/components/buttons). Tooltip required — see [Tooltips](/components/tooltips)."*
+
+| Component type | Required? |
+|----------------|-----------|
+| All | Yes — even if just one link |
+
+---
+
+## Section Summary
+
+Quick reference for which sections to include by component type:
+
+| Section | Interactive atom | Presentational atom | Composite | Overlay / Floating |
+|---------|-----------------|--------------------|-----------|--------------------|
+| 1. Overview | Yes | Yes | Yes | Yes |
+| 2. Anatomy | Optional | Optional | Yes | Optional |
+| 3. Visual Preview | Yes | Yes | Yes | Yes |
+| 4. Visual Specs | Yes | Yes | Yes | Yes |
+| 5. States | Full ladder | Hover + active | Per sub-element | Full ladder |
+| 6. Variants | If multiple | If multiple | If multiple | If multiple |
+| 7. Behavior | Yes | No | Yes | Yes (dismiss rules) |
+| 8. Animation | Transitions | Transitions | Per sub-element | Enter/exit + transitions |
+| 9. Keyboard | Yes | No | Yes | Yes (Escape, focus trap) |
+| 10. Accessibility | Full | Contrast + semantics | Full | Full |
+| 11. Layout | Parent ref | Parent ref | Yes | Z-index + positioning |
+| 12. Related | Yes | Yes | Yes | Yes |

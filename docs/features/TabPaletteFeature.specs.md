@@ -57,4 +57,4 @@ This feature uses the following shortcut:
 ## Unresolved Issues
 
 - **F1 conflict**: F1 is universally used for "Help" in most applications. This will override browser help and in-page help shortcuts. Consider an alternative.
-- **Relationship to command palette**: The command palette (Ctrl-K) and tab palette (F1) serve different purposes but could potentially be confusing. Consider whether some tab palette functionality could be folded into the command palette instead of maintaining two separate overlay panels.
+- **Relationship to command palette**: The command palette (Ctrl-T) and tab palette (F1) serve different purposes but could potentially be confusing. Consider whether some tab palette functionality could be folded into the command palette instead of maintaining two separate overlay panels.
