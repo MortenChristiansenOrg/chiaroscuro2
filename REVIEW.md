@@ -80,9 +80,10 @@ None. No console errors, warnings, or failed network requests.
    The design system component pages does not map 1:1 with actual components. It also seems like we should make more things into components. In particular the workspace switcher suffers from this.
    Transition between workspaces should be smoother
    Too much space between tabs and web content
-   I need to have hot reload when developing
-   Add React docs and update to code to use them
-   Extract address-bar and workspace-switcher into dedicated components and reference them in the design system
    Remove the notion of the tab focus circle from the design system and application. You should not be able to tab around in the application chrome.
    The ui review should not shut down the agent manager and it should use playwright-cli
    Fix the weird line under the pinned tabs
+   Review our test documentation
+   Check for confirm prompt when deleting workspace
+   Workspace favicon support
+   No hover feedback when hovering over pinned tab

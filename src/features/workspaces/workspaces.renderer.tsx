@@ -127,6 +127,7 @@ export function WorkspaceEditor({
 
   const handleDelete = () => {
     if (!workspace) return;
+    if (!window.confirm(`Delete workspace "${workspace.name}"?`)) return;
     sendCommand(WORKSPACES_DELETE, { workspaceId: workspace.id });
     onClose();
   };

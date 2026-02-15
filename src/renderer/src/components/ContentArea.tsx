@@ -47,7 +47,7 @@ export function ContentArea() {
       ref={ref}
       className="relative flex-1 rounded-lg overflow-hidden"
       style={{
-        margin: "0 var(--content-inset) var(--content-inset)",
+        margin: "0 var(--content-inset) var(--content-inset) 0",
         boxShadow: "var(--shadow-medium)",
         background: activeTabId ? "var(--content-bg)" : "var(--glass-subtle)",
       }}

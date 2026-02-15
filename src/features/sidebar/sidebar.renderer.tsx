@@ -292,59 +292,55 @@ function PinnedTabsStrip({
 }) {
   return (
     <div
+      className="flex"
       style={{
+        gap: "0.5rem",
         padding: "0 0.375rem 0.25rem",
-        borderBottom: "1px solid var(--glass-border)",
       }}
     >
-      <div
-        className="flex flex-wrap justify-center"
-        style={{ gap: "0.25rem", padding: "0 0.25rem" }}
-      >
-        {pinnedTabs.map((pt) => {
-          const tab = tabs.get(pt.id);
-          const isActive = pt.id === activeTabId;
-          return (
-            <button
-              key={pt.id}
-              type="button"
-              className="flex items-center justify-center cursor-pointer hover:bg-glass-hover focus-ring"
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: "var(--radius-sm)",
-                border: "none",
-                background: isActive ? "var(--glass-active)" : "transparent",
-                boxShadow: isActive ? "var(--shadow-subtle)" : undefined,
-              }}
-              onClick={() => sendCommand(PINNED_TABS_ACTIVATE, { tabId: pt.id })}
-              data-tip={pt.title || pt.url}
-              aria-label={pt.title || pt.url}
-            >
-              {tab ? (
-                <Favicon tab={tab} />
-              ) : pt.favicon ? (
-                <img
-                  src={pt.favicon}
-                  alt=""
-                  className="rounded-full"
-                  style={{ width: 16, height: 16 }}
-                />
-              ) : (
-                <span
-                  style={{
-                    fontSize: "var(--text-xs)",
-                    fontWeight: 600,
-                    color: "var(--glass-text-default)",
-                  }}
-                >
-                  {(pt.title || pt.url)?.[0]?.toUpperCase() || "?"}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+      {pinnedTabs.map((pt) => {
+        const tab = tabs.get(pt.id);
+        const isActive = pt.id === activeTabId;
+        return (
+          <button
+            key={pt.id}
+            type="button"
+            className="flex flex-1 items-center justify-center cursor-pointer hover:bg-glass-hover focus-ring"
+            style={{
+              height: 32,
+              minWidth: 0,
+              borderRadius: "var(--radius-md)",
+              border: "none",
+              background: isActive ? "var(--glass-active)" : "var(--glass-subtle)",
+              boxShadow: isActive ? "var(--shadow-subtle)" : undefined,
+            }}
+            onClick={() => sendCommand(PINNED_TABS_ACTIVATE, { tabId: pt.id })}
+            data-tip={pt.title || pt.url}
+            aria-label={pt.title || pt.url}
+          >
+            {tab ? (
+              <Favicon tab={tab} />
+            ) : pt.favicon ? (
+              <img
+                src={pt.favicon}
+                alt=""
+                className="rounded-full"
+                style={{ width: 16, height: 16 }}
+              />
+            ) : (
+              <span
+                style={{
+                  fontSize: "var(--text-xs)",
+                  fontWeight: 600,
+                  color: "var(--glass-text-default)",
+                }}
+              >
+                {(pt.title || pt.url)?.[0]?.toUpperCase() || "?"}
+              </span>
+            )}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -381,37 +377,22 @@ function TabSection({
   return (
     // biome-ignore lint/a11y/useSemanticElements: role="listbox" is semantically correct for roving tabindex tab list
     <div role="listbox" aria-label="Tabs" tabIndex={-1} onKeyDown={onKeyDown}>
-      {bookmarked.length > 0 && (
-        <>
-          <div
-            style={{
-              fontSize: "var(--text-xs)",
-              textTransform: "uppercase",
-              letterSpacing: "0.1em",
-              color: "var(--glass-text-muted)",
-              padding: "0.625rem 0.875rem 0.25rem",
-              fontWeight: 500,
-            }}
-          >
-            Bookmarked
-          </div>
-          {bookmarked.map((tab, i) => (
-            <TabItem
-              key={tab.id}
-              tab={tab}
-              isActive={tab.id === activeTabId}
-              isEphemeral={false}
-              exiting={exitingIds.has(tab.id)}
-              focused={bookmarkedBaseIdx + i === focusedTabIdx}
-              index={i}
-              isBookmarkedSection={true}
-              onDragStart={onDragStart}
-              onDragOver={onDragOver}
-              onDrop={onDrop}
-            />
-          ))}
-        </>
-      )}
+      {bookmarked.length > 0 &&
+        bookmarked.map((tab, i) => (
+          <TabItem
+            key={tab.id}
+            tab={tab}
+            isActive={tab.id === activeTabId}
+            isEphemeral={false}
+            exiting={exitingIds.has(tab.id)}
+            focused={bookmarkedBaseIdx + i === focusedTabIdx}
+            index={i}
+            isBookmarkedSection={true}
+            onDragStart={onDragStart}
+            onDragOver={onDragOver}
+            onDrop={onDrop}
+          />
+        ))}
 
       {ephemeral.length > 0 && (
         <>
