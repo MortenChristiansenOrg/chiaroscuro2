@@ -6,12 +6,12 @@ import { useWindowChromeStore } from "@features/window-chrome/window-chrome.stor
 import type { Workspace } from "@features/workspaces/workspaces.shared";
 import { useWorkspacesStore } from "@features/workspaces/workspaces.store";
 import { type ReactNode, useEffect } from "react";
-import type { TabId } from "../../../src/shared/types";
+import type { TabId, WorkspaceId } from "../../../src/shared/types";
 import { ComponentPreview } from "./ComponentPreview";
 
 interface StoreOverrides {
   tabs?: { tabs: Map<TabId, Tab>; activeTabId: TabId | null };
-  workspaces?: { workspaces: Workspace[]; activeWorkspaceId: string | null };
+  workspaces?: { workspaces: Workspace[]; activeWorkspaceId: WorkspaceId | null };
   sidebar?: { visible: boolean };
   commandPalette?: { open: boolean };
   windowChrome?: { maximized: boolean; loadingTabs: Set<TabId> };
@@ -29,7 +29,7 @@ export function LivePreview({
   // biome-ignore lint/correctness/useExhaustiveDependencies: stores are static in MDX previews
   useEffect(() => {
     if (stores?.tabs) useTabsStore.setState(stores.tabs);
-    if (stores?.workspaces) useWorkspacesStore.setState(stores.workspaces as never);
+    if (stores?.workspaces) useWorkspacesStore.setState(stores.workspaces);
     if (stores?.sidebar) useSidebarStore.setState(stores.sidebar);
     if (stores?.commandPalette) useCommandPaletteStore.setState(stores.commandPalette);
     if (stores?.windowChrome) useWindowChromeStore.setState(stores.windowChrome);

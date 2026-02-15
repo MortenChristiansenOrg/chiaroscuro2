@@ -13,7 +13,10 @@ import {
 } from "./window-chrome.shared";
 import { useWindowChromeStore } from "./window-chrome.store";
 
-function sendCommand(name: string & keyof WindowChromeCommands, payload?: unknown) {
+function sendCommand<K extends keyof WindowChromeCommands>(
+  name: K,
+  payload?: WindowChromeCommands[K]["payload"],
+) {
   window.chiaroscuro.sendCommand(name, payload);
 }
 
@@ -32,13 +35,16 @@ const navBtnStyle: React.CSSProperties = {
     "background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out)",
 };
 
+const navBtnClass =
+  "focus-ring bg-transparent text-glass-text-muted hover:bg-glass-hover hover:text-glass-text-hover active:bg-glass-pressed active:text-glass-text-pressed";
+
 export function NavButtons() {
   return (
     <div className="flex" style={{ gap: "0.0625rem", paddingLeft: "0.5rem" }}>
       <button
         type="button"
         style={navBtnStyle}
-        className="focus-ring bg-transparent text-glass-text-muted hover:bg-glass-hover hover:text-glass-text-hover active:bg-glass-pressed active:text-glass-text-pressed"
+        className={navBtnClass}
         onClick={() => sendCommand(WINDOW_GO_BACK)}
         aria-label="Go back"
         data-tip="Back"
@@ -48,7 +54,7 @@ export function NavButtons() {
       <button
         type="button"
         style={navBtnStyle}
-        className="focus-ring bg-transparent text-glass-text-muted hover:bg-glass-hover hover:text-glass-text-hover active:bg-glass-pressed active:text-glass-text-pressed"
+        className={navBtnClass}
         onClick={() => sendCommand(WINDOW_GO_FORWARD)}
         aria-label="Go forward"
         data-tip="Forward"
@@ -58,7 +64,7 @@ export function NavButtons() {
       <button
         type="button"
         style={navBtnStyle}
-        className="focus-ring bg-transparent text-glass-text-muted hover:bg-glass-hover hover:text-glass-text-hover active:bg-glass-pressed active:text-glass-text-pressed"
+        className={navBtnClass}
         onClick={() => sendCommand(WINDOW_RELOAD)}
         aria-label="Reload"
         data-tip="Reload"
@@ -74,7 +80,10 @@ export function UrlPill() {
     const tab = s.activeTabId ? s.tabs.get(s.activeTabId) : undefined;
     return tab?.url ?? "";
   });
-  const isLoading = useWindowChromeStore((s) => s.loadingTabs.size > 0);
+  const activeTabId = useTabsStore((s) => s.activeTabId);
+  const isLoading = useWindowChromeStore(
+    (s) => activeTabId != null && s.loadingTabs.has(activeTabId),
+  );
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(null);
 

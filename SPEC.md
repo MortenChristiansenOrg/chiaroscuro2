@@ -260,8 +260,8 @@ Three-tier lifecycle: **active → suspended → evicted**. Thresholds are user-
 **Default eviction policy (configurable in Settings):**
 
 - **Pinned tabs**: never evict, only throttle
-- **Bookmarked tabs**: evict after 30min inactive when available RAM < 25%
-- **Ephemeral tabs**: evict after 15min inactive when available RAM < 25%
+- **Bookmarked tabs**: evict after 30 min inactive when available RAM < 25%
+- **Ephemeral tabs**: evict after 15 min inactive when available RAM < 25%
 - **Aggressive mode** (RAM < 15%): evict all non-active non-protected tabs
 - **Never evict**: tabs playing audio, running WebRTC, or with unsaved form data
 
@@ -466,7 +466,7 @@ JSON files:       settings.json, shortcuts.json, extensions.json
 
 ### Auto-Update Infrastructure
 
-```
+```text
 Git tag (v1.0.0) → GitHub Actions → Build artifacts → GitHub Releases
                                                            ↓
                            Browser ← electron-updater ← Release assets
