@@ -31,18 +31,23 @@ export function signalReady(): void {
 
 export function ContentArea() {
   const ref = useRef<HTMLDivElement>(null);
+  const pendingRaf = useRef(false);
   const activeTabId = useTabsStore((s) => s.activeTabId);
 
   const reportBounds = useCallback(() => {
-    const el = ref.current;
-    if (!el) return;
-    const rect = el.getBoundingClientRect();
-    // setBounds expects CSS px (DIPs), same as getBoundingClientRect
-    window.chiaroscuro.sendCommand("tabs:report-content-bounds", {
-      x: Math.round(rect.left),
-      y: Math.round(rect.top),
-      width: Math.round(rect.width),
-      height: Math.round(rect.height),
+    if (pendingRaf.current) return;
+    pendingRaf.current = true;
+    requestAnimationFrame(() => {
+      pendingRaf.current = false;
+      const el = ref.current;
+      if (!el) return;
+      const rect = el.getBoundingClientRect();
+      window.chiaroscuro.sendCommand("tabs:report-content-bounds", {
+        x: Math.round(rect.left),
+        y: Math.round(rect.top),
+        width: Math.round(rect.width),
+        height: Math.round(rect.height),
+      });
     });
   }, []);
 
@@ -66,29 +71,29 @@ export function ContentArea() {
   }, [reportBounds]);
 
   return (
-    <div
+    <main
       ref={ref}
       className="relative flex-1 rounded-lg overflow-hidden"
       style={{
         margin: "0 var(--content-inset) var(--content-inset)",
         boxShadow: "var(--shadow-medium)",
-        background: activeTabId ? "var(--content-bg)" : "oklch(1 0 0 / 0.08)",
+        background: activeTabId ? "var(--content-bg)" : "var(--glass-subtle)",
       }}
     >
       {!activeTabId && (
         <div
           className="absolute inset-0 flex items-center justify-center select-none"
-          style={{ color: "oklch(1 0 0 / 0.35)" }}
+          style={{ color: "var(--glass-text-muted)" }}
         >
-          <span style={{ fontSize: 13, letterSpacing: "0.01em" }}>
+          <span style={{ fontSize: "var(--text-base)", letterSpacing: "0.01em" }}>
             Press{" "}
             <kbd
               style={{
-                padding: "1px 6px",
-                borderRadius: 5,
-                border: "1px solid oklch(1 0 0 / 0.15)",
-                background: "oklch(1 0 0 / 0.06)",
-                fontSize: 12,
+                padding: "0.0625rem 0.375rem",
+                borderRadius: "var(--radius-sm)",
+                border: "1px solid var(--glass-border)",
+                background: "var(--glass-subtle)",
+                fontSize: "var(--text-sm)",
                 fontFamily: "inherit",
               }}
             >
@@ -98,7 +103,7 @@ export function ContentArea() {
           </span>
         </div>
       )}
-    </div>
+    </main>
   );
 }
 

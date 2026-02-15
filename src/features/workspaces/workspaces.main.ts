@@ -29,14 +29,11 @@ interface Deps {
   setActiveWorkspaceId: (id: WorkspaceId) => void;
 }
 
-const workspaces = new Map<WorkspaceId, Workspace>();
+// Shared state exposed via accessor for cross-feature queries
+let _workspaces: Map<WorkspaceId, Workspace> | undefined;
 
 export function getWorkspace(id: WorkspaceId): Workspace | undefined {
-  return workspaces.get(id);
-}
-
-function emitListChanged(events: EventBus<AllEvents>): void {
-  events.emit(WORKSPACES_LIST_CHANGED, { workspaces: [...workspaces.values()] });
+  return _workspaces?.get(id);
 }
 
 export function register(deps: Deps): void {
@@ -49,6 +46,13 @@ export function register(deps: Deps): void {
     getActiveWorkspaceId,
     setActiveWorkspaceId,
   } = deps;
+
+  const workspaces = new Map<WorkspaceId, Workspace>();
+  _workspaces = workspaces;
+
+  function emitListChanged(): void {
+    events.emit(WORKSPACES_LIST_CHANGED, { workspaces: [...workspaces.values()] });
+  }
 
   commands.handle(WORKSPACES_SWITCH, async (payload) => {
     const { workspaceId } = payload;
@@ -88,12 +92,13 @@ export function register(deps: Deps): void {
       id,
       name: payload.name,
       color: payload.color,
-      initial: payload.initial,
+      icon: payload.icon,
+      initial: payload.icon, // backward compat until renderer migrates to icon
       activeTabId: null,
     };
     workspaces.set(id, ws);
     events.emit(WORKSPACES_CREATED, { workspace: ws });
-    emitListChanged(events);
+    emitListChanged();
     return id;
   });
 }
@@ -107,12 +112,15 @@ export function start(deps: Deps): void {
     id: defaultId,
     name: "Work",
     color: "oklch(0.6 0.12 230)",
-    initial: "W",
+    icon: "W",
+    initial: "W", // backward compat until renderer migrates to icon
     activeTabId: null,
   };
-  workspaces.set(defaultId, defaultWs);
+  _workspaces?.set(defaultId, defaultWs);
   setActiveWorkspaceId(defaultId);
 
   events.emit(WORKSPACES_CREATED, { workspace: defaultWs });
-  emitListChanged(events);
+  events.emit(WORKSPACES_LIST_CHANGED, {
+    workspaces: _workspaces ? [..._workspaces.values()] : [],
+  });
 }

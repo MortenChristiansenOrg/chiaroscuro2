@@ -13,7 +13,7 @@
   --glass-text-default: oklch(1 0 0 / 0.55);
   --glass-text-hover: oklch(1 0 0 / 0.95);
   --glass-text-muted: oklch(1 0 0 / 0.4);
-  --glass-text-hint: oklch(1 0 0 / 0.25);
+  --glass-text-hint: oklch(1 0 0 / 0.3);
   --glass-text-pressed: oklch(1 0 0 / 0.95);
 
   /* ── Content Context (Opaque Panels) ── */

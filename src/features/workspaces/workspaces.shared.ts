@@ -14,7 +14,9 @@ export interface Workspace {
   id: WorkspaceId;
   name: string;
   color: string;
-  initial: string;
+  icon: string;
+  /** @deprecated Use `icon` instead */
+  initial?: string;
   activeTabId: TabId | null;
 }
 
@@ -26,7 +28,7 @@ export interface WorkspacesSwitchPayload {
 export interface WorkspacesCreatePayload {
   name: string;
   color: string;
-  initial: string;
+  icon: string;
 }
 
 export interface WorkspacesSwitchedEvent {

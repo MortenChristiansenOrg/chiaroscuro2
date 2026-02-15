@@ -1,61 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useTabsStore } from "../tabs/tabs.store";
 import { useCommandPaletteStore } from "./command-palette.store";
-
-function sendCommand(name: string, payload: unknown) {
-  window.chiaroscuro.sendCommand(name, payload);
-}
-
-// ── Bang providers ──────────────────────────────────────────────
-const BANG_PROVIDERS: Record<string, string> = {
-  "!g": "https://www.google.com/search?q=",
-  "!d": "https://duckduckgo.com/?q=",
-  "!gh": "https://github.com/search?q=",
-  "!yt": "https://www.youtube.com/results?search_query=",
-  "!w": "https://en.wikipedia.org/w/index.php?search=",
-};
-
-export function resolveInput(input: string): string {
-  const trimmed = input.trim();
-  if (!trimmed) return "";
-
-  // Bang at start: !g query
-  const bangStartMatch = trimmed.match(/^(![\w]+)\s+(.+)/);
-  if (bangStartMatch?.[1] && bangStartMatch[2]) {
-    const provider = BANG_PROVIDERS[bangStartMatch[1]];
-    if (provider) return provider + encodeURIComponent(bangStartMatch[2]);
-  }
-
-  // Bang at end: query !g
-  const bangEndMatch = trimmed.match(/^(.+)\s+(![\w]+)$/);
-  if (bangEndMatch?.[1] && bangEndMatch[2]) {
-    const provider = BANG_PROVIDERS[bangEndMatch[2]];
-    if (provider) return provider + encodeURIComponent(bangEndMatch[1]);
-  }
-
-  // Has explicit protocol
-  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed)) {
-    return trimmed;
-  }
-
-  // Looks like a URL (has dot, no spaces)
-  if (trimmed.includes(".") && !trimmed.includes(" ")) {
-    return `https://${trimmed}`;
-  }
-
-  // Default: DuckDuckGo search
-  return `https://duckduckgo.com/?q=${encodeURIComponent(trimmed)}`;
-}
 
 export function CommandPaletteOverlay() {
   const open = useCommandPaletteStore((s) => s.open);
-  const activeTabId = useTabsStore((s) => s.activeTabId);
   const inputRef = useRef<HTMLInputElement>(null);
+  const triggerRef = useRef<Element | null>(null);
   const [visible, setVisible] = useState(false);
   const [closing, setClosing] = useState(false);
 
   useEffect(() => {
     if (open) {
+      triggerRef.current = document.activeElement;
       setVisible(true);
       setClosing(false);
       requestAnimationFrame(() => inputRef.current?.focus());
@@ -67,12 +22,16 @@ export function CommandPaletteOverlay() {
     const timer = setTimeout(() => {
       setVisible(false);
       setClosing(false);
+      if (triggerRef.current instanceof HTMLElement) {
+        triggerRef.current.focus();
+        triggerRef.current = null;
+      }
     }, 150); // --duration-exit
     return () => clearTimeout(timer);
   }, [open, visible]);
 
   const handleClose = useCallback(() => {
-    sendCommand("command-palette:hide", undefined);
+    window.chiaroscuro.sendCommand("command-palette:hide", undefined);
   }, []);
 
   // Global Esc handler — works even if input loses focus
@@ -95,41 +54,29 @@ export function CommandPaletteOverlay() {
     return () => input.removeEventListener("blur", refocus);
   }, [visible, closing]);
 
-  const handleSubmit = useCallback(
-    (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key !== "Enter") return;
+  const handleSubmit = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key !== "Enter") return;
 
-      const value = inputRef.current?.value;
-      if (!value) return;
+    const value = inputRef.current?.value;
+    if (!value?.trim()) return;
 
-      const url = resolveInput(value);
-      if (!url) return;
+    window.chiaroscuro.sendCommand("command-palette:execute", {
+      command: value,
+      inCurrentTab: e.ctrlKey || e.metaKey,
+    });
 
-      if (e.ctrlKey || e.metaKey) {
-        // Ctrl+Enter: navigate current tab
-        if (activeTabId) {
-          sendCommand("tabs:navigate", { tabId: activeTabId, url });
-        } else {
-          sendCommand("tabs:create", { url });
-        }
-      } else {
-        // Enter: new tab
-        sendCommand("tabs:create", { url });
-      }
-
-      sendCommand("command-palette:hide", undefined);
-      if (inputRef.current) inputRef.current.value = "";
-    },
-    [activeTabId],
-  );
+    window.chiaroscuro.sendCommand("command-palette:hide", undefined);
+    if (inputRef.current) inputRef.current.value = "";
+  }, []);
 
   if (!visible) return null;
 
   return (
+    // biome-ignore lint/a11y/useKeyWithClickEvents: Esc handler covers keyboard close
     <div
       className="fixed inset-0 flex items-center justify-center"
       style={{
-        zIndex: "var(--z-overlay)" as unknown as number,
+        zIndex: 50,
         background: "oklch(0 0 0 / 0.4)",
         backdropFilter: "blur(4px)",
         animation: closing
@@ -137,8 +84,8 @@ export function CommandPaletteOverlay() {
           : "backdrop-in 200ms cubic-bezier(0, 0, 0.2, 1)",
       }}
       onClick={handleClose}
-      onKeyDown={() => {}}
     >
+      {/* biome-ignore lint/a11y/useKeyWithClickEvents: stopPropagation only prevents backdrop close */}
       <div
         className="flex flex-col"
         // biome-ignore lint/a11y/useSemanticElements: overlay handles backdrop click
@@ -147,7 +94,7 @@ export function CommandPaletteOverlay() {
         aria-modal="true"
         style={{
           width: 560,
-          background: "oklch(0.18 0.02 250 / 0.82)",
+          background: "var(--glass-bg)",
           borderRadius: "var(--radius-xl)",
           border: "1px solid var(--glass-border)",
           boxShadow: "var(--shadow-elevated)",
@@ -157,18 +104,18 @@ export function CommandPaletteOverlay() {
             : "palette-in 200ms cubic-bezier(0, 0, 0.2, 1)",
         }}
         onClick={(e) => e.stopPropagation()}
-        onKeyDown={() => {}}
       >
         <input
           ref={inputRef}
           type="text"
           placeholder="Search or enter URL..."
+          aria-label="Search or enter URL"
           className="w-full outline-none placeholder:text-glass-text-hint"
           style={{
             background: "transparent",
             color: "var(--glass-text-primary)",
             fontSize: "var(--text-md)",
-            padding: "16px 20px",
+            padding: "1rem 1.25rem",
             border: "none",
             fontFamily: "inherit",
           }}
@@ -179,9 +126,9 @@ export function CommandPaletteOverlay() {
         <div
           className="flex items-center justify-between"
           style={{
-            padding: "8px 20px 12px",
+            padding: "0.5rem 1.25rem 0.75rem",
             fontSize: "var(--text-sm)",
-            color: "var(--glass-text-hint)",
+            color: "var(--glass-text-muted)",
             borderTop: "1px solid var(--glass-border)",
           }}
         >

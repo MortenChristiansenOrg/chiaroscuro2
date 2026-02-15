@@ -5,7 +5,7 @@ type IconProps<S extends FaStyle = "solid"> = {
   name: FaIconForStyle<S>;
   style?: S;
   css?: CSSProperties;
-} & Omit<React.JSX.IntrinsicElements["i"], "style" | "children">;
+} & Omit<React.JSX.IntrinsicElements["i"], "style" | "children" | "tabIndex">;
 
 /**
  * Typed Font Awesome icon. Renders an `<i>` element with the correct FA classes.
@@ -24,5 +24,6 @@ export function Icon<S extends FaStyle = "solid">({
 }: IconProps<S>) {
   const s = style ?? "solid";
   const cls = `fa-${s} fa-${name}${className ? ` ${className}` : ""}`;
-  return <i className={cls} style={css} {...rest} />;
+  // biome-ignore lint/a11y/noAriaHiddenOnFocusable: icons are decorative, tabIndex excluded from props type
+  return <i className={cls} style={css} aria-hidden="true" {...rest} />;
 }

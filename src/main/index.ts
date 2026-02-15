@@ -93,8 +93,6 @@ function createWindow(): void {
 
   activeWindowId = String(win.id) as WindowId;
 
-  bridgeBusToIpc(commands, events, () => BrowserWindow.getAllWindows());
-
   // Hook BrowserWindow webContents for shortcut support
   platform.hookWebContents(win.webContents);
 
@@ -113,8 +111,7 @@ function createWindow(): void {
   }
 }
 
-// biome-ignore lint/suspicious/noExplicitAny: bus types are narrowed per-feature
-const deps: any = {
+const deps = {
   commands,
   events,
   platform,
@@ -137,6 +134,9 @@ app.whenReady().then(() => {
   registerSidebar(deps);
   registerCommandPalette(deps);
   registerTooltip(deps);
+
+  // Bridge bus to IPC (once, before any window creation)
+  bridgeBusToIpc(commands, events, () => BrowserWindow.getAllWindows());
 
   createWindow();
   if (activeWindowId) platform.initTooltipOverlay(activeWindowId);

@@ -6,7 +6,13 @@ import { useTabsStore } from "../tabs/tabs.store";
 import { useWorkspacesStore } from "../workspaces/workspaces.store";
 import { useSidebarStore } from "./sidebar.store";
 
-function sendCommand(name: string, payload: unknown) {
+type SidebarCommandName =
+  | "tabs:activate"
+  | "tabs:close"
+  | "tabs:clear-ephemeral"
+  | "workspaces:switch";
+
+function sendCommand(name: SidebarCommandName, payload: unknown) {
   window.chiaroscuro.sendCommand(name, payload);
 }
 
@@ -32,10 +38,10 @@ export function Favicon({ tab }: { tab: Tab }) {
       style={{
         width: 16,
         height: 16,
-        fontSize: 8,
+        fontSize: "var(--text-xs)",
         fontWeight: 600,
         fontFamily: "var(--font-sans)",
-        color: "oklch(1 0 0)",
+        color: "var(--glass-text-primary)",
         background: `oklch(0.55 0.15 ${hue})`,
       }}
     >
@@ -57,12 +63,25 @@ export function TabItem({
   isActive,
   isEphemeral,
   exiting,
+  focused,
 }: {
   tab: Tab;
   isActive: boolean;
   isEphemeral: boolean;
   exiting?: boolean;
+  focused?: boolean;
 }) {
+  const mountedRef = useRef(false);
+  const elRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    mountedRef.current = true;
+  }, []);
+
+  // Auto-focus when roving tabindex moves to this item
+  useEffect(() => {
+    if (focused) elRef.current?.focus();
+  }, [focused]);
+
   const handleClick = useCallback(() => {
     sendCommand("tabs:activate", { tabId: tab.id });
   }, [tab.id]);
@@ -77,9 +96,10 @@ export function TabItem({
 
   return (
     <div
-      className="group flex items-center cursor-pointer transition-all focus-ring hover:bg-glass-hover hover:text-glass-text-hover active:bg-glass-pressed active:text-glass-text-pressed"
+      ref={elRef}
+      className="group flex items-center cursor-pointer transition-colors focus-ring hover:bg-glass-hover hover:text-glass-text-hover active:bg-glass-pressed active:text-glass-text-pressed"
       style={{
-        gap: 10,
+        gap: "0.625rem",
         padding: "0.375rem 0.75rem",
         margin: "2px 0.375rem",
         borderRadius: "var(--radius-md)",
@@ -88,13 +108,20 @@ export function TabItem({
         pointerEvents: exiting ? "none" : undefined,
         animation: exiting
           ? "tab-out 150ms cubic-bezier(0.4, 0, 1, 1) forwards"
-          : "tab-in 200ms cubic-bezier(0, 0, 0.2, 1)",
+          : mountedRef.current
+            ? undefined
+            : "tab-in 200ms cubic-bezier(0, 0, 0.2, 1)",
       }}
       onClick={handleClick}
-      onKeyDown={(e) => e.key === "Enter" && handleClick()}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          handleClick();
+        }
+      }}
       // biome-ignore lint/a11y/useSemanticElements: tab item is not a semantic button
       role="button"
-      tabIndex={0}
+      tabIndex={focused ? 0 : -1}
     >
       <Favicon tab={tab} />
       <span
@@ -108,10 +135,10 @@ export function TabItem({
       </span>
       <button
         type="button"
-        className="flex opacity-0 group-hover:opacity-100 items-center justify-center shrink-0 bg-transparent text-glass-text-hint transition-all focus-ring hover:text-glass-text-hover"
+        className="flex opacity-0 group-hover:opacity-100 items-center justify-center shrink-0 bg-transparent text-glass-text-hint transition-colors focus-ring hover:text-destructive"
         style={{
-          width: 20,
-          height: 20,
+          width: 24,
+          height: 24,
           borderRadius: "var(--radius-sm)",
           marginLeft: "auto",
           cursor: "pointer",
@@ -130,10 +157,18 @@ export function TabItem({
 export function WorkspaceBubble({
   workspace,
   isActive,
+  focused,
 }: {
-  workspace: { id: WorkspaceId; name: string; color: string; initial: string };
+  workspace: { id: WorkspaceId; name: string; color: string; icon: string };
   isActive: boolean;
+  focused?: boolean;
 }) {
+  const btnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (focused) btnRef.current?.focus();
+  }, [focused]);
+
   const handleClick = useCallback(() => {
     sendCommand("workspaces:switch", { workspaceId: workspace.id });
   }, [workspace.id]);
@@ -143,33 +178,39 @@ export function WorkspaceBubble({
     ? `0 0 0 2px oklch(${workspace.color.slice(5, -1)} / 0.4)`
     : `0 0 0 2px ${workspace.color}66`;
 
-  const [hovered, setHovered] = useState(false);
-
   return (
     <button
+      ref={btnRef}
       type="button"
-      className="flex items-center justify-center cursor-pointer focus-ring"
+      className="flex items-center justify-center cursor-pointer focus-ring hover:scale-[1.12]"
+      aria-label={workspace.name}
+      aria-current={isActive ? "true" : undefined}
+      tabIndex={focused ? 0 : -1}
       style={{
         width: 24,
         height: 24,
         borderRadius: "var(--radius-full)",
         border: "none",
-        fontSize: 10,
+        fontSize: "var(--text-xs)",
         fontWeight: 600,
         background: workspace.color,
-        color: "oklch(1 0 0)",
-        transform: isActive ? "scale(1.08)" : hovered ? "scale(1.12)" : undefined,
+        color: "var(--glass-text-primary)",
+        transform: isActive ? "scale(1.08)" : undefined,
         boxShadow: isActive ? activeRing : undefined,
         transition: "transform var(--duration-normal) var(--ease-in-out)",
       }}
       onClick={handleClick}
       data-tip={workspace.name}
-      onMouseEnter={() => setHovered(true)}
-      onMouseLeave={() => setHovered(false)}
     >
-      {workspace.initial}
+      {workspace.icon}
     </button>
   );
+}
+
+/** Clamp index to [0, max) with wrapping. */
+function clampIndex(i: number, len: number): number {
+  if (len === 0) return 0;
+  return ((i % len) + len) % len;
 }
 
 export function SidebarPanel() {
@@ -179,9 +220,18 @@ export function SidebarPanel() {
   const workspaces = useWorkspacesStore((s) => s.workspaces);
   const activeWorkspaceId = useWorkspacesStore((s) => s.activeWorkspaceId);
 
+  // Roving tabindex state
+  const [focusedTabIdx, setFocusedTabIdx] = useState(0);
+  const [focusedWsIdx, setFocusedWsIdx] = useState(0);
+
   // Track exiting tabs for exit animation
   const prevTabsRef = useRef(new Map<TabId, Tab>());
   const [exitingTabs, setExitingTabs] = useState<Tab[]>([]);
+
+  // aria-live announcement
+  const [announcement, setAnnouncement] = useState("");
+  const prevTabCount = useRef(0);
+  const prevWsId = useRef(activeWorkspaceId);
 
   useEffect(() => {
     const prev = prevTabsRef.current;
@@ -211,6 +261,87 @@ export function SidebarPanel() {
     };
   }, [tabs, activeWorkspaceId, exitingTabs]);
 
+  // Combined tab list for roving tabindex
+  const allTabs = useMemo(() => [...bookmarked, ...ephemeral], [bookmarked, ephemeral]);
+
+  // Announce tab count changes and workspace switches
+  useEffect(() => {
+    const count = allTabs.length;
+    if (prevWsId.current !== activeWorkspaceId) {
+      const ws = workspaces.find((w) => w.id === activeWorkspaceId);
+      setAnnouncement(
+        `Switched to ${ws?.name ?? "workspace"}, ${count} tab${count !== 1 ? "s" : ""}`,
+      );
+      prevWsId.current = activeWorkspaceId;
+    } else if (prevTabCount.current !== count && prevTabCount.current > 0) {
+      setAnnouncement(`${count} tab${count !== 1 ? "s" : ""}`);
+    }
+    prevTabCount.current = count;
+  }, [allTabs.length, activeWorkspaceId, workspaces]);
+
+  // Reset focused index when tab list changes
+  useEffect(() => {
+    setFocusedTabIdx((i) => Math.min(i, Math.max(0, allTabs.length - 1)));
+  }, [allTabs.length]);
+
+  useEffect(() => {
+    setFocusedWsIdx((i) => Math.min(i, Math.max(0, workspaces.length - 1)));
+  }, [workspaces.length]);
+
+  const handleTabListKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      const len = allTabs.length;
+      if (!len) return;
+      let next: number | undefined;
+      switch (e.key) {
+        case "ArrowDown":
+          next = clampIndex(focusedTabIdx + 1, len);
+          break;
+        case "ArrowUp":
+          next = clampIndex(focusedTabIdx - 1, len);
+          break;
+        case "Home":
+          next = 0;
+          break;
+        case "End":
+          next = len - 1;
+          break;
+        default:
+          return;
+      }
+      e.preventDefault();
+      setFocusedTabIdx(next);
+    },
+    [focusedTabIdx, allTabs.length],
+  );
+
+  const handleWsBarKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      const len = workspaces.length;
+      if (!len) return;
+      let next: number | undefined;
+      switch (e.key) {
+        case "ArrowRight":
+          next = clampIndex(focusedWsIdx + 1, len);
+          break;
+        case "ArrowLeft":
+          next = clampIndex(focusedWsIdx - 1, len);
+          break;
+        case "Home":
+          next = 0;
+          break;
+        case "End":
+          next = len - 1;
+          break;
+        default:
+          return;
+      }
+      e.preventDefault();
+      setFocusedWsIdx(next);
+    },
+    [focusedWsIdx, workspaces.length],
+  );
+
   const handleClearEphemeral = useCallback(() => {
     if (activeWorkspaceId) {
       sendCommand("tabs:clear-ephemeral", { workspaceId: activeWorkspaceId });
@@ -221,89 +352,125 @@ export function SidebarPanel() {
 
   if (!visible) return null;
 
-  return (
-    <div
-      className="flex flex-col overflow-y-auto shrink-0"
-      style={{ width: "var(--sidebar-width)", padding: "5px 0 0" }}
-    >
-      {/* Bookmarked section */}
-      {bookmarked.length > 0 && (
-        <>
-          <div
-            style={{
-              fontSize: "var(--text-xs)",
-              textTransform: "uppercase",
-              letterSpacing: "0.1em",
-              color: "var(--glass-text-muted)",
-              padding: "10px 14px 3px",
-              fontWeight: 500,
-            }}
-          >
-            Bookmarked
-          </div>
-          {bookmarked.map((tab) => (
-            <TabItem
-              key={tab.id}
-              tab={tab}
-              isActive={tab.id === activeTabId}
-              isEphemeral={false}
-              exiting={exitingIds.has(tab.id)}
-            />
-          ))}
-        </>
-      )}
+  // Build a flat index counter for TabItem focused prop
+  let tabIdx = 0;
 
-      {/* Ephemeral divider */}
-      {ephemeral.length > 0 && (
-        <>
-          <div
-            className="flex items-center"
-            style={{ gap: 8, padding: "6px 8px 4px 14px", margin: "2px 0" }}
-          >
-            <div style={{ flex: 1, height: 1, background: "var(--glass-border)" }} />
-            <button
-              type="button"
-              className="flex items-center cursor-pointer bg-transparent text-glass-text-hint transition-all focus-ring hover:bg-glass-hover hover:text-glass-text-hover"
+  return (
+    <nav
+      aria-label="Sidebar"
+      className="flex flex-col overflow-y-auto shrink-0"
+      style={{ width: "var(--sidebar-width)", padding: "0.375rem 0 0" }}
+    >
+      {/* aria-live region for screen readers */}
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {announcement}
+      </div>
+
+      {/* Tab list with roving tabindex */}
+      {/* biome-ignore lint/a11y/useSemanticElements: role="listbox" is semantically correct for roving tabindex tab list */}
+      <div role="listbox" aria-label="Tabs" tabIndex={-1} onKeyDown={handleTabListKeyDown}>
+        {/* Bookmarked section */}
+        {bookmarked.length > 0 && (
+          <>
+            <div
               style={{
-                gap: 4,
-                border: "none",
                 fontSize: "var(--text-xs)",
+                textTransform: "uppercase",
+                letterSpacing: "0.1em",
+                color: "var(--glass-text-muted)",
+                padding: "0.625rem 0.875rem 0.25rem",
                 fontWeight: 500,
-                fontFamily: "inherit",
-                padding: "2px 6px",
-                borderRadius: "var(--radius-sm)",
-                whiteSpace: "nowrap",
-                letterSpacing: "0.02em",
               }}
-              onClick={handleClearEphemeral}
-              data-tip="Clear ephemeral tabs"
             >
-              Clear <Icon name="broom" />
-            </button>
-          </div>
-          {ephemeral.map((tab) => (
-            <TabItem
-              key={tab.id}
-              tab={tab}
-              isActive={tab.id === activeTabId}
-              isEphemeral={true}
-              exiting={exitingIds.has(tab.id)}
-            />
-          ))}
-        </>
-      )}
+              Bookmarked
+            </div>
+            {bookmarked.map((tab) => {
+              const idx = tabIdx++;
+              return (
+                <TabItem
+                  key={tab.id}
+                  tab={tab}
+                  isActive={tab.id === activeTabId}
+                  isEphemeral={false}
+                  exiting={exitingIds.has(tab.id)}
+                  focused={idx === focusedTabIdx}
+                />
+              );
+            })}
+          </>
+        )}
+
+        {/* Ephemeral divider */}
+        {ephemeral.length > 0 && (
+          <>
+            <div
+              className="flex items-center"
+              style={{
+                gap: "0.5rem",
+                padding: "0.375rem 0.5rem 0.25rem 0.875rem",
+                margin: "0.125rem 0",
+              }}
+            >
+              <div style={{ flex: 1, height: 1, background: "var(--glass-border)" }} />
+              <button
+                type="button"
+                className="flex items-center cursor-pointer bg-transparent text-glass-text-hint transition-colors focus-ring hover:bg-glass-hover hover:text-glass-text-hover"
+                style={{
+                  gap: "0.25rem",
+                  border: "none",
+                  fontSize: "var(--text-xs)",
+                  fontWeight: 500,
+                  fontFamily: "inherit",
+                  padding: "0.125rem 0.375rem",
+                  borderRadius: "var(--radius-sm)",
+                  whiteSpace: "nowrap",
+                  letterSpacing: "0.02em",
+                }}
+                onClick={handleClearEphemeral}
+                data-tip="Clear ephemeral tabs"
+              >
+                Clear <Icon name="broom" />
+              </button>
+            </div>
+            {ephemeral.map((tab) => {
+              const idx = tabIdx++;
+              return (
+                <TabItem
+                  key={tab.id}
+                  tab={tab}
+                  isActive={tab.id === activeTabId}
+                  isEphemeral={true}
+                  exiting={exitingIds.has(tab.id)}
+                  focused={idx === focusedTabIdx}
+                />
+              );
+            })}
+          </>
+        )}
+      </div>
 
       {/* Spacer */}
       <div className="flex-1" />
 
-      {/* Workspace bar */}
-      <div className="flex items-center" style={{ gap: "0.375rem", padding: "10px 12px" }}>
-        <div className="flex" style={{ gap: "0.375rem" }}>
-          {workspaces.map((ws) => (
-            <WorkspaceBubble key={ws.id} workspace={ws} isActive={ws.id === activeWorkspaceId} />
+      {/* Workspace bar with roving tabindex */}
+      <div className="flex items-center" style={{ gap: "0.375rem", padding: "0.625rem 0.75rem" }}>
+        <div
+          className="flex"
+          role="toolbar"
+          aria-label="Workspaces"
+          style={{ gap: "0.375rem" }}
+          onKeyDown={handleWsBarKeyDown}
+        >
+          {workspaces.map((ws, i) => (
+            <WorkspaceBubble
+              key={ws.id}
+              workspace={ws}
+              isActive={ws.id === activeWorkspaceId}
+              focused={i === focusedWsIdx}
+            />
           ))}
         </div>
       </div>
-    </div>
+    </nav>
   );
 }

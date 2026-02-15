@@ -13,8 +13,11 @@ export function bridgeBusToIpc<C extends CommandRegistry, E extends EventRegistr
   eventBus: EventBus<E>,
   getWindows: () => BrowserWindow[],
 ): void {
-  // Forward commands from renderer to command bus
+  // Forward commands from renderer to command bus (with allowlist check)
   ipcMain.handle("bus:command", async (_event, name: string, payload: unknown) => {
+    if (!commandBus.hasHandler(name)) {
+      throw new Error(`Unknown command from renderer: "${name}"`);
+    }
     return commandBus.send(name as string & keyof C, payload as C[string & keyof C]["payload"]);
   });
 

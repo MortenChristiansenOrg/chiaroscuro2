@@ -49,14 +49,14 @@ export const DEMO_WORKSPACES: Workspace[] = [
     id: WS_WORK,
     name: "Work",
     color: "oklch(0.65 0.15 230)",
-    initial: "W",
+    icon: "W",
     activeTabId: tabId("tab-github"),
   },
   {
     id: WS_PERSONAL,
     name: "Personal",
     color: "oklch(0.65 0.15 350)",
-    initial: "P",
+    icon: "P",
     activeTabId: null,
   },
 ];

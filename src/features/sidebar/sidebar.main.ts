@@ -14,19 +14,24 @@ interface Deps {
   platform: Platform;
 }
 
-let visible = true;
+// Expose for start() to read
+let _visible = true;
 
 export function register({ commands, events, platform }: Deps): void {
+  let visible = true;
+  _visible = visible;
+
   commands.handle(SIDEBAR_TOGGLE, async () => {
     visible = !visible;
+    _visible = visible;
     events.emit(SIDEBAR_VISIBILITY_CHANGED, { visible });
   });
 
   platform.registerShortcut("CommandOrControl+S", () => {
-    commands.send(SIDEBAR_TOGGLE, undefined);
+    commands.send(SIDEBAR_TOGGLE, undefined).catch(() => {});
   });
 }
 
 export function start({ events }: Deps): void {
-  events.emit(SIDEBAR_VISIBILITY_CHANGED, { visible });
+  events.emit(SIDEBAR_VISIBILITY_CHANGED, { visible: _visible });
 }

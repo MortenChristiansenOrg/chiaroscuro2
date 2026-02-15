@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "../../renderer/src/components/Icon";
-import type { Tab } from "../tabs/tabs.shared";
 import { useTabsStore } from "../tabs/tabs.store";
 import type { WindowChromeCommands } from "./window-chrome.shared";
 import {
@@ -35,7 +34,7 @@ const navBtnStyle: React.CSSProperties = {
 
 export function NavButtons() {
   return (
-    <div className="flex" style={{ gap: 1, paddingLeft: 8 }}>
+    <div className="flex" style={{ gap: "0.0625rem", paddingLeft: "0.5rem" }}>
       <button
         type="button"
         style={navBtnStyle}
@@ -71,10 +70,10 @@ export function NavButtons() {
 }
 
 export function UrlPill() {
-  const activeTabId = useTabsStore((s) => s.activeTabId);
-  const activeTab: Tab | undefined = useTabsStore((s) =>
-    s.activeTabId ? s.tabs.get(s.activeTabId) : undefined,
-  );
+  const url = useTabsStore((s) => {
+    const tab = s.activeTabId ? s.tabs.get(s.activeTabId) : undefined;
+    return tab?.url ?? "";
+  });
   const isLoading = useWindowChromeStore((s) => s.loadingTabs.size > 0);
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<ReturnType<typeof setTimeout>>(null);
@@ -93,11 +92,11 @@ export function UrlPill() {
     timerRef.current = setTimeout(() => setCopied(false), 1500);
   }, []);
 
-  if (!activeTab) return null;
+  if (!url) return null;
 
-  let displayUrl = activeTab.url;
+  let displayUrl = url;
   try {
-    const parsed = new URL(activeTab.url);
+    const parsed = new URL(url);
     displayUrl = parsed.hostname + (parsed.pathname !== "/" ? parsed.pathname : "");
   } catch {
     // keep raw url
@@ -114,7 +113,7 @@ export function UrlPill() {
             padding: 2,
             background:
               "conic-gradient(from var(--url-angle), oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250) / 0) 0%, oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250) / 0.8) 10%, oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250) / 0) 22%, transparent 22%)",
-            mask: "linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)",
+            mask: "linear-gradient(oklch(1 0 0) 0 0) content-box, linear-gradient(oklch(1 0 0) 0 0)",
             maskComposite: "exclude",
             WebkitMaskComposite: "xor",
             animation: "url-spin 2.5s linear infinite",
@@ -126,11 +125,11 @@ export function UrlPill() {
         className="relative flex items-center"
         style={
           {
-            gap: 2,
+            gap: "0.125rem",
             fontSize: "var(--text-sm)",
             fontFamily: "var(--font-mono)",
             color: "var(--glass-text-default)",
-            padding: "3px 4px 3px 14px",
+            padding: "0.1875rem 0.25rem 0.1875rem 0.875rem",
             borderRadius: "var(--radius-lg)",
             background: "var(--glass-subtle)",
             WebkitAppRegion: "no-drag",
@@ -148,8 +147,8 @@ export function UrlPill() {
               : "text-glass-text-muted hover:bg-glass-hover hover:text-glass-text-hover active:bg-glass-pressed active:text-glass-text-pressed"
           }`}
           style={{
-            width: 22,
-            height: 22,
+            width: 24,
+            height: 24,
             borderRadius: "var(--radius-md)",
             border: "none",
             background: copied
@@ -229,7 +228,7 @@ export function WindowControls() {
         type="button"
         onClick={() => sendCommand(WINDOW_CLOSE)}
         style={winCtrlStyle}
-        className="focus-ring bg-transparent text-glass-text-muted hover:bg-destructive hover:text-white active:bg-destructive/80"
+        className="focus-ring bg-transparent text-glass-text-muted hover:bg-destructive hover:text-glass-text-primary active:bg-destructive/80"
         aria-label="Close"
         data-tip="Close"
       >

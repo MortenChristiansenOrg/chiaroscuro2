@@ -37,25 +37,8 @@ interface Deps {
   getActiveWorkspaceId: () => WorkspaceId | undefined;
 }
 
-const tabs = new Map<TabId, Tab>();
-let contentBounds: Bounds = { x: 0, y: 0, width: 0, height: 0 };
-const eventCleanups = new Map<TabId, (() => void)[]>();
-
-function emitListChanged(events: EventBus<AllEvents>): void {
-  events.emit(TABS_LIST_CHANGED, { tabs: [...tabs.values()] });
-}
-
-function findMruTab(workspaceId: WorkspaceId, excludeTabId?: TabId): Tab | undefined {
-  let best: Tab | undefined;
-  for (const tab of tabs.values()) {
-    if (tab.workspaceId !== workspaceId) continue;
-    if (tab.id === excludeTabId) continue;
-    if (!best || tab.lastAccessedAt > best.lastAccessedAt) {
-      best = tab;
-    }
-  }
-  return best;
-}
+// Shared state exposed via accessor for cross-feature queries
+let _tabs: Map<TabId, Tab> | undefined;
 
 export function register(deps: Deps): void {
   const {
@@ -67,6 +50,120 @@ export function register(deps: Deps): void {
     setActiveTabId,
     getActiveWorkspaceId,
   } = deps;
+
+  const tabs = new Map<TabId, Tab>();
+  let contentBounds: Bounds = { x: 0, y: 0, width: 0, height: 0 };
+  const eventCleanups = new Map<TabId, (() => void)[]>();
+
+  // Expose for getTabsForWorkspace
+  _tabs = tabs;
+
+  // ── Debounced list-changed emission ─────────────────────────────
+  let listDirty = false;
+  let listTimer: ReturnType<typeof setTimeout> | undefined;
+
+  function scheduleListChanged(): void {
+    if (listDirty) return;
+    listDirty = true;
+    listTimer = setTimeout(() => {
+      listDirty = false;
+      listTimer = undefined;
+      events.emit(TABS_LIST_CHANGED, { tabs: [...tabs.values()] });
+    }, 0);
+  }
+
+  function flushListChanged(): void {
+    if (!listDirty) return;
+    if (listTimer !== undefined) clearTimeout(listTimer);
+    listDirty = false;
+    listTimer = undefined;
+    events.emit(TABS_LIST_CHANGED, { tabs: [...tabs.values()] });
+  }
+
+  // ── Helpers ─────────────────────────────────────────────────────
+
+  function findMruTab(workspaceId: WorkspaceId, excludeTabId?: TabId): Tab | undefined {
+    let best: Tab | undefined;
+    for (const tab of tabs.values()) {
+      if (tab.workspaceId !== workspaceId) continue;
+      if (tab.id === excludeTabId) continue;
+      if (!best || tab.lastAccessedAt > best.lastAccessedAt) {
+        best = tab;
+      }
+    }
+    return best;
+  }
+
+  function attachTabListeners(tabId: TabId): void {
+    const cleanups: (() => void)[] = [];
+
+    cleanups.push(
+      platform.onTabEvent(tabId, "page-title-updated", (_event: unknown, title: unknown) => {
+        const tab = tabs.get(tabId);
+        if (!tab) return;
+        tab.title = title as string;
+        events.emit(TABS_UPDATED, { tab: { ...tab } });
+      }),
+    );
+
+    cleanups.push(
+      platform.onTabEvent(tabId, "did-navigate", (_event: unknown, url: unknown) => {
+        const tab = tabs.get(tabId);
+        if (!tab) return;
+        tab.url = url as string;
+        events.emit(TABS_UPDATED, { tab: { ...tab } });
+      }),
+    );
+
+    cleanups.push(
+      platform.onTabEvent(tabId, "did-navigate-in-page", (_event: unknown, url: unknown) => {
+        const tab = tabs.get(tabId);
+        if (!tab) return;
+        tab.url = url as string;
+        events.emit(TABS_UPDATED, { tab: { ...tab } });
+      }),
+    );
+
+    cleanups.push(
+      platform.onTabEvent(tabId, "did-start-loading", () => {
+        const tab = tabs.get(tabId);
+        if (!tab) return;
+        tab.loading = true;
+        events.emit(TABS_UPDATED, { tab: { ...tab } });
+        events.emit("tab:loading-changed", { tabId, loading: true });
+      }),
+    );
+
+    cleanups.push(
+      platform.onTabEvent(tabId, "did-stop-loading", () => {
+        const tab = tabs.get(tabId);
+        if (!tab) return;
+        tab.loading = false;
+        const currentUrl = platform.getTabUrl(tabId);
+        if (currentUrl) tab.url = currentUrl;
+        const currentTitle = platform.getTabTitle(tabId);
+        if (currentTitle) tab.title = currentTitle;
+        events.emit(TABS_UPDATED, { tab: { ...tab } });
+        events.emit("tab:loading-changed", { tabId, loading: false });
+      }),
+    );
+
+    cleanups.push(
+      platform.onTabEvent(tabId, "page-favicon-updated", (_event: unknown, favicons: unknown) => {
+        const tab = tabs.get(tabId);
+        if (!tab) return;
+        const urls = favicons as string[];
+        if (urls.length > 0 && urls[0]) {
+          tab.favicon = urls[0];
+          events.emit(TABS_UPDATED, { tab: { ...tab } });
+        }
+      }),
+    );
+
+    eventCleanups.set(tabId, cleanups);
+  }
+
+  // ── Command handlers ────────────────────────────────────────────
 
   commands.handle(TABS_CREATE, async (payload) => {
     const windowId = getActiveWindowId();
@@ -90,11 +187,11 @@ export function register(deps: Deps): void {
     };
 
     tabs.set(tabId, tab);
-    attachTabListeners(tabId, deps);
+    attachTabListeners(tabId);
 
     events.emit(TABS_CREATED, { tab });
     events.emit("tab:loading-changed", { tabId, loading: true });
-    emitListChanged(events);
+    scheduleListChanged();
 
     // Activate by default
     if (payload.activate !== false) {
@@ -132,7 +229,7 @@ export function register(deps: Deps): void {
     }
 
     events.emit(TABS_CLOSED, { tabId, activatedTabId });
-    emitListChanged(events);
+    flushListChanged();
   });
 
   commands.handle(TABS_ACTIVATE, async (payload) => {
@@ -160,30 +257,39 @@ export function register(deps: Deps): void {
   });
 
   commands.handle(TABS_NAVIGATE, async (payload) => {
-    const { tabId, url } = payload;
+    const tabId = payload.tabId ?? getActiveTabId();
+    if (!tabId) return;
     const tab = tabs.get(tabId);
     if (!tab) return;
 
-    tab.url = url;
+    tab.url = payload.url;
     tab.loading = true;
-    await platform.navigateTab(tabId, url);
+    await platform.navigateTab(tabId, payload.url);
 
     events.emit(TABS_UPDATED, { tab: { ...tab } });
     events.emit("tab:loading-changed", { tabId, loading: true });
   });
 
   commands.handle(TABS_TOGGLE_BOOKMARK, async (payload) => {
-    const tab = tabs.get(payload.tabId);
+    const tabId = payload.tabId ?? getActiveTabId();
+    if (!tabId) return;
+    const tab = tabs.get(tabId);
     if (!tab) return;
+
+    // TODO: when PinnedTabs feature is implemented, skip if tab.pinned
+    // if ('pinned' in tab && tab.pinned) return;
+
     tab.bookmarked = !tab.bookmarked;
     events.emit(TABS_UPDATED, { tab: { ...tab } });
-    emitListChanged(events);
+    scheduleListChanged();
   });
 
   commands.handle(TABS_CLEAR_EPHEMERAL, async (payload) => {
+    const workspaceId = payload.workspaceId ?? getActiveWorkspaceId();
+    if (!workspaceId) return;
     const toClose: TabId[] = [];
     for (const tab of tabs.values()) {
-      if (tab.workspaceId === payload.workspaceId && !tab.bookmarked) {
+      if (tab.workspaceId === workspaceId && !tab.bookmarked) {
         toClose.push(tab.id);
       }
     }
@@ -199,81 +305,10 @@ export function register(deps: Deps): void {
       platform.setTabBounds(activeTabId, contentBounds);
     }
   });
-}
 
-function attachTabListeners(tabId: TabId, deps: Deps): void {
-  const { events, platform } = deps;
-  const cleanups: (() => void)[] = [];
-
-  cleanups.push(
-    platform.onTabEvent(tabId, "page-title-updated", (_event: unknown, title: unknown) => {
-      const tab = tabs.get(tabId);
-      if (!tab) return;
-      tab.title = title as string;
-      events.emit(TABS_UPDATED, { tab: { ...tab } });
-      emitListChanged(events);
-    }),
-  );
-
-  cleanups.push(
-    platform.onTabEvent(tabId, "did-navigate", (_event: unknown, url: unknown) => {
-      const tab = tabs.get(tabId);
-      if (!tab) return;
-      tab.url = url as string;
-      events.emit(TABS_UPDATED, { tab: { ...tab } });
-      emitListChanged(events);
-    }),
-  );
-
-  cleanups.push(
-    platform.onTabEvent(tabId, "did-navigate-in-page", (_event: unknown, url: unknown) => {
-      const tab = tabs.get(tabId);
-      if (!tab) return;
-      tab.url = url as string;
-      events.emit(TABS_UPDATED, { tab: { ...tab } });
-    }),
-  );
-
-  cleanups.push(
-    platform.onTabEvent(tabId, "did-start-loading", () => {
-      const tab = tabs.get(tabId);
-      if (!tab) return;
-      tab.loading = true;
-      events.emit(TABS_UPDATED, { tab: { ...tab } });
-      events.emit("tab:loading-changed", { tabId, loading: true });
-    }),
-  );
-
-  cleanups.push(
-    platform.onTabEvent(tabId, "did-stop-loading", () => {
-      const tab = tabs.get(tabId);
-      if (!tab) return;
-      tab.loading = false;
-      // Update URL from webContents (may have changed via redirect)
-      const currentUrl = platform.getTabUrl(tabId);
-      if (currentUrl) tab.url = currentUrl;
-      const currentTitle = platform.getTabTitle(tabId);
-      if (currentTitle) tab.title = currentTitle;
-      events.emit(TABS_UPDATED, { tab: { ...tab } });
-      events.emit("tab:loading-changed", { tabId, loading: false });
-      emitListChanged(events);
-    }),
-  );
-
-  cleanups.push(
-    platform.onTabEvent(tabId, "page-favicon-updated", (_event: unknown, favicons: unknown) => {
-      const tab = tabs.get(tabId);
-      if (!tab) return;
-      const urls = favicons as string[];
-      if (urls.length > 0 && urls[0]) {
-        tab.favicon = urls[0];
-        events.emit(TABS_UPDATED, { tab: { ...tab } });
-        emitListChanged(events);
-      }
-    }),
-  );
-
-  eventCleanups.set(tabId, cleanups);
+  platform.registerShortcut("CommandOrControl+B", () => {
+    commands.send(TABS_TOGGLE_BOOKMARK, {}).catch(() => {});
+  });
 }
 
 export function start(_deps: Deps): void {
@@ -281,5 +316,6 @@ export function start(_deps: Deps): void {
 }
 
 export function getTabsForWorkspace(workspaceId: WorkspaceId): Tab[] {
-  return [...tabs.values()].filter((t) => t.workspaceId === workspaceId);
+  if (!_tabs) return [];
+  return [..._tabs.values()].filter((t) => t.workspaceId === workspaceId);
 }

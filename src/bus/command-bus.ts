@@ -19,6 +19,10 @@ export class CommandBus<TRegistry extends CommandRegistry> {
     this.handlers.delete(name);
   }
 
+  hasHandler(name: string): boolean {
+    return this.handlers.has(name);
+  }
+
   async send<K extends string & keyof TRegistry>(
     name: K,
     payload: TRegistry[K]["payload"],

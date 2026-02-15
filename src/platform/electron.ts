@@ -41,6 +41,27 @@ function parseAccelerator(accelerator: string): ParsedAccelerator {
   return result;
 }
 
+const ALLOWED_SCHEMES = new Set(["http:", "https:", "about:", "data:"]);
+const ALLOWED_EXTERNAL_SCHEMES = new Set(["http:", "https:", "mailto:"]);
+
+function isAllowedUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return ALLOWED_SCHEMES.has(parsed.protocol);
+  } catch {
+    return false;
+  }
+}
+
+function isAllowedExternalUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    return ALLOWED_EXTERNAL_SCHEMES.has(parsed.protocol);
+  } catch {
+    return false;
+  }
+}
+
 function matchesInput(parsed: ParsedAccelerator, input: Electron.Input): boolean {
   if (input.type !== "keyDown") return false;
   const key = input.key.toLowerCase();
@@ -66,6 +87,7 @@ export class ElectronPlatform implements Platform {
   private shortcuts = new Map<string, { parsed: ParsedAccelerator; callback: () => void }>();
   private views = new Map<TabId, WebContentsView>();
   private tooltipWin: BrowserWindow | null = null;
+  private permissionHandlerSet = false;
 
   constructor(private getActiveWindowId: () => WindowId | undefined) {}
 
@@ -116,7 +138,14 @@ export class ElectronPlatform implements Platform {
     if (!win) throw new Error("No window found");
 
     const tabId = crypto.randomUUID() as TabId;
-    const view = new WebContentsView();
+    const view = new WebContentsView({
+      webPreferences: {
+        sandbox: true,
+        contextIsolation: true,
+        nodeIntegration: false,
+        webSecurity: true,
+      },
+    });
 
     // Match the CSS border-radius of the content area (--radius = 0.5rem = 8px)
     view.setBorderRadius(8);
@@ -127,7 +156,26 @@ export class ElectronPlatform implements Platform {
     // Hide initially — caller will activate
     view.setBounds({ x: 0, y: 0, width: 0, height: 0 });
 
+    if (!this.permissionHandlerSet) {
+      const ses = view.webContents.session;
+      ses.setPermissionRequestHandler((_wc, _permission, callback) => {
+        callback(false);
+      });
+      ses.setPermissionCheckHandler(() => false);
+      this.permissionHandlerSet = true;
+    }
+
+    view.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+
+    view.webContents.on("will-navigate", (event, navUrl) => {
+      if (!isAllowedUrl(navUrl)) {
+        event.preventDefault();
+      }
+    });
+
     this.hookWebContents(view.webContents);
+
+    if (!isAllowedUrl(url)) throw new Error(`Blocked URL scheme: ${url}`);
     view.webContents.loadURL(url);
 
     return tabId;
@@ -147,15 +195,10 @@ export class ElectronPlatform implements Platform {
     this.views.delete(tabId);
   }
 
-  async activateTab(windowId: WindowId, tabId: TabId): Promise<void> {
-    const view = this.views.get(tabId);
-    if (!view) return;
-    // Showing is handled by showTab + setTabBounds
-  }
-
   async navigateTab(tabId: TabId, url: string): Promise<void> {
     const view = this.views.get(tabId);
     if (!view) return;
+    if (!isAllowedUrl(url)) return;
     view.webContents.loadURL(url);
   }
 
@@ -165,11 +208,6 @@ export class ElectronPlatform implements Platform {
 
   getTabTitle(tabId: TabId): string | undefined {
     return this.views.get(tabId)?.webContents.getTitle() || undefined;
-  }
-
-  getTabFavicon(tabId: TabId): string | undefined {
-    // Favicon is tracked via page-favicon-updated event in tabs.main.ts
-    return undefined;
   }
 
   setTabBounds(tabId: TabId, bounds: Bounds): void {
@@ -187,10 +225,6 @@ export class ElectronPlatform implements Platform {
     const view = this.views.get(tabId);
     if (!view) return;
     view.setBounds({ x: 0, y: 0, width: 0, height: 0 });
-  }
-
-  showTab(tabId: TabId): void {
-    // Showing is managed by setTabBounds — just a semantic marker
   }
 
   hideAllTabs(): void {
@@ -232,12 +266,6 @@ export class ElectronPlatform implements Platform {
 
   canGoForward(tabId: TabId): boolean {
     return this.views.get(tabId)?.webContents.canGoForward() ?? false;
-  }
-
-  // ── Session isolation ───────────────────────────────────────────
-
-  async createIsolatedSession(_tabId: TabId): Promise<void> {
-    throw new Error("Not implemented: createIsolatedSession");
   }
 
   // ── Focus ──────────────────────────────────────────────────────
@@ -331,6 +359,7 @@ export class ElectronPlatform implements Platform {
   // ── Shell / clipboard ───────────────────────────────────────────
 
   async openExternal(url: string): Promise<void> {
+    if (!isAllowedExternalUrl(url)) return;
     await shell.openExternal(url);
   }
 

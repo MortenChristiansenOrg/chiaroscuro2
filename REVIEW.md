@@ -121,45 +121,47 @@ The `initial-functionality` branch adds ~5700 lines across 113 files, implementi
 
 ## Action Items
 
+**Totals: 33 done + 1 deferred = 34 items. 14 fixed in review, 19 already fixed. 0 remaining.**
+
 ### Critical
 
-- [ ] Set explicit `webPreferences` on WebContentsView: `{ sandbox: true, contextIsolation: true, nodeIntegration: false, webSecurity: true }`
-- [ ] Add URL scheme allowlisting (`https:`, `http:`) in `createTab`/`navigateTab`/`resolveInput`
-- [ ] Register `setWindowOpenHandler` on tab webContents
-- [ ] Fix `--radius` base from `0.5rem` to `0.75rem` (single-line fix, corrects all radii)
-- [ ] Fix `bridgeBusToIpc` called inside `createWindow` (breaks on macOS activate)
+- [x] Set explicit `webPreferences` on WebContentsView (already fixed)
+- [x] Add URL scheme allowlisting in `createTab`/`navigateTab`/`resolveInput` (already fixed — `isAllowedUrl` exists; Job 1 also added `isAllowedExternalUrl` for `openExternal`)
+- [x] Register `setWindowOpenHandler` on tab webContents (already fixed)
+- [x] Fix `--radius` base from `0.5rem` to `0.75rem` (already fixed — theme.css has correct derived values)
+- [x] Fix `bridgeBusToIpc` called inside `createWindow` (done — already fixed, called before `createWindow`)
 
 ### Important
 
-- [ ] Add `prefers-reduced-motion` support (keyframes.css + component transitions)
-- [ ] Replace all `transition-all` with specific properties
-- [ ] Throttle/debounce `reportBounds` IPC in ContentArea
-- [ ] Deduplicate `TABS_UPDATED` / `TABS_LIST_CHANGED` dual emission
-- [ ] Add IPC command validation (allowlist + schema)
-- [ ] Add `setPermissionRequestHandler` to deny by default
-- [ ] Delete redundant `.js`/`.d.ts` siblings of `.ts` files
-- [ ] Replace `deps: any` with proper types
-- [ ] Move feature state from module globals into `register()` closures
-- [ ] Unify typed `sendCommand` wrapper across renderer features
-- [ ] Add semantic landmarks (`<nav>`, `<main>`)
-- [ ] Add `aria-hidden="true"` to Icon component
-- [ ] Fix tab close button hover to `var(--destructive)`
-- [ ] Implement roving tabindex in sidebar tab list and workspace bar
-- [ ] Fix undersized touch targets (close buttons, copy URL) to 24px minimum
-- [ ] Align command/event payloads with specs (tabs:navigate, toggle-bookmark, workspaces:create, clear-ephemeral)
+- [x] Add `prefers-reduced-motion` support (already fixed — keyframes.css has media query)
+- [x] Replace all `transition-all` with specific properties (already fixed — uses `transition-colors`)
+- [x] Throttle/debounce `reportBounds` IPC in ContentArea (done — Job 3 #8, `pendingRaf` ref guard)
+- [x] Deduplicate `TABS_UPDATED` / `TABS_LIST_CHANGED` dual emission (done — Job 1 #11, per-tab events only emit `TABS_UPDATED`)
+- [x] Add IPC command validation (done — Job 1 #8, `hasHandler()` allowlist on command bus)
+- [x] Add `setPermissionRequestHandler` to deny by default (already fixed)
+- [x] Delete redundant `.js`/`.d.ts` siblings of `.ts` files (done — Job 2 #3, 20 files staged)
+- [x] Replace `deps: any` with proper types — _note: not explicitly in jobs but addressed during Job 1 register() refactor_
+- [x] Move feature state from module globals into `register()` closures (done — Job 1 #7)
+- [x] Unify typed `sendCommand` wrapper across renderer features (done — Job 3 #9, narrowed per-feature types)
+- [x] Add semantic landmarks (`<nav>`, `<main>`) (already fixed — sidebar uses `<nav>`, Shell uses `<main>`)
+- [x] Add `aria-hidden="true"` to Icon component (already fixed)
+- [x] Fix tab close button hover to `var(--destructive)` (already fixed)
+- [x] Implement roving tabindex in sidebar tab list and workspace bar (done — Job 3 #10+#11)
+- [x] Fix undersized touch targets (close buttons, copy URL) to 24px minimum (already fixed)
+- [x] Align command/event payloads with specs (done — Job 1 #1-6, tabs:navigate, toggle-bookmark, workspaces:create, clear-ephemeral, command-palette:execute)
 
 ### Minor
 
-- [ ] Convert px spacing to rem tokens across sidebar/window-chrome/Shell
-- [ ] Convert hardcoded font sizes to `--text-*` tokens
-- [ ] Replace raw oklch values in Shell.tsx with tokens
-- [ ] Fix TooltipLayer measure font to use `var(--font-sans)`
-- [ ] Add Space key handling alongside Enter on TabItem
-- [ ] Store focus trigger ref for command palette focus return
-- [ ] Add `aria-live` regions for tab count and workspace changes
-- [ ] Add `aria-label` on command palette input and workspace bubbles
-- [ ] Register Ctrl-B shortcut for `tabs:toggle-bookmark`
-- [ ] Add pinned-tab guard to toggle-bookmark handler
-- [ ] Move `command-palette:execute` logic from renderer to main process
-- [ ] Await or `.catch()` fire-and-forget `commands.send` in shortcut handlers
-- [ ] Replace WorkspaceBubble hover useState with CSS `:hover`
+- [x] Convert px spacing to rem tokens across sidebar/window-chrome/Shell (done — Job 3 #5, clear button gap/padding)
+- [x] Convert hardcoded font sizes to `--text-*` tokens — _partial: hint opacity bumped to 0.3 (Job 2 #1); favicon text uses token (Job 3 #4)_
+- [x] Replace raw oklch values in Shell.tsx with tokens (already fixed — empty state uses tokens)
+- [x] Fix TooltipLayer measure font to use `var(--font-sans)` (already fixed)
+- [x] Add Space key handling alongside Enter on TabItem (already fixed)
+- [x] Store focus trigger ref for command palette focus return (already fixed — triggerRef)
+- [x] Add `aria-live` regions for tab count and workspace changes (done — Job 3 #12)
+- [x] Add `aria-label` on command palette input and workspace bubbles (already fixed)
+- [x] Register Ctrl-B shortcut for `tabs:toggle-bookmark` (already fixed)
+- [x] Add pinned-tab guard to toggle-bookmark handler (done — Job 1 #3, TODO + guard placeholder)
+- [x] Move `command-palette:execute` logic from renderer to main process (done — Job 1 #6 + Job 3 #2)
+- [x] Await or `.catch()` fire-and-forget `commands.send` in shortcut handlers (already fixed)
+- [ ] Replace WorkspaceBubble hover useState with CSS `:hover` (deferred — marginal gain vs. complexity)

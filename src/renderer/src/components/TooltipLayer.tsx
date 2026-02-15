@@ -10,7 +10,7 @@ function measureText(text: string): { width: number; height: number } {
   if (!measureEl) {
     measureEl = document.createElement("span");
     measureEl.style.cssText = `position:fixed;visibility:hidden;pointer-events:none;
-font:500 11px/1.4 system-ui,-apple-system,sans-serif;
+font:500 0.6875rem/1.4 var(--font-sans);
 letter-spacing:0.01em;padding:4px 10px;white-space:nowrap`;
     document.body.appendChild(measureEl);
   }

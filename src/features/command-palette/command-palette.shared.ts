@@ -2,16 +2,24 @@
 export const COMMAND_PALETTE_SHOW = "command-palette:show" as const;
 export const COMMAND_PALETTE_HIDE = "command-palette:hide" as const;
 export const COMMAND_PALETTE_TOGGLE = "command-palette:toggle" as const;
+export const COMMAND_PALETTE_EXECUTE = "command-palette:execute" as const;
 
 // ── Event names ──────────────────────────────────────────────────
 export const COMMAND_PALETTE_SHOWN = "command-palette:shown" as const;
 export const COMMAND_PALETTE_HIDDEN = "command-palette:hidden" as const;
+
+// ── Payload types ────────────────────────────────────────────────
+export interface CommandPaletteExecutePayload {
+  command: string;
+  inCurrentTab?: boolean;
+}
 
 // ── Command registry ─────────────────────────────────────────────
 export type CommandPaletteCommands = {
   [COMMAND_PALETTE_SHOW]: { payload: undefined; response: undefined };
   [COMMAND_PALETTE_HIDE]: { payload: undefined; response: undefined };
   [COMMAND_PALETTE_TOGGLE]: { payload: undefined; response: undefined };
+  [COMMAND_PALETTE_EXECUTE]: { payload: CommandPaletteExecutePayload; response: undefined };
 };
 
 // ── Event registry ───────────────────────────────────────────────

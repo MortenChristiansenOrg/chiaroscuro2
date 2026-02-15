@@ -45,16 +45,16 @@ export interface TabsActivatePayload {
 }
 
 export interface TabsNavigatePayload {
-  tabId: TabId;
   url: string;
+  tabId?: TabId;
 }
 
 export interface TabsToggleBookmarkPayload {
-  tabId: TabId;
+  tabId?: TabId;
 }
 
 export interface TabsClearEphemeralPayload {
-  workspaceId: WorkspaceId;
+  workspaceId?: WorkspaceId;
 }
 
 export interface TabsCreatedEvent {

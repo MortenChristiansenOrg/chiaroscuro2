@@ -4,6 +4,7 @@ import type { Platform } from "../../platform/types";
 import type { TabId, WindowId } from "../../shared/types";
 import type { TabsCommands } from "../tabs/tabs.shared";
 import {
+  COMMAND_PALETTE_EXECUTE,
   COMMAND_PALETTE_HIDDEN,
   COMMAND_PALETTE_HIDE,
   COMMAND_PALETTE_SHOW,
@@ -12,8 +13,10 @@ import {
   type CommandPaletteCommands,
   type CommandPaletteEvents,
 } from "./command-palette.shared";
+import { resolveInput } from "./resolve-input";
 
-type AllCommands = CommandPaletteCommands & Pick<TabsCommands, "tabs:activate">;
+type AllCommands = CommandPaletteCommands &
+  Pick<TabsCommands, "tabs:activate" | "tabs:create" | "tabs:navigate">;
 
 interface Deps {
   commands: CommandBus<AllCommands>;
@@ -23,8 +26,6 @@ interface Deps {
   getActiveTabId: () => TabId | undefined;
 }
 
-let isOpen = false;
-
 export function register({
   commands,
   events,
@@ -32,6 +33,8 @@ export function register({
   getActiveWindowId,
   getActiveTabId,
 }: Deps): void {
+  let isOpen = false;
+
   commands.handle(COMMAND_PALETTE_SHOW, async () => {
     if (isOpen) return;
     isOpen = true;
@@ -61,8 +64,27 @@ export function register({
     }
   });
 
+  commands.handle(COMMAND_PALETTE_EXECUTE, async (payload) => {
+    const url = resolveInput(payload.command);
+    if (!url) return;
+
+    if (payload.inCurrentTab) {
+      const tabId = getActiveTabId();
+      if (tabId) {
+        await commands.send("tabs:navigate", { url });
+      } else {
+        await commands.send("tabs:create", { url });
+      }
+    } else {
+      await commands.send("tabs:create", { url });
+    }
+
+    // Auto-hide palette after execution
+    await commands.send(COMMAND_PALETTE_HIDE, undefined);
+  });
+
   platform.registerShortcut("CommandOrControl+T", () => {
-    commands.send(COMMAND_PALETTE_TOGGLE, undefined);
+    commands.send(COMMAND_PALETTE_TOGGLE, undefined).catch(() => {});
   });
 }
 
