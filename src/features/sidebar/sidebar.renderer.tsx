@@ -31,11 +31,6 @@ function sendCommand<K extends keyof SidebarUsedCommands>(
 
 // ── Helpers ─────────────────────────────────────────────────────
 
-function clampIndex(i: number, len: number): number {
-  if (len === 0) return 0;
-  return ((i % len) + len) % len;
-}
-
 export function hashToHue(str: string): number {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
@@ -65,39 +60,6 @@ function useExitAnimation(tabs: Map<TabId, Tab>) {
 
   const exitingIds = new Set(exitingTabs.map((t) => t.id));
   return { exitingTabs, exitingIds };
-}
-
-function useArrowNav(
-  direction: "vertical" | "horizontal",
-  index: number,
-  setIndex: (i: number) => void,
-  length: number,
-) {
-  const fwdKey = direction === "vertical" ? "ArrowDown" : "ArrowRight";
-  const bwdKey = direction === "vertical" ? "ArrowUp" : "ArrowLeft";
-
-  return (e: React.KeyboardEvent) => {
-    if (!length) return;
-    let next: number | undefined;
-    switch (e.key) {
-      case fwdKey:
-        next = clampIndex(index + 1, length);
-        break;
-      case bwdKey:
-        next = clampIndex(index - 1, length);
-        break;
-      case "Home":
-        next = 0;
-        break;
-      case "End":
-        next = length - 1;
-        break;
-      default:
-        return;
-    }
-    e.preventDefault();
-    setIndex(next);
-  };
 }
 
 // ── Components ──────────────────────────────────────────────────
@@ -140,7 +102,6 @@ export function TabItem({
   isActive,
   isEphemeral,
   exiting,
-  focused,
   index,
   isBookmarkedSection,
   onDragStart,
@@ -151,7 +112,6 @@ export function TabItem({
   isActive: boolean;
   isEphemeral: boolean;
   exiting?: boolean;
-  focused?: boolean;
   index: number;
   isBookmarkedSection: boolean;
   onDragStart?: (tabId: TabId, index: number) => void;
@@ -164,10 +124,6 @@ export function TabItem({
   useEffect(() => {
     mountedRef.current = true;
   }, []);
-
-  useEffect(() => {
-    if (focused) elRef.current?.focus();
-  }, [focused]);
 
   const handleClick = () => {
     sendCommand(TABS_ACTIVATE, { tabId: tab.id });
@@ -208,10 +164,11 @@ export function TabItem({
   };
 
   return (
+    // biome-ignore lint/a11y/useKeyWithClickEvents: chrome elements are not keyboard-navigable
     <div
       ref={elRef}
       draggable={!exiting}
-      className="group relative flex items-center cursor-pointer transition-colors focus-ring hover:bg-glass-hover hover:text-glass-text-hover active:bg-glass-pressed active:text-glass-text-pressed"
+      className="group relative flex items-center cursor-pointer transition-colors hover:bg-glass-hover hover:text-glass-text-hover active:bg-glass-pressed active:text-glass-text-pressed"
       style={{
         gap: "0.625rem",
         padding: "0.375rem 0.75rem",
@@ -233,19 +190,10 @@ export function TabItem({
             : "tab-in 200ms cubic-bezier(0, 0, 0.2, 1)",
       }}
       onClick={handleClick}
-      onKeyDown={(e) => {
-        if (e.key === "Enter" || e.key === " ") {
-          e.preventDefault();
-          handleClick();
-        }
-      }}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      // biome-ignore lint/a11y/useSemanticElements: tab item is not a semantic button
-      role="button"
-      tabIndex={focused ? 0 : -1}
     >
       <Favicon tab={tab} />
       <span
@@ -260,7 +208,7 @@ export function TabItem({
       </span>
       <button
         type="button"
-        className="absolute flex opacity-0 group-hover:opacity-100 items-center justify-center bg-transparent text-glass-text-hint transition-colors focus-ring hover:text-destructive"
+        className="absolute flex opacity-0 group-hover:opacity-100 items-center justify-center bg-transparent text-glass-text-hint transition-colors hover:text-destructive"
         style={{
           right: "0.375rem",
           top: "50%",
@@ -271,6 +219,7 @@ export function TabItem({
           cursor: "pointer",
           border: "none",
         }}
+        tabIndex={-1}
         onClick={handleClose}
         aria-label="Close tab"
         data-tip="Close tab"
@@ -305,7 +254,7 @@ export function PinnedTabsStrip({
           <button
             key={pt.id}
             type="button"
-            className={`flex flex-1 items-center justify-center cursor-pointer transition-colors focus-ring ${isActive ? "" : "bg-glass-subtle hover:bg-glass-hover active:bg-glass-pressed"}`}
+            className={`flex flex-1 items-center justify-center cursor-pointer transition-colors ${isActive ? "" : "bg-glass-subtle hover:bg-glass-hover active:bg-glass-pressed"}`}
             style={{
               height: 32,
               minWidth: 0,
@@ -314,6 +263,7 @@ export function PinnedTabsStrip({
               background: isActive ? "var(--glass-active)" : undefined,
               boxShadow: isActive ? "var(--shadow-subtle)" : undefined,
             }}
+            tabIndex={-1}
             onClick={() => sendCommand(PINNED_TABS_ACTIVATE, { tabId: pt.id })}
             data-tip={pt.title || pt.url}
             aria-label={pt.title || pt.url}
@@ -350,33 +300,22 @@ function TabSection({
   ephemeral,
   activeTabId,
   exitingIds,
-  focusedTabIdx,
   onDragStart,
   onDragOver,
   onDrop,
-  activeWorkspaceId,
-  onKeyDown,
   onClearEphemeral,
 }: {
   bookmarked: Tab[];
   ephemeral: Tab[];
   activeTabId: TabId | null;
   exitingIds: Set<TabId>;
-  focusedTabIdx: number;
   onDragStart: (tabId: TabId, index: number) => void;
   onDragOver: (e: React.DragEvent, index: number, bookmarked: boolean) => void;
   onDrop: (e: React.DragEvent, index: number, bookmarked: boolean) => void;
-  activeWorkspaceId: WorkspaceId | null;
-  onKeyDown: (e: React.KeyboardEvent) => void;
   onClearEphemeral: () => void;
 }) {
-  // Precompute flat indices: bookmarked tabs first, then ephemeral
-  const bookmarkedBaseIdx = 0;
-  const ephemeralBaseIdx = bookmarked.length;
-
   return (
-    // biome-ignore lint/a11y/useSemanticElements: role="listbox" is semantically correct for roving tabindex tab list
-    <div role="listbox" aria-label="Tabs" tabIndex={-1} onKeyDown={onKeyDown}>
+    <div>
       {bookmarked.length > 0 &&
         bookmarked.map((tab, i) => (
           <TabItem
@@ -385,7 +324,6 @@ function TabSection({
             isActive={tab.id === activeTabId}
             isEphemeral={false}
             exiting={exitingIds.has(tab.id)}
-            focused={bookmarkedBaseIdx + i === focusedTabIdx}
             index={i}
             isBookmarkedSection={true}
             onDragStart={onDragStart}
@@ -407,7 +345,7 @@ function TabSection({
             <div style={{ flex: 1, height: 1, background: "var(--glass-border)" }} />
             <button
               type="button"
-              className="flex items-center cursor-pointer bg-transparent text-glass-text-hint transition-colors focus-ring hover:bg-glass-hover hover:text-glass-text-hover"
+              className="flex items-center cursor-pointer bg-transparent text-glass-text-hint transition-colors hover:bg-glass-hover hover:text-glass-text-hover"
               style={{
                 gap: "0.25rem",
                 border: "none",
@@ -419,6 +357,7 @@ function TabSection({
                 whiteSpace: "nowrap",
                 letterSpacing: "0.02em",
               }}
+              tabIndex={-1}
               onClick={onClearEphemeral}
               data-tip="Clear ephemeral tabs"
             >
@@ -432,7 +371,6 @@ function TabSection({
               isActive={tab.id === activeTabId}
               isEphemeral={true}
               exiting={exitingIds.has(tab.id)}
-              focused={ephemeralBaseIdx + i === focusedTabIdx}
               index={i}
               isBookmarkedSection={false}
               onDragStart={onDragStart}
@@ -461,10 +399,6 @@ export function SidebarPanel() {
   // Workspace editor state
   const [editorMode, setEditorMode] = useState<"none" | "new" | WorkspaceId>("none");
 
-  // Roving tabindex state (inline clamping replaces useEffect)
-  const [rawTabIdx, setRawTabIdx] = useState(0);
-  const [rawWsIdx, setRawWsIdx] = useState(0);
-
   // Exit animation
   const { exitingTabs, exitingIds } = useExitAnimation(tabs);
 
@@ -483,21 +417,6 @@ export function SidebarPanel() {
     ...all.filter((t) => !t.bookmarked),
     ...exitingInWorkspace.filter((t) => !t.bookmarked),
   ];
-  const allTabs = [...bookmarked, ...ephemeral];
-
-  // Inline clamping (replaces useEffect clamping)
-  const clampedTabIdx = allTabs.length === 0 ? 0 : Math.min(rawTabIdx, allTabs.length - 1);
-  const clampedWsIdx = workspaces.length === 0 ? 0 : Math.min(rawWsIdx, workspaces.length - 1);
-
-  // Keyboard navigation
-  const handleTabListKeyDown = useArrowNav("vertical", clampedTabIdx, setRawTabIdx, allTabs.length);
-  const handleWsBarKeyDown = useArrowNav(
-    "horizontal",
-    clampedWsIdx,
-    setRawWsIdx,
-    workspaces.length,
-  );
-
   // Drag & drop
   const dragTabIdRef = useRef<TabId | null>(null);
 
@@ -543,12 +462,9 @@ export function SidebarPanel() {
         ephemeral={ephemeral}
         activeTabId={activeTabId}
         exitingIds={exitingIds}
-        focusedTabIdx={clampedTabIdx}
         onDragStart={handleDragStart}
         onDragOver={handleDragOver}
         onDrop={handleDrop}
-        activeWorkspaceId={activeWorkspaceId}
-        onKeyDown={handleTabListKeyDown}
         onClearEphemeral={handleClearEphemeral}
       />
 
@@ -557,8 +473,6 @@ export function SidebarPanel() {
       <WorkspaceSwitcher
         workspaces={workspaces}
         activeWorkspaceId={activeWorkspaceId}
-        focusedWsIdx={clampedWsIdx}
-        onWsBarKeyDown={handleWsBarKeyDown}
         editorMode={editorMode}
         onEditorModeChange={setEditorMode}
       />

@@ -71,12 +71,6 @@ export const routes: Route[] = [
     component: lazy(() => import("./pages/interaction.mdx")),
   },
   {
-    path: "/keyboard-focus",
-    title: "Keyboard & Focus",
-    group: "Behavior",
-    component: lazy(() => import("./pages/keyboard-focus.mdx")),
-  },
-  {
     path: "/accessibility",
     title: "Accessibility",
     group: "Behavior",

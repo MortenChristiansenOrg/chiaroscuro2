@@ -53,8 +53,6 @@ Each bubble uses the workspace's accent color derived from `var(--accent-hue)`. 
     <WorkspaceSwitcher
       workspaces={DEMO_WORKSPACES}
       activeWorkspaceId={workspaceId("ws-work")}
-      focusedWsIdx={0}
-      onWsBarKeyDown={() => {}}
       editorMode="none"
       onEditorModeChange={() => {}}
     />
@@ -86,7 +84,6 @@ See [Colors](/colors) for the full palette. Available hues: Iris (270), Ocean (2
 | Default | No transform, no ring |
 | Hover | `transform: scale(1.12)` |
 | Active (current workspace) | `transform: scale(1.08)`, Ring shadow: `0 0 0 2px oklch(var(--accent-L) var(--accent-C) <hue> / 0.4)` |
-| Focus-visible | `outline: 2px solid accent; outline-offset: 2px` |
 | Disabled | `opacity: 0.4`, `cursor: default` |
 
 ---
@@ -117,11 +114,7 @@ transition: transform var(--duration-normal) var(--ease-in-out);
 
 ## Keyboard & Focus
 
-- **Tab:** moves focus into the workspace bar zone.
-- **Left / Right arrow:** moves focus between bubbles within the bar.
-- **Enter:** activates the focused bubble (switches workspace).
-- **Focus ring:** `:focus-visible` only — `2px solid accent`, `outline-offset: 2px`.
-- **Tab order:** all bubbles are native `<button>` elements, no `tabindex` needed.
+- **Not keyboard-navigable.** All bubbles use `tabIndex={-1}`. Workspace switching is available via commands and keyboard shortcuts.
 
 ---
 
@@ -157,5 +150,4 @@ transition: transform var(--duration-normal) var(--ease-in-out);
 - [Tooltips](/components/tooltips) — required on each bubble
 - [Interaction Feedback](/interaction) — state ladder reference
 - [Motion & Animation](/motion) — duration and easing tokens
-- [Keyboard & Focus](/keyboard-focus) — focus zone model
 - [Accessibility](/accessibility) — contrast and ARIA requirements

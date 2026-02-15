@@ -19,7 +19,7 @@ Chiaroscuro is a personal browser. Its chrome should disappear — web content i
 3. **Soft geometry.** Pill shapes for interactive elements (tabs, URL bar), rounded rects for containers. Never sharp corners in the chrome UI.
 4. **Quiet until needed.** Default states are subdued. Elements reveal themselves through interaction — hover brightens, focus highlights, active promotes.
 5. **Density over sprawl.** Browser chrome should be compact. Prefer smaller text, tighter spacing, and fewer visual elements. Every saved pixel goes to web content.
-6. **Keyboard-first.** Every action reachable by keyboard. Mouse is a convenience, not a requirement.
+6. **Command-driven.** Chrome actions are triggered via commands and shortcuts, not Tab navigation. Chrome elements use `tabIndex={-1}` — only overlays and form inputs receive keyboard focus.
 
 ## Reference Design
 
@@ -34,6 +34,6 @@ but initially it is a hard-coded mockup.
 
 **Foundations** — [Color](/colors), [typography](/typography), [spacing](/spacing), [borders & radius](/borders-radius), [shadows & depth](/shadows-effects), [motion & animation](/motion), and [icons](/icons).
 
-**Behavior** — [Interaction feedback](/interaction), [keyboard & focus](/keyboard-focus), [accessibility](/accessibility), and [layout composition](/layout).
+**Behavior** — [Interaction feedback](/interaction), [accessibility](/accessibility), and [layout composition](/layout).
 
 **Components** — Individual UI elements ([buttons](/components/buttons), [tabs](/components/tabs), [sidebar](/components/sidebar), [address bar](/components/address-bar), [tooltips](/components/tooltips), [workspace switcher](/components/workspace-switcher)) shown in isolation with their token values.

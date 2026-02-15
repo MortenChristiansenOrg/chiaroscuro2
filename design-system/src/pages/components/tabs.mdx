@@ -80,7 +80,7 @@ Three tab types exist with different default text brightness:
 
 - Each tab uses `role="listitem"` within a `role="list"` sidebar container.
 - Close button has `aria-label="Close tab"`.
-- Focus-visible ring via `outline: 2px solid var(--focus-ring); outline-offset: -2px`.
+- Tab items are not keyboard-focusable (`tabIndex={-1}`).
 - Active tab indicated with `aria-selected="true"`.
 
 ## Layout & Composition

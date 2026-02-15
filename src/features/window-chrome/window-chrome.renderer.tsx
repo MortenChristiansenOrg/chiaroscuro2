@@ -40,7 +40,7 @@ const navBtnStyle: React.CSSProperties = {
 };
 
 const navBtnClass =
-  "focus-ring bg-transparent text-glass-text-muted hover:bg-glass-hover hover:text-glass-text-hover active:bg-glass-pressed active:text-glass-text-pressed";
+  "bg-transparent text-glass-text-muted hover:bg-glass-hover hover:text-glass-text-hover active:bg-glass-pressed active:text-glass-text-pressed";
 
 export function NavButtons() {
   return (
@@ -49,6 +49,7 @@ export function NavButtons() {
         type="button"
         style={navBtnStyle}
         className={navBtnClass}
+        tabIndex={-1}
         onClick={() => sendCommand(WINDOW_GO_BACK)}
         aria-label="Go back"
         data-tip="Back"
@@ -59,6 +60,7 @@ export function NavButtons() {
         type="button"
         style={navBtnStyle}
         className={navBtnClass}
+        tabIndex={-1}
         onClick={() => sendCommand(WINDOW_GO_FORWARD)}
         aria-label="Go forward"
         data-tip="Forward"
@@ -69,6 +71,7 @@ export function NavButtons() {
         type="button"
         style={navBtnStyle}
         className={navBtnClass}
+        tabIndex={-1}
         onClick={() => sendCommand(WINDOW_RELOAD)}
         aria-label="Reload"
         data-tip="Reload"
@@ -154,7 +157,7 @@ export function UrlPill() {
         </span>
         <button
           type="button"
-          className={`focus-ring flex items-center justify-center shrink-0 cursor-pointer ${
+          className={`flex items-center justify-center shrink-0 cursor-pointer ${
             copied
               ? ""
               : "text-glass-text-muted hover:bg-glass-hover hover:text-glass-text-hover active:bg-glass-pressed active:text-glass-text-pressed"
@@ -173,6 +176,7 @@ export function UrlPill() {
             transition:
               "background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out)",
           }}
+          tabIndex={-1}
           onClick={handleCopy}
           aria-label={copied ? "Copied!" : "Copy URL"}
           data-tip={copied ? "Copied!" : "Copy URL"}
@@ -210,6 +214,7 @@ export function WindowControls() {
         onClick={() => sendCommand(WINDOW_MINIMIZE)}
         style={winCtrlStyle}
         className={navBtnClass}
+        tabIndex={-1}
         aria-label="Minimize"
         data-tip="Minimize"
       >
@@ -221,6 +226,7 @@ export function WindowControls() {
         onClick={() => sendCommand(WINDOW_MAXIMIZE_RESTORE)}
         style={winCtrlStyle}
         className={navBtnClass}
+        tabIndex={-1}
         aria-label={maximized ? "Restore" : "Maximize"}
         data-tip={maximized ? "Restore" : "Maximize"}
       >
@@ -235,7 +241,8 @@ export function WindowControls() {
         type="button"
         onClick={() => sendCommand(WINDOW_CLOSE)}
         style={winCtrlStyle}
-        className="focus-ring bg-transparent text-glass-text-muted hover:bg-destructive hover:text-glass-text-primary active:bg-destructive/80"
+        className="bg-transparent text-glass-text-muted hover:bg-destructive hover:text-glass-text-primary active:bg-destructive/80"
+        tabIndex={-1}
         aria-label="Close"
         data-tip="Close"
       >

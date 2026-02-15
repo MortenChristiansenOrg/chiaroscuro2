@@ -1,13 +1,3 @@
-/* ── Focus ring (accent-colored, keyboard-only) ── */
-.focus-ring {
-  outline: none;
-}
-
-.focus-ring:focus-visible {
-  outline: 2px solid oklch(var(--accent-L, 0.65) var(--accent-C, 0.15) var(--accent-hue, 250));
-  outline-offset: 2px;
-}
-
 /* ── URL pill loading spinner ── */
 @property --url-angle {
   syntax: "<angle>";

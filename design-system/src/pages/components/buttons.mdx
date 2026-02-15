@@ -66,7 +66,6 @@ Full state ladder for icon buttons. All variants follow the same progression unl
 | Hover | `var(--glass-hover)` | `var(--glass-text-hover)` | `cursor: pointer` |
 | Active / Pressed | `var(--glass-pressed)` | `var(--glass-text-pressed)` | immediate on `pointerdown` |
 | Disabled | `transparent` | `var(--glass-text-hint)` | `cursor: default`, no hover |
-| Focus-visible | current bg | current text | `outline: 2px solid accent; outline-offset: 2px` |
 
 **Close button exception:** hover bg is `transparent`, hover text is `var(--destructive)`. No glass-hover background.
 
@@ -103,12 +102,7 @@ transition: background-color var(--duration-fast) var(--ease-out),
 
 ## Keyboard & Focus
 
-- **Focus zone:** buttons belong to the focus zone of their parent region (titlebar, sidebar, workspace bar).
-- **Tab:** moves focus between zones. Arrow keys move between sibling buttons within a zone.
-- **Enter / Space:** activates the focused button (same as click).
-- **Focus ring:** `:focus-visible` only — `2px solid accent`, `outline-offset: 2px`.
-- **Tab order:** all buttons are natively focusable (`<button>`), no `tabindex` needed.
-- **Focus return:** after action completes, focus stays on the button (window controls may lose focus if window state changes).
+- **Not keyboard-navigable.** All chrome buttons use `tabIndex={-1}`. Actions are available via commands and keyboard shortcuts.
 
 ---
 
@@ -146,5 +140,4 @@ transition: background-color var(--duration-fast) var(--ease-out),
 - [Sidebar](/components/sidebar) — parent container for close + workspace buttons
 - [Interaction Feedback](/interaction) — state ladder and interaction rules
 - [Motion & Animation](/motion) — duration and easing tokens
-- [Keyboard & Focus](/keyboard-focus) — focus zone model
 - [Accessibility](/accessibility) — contrast and ARIA requirements

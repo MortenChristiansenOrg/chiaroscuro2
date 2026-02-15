@@ -57,7 +57,7 @@ function ZoneFallback({ error, resetErrorBoundary }: FallbackProps) {
       <button
         type="button"
         onClick={resetErrorBoundary}
-        className="cursor-pointer text-glass-text-default hover:bg-glass-hover focus-ring"
+        className="cursor-pointer text-glass-text-default hover:bg-glass-hover"
         style={{
           fontSize: "var(--text-xs)",
           padding: "0.25rem 0.75rem",
