@@ -3,7 +3,7 @@ title: Workspace Switcher
 ---
 
 import { LivePreview } from "../../components/LivePreview"
-import { WorkspaceBubble } from "@features/sidebar/sidebar.renderer"
+import { WorkspaceBubble, WorkspaceEditor, WorkspaceSwitcher } from "@features/workspaces/WorkspaceSwitcher"
 import { DEMO_WORKSPACES, workspaceId } from "../../lib/demo-data"
 
 # Workspace Switcher
@@ -31,6 +31,37 @@ Each bubble uses the workspace's accent color derived from `var(--accent-hue)`. 
     ))}
   </div>
 </LivePreview>
+
+## Workspace Editor
+
+<LivePreview label="Workspace Editor — new workspace">
+  <div style={{ maxWidth: 280 }}>
+    <WorkspaceEditor onClose={() => {}} />
+  </div>
+</LivePreview>
+
+<LivePreview label="Workspace Editor — editing existing">
+  <div style={{ maxWidth: 280 }}>
+    <WorkspaceEditor workspace={DEMO_WORKSPACES[0]} onClose={() => {}} />
+  </div>
+</LivePreview>
+
+## Full Workspace Switcher Bar
+
+<LivePreview label="Workspace Switcher bar">
+  <div style={{ maxWidth: 280 }}>
+    <WorkspaceSwitcher
+      workspaces={DEMO_WORKSPACES}
+      activeWorkspaceId={workspaceId("ws-work")}
+      focusedWsIdx={0}
+      onWsBarKeyDown={() => {}}
+      editorMode="none"
+      onEditorModeChange={() => {}}
+    />
+  </div>
+</LivePreview>
+
+---
 
 ## Bubble Specs
 

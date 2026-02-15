@@ -20,7 +20,8 @@
     "src/features/**/*.renderer.tsx",
     "src/features/**/*.store.ts",
     "src/features/**/*.shared.ts",
-    "src/features/command-palette/resolve-input.ts"
+    "src/features/command-palette/resolve-input.ts",
+    "src/features/workspaces/WorkspaceSwitcher.tsx"
   ],
   "exclude": ["src/bus/ipc-main-bridge.ts"]
 }
