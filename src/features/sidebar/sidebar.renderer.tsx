@@ -1,16 +1,52 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../../renderer/src/components/Icon";
 import type { TabId, WorkspaceId } from "../../shared/types";
+import { usePinnedTabsStore } from "../pinned-tabs/pinned-tabs.store";
 import type { Tab } from "../tabs/tabs.shared";
 import { useTabsStore } from "../tabs/tabs.store";
 import { useWorkspacesStore } from "../workspaces/workspaces.store";
 import { useSidebarStore } from "./sidebar.store";
 
+/** Fades children in/out, unmounting after exit transition. */
+function FadePresence({ visible, children }: { visible: boolean; children: React.ReactNode }) {
+  const [mounted, setMounted] = useState(visible);
+  const [show, setShow] = useState(false);
+
+  useEffect(() => {
+    if (visible) {
+      setMounted(true);
+      // Trigger fade-in on next frame so the element is in DOM at opacity 0 first
+      requestAnimationFrame(() => requestAnimationFrame(() => setShow(true)));
+    } else {
+      setShow(false);
+    }
+  }, [visible]);
+
+  if (!mounted) return null;
+
+  return (
+    <div
+      style={{
+        opacity: show ? 1 : 0,
+        transition: "opacity var(--duration-normal) var(--ease-in-out)",
+      }}
+      onTransitionEnd={() => {
+        if (!visible) setMounted(false);
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 type SidebarCommandName =
   | "tabs:activate"
   | "tabs:close"
   | "tabs:clear-ephemeral"
-  | "workspaces:switch";
+  | "workspaces:switch"
+  | "workspaces:create"
+  | "workspaces:update"
+  | "workspaces:delete";
 
 function sendCommand(name: SidebarCommandName, payload: unknown) {
   window.chiaroscuro.sendCommand(name, payload);
@@ -64,15 +100,26 @@ export function TabItem({
   isEphemeral,
   exiting,
   focused,
+  index,
+  isBookmarkedSection,
+  onDragStart,
+  onDragOver,
+  onDrop,
 }: {
   tab: Tab;
   isActive: boolean;
   isEphemeral: boolean;
   exiting?: boolean;
   focused?: boolean;
+  index: number;
+  isBookmarkedSection: boolean;
+  onDragStart?: (tabId: TabId, index: number) => void;
+  onDragOver?: (e: React.DragEvent, index: number, bookmarked: boolean) => void;
+  onDrop?: (e: React.DragEvent, index: number, bookmarked: boolean) => void;
 }) {
   const mountedRef = useRef(false);
   const elRef = useRef<HTMLDivElement>(null);
+  const [dropIndicator, setDropIndicator] = useState<"above" | "below" | null>(null);
   useEffect(() => {
     mountedRef.current = true;
   }, []);
@@ -94,17 +141,62 @@ export function TabItem({
     [tab.id],
   );
 
+  const handleDragStart = useCallback(
+    (e: React.DragEvent) => {
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", tab.id);
+      onDragStart?.(tab.id, index);
+    },
+    [tab.id, index, onDragStart],
+  );
+
+  const handleDragOver = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      const rect = elRef.current?.getBoundingClientRect();
+      if (rect) {
+        const midY = rect.top + rect.height / 2;
+        setDropIndicator(e.clientY < midY ? "above" : "below");
+      }
+      onDragOver?.(e, index, isBookmarkedSection);
+    },
+    [index, isBookmarkedSection, onDragOver],
+  );
+
+  const handleDragLeave = useCallback(() => {
+    setDropIndicator(null);
+  }, []);
+
+  const handleDrop = useCallback(
+    (e: React.DragEvent) => {
+      e.preventDefault();
+      setDropIndicator(null);
+      const rect = elRef.current?.getBoundingClientRect();
+      const dropIndex = rect && e.clientY > rect.top + rect.height / 2 ? index + 1 : index;
+      onDrop?.(e, dropIndex, isBookmarkedSection);
+    },
+    [index, isBookmarkedSection, onDrop],
+  );
+
   return (
     <div
       ref={elRef}
-      className="group flex items-center cursor-pointer transition-colors focus-ring hover:bg-glass-hover hover:text-glass-text-hover active:bg-glass-pressed active:text-glass-text-pressed"
+      draggable={!exiting}
+      className="group relative flex items-center cursor-pointer transition-colors focus-ring hover:bg-glass-hover hover:text-glass-text-hover active:bg-glass-pressed active:text-glass-text-pressed"
       style={{
         gap: "0.625rem",
         padding: "0.375rem 0.75rem",
-        margin: "2px 0.375rem",
+        margin: "0.25rem 0.375rem",
         borderRadius: "var(--radius-md)",
         background: isActive ? "var(--glass-active)" : undefined,
-        boxShadow: isActive ? "var(--shadow-subtle)" : undefined,
+        boxShadow: isActive
+          ? "var(--shadow-subtle)"
+          : dropIndicator === "above"
+            ? "inset 0 2px 0 0 var(--accent)"
+            : dropIndicator === "below"
+              ? "inset 0 -2px 0 0 var(--accent)"
+              : undefined,
         pointerEvents: exiting ? "none" : undefined,
         animation: exiting
           ? "tab-out 150ms cubic-bezier(0.4, 0, 1, 1) forwards"
@@ -119,28 +211,35 @@ export function TabItem({
           handleClick();
         }
       }}
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
       // biome-ignore lint/a11y/useSemanticElements: tab item is not a semantic button
       role="button"
       tabIndex={focused ? 0 : -1}
     >
       <Favicon tab={tab} />
       <span
-        className={`flex-1 min-w-0 truncate group-hover:text-glass-text-hover group-active:text-glass-text-pressed ${isActive ? "text-glass-text-primary" : isEphemeral ? "text-glass-text-muted" : "text-glass-text-default"}`}
+        className={`flex-1 min-w-0 truncate group-hover:text-glass-text-hover group-hover:mr-5 group-active:text-glass-text-pressed ${isActive ? "text-glass-text-primary" : isEphemeral ? "text-glass-text-muted" : "text-glass-text-default"}`}
         style={{
           fontSize: "var(--text-base)",
           fontWeight: isActive ? 500 : undefined,
+          transition: "margin var(--duration-fast) var(--ease-in-out)",
         }}
       >
         {tab.title || tab.url}
       </span>
       <button
         type="button"
-        className="flex opacity-0 group-hover:opacity-100 items-center justify-center shrink-0 bg-transparent text-glass-text-hint transition-colors focus-ring hover:text-destructive"
+        className="absolute flex opacity-0 group-hover:opacity-100 items-center justify-center bg-transparent text-glass-text-hint transition-colors focus-ring hover:text-destructive"
         style={{
+          right: "0.375rem",
+          top: "50%",
+          transform: "translateY(-50%)",
           width: 24,
           height: 24,
           borderRadius: "var(--radius-sm)",
-          marginLeft: "auto",
           cursor: "pointer",
           border: "none",
         }}
@@ -158,10 +257,12 @@ export function WorkspaceBubble({
   workspace,
   isActive,
   focused,
+  onEdit,
 }: {
   workspace: { id: WorkspaceId; name: string; color: string; icon: string };
   isActive: boolean;
   focused?: boolean;
+  onEdit?: () => void;
 }) {
   const btnRef = useRef<HTMLButtonElement>(null);
 
@@ -182,24 +283,25 @@ export function WorkspaceBubble({
     <button
       ref={btnRef}
       type="button"
-      className="flex items-center justify-center cursor-pointer focus-ring hover:scale-[1.12]"
+      className="flex items-center justify-center cursor-pointer focus-ring"
       aria-label={workspace.name}
       aria-current={isActive ? "true" : undefined}
       tabIndex={focused ? 0 : -1}
       style={{
-        width: 24,
-        height: 24,
+        width: 32,
+        height: 32,
         borderRadius: "var(--radius-full)",
         border: "none",
-        fontSize: "var(--text-xs)",
+        fontSize: "var(--text-sm)",
         fontWeight: 600,
         background: workspace.color,
         color: "var(--glass-text-primary)",
-        transform: isActive ? "scale(1.08)" : undefined,
         boxShadow: isActive ? activeRing : undefined,
-        transition: "transform var(--duration-normal) var(--ease-in-out)",
+        transform: isActive ? "scale(1)" : "scale(0.75)",
+        transition: "all var(--duration-normal) var(--ease-in-out)",
       }}
       onClick={handleClick}
+      onDoubleClick={onEdit}
       data-tip={workspace.name}
     >
       {workspace.icon}
@@ -213,12 +315,191 @@ function clampIndex(i: number, len: number): number {
   return ((i % len) + len) % len;
 }
 
+const WORKSPACE_COLORS = [
+  "oklch(0.6 0.12 230)",
+  "oklch(0.6 0.15 350)",
+  "oklch(0.6 0.15 140)",
+  "oklch(0.6 0.15 50)",
+  "oklch(0.6 0.15 280)",
+  "oklch(0.6 0.12 180)",
+];
+
+function WorkspaceEditor({
+  workspace,
+  onClose,
+}: {
+  workspace?: { id: WorkspaceId; name: string; color: string; icon: string };
+  onClose: () => void;
+}) {
+  const isNew = !workspace;
+  const [name, setName] = useState(workspace?.name ?? "");
+  const [icon, setIcon] = useState(workspace?.icon ?? "");
+  const [iconCustomized, setIconCustomized] = useState(false);
+  const [color, setColor] = useState(workspace?.color ?? (WORKSPACE_COLORS[0] as string));
+
+  // Auto-derive icon from name unless user has manually edited the icon field
+  const displayIcon = iconCustomized ? icon : name[0]?.toUpperCase() || "";
+
+  const handleSubmit = useCallback(
+    (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!name.trim()) return;
+      const finalIcon = displayIcon.trim() || "?";
+      if (isNew) {
+        sendCommand("workspaces:create", { name: name.trim(), color, icon: finalIcon });
+      } else {
+        sendCommand("workspaces:update", {
+          workspaceId: workspace.id,
+          changes: { name: name.trim(), color, icon: finalIcon },
+        });
+      }
+      onClose();
+    },
+    [name, displayIcon, color, isNew, workspace, onClose],
+  );
+
+  const handleDelete = useCallback(() => {
+    if (!workspace) return;
+    sendCommand("workspaces:delete", { workspaceId: workspace.id });
+    onClose();
+  }, [workspace, onClose]);
+
+  return (
+    <form
+      onSubmit={handleSubmit}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") onClose();
+      }}
+      className="flex flex-col"
+      style={{
+        gap: "0.5rem",
+        padding: "0.5rem 0.75rem",
+        borderTop: "1px solid var(--glass-border)",
+      }}
+    >
+      <div className="flex items-center" style={{ gap: "0.375rem" }}>
+        <input
+          type="text"
+          value={displayIcon}
+          onChange={(e) => {
+            setIcon(e.target.value.slice(0, 2));
+            setIconCustomized(true);
+          }}
+          placeholder="?"
+          className="outline-none text-center"
+          style={{
+            width: 28,
+            height: 28,
+            borderRadius: "var(--radius-full)",
+            background: color,
+            color: "var(--glass-text-primary)",
+            fontSize: "var(--text-xs)",
+            fontWeight: 600,
+            border: "none",
+            fontFamily: "inherit",
+          }}
+        />
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          placeholder="Workspace name"
+          // biome-ignore lint/a11y/noAutofocus: editor should focus name field
+          autoFocus
+          className="flex-1 min-w-0 outline-none placeholder:text-glass-text-hint"
+          style={{
+            background: "transparent",
+            color: "var(--glass-text-primary)",
+            fontSize: "var(--text-sm)",
+            border: "none",
+            padding: "0.25rem 0",
+            fontFamily: "inherit",
+          }}
+        />
+      </div>
+      <div className="flex items-center" style={{ gap: "0.25rem" }}>
+        {WORKSPACE_COLORS.map((c) => (
+          <button
+            key={c}
+            type="button"
+            className="cursor-pointer"
+            onClick={() => setColor(c)}
+            style={{
+              width: 16,
+              height: 16,
+              borderRadius: "var(--radius-full)",
+              background: c,
+              border: c === color ? "2px solid var(--glass-text-primary)" : "2px solid transparent",
+            }}
+            aria-label={`Color ${c}`}
+          />
+        ))}
+      </div>
+      <div className="flex items-center" style={{ gap: "0.375rem" }}>
+        <button
+          type="submit"
+          className="cursor-pointer text-glass-text-primary hover:bg-glass-hover focus-ring"
+          style={{
+            fontSize: "var(--text-xs)",
+            fontWeight: 500,
+            padding: "0.25rem 0.5rem",
+            borderRadius: "var(--radius-sm)",
+            border: "1px solid var(--glass-border)",
+            background: "var(--glass-subtle)",
+            fontFamily: "inherit",
+          }}
+        >
+          {isNew ? "Add" : "Save"}
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          className="cursor-pointer text-glass-text-muted hover:text-glass-text-default focus-ring"
+          style={{
+            fontSize: "var(--text-xs)",
+            padding: "0.25rem 0.5rem",
+            borderRadius: "var(--radius-sm)",
+            border: "none",
+            background: "transparent",
+            fontFamily: "inherit",
+          }}
+        >
+          Cancel
+        </button>
+        {!isNew && (
+          <button
+            type="button"
+            onClick={handleDelete}
+            className="cursor-pointer text-glass-text-muted hover:text-destructive focus-ring"
+            style={{
+              fontSize: "var(--text-xs)",
+              padding: "0.25rem 0.5rem",
+              borderRadius: "var(--radius-sm)",
+              border: "none",
+              background: "transparent",
+              fontFamily: "inherit",
+              marginLeft: "auto",
+            }}
+          >
+            Delete
+          </button>
+        )}
+      </div>
+    </form>
+  );
+}
+
 export function SidebarPanel() {
   const visible = useSidebarStore((s) => s.visible);
   const tabs = useTabsStore((s) => s.tabs);
   const activeTabId = useTabsStore((s) => s.activeTabId);
+  const pinnedTabs = usePinnedTabsStore((s) => s.pinnedTabs);
+  const pinnedTabIds = useMemo(() => new Set(pinnedTabs.map((p) => p.id)), [pinnedTabs]);
   const workspaces = useWorkspacesStore((s) => s.workspaces);
   const activeWorkspaceId = useWorkspacesStore((s) => s.activeWorkspaceId);
+
+  // Workspace editor state
+  const [editorMode, setEditorMode] = useState<"none" | "new" | WorkspaceId>("none");
 
   // Roving tabindex state
   const [focusedTabIdx, setFocusedTabIdx] = useState(0);
@@ -247,8 +528,12 @@ export function SidebarPanel() {
   }, [tabs]);
 
   const { bookmarked, ephemeral } = useMemo(() => {
-    const all = [...tabs.values()].filter((t) => t.workspaceId === activeWorkspaceId);
-    const exitingInWorkspace = exitingTabs.filter((t) => t.workspaceId === activeWorkspaceId);
+    const all = [...tabs.values()].filter(
+      (t) => t.workspaceId === activeWorkspaceId && !pinnedTabIds.has(t.id),
+    );
+    const exitingInWorkspace = exitingTabs.filter(
+      (t) => t.workspaceId === activeWorkspaceId && !pinnedTabIds.has(t.id),
+    );
     return {
       bookmarked: [
         ...all.filter((t) => t.bookmarked),
@@ -259,7 +544,7 @@ export function SidebarPanel() {
         ...exitingInWorkspace.filter((t) => !t.bookmarked),
       ],
     };
-  }, [tabs, activeWorkspaceId, exitingTabs]);
+  }, [tabs, activeWorkspaceId, exitingTabs, pinnedTabIds]);
 
   // Combined tab list for roving tabindex
   const allTabs = useMemo(() => [...bookmarked, ...ephemeral], [bookmarked, ephemeral]);
@@ -348,6 +633,34 @@ export function SidebarPanel() {
     }
   }, [activeWorkspaceId]);
 
+  // ── Drag & Drop ─────────────────────────────────────────────
+  const dragTabIdRef = useRef<TabId | null>(null);
+
+  const handleDragStart = useCallback((tabId: TabId, _index: number) => {
+    dragTabIdRef.current = tabId;
+  }, []);
+
+  const handleDragOver = useCallback(
+    (_e: React.DragEvent, _index: number, _bookmarked: boolean) => {
+      // Just allow drop — visual indicator is handled per-item
+    },
+    [],
+  );
+
+  const handleDrop = useCallback(
+    (_e: React.DragEvent, targetIndex: number, targetBookmarked: boolean) => {
+      const tabId = dragTabIdRef.current;
+      dragTabIdRef.current = null;
+      if (!tabId) return;
+      window.chiaroscuro.sendCommand("tabs:reorder", {
+        tabId,
+        targetIndex,
+        targetBookmarked,
+      });
+    },
+    [],
+  );
+
   const exitingIds = useMemo(() => new Set(exitingTabs.map((t) => t.id)), [exitingTabs]);
 
   if (!visible) return null;
@@ -359,12 +672,73 @@ export function SidebarPanel() {
     <nav
       aria-label="Sidebar"
       className="flex flex-col overflow-y-auto shrink-0"
-      style={{ width: "var(--sidebar-width)", padding: "0.375rem 0 0" }}
+      style={{ width: "var(--sidebar-width)" }}
     >
       {/* aria-live region for screen readers */}
       <div className="sr-only" aria-live="polite" aria-atomic="true">
         {announcement}
       </div>
+
+      {/* Pinned tabs strip */}
+      {pinnedTabs.length > 0 && (
+        <div
+          style={{
+            padding: "0 0.375rem 0.25rem",
+            borderBottom: "1px solid var(--glass-border)",
+          }}
+        >
+          <div
+            className="flex flex-wrap justify-center"
+            style={{ gap: "0.25rem", padding: "0 0.25rem" }}
+          >
+            {pinnedTabs.map((pt) => {
+              const tab = tabs.get(pt.id);
+              const isActive = pt.id === activeTabId;
+              return (
+                <button
+                  key={pt.id}
+                  type="button"
+                  className="flex items-center justify-center cursor-pointer hover:bg-glass-hover focus-ring"
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: "var(--radius-sm)",
+                    border: "none",
+                    background: isActive ? "var(--glass-active)" : "transparent",
+                    boxShadow: isActive ? "var(--shadow-subtle)" : undefined,
+                  }}
+                  onClick={() =>
+                    window.chiaroscuro.sendCommand("pinned-tabs:activate", { tabId: pt.id })
+                  }
+                  data-tip={pt.title || pt.url}
+                  aria-label={pt.title || pt.url}
+                >
+                  {tab ? (
+                    <Favicon tab={tab} />
+                  ) : pt.favicon ? (
+                    <img
+                      src={pt.favicon}
+                      alt=""
+                      className="rounded-full"
+                      style={{ width: 16, height: 16 }}
+                    />
+                  ) : (
+                    <span
+                      style={{
+                        fontSize: "var(--text-xs)",
+                        fontWeight: 600,
+                        color: "var(--glass-text-default)",
+                      }}
+                    >
+                      {(pt.title || pt.url)?.[0]?.toUpperCase() || "?"}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Tab list with roving tabindex */}
       {/* biome-ignore lint/a11y/useSemanticElements: role="listbox" is semantically correct for roving tabindex tab list */}
@@ -384,7 +758,7 @@ export function SidebarPanel() {
             >
               Bookmarked
             </div>
-            {bookmarked.map((tab) => {
+            {bookmarked.map((tab, i) => {
               const idx = tabIdx++;
               return (
                 <TabItem
@@ -394,6 +768,11 @@ export function SidebarPanel() {
                   isEphemeral={false}
                   exiting={exitingIds.has(tab.id)}
                   focused={idx === focusedTabIdx}
+                  index={i}
+                  isBookmarkedSection={true}
+                  onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
+                  onDrop={handleDrop}
                 />
               );
             })}
@@ -432,7 +811,7 @@ export function SidebarPanel() {
                 Clear <Icon name="broom" />
               </button>
             </div>
-            {ephemeral.map((tab) => {
+            {ephemeral.map((tab, i) => {
               const idx = tabIdx++;
               return (
                 <TabItem
@@ -442,6 +821,11 @@ export function SidebarPanel() {
                   isEphemeral={true}
                   exiting={exitingIds.has(tab.id)}
                   focused={idx === focusedTabIdx}
+                  index={i}
+                  isBookmarkedSection={false}
+                  onDragStart={handleDragStart}
+                  onDragOver={handleDragOver}
+                  onDrop={handleDrop}
                 />
               );
             })}
@@ -452,10 +836,18 @@ export function SidebarPanel() {
       {/* Spacer */}
       <div className="flex-1" />
 
+      {/* Workspace editor */}
+      <FadePresence visible={editorMode !== "none"}>
+        <WorkspaceEditor
+          workspace={editorMode !== "new" ? workspaces.find((w) => w.id === editorMode) : undefined}
+          onClose={() => setEditorMode("none")}
+        />
+      </FadePresence>
+
       {/* Workspace bar with roving tabindex */}
       <div className="flex items-center" style={{ gap: "0.375rem", padding: "0.625rem 0.75rem" }}>
         <div
-          className="flex"
+          className="flex items-center"
           role="toolbar"
           aria-label="Workspaces"
           style={{ gap: "0.375rem" }}
@@ -467,9 +859,44 @@ export function SidebarPanel() {
               workspace={ws}
               isActive={ws.id === activeWorkspaceId}
               focused={i === focusedWsIdx}
+              onEdit={() => setEditorMode(ws.id)}
             />
           ))}
         </div>
+        <button
+          type="button"
+          className="flex items-center justify-center cursor-pointer text-glass-text-hint hover:text-glass-text-default hover:bg-glass-hover focus-ring"
+          style={{
+            width: 24,
+            height: 24,
+            borderRadius: "var(--radius-full)",
+            border: "none",
+            background: "transparent",
+            fontSize: "var(--text-sm)",
+          }}
+          onClick={() => setEditorMode(activeWorkspaceId ?? "none")}
+          aria-label="Edit workspace"
+          data-tip="Edit workspace"
+        >
+          <Icon name="pencil" css={{ fontSize: 10 }} />
+        </button>
+        <button
+          type="button"
+          className="flex items-center justify-center cursor-pointer text-glass-text-hint hover:text-glass-text-default hover:bg-glass-hover focus-ring"
+          style={{
+            width: 24,
+            height: 24,
+            borderRadius: "var(--radius-full)",
+            border: "none",
+            background: "transparent",
+            fontSize: "var(--text-sm)",
+          }}
+          onClick={() => setEditorMode("new")}
+          aria-label="Add workspace"
+          data-tip="Add workspace"
+        >
+          <Icon name="plus" css={{ fontSize: 10 }} />
+        </button>
       </div>
     </nav>
   );

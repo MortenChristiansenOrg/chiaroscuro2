@@ -7,6 +7,7 @@ export const TABS_ACTIVATE = "tabs:activate" as const;
 export const TABS_NAVIGATE = "tabs:navigate" as const;
 export const TABS_TOGGLE_BOOKMARK = "tabs:toggle-bookmark" as const;
 export const TABS_CLEAR_EPHEMERAL = "tabs:clear-ephemeral" as const;
+export const TABS_REORDER = "tabs:reorder" as const;
 export const TABS_REPORT_CONTENT_BOUNDS = "tabs:report-content-bounds" as const;
 
 // ── Event names ──────────────────────────────────────────────────
@@ -26,6 +27,20 @@ export interface Tab {
   loading: boolean;
   bookmarked: boolean;
   lastAccessedAt: number;
+  createdAt: number;
+  order: number;
+}
+
+/** Shape persisted to DataStore (no transient fields like loading). */
+export interface PersistedTab {
+  id: string;
+  workspaceId: string;
+  url: string;
+  title: string;
+  favicon: string;
+  bookmarked: boolean;
+  lastAccessedAt: number;
+  createdAt: number;
   order: number;
 }
 
@@ -57,6 +72,12 @@ export interface TabsClearEphemeralPayload {
   workspaceId?: WorkspaceId;
 }
 
+export interface TabsReorderPayload {
+  tabId: TabId;
+  targetIndex: number;
+  targetBookmarked: boolean;
+}
+
 export interface TabsCreatedEvent {
   tab: Tab;
 }
@@ -67,7 +88,7 @@ export interface TabsClosedEvent {
 }
 
 export interface TabsActivatedEvent {
-  tabId: TabId;
+  tabId: TabId | null;
   previousTabId: TabId | null;
 }
 
@@ -87,6 +108,7 @@ export type TabsCommands = {
   [TABS_NAVIGATE]: { payload: TabsNavigatePayload; response: undefined };
   [TABS_TOGGLE_BOOKMARK]: { payload: TabsToggleBookmarkPayload; response: undefined };
   [TABS_CLEAR_EPHEMERAL]: { payload: TabsClearEphemeralPayload; response: undefined };
+  [TABS_REORDER]: { payload: TabsReorderPayload; response: undefined };
   [TABS_REPORT_CONTENT_BOUNDS]: { payload: Bounds; response: undefined };
 };
 

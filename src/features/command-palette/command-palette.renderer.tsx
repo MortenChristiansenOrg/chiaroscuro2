@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import type { Suggestion } from "./command-palette.shared";
 import { useCommandPaletteStore } from "./command-palette.store";
+import { type ResolvedInput, resolveInputDetailed } from "./resolve-input";
 
 export function CommandPaletteOverlay() {
   const open = useCommandPaletteStore((s) => s.open);
@@ -7,12 +9,19 @@ export function CommandPaletteOverlay() {
   const triggerRef = useRef<Element | null>(null);
   const [visible, setVisible] = useState(false);
   const [closing, setClosing] = useState(false);
+  const [resolution, setResolution] = useState<ResolvedInput>({ type: "empty" });
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [selectedSuggestion, setSelectedSuggestion] = useState(-1);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
     if (open) {
       triggerRef.current = document.activeElement;
       setVisible(true);
       setClosing(false);
+      setResolution({ type: "empty" });
+      setSuggestions([]);
+      setSelectedSuggestion(-1);
       requestAnimationFrame(() => inputRef.current?.focus());
       return;
     }
@@ -54,20 +63,66 @@ export function CommandPaletteOverlay() {
     return () => input.removeEventListener("blur", refocus);
   }, [visible, closing]);
 
-  const handleSubmit = useCallback((e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key !== "Enter") return;
+  const handleInputChange = useCallback(() => {
+    const value = inputRef.current?.value ?? "";
+    setResolution(resolveInputDetailed(value));
+    setSelectedSuggestion(-1);
 
-    const value = inputRef.current?.value;
-    if (!value?.trim()) return;
+    // Debounce suggestion search
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (value.trim().length >= 2) {
+      debounceRef.current = setTimeout(() => {
+        window.chiaroscuro
+          .sendCommand("command-palette:search-visits", { query: value.trim() })
+          .then((results) => setSuggestions(results as Suggestion[]))
+          .catch(() => setSuggestions([]));
+      }, 150);
+    } else {
+      setSuggestions([]);
+    }
+  }, []);
 
+  const executeCommand = useCallback((value: string, inCurrentTab: boolean) => {
+    if (!value.trim()) return;
     window.chiaroscuro.sendCommand("command-palette:execute", {
       command: value,
-      inCurrentTab: e.ctrlKey || e.metaKey,
+      inCurrentTab,
     });
-
     window.chiaroscuro.sendCommand("command-palette:hide", undefined);
     if (inputRef.current) inputRef.current.value = "";
+    setSuggestions([]);
+    setResolution({ type: "empty" });
   }, []);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      // Arrow navigation for suggestions
+      if (suggestions.length > 0) {
+        if (e.key === "ArrowDown") {
+          e.preventDefault();
+          setSelectedSuggestion((prev) => Math.min(prev + 1, suggestions.length - 1));
+          return;
+        }
+        if (e.key === "ArrowUp") {
+          e.preventDefault();
+          setSelectedSuggestion((prev) => Math.max(prev - 1, -1));
+          return;
+        }
+      }
+
+      if (e.key !== "Enter") return;
+
+      // Use selected suggestion if any
+      if (selectedSuggestion >= 0 && suggestions[selectedSuggestion]) {
+        executeCommand(suggestions[selectedSuggestion].url, e.ctrlKey || e.metaKey);
+        return;
+      }
+
+      const value = inputRef.current?.value;
+      if (value) executeCommand(value, e.ctrlKey || e.metaKey);
+    },
+    [suggestions, selectedSuggestion, executeCommand],
+  );
 
   if (!visible) return null;
 
@@ -119,10 +174,87 @@ export function CommandPaletteOverlay() {
             border: "none",
             fontFamily: "inherit",
           }}
-          onKeyDown={handleSubmit}
+          onKeyDown={handleKeyDown}
+          onInput={handleInputChange}
           autoComplete="off"
           spellCheck={false}
         />
+
+        {/* Resolution indicator */}
+        {resolution.type !== "empty" && (
+          <div
+            style={{
+              padding: "0 1.25rem 0.5rem",
+              fontSize: "var(--text-sm)",
+              color: "var(--glass-text-muted)",
+            }}
+          >
+            {resolution.type === "search" ? (
+              <span>
+                Search with{" "}
+                <strong style={{ color: "var(--glass-text-default)" }}>
+                  {resolution.provider}
+                </strong>
+              </span>
+            ) : (
+              <span>
+                Navigate to{" "}
+                <strong
+                  className="truncate"
+                  style={{
+                    color: "var(--glass-text-default)",
+                    maxWidth: 400,
+                    display: "inline-block",
+                    verticalAlign: "bottom",
+                  }}
+                >
+                  {resolution.url}
+                </strong>
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Suggestions dropdown */}
+        {suggestions.length > 0 && (
+          <div
+            style={{
+              borderTop: "1px solid var(--glass-border)",
+              maxHeight: 240,
+              overflowY: "auto",
+            }}
+          >
+            {suggestions.map((s, i) => (
+              // biome-ignore lint/a11y/useKeyWithClickEvents: keyboard handled on input
+              <div
+                key={s.url}
+                className="flex items-center cursor-pointer"
+                style={{
+                  gap: "0.625rem",
+                  padding: "0.5rem 1.25rem",
+                  background: i === selectedSuggestion ? "var(--glass-hover)" : undefined,
+                  fontSize: "var(--text-sm)",
+                }}
+                onClick={() => executeCommand(s.url, false)}
+              >
+                <span className="truncate flex-1" style={{ color: "var(--glass-text-default)" }}>
+                  {s.title}
+                </span>
+                <span
+                  className="truncate shrink-0"
+                  style={{
+                    color: "var(--glass-text-muted)",
+                    fontSize: "var(--text-xs)",
+                    maxWidth: 200,
+                  }}
+                >
+                  {s.url}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div
           className="flex items-center justify-between"
           style={{

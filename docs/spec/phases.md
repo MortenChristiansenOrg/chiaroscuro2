@@ -40,6 +40,7 @@
 4. Downloads with custom folder selection
 5. Settings page
 6. Keyboard shortcut customization
+7. Built-in page routing in command palette
 
 ## Phase 5: Extensions
 

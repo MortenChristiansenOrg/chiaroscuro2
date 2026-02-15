@@ -1,12 +1,15 @@
 import type { CommandBus } from "../../bus/command-bus";
 import type { EventBus } from "../../bus/event-bus";
+import type { Collection, DataStore } from "../../data/types";
 import type { Bounds, Platform } from "../../platform/types";
 import type { TabId, WindowId, WorkspaceId } from "../../shared/types";
+import { isPinned } from "../pinned-tabs/pinned-tabs.main";
 import type {
   TAB_LOADING_CHANGED,
   TabLoadingChangedPayload,
 } from "../window-chrome/window-chrome.shared";
 import {
+  type PersistedTab,
   TABS_ACTIVATE,
   TABS_ACTIVATED,
   TABS_CLEAR_EPHEMERAL,
@@ -16,6 +19,7 @@ import {
   TABS_CREATED,
   TABS_LIST_CHANGED,
   TABS_NAVIGATE,
+  TABS_REORDER,
   TABS_REPORT_CONTENT_BOUNDS,
   TABS_TOGGLE_BOOKMARK,
   TABS_UPDATED,
@@ -27,10 +31,13 @@ import {
 type AllCommands = TabsCommands;
 type AllEvents = TabsEvents & { [K in typeof TAB_LOADING_CHANGED]: TabLoadingChangedPayload };
 
+const EPHEMERAL_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
+
 interface Deps {
   commands: CommandBus<AllCommands>;
   events: EventBus<AllEvents>;
   platform: Platform;
+  dataStore: DataStore;
   getActiveWindowId: () => WindowId | undefined;
   getActiveTabId: () => TabId | undefined;
   setActiveTabId: (tabId: TabId | undefined) => void;
@@ -45,6 +52,7 @@ export function register(deps: Deps): void {
     commands,
     events,
     platform,
+    dataStore,
     getActiveWindowId,
     getActiveTabId,
     setActiveTabId,
@@ -54,9 +62,24 @@ export function register(deps: Deps): void {
   const tabs = new Map<TabId, Tab>();
   let contentBounds: Bounds = { x: 0, y: 0, width: 0, height: 0 };
   const eventCleanups = new Map<TabId, (() => void)[]>();
+  const tabsCollection: Collection<PersistedTab> = dataStore.collection("tabs");
 
   // Expose for getTabsForWorkspace
   _tabs = tabs;
+
+  // ── Persistence helpers ──────────────────────────────────────────
+
+  function persistTab(tab: Tab): void {
+    const { loading, ...persisted } = tab;
+    tabsCollection.update(persisted.id, persisted as PersistedTab).catch(() => {
+      // Insert if update fails (doc doesn't exist yet)
+      tabsCollection.insert(persisted as PersistedTab).catch(console.error);
+    });
+  }
+
+  function removePersistedTab(tabId: TabId): void {
+    tabsCollection.remove(tabId).catch(() => {});
+  }
 
   // ── Debounced list-changed emission ─────────────────────────────
   let listDirty = false;
@@ -103,6 +126,7 @@ export function register(deps: Deps): void {
         if (!tab) return;
         tab.title = title as string;
         events.emit(TABS_UPDATED, { tab: { ...tab } });
+        persistTab(tab);
       }),
     );
 
@@ -112,6 +136,7 @@ export function register(deps: Deps): void {
         if (!tab) return;
         tab.url = url as string;
         events.emit(TABS_UPDATED, { tab: { ...tab } });
+        persistTab(tab);
       }),
     );
 
@@ -121,6 +146,7 @@ export function register(deps: Deps): void {
         if (!tab) return;
         tab.url = url as string;
         events.emit(TABS_UPDATED, { tab: { ...tab } });
+        persistTab(tab);
       }),
     );
 
@@ -145,6 +171,7 @@ export function register(deps: Deps): void {
         if (currentTitle) tab.title = currentTitle;
         events.emit(TABS_UPDATED, { tab: { ...tab } });
         events.emit("tab:loading-changed", { tabId, loading: false });
+        persistTab(tab);
       }),
     );
 
@@ -156,6 +183,7 @@ export function register(deps: Deps): void {
         if (urls.length > 0 && urls[0]) {
           tab.favicon = urls[0];
           events.emit(TABS_UPDATED, { tab: { ...tab } });
+          persistTab(tab);
         }
       }),
     );
@@ -163,7 +191,7 @@ export function register(deps: Deps): void {
     eventCleanups.set(tabId, cleanups);
   }
 
-  // ── Command handlers ────────────────────────────────────────────
+  // ── Command handlers ───────────────────────────────────────────
 
   commands.handle(TABS_CREATE, async (payload) => {
     const windowId = getActiveWindowId();
@@ -173,6 +201,7 @@ export function register(deps: Deps): void {
     if (!workspaceId) throw new Error("No active workspace");
 
     const tabId = await platform.createTab(windowId, payload.url);
+    const now = Date.now();
 
     const tab: Tab = {
       id: tabId,
@@ -182,12 +211,14 @@ export function register(deps: Deps): void {
       favicon: "",
       loading: true,
       bookmarked: false,
-      lastAccessedAt: Date.now(),
+      lastAccessedAt: now,
+      createdAt: now,
       order: tabs.size,
     };
 
     tabs.set(tabId, tab);
     attachTabListeners(tabId);
+    persistTab(tab);
 
     events.emit(TABS_CREATED, { tab });
     events.emit("tab:loading-changed", { tabId, loading: true });
@@ -216,6 +247,7 @@ export function register(deps: Deps): void {
     const wasActive = getActiveTabId() === tabId;
     await platform.closeTab(tabId);
     tabs.delete(tabId);
+    removePersistedTab(tabId);
 
     let activatedTabId: TabId | null = null;
     if (wasActive) {
@@ -254,6 +286,7 @@ export function register(deps: Deps): void {
 
     events.emit(TABS_ACTIVATED, { tabId, previousTabId });
     events.emit(TABS_UPDATED, { tab: { ...tab } });
+    persistTab(tab);
   });
 
   commands.handle(TABS_NAVIGATE, async (payload) => {
@@ -268,6 +301,7 @@ export function register(deps: Deps): void {
 
     events.emit(TABS_UPDATED, { tab: { ...tab } });
     events.emit("tab:loading-changed", { tabId, loading: true });
+    persistTab(tab);
   });
 
   commands.handle(TABS_TOGGLE_BOOKMARK, async (payload) => {
@@ -276,12 +310,13 @@ export function register(deps: Deps): void {
     const tab = tabs.get(tabId);
     if (!tab) return;
 
-    // TODO: when PinnedTabs feature is implemented, skip if tab.pinned
-    // if ('pinned' in tab && tab.pinned) return;
+    // Skip pinned tabs
+    if (isPinned(tabId)) return;
 
     tab.bookmarked = !tab.bookmarked;
     events.emit(TABS_UPDATED, { tab: { ...tab } });
     scheduleListChanged();
+    persistTab(tab);
   });
 
   commands.handle(TABS_CLEAR_EPHEMERAL, async (payload) => {
@@ -298,6 +333,25 @@ export function register(deps: Deps): void {
     }
   });
 
+  commands.handle(TABS_REORDER, async (payload) => {
+    const { tabId, targetIndex, targetBookmarked } = payload;
+    const tab = tabs.get(tabId);
+    if (!tab) return;
+
+    // Auto-bookmark/unbookmark when moving between sections
+    if (targetBookmarked && !tab.bookmarked) {
+      tab.bookmarked = true;
+    } else if (!targetBookmarked && tab.bookmarked) {
+      tab.bookmarked = false;
+    }
+
+    tab.order = targetIndex;
+
+    events.emit(TABS_UPDATED, { tab: { ...tab } });
+    scheduleListChanged();
+    persistTab(tab);
+  });
+
   commands.handle(TABS_REPORT_CONTENT_BOUNDS, async (payload) => {
     contentBounds = payload;
     const activeTabId = getActiveTabId();
@@ -311,8 +365,80 @@ export function register(deps: Deps): void {
   });
 }
 
-export function start(_deps: Deps): void {
-  // No initial state to emit — user opens first tab via Ctrl-T
+export async function start(deps: Deps): Promise<void> {
+  const { dataStore, platform, getActiveWindowId, getActiveWorkspaceId } = deps;
+  const tabsCollection: Collection<PersistedTab> = dataStore.collection("tabs");
+
+  // Restore persisted tabs
+  const persisted = await tabsCollection.findMany({});
+  if (persisted.length === 0) return;
+
+  const windowId = getActiveWindowId();
+  if (!windowId) return;
+
+  const now = Date.now();
+
+  // Ephemeral cleanup: remove tabs older than 8 hours
+  const toRestore: PersistedTab[] = [];
+  for (const pt of persisted) {
+    if (!pt.bookmarked && now - pt.lastAccessedAt > EPHEMERAL_TTL_MS) {
+      tabsCollection.remove(pt.id).catch(() => {});
+    } else {
+      toRestore.push(pt);
+    }
+  }
+
+  if (toRestore.length === 0) return;
+
+  // Recreate tabs from persisted data
+  const activeWsId = getActiveWorkspaceId();
+  let firstTabInActiveWs: TabId | undefined;
+
+  for (const pt of toRestore) {
+    try {
+      const tabId = await platform.createTab(windowId, pt.url);
+      const tab: Tab = {
+        id: tabId,
+        workspaceId: pt.workspaceId as WorkspaceId,
+        url: pt.url,
+        title: pt.title,
+        favicon: pt.favicon,
+        loading: true,
+        bookmarked: pt.bookmarked,
+        lastAccessedAt: pt.lastAccessedAt,
+        createdAt: pt.createdAt,
+        order: pt.order,
+      };
+
+      if (!_tabs) continue;
+      _tabs.set(tabId, tab);
+
+      // Update persisted doc with new tabId (platform assigns new IDs)
+      await tabsCollection.remove(pt.id).catch(() => {});
+      const { loading, ...newPersisted } = tab;
+      await tabsCollection.insert(newPersisted as PersistedTab).catch(() => {});
+
+      // Track first tab in active workspace for activation
+      if (tab.workspaceId === activeWsId && !firstTabInActiveWs) {
+        firstTabInActiveWs = tabId;
+      }
+
+      // Hide until activated
+      platform.hideTab(tabId);
+    } catch {
+      // Skip tabs that fail to restore (e.g., invalid URLs)
+    }
+  }
+
+  // Activate first tab in current workspace
+  if (firstTabInActiveWs) {
+    await deps.commands.send(TABS_ACTIVATE, { tabId: firstTabInActiveWs });
+  }
+
+  // Emit full list
+  if (_tabs) {
+    deps.events.emit(TABS_LIST_CHANGED, { tabs: [..._tabs.values()] });
+  }
 }
 
 export function getTabsForWorkspace(workspaceId: WorkspaceId): Tab[] {

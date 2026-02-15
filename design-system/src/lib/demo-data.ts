@@ -18,6 +18,7 @@ export const DEMO_TABS: Tab[] = [
     loading: false,
     bookmarked: true,
     lastAccessedAt: Date.now(),
+    createdAt: Date.now(),
     order: 0,
   },
   {
@@ -29,6 +30,7 @@ export const DEMO_TABS: Tab[] = [
     loading: false,
     bookmarked: true,
     lastAccessedAt: Date.now() - 60_000,
+    createdAt: Date.now() - 60_000,
     order: 1,
   },
   {
@@ -40,6 +42,7 @@ export const DEMO_TABS: Tab[] = [
     loading: false,
     bookmarked: false,
     lastAccessedAt: Date.now() - 120_000,
+    createdAt: Date.now() - 120_000,
     order: 2,
   },
 ];
