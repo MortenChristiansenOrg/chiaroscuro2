@@ -1,11 +1,33 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "../../renderer/src/components/Icon";
 import type { WorkspaceId } from "../../shared/types";
-import type { Workspace } from "./workspaces.shared";
+import {
+  WORKSPACES_CREATE,
+  WORKSPACES_DELETE,
+  WORKSPACES_SWITCH,
+  WORKSPACES_UPDATE,
+  type Workspace,
+  type WorkspacesCommands,
+} from "./workspaces.shared";
 
-function sendCommand(name: string, payload: unknown) {
+// ── Typed sendCommand ───────────────────────────────────────────
+
+type WorkspacesUsedCommands = Pick<
+  WorkspacesCommands,
+  | typeof WORKSPACES_SWITCH
+  | typeof WORKSPACES_CREATE
+  | typeof WORKSPACES_UPDATE
+  | typeof WORKSPACES_DELETE
+>;
+
+function sendCommand<K extends keyof WorkspacesUsedCommands>(
+  name: K,
+  payload: WorkspacesUsedCommands[K]["payload"],
+) {
   window.chiaroscuro.sendCommand(name, payload);
 }
+
+// ── Components ──────────────────────────────────────────────────
 
 export function WorkspaceBubble({
   workspace,
@@ -24,9 +46,9 @@ export function WorkspaceBubble({
     if (focused) btnRef.current?.focus();
   }, [focused]);
 
-  const handleClick = useCallback(() => {
-    sendCommand("workspaces:switch", { workspaceId: workspace.id });
-  }, [workspace.id]);
+  const handleClick = () => {
+    sendCommand(WORKSPACES_SWITCH, { workspaceId: workspace.id });
+  };
 
   // Build the ring shadow using oklch with proper syntax
   const activeRing = workspace.color.startsWith("oklch(")
@@ -88,29 +110,26 @@ export function WorkspaceEditor({
   // Auto-derive icon from name unless user has manually edited the icon field
   const displayIcon = iconCustomized ? icon : name[0]?.toUpperCase() || "";
 
-  const handleSubmit = useCallback(
-    (e: React.FormEvent) => {
-      e.preventDefault();
-      if (!name.trim()) return;
-      const finalIcon = displayIcon.trim() || "?";
-      if (isNew) {
-        sendCommand("workspaces:create", { name: name.trim(), color, icon: finalIcon });
-      } else {
-        sendCommand("workspaces:update", {
-          workspaceId: workspace.id,
-          changes: { name: name.trim(), color, icon: finalIcon },
-        });
-      }
-      onClose();
-    },
-    [name, displayIcon, color, isNew, workspace, onClose],
-  );
-
-  const handleDelete = useCallback(() => {
-    if (!workspace) return;
-    sendCommand("workspaces:delete", { workspaceId: workspace.id });
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!name.trim()) return;
+    const finalIcon = displayIcon.trim() || "?";
+    if (isNew) {
+      sendCommand(WORKSPACES_CREATE, { name: name.trim(), color, icon: finalIcon });
+    } else {
+      sendCommand(WORKSPACES_UPDATE, {
+        workspaceId: workspace.id,
+        changes: { name: name.trim(), color, icon: finalIcon },
+      });
+    }
     onClose();
-  }, [workspace, onClose]);
+  };
+
+  const handleDelete = () => {
+    if (!workspace) return;
+    sendCommand(WORKSPACES_DELETE, { workspaceId: workspace.id });
+    onClose();
+  };
 
   return (
     <form

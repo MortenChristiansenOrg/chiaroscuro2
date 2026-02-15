@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "../../renderer/src/components/Icon";
 import { useTabsStore } from "../tabs/tabs.store";
 import type { WindowChromeCommands } from "./window-chrome.shared";
@@ -98,12 +98,12 @@ export function UrlPill() {
     [],
   );
 
-  const handleCopy = useCallback(() => {
+  const handleCopy = () => {
     sendCommand(WINDOW_COPY_ADDRESS);
     setCopied(true);
     if (timerRef.current) clearTimeout(timerRef.current);
     timerRef.current = setTimeout(() => setCopied(false), 1500);
-  }, []);
+  };
 
   if (!url) return null;
 

@@ -124,7 +124,11 @@ export function register(deps: Deps): void {
       events.emit(TABS_ACTIVATED, { tabId: null, previousTabId });
     }
 
-    events.emit(WORKSPACES_SWITCHED, { workspaceId, previousWorkspaceId: previousWsId });
+    events.emit(WORKSPACES_SWITCHED, {
+      workspaceId,
+      previousWorkspaceId: previousWsId,
+      workspaceName: ws.name,
+    });
   });
 
   commands.handle(WORKSPACES_CREATE, async (payload) => {

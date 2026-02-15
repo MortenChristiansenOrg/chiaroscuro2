@@ -60,6 +60,7 @@ export interface WorkspacesMoveTabPayload {
 export interface WorkspacesSwitchedEvent {
   workspaceId: WorkspaceId;
   previousWorkspaceId: WorkspaceId | null;
+  workspaceName: string;
 }
 
 export interface WorkspacesCreatedEvent {

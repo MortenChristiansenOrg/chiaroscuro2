@@ -26,6 +26,8 @@ src/features/{feature-name}/
 
 **Rule:** features never import another feature's `.main.ts`, `.store.ts`, or `.renderer.tsx`. Cross-feature communication goes through the command/event bus using types from `.shared.ts`.
 
+**Exception:** Shell-level composites (sidebar, title bar, content area) may read other features' stores via selectors. They must never write to or call `setState` on another feature's store — all mutations go through commands. Mark each such import with `// shell-composite: read-only cross-feature store access`.
+
 ## Naming Conventions
 
 | Item | Convention | Example |
