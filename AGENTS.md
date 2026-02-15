@@ -1,6 +1,12 @@
 # Documentation
 
-- Overall system architecture and specification: SPEC.md
+- Overview & tech stack: docs/spec/overview.md
+- Architecture (buses, abstractions, process boundary, components): docs/spec/architecture.md
+- Implementation details (tabs, extensions, lifecycle, multi-window, storage): docs/spec/implementation.md
+- Project phases / roadmap: docs/spec/phases.md
+- Dependencies & build/distribution: docs/spec/dependencies.md
+- Resolved decisions, performance targets, constraints: docs/spec/decisions.md
+- Feature specs (19 features): docs/features/
 
 # Development
 
