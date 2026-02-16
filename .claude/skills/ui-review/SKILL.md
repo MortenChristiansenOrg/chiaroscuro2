@@ -5,7 +5,7 @@ description: Review the app's UI/UX by launching it, taking screenshots, checkin
 
 # Goal
 
-Perform a comprehensive UI/UX review of the running Chiaroscuro app **or the design system website** using the Playwright MCP server. Verify behavior, visual quality, UX, and error-free operation.
+Perform a comprehensive UI/UX review of the running Chiaroscuro app **or the design system website** using `playwright-cli`. Verify behavior, visual quality, UX, and error-free operation.
 
 ## Invocation
 
@@ -21,56 +21,101 @@ There are two review targets with different launch procedures:
 |               | **App**                                 | **Design System**              |
 | ------------- | --------------------------------------- | ------------------------------ |
 | What          | Electron browser app                    | Vite-served documentation site |
-| URL           | Electron window (no URL)                | `http://localhost:5200`        |
 | Launch        | `launch-app.sh`                         | `launch-docs.sh`              |
 | Teardown      | `teardown-app.sh`                       | `teardown-docs.sh`            |
-| Browser       | Electron (built-in)                     | Edge with CDP                  |
 | Build         | `electron-vite build` + sync to Windows | `bun run docs:dev --host`     |
 | Window chrome | Yes (custom title bar)                  | No                            |
 
-Both targets expose CDP on port 9333 which the Playwright MCP server connects to directly via WSL2 mirrored networking.
-
 ## Prerequisites
 
-Playwright MCP must be configured to connect to the app's CDP endpoint. Add to your MCP config:
+`playwright-cli` must be installed globally (already on `PATH`). No MCP configuration needed.
 
-```json
-{
-  "playwright": {
-    "command": "npx",
-    "args": ["@playwright/mcp@latest", "--cdp-url", "http://127.0.0.1:9333"]
-  }
-}
+## Browser Interaction via `playwright-cli`
+
+All browser interaction uses `playwright-cli` via the Bash tool. The CLI manages its own headless Chromium browser with persistent sessions.
+
+### Key commands
+
+```bash
+# Browser lifecycle
+playwright-cli open [url]             # open browser (optionally navigate)
+playwright-cli close                  # close browser
+playwright-cli goto <url>            # navigate to URL
+
+# Page inspection
+playwright-cli snapshot              # get page accessibility tree with element refs
+playwright-cli screenshot            # screenshot current page
+playwright-cli screenshot <ref>      # screenshot specific element
+playwright-cli screenshot --full-page # full scrollable page
+
+# Interaction (refs come from snapshot output)
+playwright-cli click <ref>           # click element
+playwright-cli fill <ref> <text>     # fill input
+playwright-cli type <text>           # type text into focused element
+playwright-cli press <key>           # press key (e.g., Enter, ArrowDown)
+playwright-cli hover <ref>           # hover over element
+playwright-cli select <ref> <val>    # select dropdown option
+playwright-cli resize <w> <h>        # resize viewport
+
+# Debugging
+playwright-cli console               # list console messages
+playwright-cli console error         # errors only
+playwright-cli network               # list network requests
+playwright-cli eval '<func>'         # evaluate JS on page
+
+# Tabs
+playwright-cli tab-list              # list tabs
+playwright-cli tab-new [url]         # open new tab
+playwright-cli tab-close [index]     # close tab
 ```
+
+### Workflow pattern
+
+1. Take a `snapshot` to get element refs
+2. Use refs to `click`, `fill`, `hover` etc.
+3. Take `screenshot` to verify visual state
+4. Read the screenshot image file with the Read tool to see the result
+5. Repeat
 
 ## WSL Environment Setup
 
-This project runs in WSL2 with `networkingMode=mirrored`. WSL and Windows share the same port space, so the Playwright MCP server on WSL can reach the Windows-side browser's CDP endpoint directly at `127.0.0.1:9333`.
-
-**Architecture:**
-
-```text
-Playwright MCP (WSL) → 127.0.0.1:9333 → Browser CDP (Windows)
-```
-
-No CDP proxy is needed.
+This project runs in WSL2. The Electron app runs on Windows.
 
 ### Starting the app (Electron)
+
+The launcher builds, syncs to Windows, and launches Electron on a separate virtual desktop.
 
 ```bash
 .claude/skills/ui-review/scripts/launch-app.sh          # build if needed + launch
 .claude/skills/ui-review/scripts/launch-app.sh --rebuild # force rebuild
 ```
 
-### Starting the design system (Edge)
+After Electron launches, start `playwright-cli` separately to review the renderer UI:
+
+```bash
+playwright-cli open http://localhost:5173  # Vite dev server for renderer
+```
+
+> **Note:** `playwright-cli` opens its own browser — it does not connect to the Electron window. Use it to review renderer UI (layout, components, interactions). Electron-specific features (native title bar, window chrome, WebContentsView) must be verified manually or via the Electron window directly.
+
+### Starting the design system
 
 ```bash
 .claude/skills/ui-review/scripts/launch-docs.sh
 ```
 
+Then open in `playwright-cli`:
+
+```bash
+playwright-cli open http://localhost:5200
+```
+
 ### Stopping
 
 ```bash
+# Close playwright-cli browser:
+playwright-cli close
+
 # For app reviews:
 .claude/skills/ui-review/scripts/teardown-app.sh
 
@@ -84,25 +129,18 @@ No CDP proxy is needed.
 Install-Module VirtualDesktop -Scope CurrentUser -Force
 ```
 
-### Verifying connectivity
-
-```bash
-curl -s http://127.0.0.1:9333/json/version
-```
-
 ## Workflow
 
 ### Phase 0: Connect
 
-1. Run the appropriate launch script and wait for confirmation:
-   - **App:** `launch-app.sh`
-   - **Design system:** `launch-docs.sh`
-2. Use `browser_snapshot` to confirm the connection and see the current page
-3. Take an initial screenshot with `browser_take_screenshot` to confirm visuals
+1. Run the appropriate launch script and wait for confirmation
+2. Open the target in `playwright-cli`:
+   - **App:** `playwright-cli open http://localhost:5173`
+   - **Design system:** `playwright-cli open http://localhost:5200`
+3. Run `playwright-cli snapshot` to confirm the page loaded
+4. Run `playwright-cli screenshot` and read the image to confirm visuals
 
-If the review was invoked with a specific feature/area/page, navigate to the relevant view before proceeding.
-
-**Design system navigation:** Use `browser_navigate` to go to specific pages (e.g., `http://localhost:5200/colors`), or click sidebar links.
+If the review was invoked with a specific feature/area/page, navigate with `playwright-cli goto <url>`.
 
 ### Phase 1: Behavior Verification
 
@@ -112,7 +150,7 @@ Verify that implemented features work correctly.
 
 1. **Read the spec** — Check `docs/features/` for the relevant spec file
 2. **Walk through workflows** — Execute each workflow from the spec:
-   - Use `browser_click`, `browser_type`, `browser_press_key` to simulate user actions
+   - Use `snapshot` to find element refs, then `click`, `fill`, `press` to interact
    - Take screenshots after each significant state change
    - Verify expected outcomes match spec requirements
 3. **Test edge cases** — Empty states, long text, rapid interactions
@@ -121,19 +159,12 @@ Verify that implemented features work correctly.
 **For design system reviews:**
 
 1. **Check route coverage** — Verify all routes in `design-system/src/routes.ts` are navigable
-2. **Walk through pages** — Visit each page via sidebar navigation:
+2. **Walk through pages** — Navigate via `goto` or click sidebar links:
    - Verify content renders (MDX, code blocks, examples)
    - Check interactive components (previews, toggles, swatches)
    - Verify code syntax highlighting works
 3. **Test sidebar navigation** — Active state, group headers, scroll behavior
 4. **Test theme toggle** — Light/dark mode switching, persistence
-
-**Tools to use:**
-
-- `browser_take_screenshot` — after each action to verify visual state
-- `browser_snapshot` — to verify element existence/state when screenshot is ambiguous
-- `browser_click`, `browser_type`, `browser_press_key` — to simulate user interactions
-- `browser_evaluate` — to check app state programmatically if needed
 
 ### Phase 2: Visual Design Review
 
@@ -141,16 +172,19 @@ Evaluate visual quality. Apply the principles from the `frontend-design` skill.
 
 **Take full-page screenshots and evaluate:**
 
-1. **Typography** — Are fonts distinctive and readable? Consistent hierarchy? Avoid generic system font stacks without intentional styling.
-2. **Color & contrast** — Cohesive palette? Sufficient contrast for readability (poor contrast = bad UX for everyone, not an a11y concern)? Dark/light mode consistency?
-3. **Spacing & layout** — Consistent spacing rhythm? Proper alignment? Nothing cramped or floating in excess whitespace?
-4. **Visual hierarchy** — Clear primary/secondary/tertiary importance? User's eye guided to the right place?
-5. **Polish** — Hover states, transitions, focus indicators, loading states. No raw unstyled elements.
-6. **Responsive behavior** — Resize the window to test narrow/wide layouts:
-   ```
-   browser_resize width=800 height=600
-   browser_resize width=1920 height=1080
-   browser_resize width=1280 height=720
+1. **Typography** — Distinctive and readable fonts? Consistent hierarchy?
+2. **Color & contrast** — Cohesive palette? Sufficient contrast?
+3. **Spacing & layout** — Consistent rhythm? Proper alignment?
+4. **Visual hierarchy** — Clear primary/secondary/tertiary importance?
+5. **Polish** — Hover states, transitions, loading states. No raw unstyled elements.
+6. **Responsive behavior** — Resize to test different viewports:
+   ```bash
+   playwright-cli resize 800 600
+   playwright-cli screenshot
+   playwright-cli resize 1920 1080
+   playwright-cli screenshot
+   playwright-cli resize 1280 720
+   playwright-cli screenshot
    ```
 
 **Design system specific:**
@@ -164,61 +198,44 @@ Evaluate visual quality. Apply the principles from the `frontend-design` skill.
 
 Evaluate interaction quality and efficiency.
 
-1. **Task efficiency** — Count clicks/keystrokes for common tasks. Identify unnecessary steps. Can the user accomplish goals with minimal interaction?
-2. **Discoverability** — Are actions findable? Proper labels, icons, tooltips? Would a new user understand what to do?
+1. **Task efficiency** — Count clicks/keystrokes for common tasks. Identify unnecessary steps.
+2. **Discoverability** — Are actions findable? Proper labels, icons, tooltips?
 3. **Feedback** — Does the UI respond to actions? Loading indicators, success/error states, hover effects?
-4. **Consistency** — Same patterns used for similar actions? Buttons look/behave the same way?
-5. **Error states** — What happens on invalid input? Network failure? Empty data?
-6. **Navigation flow** — Is it clear where you are? Can you go back? Breadcrumbs or other wayfinding?
+4. **Consistency** — Same patterns used for similar actions?
+5. **Error states** — What happens on invalid input? Empty data?
+6. **Navigation flow** — Is it clear where you are? Can you go back?
 7. **Keyboard navigation** — Can primary workflows be completed without mouse?
-
-**Design system specific:**
-
-- Is the sidebar navigation intuitive? Are pages grouped logically?
-- Can users quickly find the component/token they need?
-- Are examples copy-pasteable and clearly presented?
 
 ### Phase 4: Error Audit
 
-Check for hidden errors that the user wouldn't see.
+Check for hidden errors.
 
-**Console errors:**
+```bash
+# Console errors:
+playwright-cli console error
 
-```
-browser_console_messages
+# Network requests (check for failures):
+playwright-cli network
+
+# Runtime state:
+playwright-cli eval '() => document.querySelectorAll("*").length'
 ```
 
 - Distinguish between: app errors (bugs), expected warnings, third-party noise
 - Check for React rendering errors, unhandled promise rejections, failed imports
-
-**Network errors:**
-
-```
-browser_network_requests
-```
-
-- Check for failed requests (4xx, 5xx status codes)
-- Check for unexpectedly slow requests
-- Look for CORS issues or blocked resources
-
-**Runtime state:**
-
-- Use `browser_evaluate` to check for:
-  - Uncaught error handlers: `window.__errorCount || 'none'`
-  - DOM size: `document.querySelectorAll('*').length`
-  - React errors in dev mode
+- Check for failed requests (4xx, 5xx), CORS issues
 
 ### Phase 5: Cross-Cutting Concerns
 
-1. **Performance feel** — Does the UI feel snappy? Any visible jank or delayed renders?
-2. **State persistence** — Navigate away and back. Is state preserved correctly?
-3. **Window chrome integration** — _(App only)_ Does the custom title bar work? Minimize/maximize/close? Draggable regions?
+1. **Performance feel** — Does the UI feel snappy? Any visible jank?
+2. **State persistence** — Navigate away and back. Is state preserved?
+3. **Window chrome integration** — _(App only, verify in Electron window)_ Custom title bar, minimize/maximize/close, draggable regions
 
 ### Phase 6: Teardown
 
-After collecting all findings, tear down:
-
 ```bash
+playwright-cli close
+
 # App:
 .claude/skills/ui-review/scripts/teardown-app.sh
 
@@ -278,7 +295,8 @@ Reference screenshots taken during review (saved to scratchpad directory).
 
 - Save screenshots to the scratchpad directory, not the project
 - Take screenshots liberally — they're the primary evidence
+- Always `snapshot` before interacting to get fresh element refs
 - When something looks wrong, take a snapshot too to understand the DOM structure
 - Resize to multiple viewport sizes during visual review
-- If the app has multiple windows, review each one via `browser_tabs`
+- Use `--full-page` on screenshots to capture scrollable content
 - For design system reviews, check each page in the sidebar — don't just review the landing page

@@ -1,39 +1,18 @@
 #!/usr/bin/env bash
-# Stop the design system dev server, Edge browser, and virtual desktop.
-# Only kills Edge processes using the docs profile, not other Edge instances.
+# Stop the design system dev server and playwright-cli browser.
 # Safe to run multiple times.
 set -e
 
 echo "Tearing down design system dev session..."
 
-# 1. Remove virtual desktop BEFORE killing Edge
-powershell.exe -NoProfile -Command "
-  Import-Module VirtualDesktop 2>\$null
-  if (-not (Get-Module VirtualDesktop)) { return }
-  for (\$i = 0; \$i -lt (Get-DesktopCount); \$i++) {
-    \$d = Get-Desktop \$i
-    if ((Get-DesktopName \$d) -eq 'Chiaroscuro Dev') {
-      Remove-Desktop \$d -ErrorAction SilentlyContinue
-      Write-Host '  Removed Chiaroscuro Dev desktop'
-      return
-    }
-  }
-  Write-Host '  No Chiaroscuro Dev desktop found'
-" 2>/dev/null || echo "  Could not check virtual desktops"
+# 1. Close playwright-cli browser
+if playwright-cli close 2>/dev/null; then
+  echo "  Closed playwright-cli browser"
+else
+  echo "  No playwright-cli browser running"
+fi
 
-# 2. Kill the Edge instance using the docs profile (not other Edge instances)
-powershell.exe -NoProfile -Command "
-  \$procs = Get-Process -Name msedge -ErrorAction SilentlyContinue |
-    Where-Object { \$_.CommandLine -match 'chiaroscuro-docs-profile' }
-  if (\$procs) {
-    \$procs | Stop-Process -Force -ErrorAction SilentlyContinue
-    Write-Host '  Killed Edge (docs profile)'
-  } else {
-    Write-Host '  No Edge docs instance running'
-  }
-" 2>/dev/null || echo "  Could not check Edge"
-
-# 3. Kill Vite dev server
+# 2. Kill Vite dev server
 if pkill -f "vite.*design-system" 2>/dev/null; then
   echo "  Killed Vite dev server"
 else

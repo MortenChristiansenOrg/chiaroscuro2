@@ -182,7 +182,7 @@ export function TabItem({
     <div
       ref={elRef}
       draggable={!exiting}
-      className="group relative flex items-center cursor-pointer transition-colors hover:bg-glass-hover hover:text-glass-text-hover active:bg-glass-pressed active:text-glass-text-pressed"
+      className="group relative flex items-center cursor-pointer transition-colors duration-150 hover:bg-glass-hover hover:text-glass-text-hover active:bg-glass-pressed active:text-glass-text-pressed"
       style={{
         gap: "0.625rem",
         padding: "0.375rem 0.75rem",
@@ -233,7 +233,7 @@ export function TabItem({
       </span>
       <button
         type="button"
-        className="absolute flex opacity-0 group-hover:opacity-100 items-center justify-center bg-transparent text-glass-text-hint transition-colors hover:text-destructive"
+        className="absolute flex opacity-0 group-hover:opacity-100 items-center justify-center bg-transparent text-glass-text-hint transition-[opacity,color] duration-150 hover:text-destructive"
         style={{
           right: "0.375rem",
           top: "50%",
@@ -279,13 +279,12 @@ export function PinnedTabsStrip({
           <button
             key={pt.id}
             type="button"
-            className={`flex flex-1 items-center justify-center cursor-pointer transition-colors ${isActive ? "" : "bg-glass-subtle hover:bg-glass-hover active:bg-glass-pressed"}`}
+            className={`flex flex-1 items-center justify-center cursor-pointer transition-colors duration-150 ${isActive ? "bg-glass-active" : "bg-glass-subtle hover:bg-glass-hover active:bg-glass-pressed"}`}
             style={{
               height: 32,
               minWidth: 0,
               borderRadius: "var(--radius-md)",
               border: "none",
-              background: isActive ? "var(--glass-active)" : undefined,
               boxShadow: isActive ? "var(--shadow-subtle)" : undefined,
             }}
             tabIndex={-1}
@@ -410,7 +409,7 @@ function TabSection({
         {ephemeral.length > 0 && (
           <button
             type="button"
-            className="flex items-center cursor-pointer bg-transparent text-glass-text-hint transition-colors hover:bg-glass-hover hover:text-glass-text-hover"
+            className="flex items-center cursor-pointer bg-transparent text-glass-text-hint transition-colors duration-150 hover:bg-glass-hover hover:text-glass-text-hover"
             style={{
               gap: "0.25rem",
               border: "none",
