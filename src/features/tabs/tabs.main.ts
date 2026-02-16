@@ -339,7 +339,7 @@ export function register(deps: Deps): void {
   });
 
   commands.handle(TABS_REORDER, async (payload) => {
-    const { tabId, targetIndex, targetBookmarked } = payload;
+    const { tabId, targetBookmarked, targetTabId, position } = payload;
     const tab = tabs.get(tabId);
     if (!tab) return;
 
@@ -350,7 +350,7 @@ export function register(deps: Deps): void {
       tab.bookmarked = false;
     }
 
-    // Get sibling tabs in the target section (same workspace + same bookmark status)
+    // Get sibling tabs in the target section (excluding the dragged tab)
     const siblings = [...tabs.values()]
       .filter(
         (t) =>
@@ -358,8 +358,17 @@ export function register(deps: Deps): void {
       )
       .sort((a, b) => a.order - b.order);
 
-    // Splice the dragged tab into the target position and re-index all
-    siblings.splice(targetIndex, 0, tab);
+    // Determine insert index
+    let insertAt = siblings.length; // default: append
+    if (targetTabId) {
+      const targetIdx = siblings.findIndex((t) => t.id === targetTabId);
+      if (targetIdx !== -1) {
+        insertAt = position === "after" ? targetIdx + 1 : targetIdx;
+      }
+    }
+
+    // Splice the dragged tab into position and re-index all
+    siblings.splice(insertAt, 0, tab);
     for (const [i, sib] of siblings.entries()) {
       if (sib.order !== i) {
         sib.order = i;

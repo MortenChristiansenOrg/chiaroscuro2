@@ -109,21 +109,15 @@ export function TabItem({
   isActive,
   isEphemeral,
   exiting,
-  index,
   isBookmarkedSection,
-  onDragStart,
-  onDragOver,
-  onDrop,
+  dragTabIdRef,
 }: {
   tab: Tab;
   isActive: boolean;
   isEphemeral: boolean;
   exiting?: boolean;
-  index: number;
   isBookmarkedSection: boolean;
-  onDragStart?: (tabId: TabId, index: number) => void;
-  onDragOver?: (e: React.DragEvent, index: number, bookmarked: boolean) => void;
-  onDrop?: (e: React.DragEvent, index: number, bookmarked: boolean) => void;
+  dragTabIdRef: React.RefObject<TabId | null>;
 }) {
   const mountedRef = useRef(false);
   const elRef = useRef<HTMLDivElement>(null);
@@ -144,7 +138,7 @@ export function TabItem({
   const handleDragStart = (e: React.DragEvent) => {
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("text/plain", tab.id);
-    onDragStart?.(tab.id, index);
+    dragTabIdRef.current = tab.id;
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -155,7 +149,6 @@ export function TabItem({
       const midY = rect.top + rect.height / 2;
       setDropIndicator(e.clientY < midY ? "above" : "below");
     }
-    onDragOver?.(e, index, isBookmarkedSection);
   };
 
   const handleDragLeave = () => {
@@ -165,10 +158,20 @@ export function TabItem({
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setDropIndicator(null);
+    const tabId = dragTabIdRef.current;
+    dragTabIdRef.current = null;
+    if (!tabId || tabId === tab.id) return;
     const rect = elRef.current?.getBoundingClientRect();
-    const dropIndex = rect && e.clientY > rect.top + rect.height / 2 ? index + 1 : index;
-    onDrop?.(e, dropIndex, isBookmarkedSection);
+    const position = rect && e.clientY > rect.top + rect.height / 2 ? "after" : "before";
+    sendCommand(TABS_REORDER, {
+      tabId,
+      targetBookmarked: isBookmarkedSection,
+      targetTabId: tab.id,
+      position,
+    });
   };
+
+  const accentColor = "oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250))";
 
   return (
     // biome-ignore lint/a11y/useKeyWithClickEvents: chrome elements are not keyboard-navigable
@@ -182,13 +185,7 @@ export function TabItem({
         margin: "0.25rem 0.375rem",
         borderRadius: "var(--radius-md)",
         background: isActive ? "var(--glass-active)" : undefined,
-        boxShadow: isActive
-          ? "var(--shadow-subtle)"
-          : dropIndicator === "above"
-            ? "inset 0 2px 0 0 var(--accent)"
-            : dropIndicator === "below"
-              ? "inset 0 -2px 0 0 var(--accent)"
-              : undefined,
+        boxShadow: isActive ? "var(--shadow-subtle)" : undefined,
         pointerEvents: exiting ? "none" : undefined,
         animation: exiting
           ? "tab-out 150ms cubic-bezier(0.4, 0, 1, 1) forwards"
@@ -202,6 +199,23 @@ export function TabItem({
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
+      {/* Drop indicator line — sits centered in the margin gap between tabs */}
+      {dropIndicator && (
+        <div
+          style={{
+            position: "absolute",
+            left: "0.75rem",
+            right: "0.75rem",
+            height: 2,
+            borderRadius: 1,
+            background: accentColor,
+            boxShadow: `0 0 6px ${accentColor}`,
+            ...(dropIndicator === "above"
+              ? { top: 0, transform: "translateY(calc(-0.25rem - 1px))" }
+              : { bottom: 0, transform: "translateY(calc(0.25rem + 1px))" }),
+          }}
+        />
+      )}
       <Favicon tab={tab} />
       <span
         className={`flex-1 min-w-0 truncate group-hover:text-glass-text-hover group-hover:mr-5 group-active:text-glass-text-pressed ${isActive ? "text-glass-text-primary" : isEphemeral ? "text-glass-text-muted" : "text-glass-text-default"}`}
@@ -283,90 +297,154 @@ export function PinnedTabsStrip({
   );
 }
 
+function SectionDropZone({
+  targetBookmarked,
+  dragTabIdRef,
+  visible,
+}: {
+  targetBookmarked: boolean;
+  dragTabIdRef: React.RefObject<TabId | null>;
+  visible: boolean;
+}) {
+  const [over, setOver] = useState(false);
+  return (
+    <div
+      style={{
+        height: visible ? (over ? 32 : 24) : 0,
+        margin: visible ? "0.25rem 0.375rem" : "0 0.375rem",
+        borderRadius: "var(--radius-md)",
+        background: over
+          ? "oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250) / 0.1)"
+          : "transparent",
+        border: over
+          ? "1px solid oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250) / 0.3)"
+          : "1px solid transparent",
+        overflow: "hidden",
+        transition:
+          "height var(--duration-normal) var(--ease-in-out), margin var(--duration-normal) var(--ease-in-out), background var(--duration-fast) var(--ease-in-out), border-color var(--duration-fast) var(--ease-in-out)",
+      }}
+      onDragOver={(e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "move";
+        setOver(true);
+      }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setOver(false);
+        const tabId = dragTabIdRef.current;
+        dragTabIdRef.current = null;
+        if (!tabId) return;
+        sendCommand(TABS_REORDER, { tabId, targetBookmarked });
+      }}
+    />
+  );
+}
+
 function TabSection({
   bookmarked,
   ephemeral,
   activeTabId,
   exitingIds,
-  onDragStart,
-  onDragOver,
-  onDrop,
+  dragTabIdRef,
+  isDragging,
   onClearEphemeral,
 }: {
   bookmarked: Tab[];
   ephemeral: Tab[];
   activeTabId: TabId | null;
   exitingIds: Set<TabId>;
-  onDragStart: (tabId: TabId, index: number) => void;
-  onDragOver: (e: React.DragEvent, index: number, bookmarked: boolean) => void;
-  onDrop: (e: React.DragEvent, index: number, bookmarked: boolean) => void;
+  dragTabIdRef: React.RefObject<TabId | null>;
+  isDragging: boolean;
   onClearEphemeral: () => void;
 }) {
+  // Divider visible when ephemeral tabs exist or during drag; lingers for fade-out
+  const dividerTarget = ephemeral.length > 0 || isDragging;
+  const [showDivider, setShowDivider] = useState(dividerTarget);
+  useEffect(() => {
+    if (dividerTarget) {
+      setShowDivider(true);
+      return;
+    }
+    const t = setTimeout(() => setShowDivider(false), 200); // match --duration-normal
+    return () => clearTimeout(t);
+  }, [dividerTarget]);
+
   return (
     <div>
-      {bookmarked.length > 0 &&
-        bookmarked.map((tab, i) => (
+      {bookmarked.length > 0 ? (
+        bookmarked.map((tab) => (
           <TabItem
             key={tab.id}
             tab={tab}
             isActive={tab.id === activeTabId}
             isEphemeral={false}
             exiting={exitingIds.has(tab.id)}
-            index={i}
             isBookmarkedSection={true}
-            onDragStart={onDragStart}
-            onDragOver={onDragOver}
-            onDrop={onDrop}
+            dragTabIdRef={dragTabIdRef}
           />
-        ))}
+        ))
+      ) : (
+        <SectionDropZone targetBookmarked={true} dragTabIdRef={dragTabIdRef} visible={isDragging} />
+      )}
 
-      {ephemeral.length > 0 && (
-        <>
-          <div
-            className="flex items-center"
+      {/* Ephemeral divider — fades in/out based on content or drag state */}
+      <div
+        className="flex items-center"
+        style={{
+          gap: "0.5rem",
+          padding: showDivider ? "0.375rem 0.5rem 0.25rem 0.875rem" : "0 0.5rem 0 0.875rem",
+          margin: "0.125rem 0",
+          height: showDivider ? undefined : 0,
+          opacity: showDivider ? 1 : 0,
+          overflow: "hidden",
+          transition:
+            "opacity var(--duration-normal) var(--ease-in-out), height var(--duration-normal) var(--ease-in-out), padding var(--duration-normal) var(--ease-in-out)",
+        }}
+      >
+        <div style={{ flex: 1, height: 1, background: "var(--glass-border)" }} />
+        {ephemeral.length > 0 && (
+          <button
+            type="button"
+            className="flex items-center cursor-pointer bg-transparent text-glass-text-hint transition-colors hover:bg-glass-hover hover:text-glass-text-hover"
             style={{
-              gap: "0.5rem",
-              padding: "0.375rem 0.5rem 0.25rem 0.875rem",
-              margin: "0.125rem 0",
+              gap: "0.25rem",
+              border: "none",
+              fontSize: "var(--text-xs)",
+              fontWeight: 500,
+              fontFamily: "inherit",
+              padding: "0.125rem 0.375rem",
+              borderRadius: "var(--radius-sm)",
+              whiteSpace: "nowrap",
+              letterSpacing: "0.02em",
             }}
+            tabIndex={-1}
+            onClick={onClearEphemeral}
+            data-tip="Clear ephemeral tabs"
           >
-            <div style={{ flex: 1, height: 1, background: "var(--glass-border)" }} />
-            <button
-              type="button"
-              className="flex items-center cursor-pointer bg-transparent text-glass-text-hint transition-colors hover:bg-glass-hover hover:text-glass-text-hover"
-              style={{
-                gap: "0.25rem",
-                border: "none",
-                fontSize: "var(--text-xs)",
-                fontWeight: 500,
-                fontFamily: "inherit",
-                padding: "0.125rem 0.375rem",
-                borderRadius: "var(--radius-sm)",
-                whiteSpace: "nowrap",
-                letterSpacing: "0.02em",
-              }}
-              tabIndex={-1}
-              onClick={onClearEphemeral}
-              data-tip="Clear ephemeral tabs"
-            >
-              Clear <Icon name="broom" />
-            </button>
-          </div>
-          {ephemeral.map((tab, i) => (
-            <TabItem
-              key={tab.id}
-              tab={tab}
-              isActive={tab.id === activeTabId}
-              isEphemeral={true}
-              exiting={exitingIds.has(tab.id)}
-              index={i}
-              isBookmarkedSection={false}
-              onDragStart={onDragStart}
-              onDragOver={onDragOver}
-              onDrop={onDrop}
-            />
-          ))}
-        </>
+            Clear <Icon name="broom" />
+          </button>
+        )}
+      </div>
+
+      {ephemeral.length > 0 ? (
+        ephemeral.map((tab) => (
+          <TabItem
+            key={tab.id}
+            tab={tab}
+            isActive={tab.id === activeTabId}
+            isEphemeral={true}
+            exiting={exitingIds.has(tab.id)}
+            isBookmarkedSection={false}
+            dragTabIdRef={dragTabIdRef}
+          />
+        ))
+      ) : (
+        <SectionDropZone
+          targetBookmarked={false}
+          dragTabIdRef={dragTabIdRef}
+          visible={isDragging}
+        />
       )}
     </div>
   );
@@ -398,30 +476,16 @@ export function SidebarPanel() {
     (t) => t.workspaceId === activeWorkspaceId && !pinnedTabIds.has(t.id),
   );
   const bookmarked = [
-    ...all.filter((t) => t.bookmarked),
+    ...all.filter((t) => t.bookmarked).sort((a, b) => a.order - b.order),
     ...exitingInWorkspace.filter((t) => t.bookmarked),
   ];
   const ephemeral = [
-    ...all.filter((t) => !t.bookmarked),
+    ...all.filter((t) => !t.bookmarked).sort((a, b) => a.order - b.order),
     ...exitingInWorkspace.filter((t) => !t.bookmarked),
   ];
   // Drag & drop
   const dragTabIdRef = useRef<TabId | null>(null);
-
-  const handleDragStart = (tabId: TabId, _index: number) => {
-    dragTabIdRef.current = tabId;
-  };
-
-  const handleDragOver = (_e: React.DragEvent, _index: number, _bookmarked: boolean) => {
-    // Just allow drop — visual indicator is handled per-item
-  };
-
-  const handleDrop = (_e: React.DragEvent, targetIndex: number, targetBookmarked: boolean) => {
-    const tabId = dragTabIdRef.current;
-    dragTabIdRef.current = null;
-    if (!tabId) return;
-    sendCommand(TABS_REORDER, { tabId, targetIndex, targetBookmarked });
-  };
+  const [isDragging, setIsDragging] = useState(false);
 
   const handleClearEphemeral = () => {
     if (activeWorkspaceId) {
@@ -441,6 +505,11 @@ export function SidebarPanel() {
         aria-label="Sidebar"
         className="flex flex-col overflow-y-auto h-full"
         style={{ width: "var(--sidebar-width)" }}
+        onDragStart={() => requestAnimationFrame(() => setIsDragging(true))}
+        onDragEnd={() => {
+          setIsDragging(false);
+          dragTabIdRef.current = null;
+        }}
       >
         <div className="sr-only" aria-live="polite" aria-atomic="true">
           {announcement}
@@ -455,9 +524,8 @@ export function SidebarPanel() {
           ephemeral={ephemeral}
           activeTabId={activeTabId}
           exitingIds={exitingIds}
-          onDragStart={handleDragStart}
-          onDragOver={handleDragOver}
-          onDrop={handleDrop}
+          dragTabIdRef={dragTabIdRef}
+          isDragging={isDragging}
           onClearEphemeral={handleClearEphemeral}
         />
 

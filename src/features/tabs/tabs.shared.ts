@@ -74,8 +74,11 @@ export interface TabsClearEphemeralPayload {
 
 export interface TabsReorderPayload {
   tabId: TabId;
-  targetIndex: number;
   targetBookmarked: boolean;
+  /** Tab to insert relative to. Omit when dropping into an empty section. */
+  targetTabId?: TabId;
+  /** Where to insert relative to targetTabId. Defaults to "before". */
+  position?: "before" | "after";
 }
 
 export interface TabsCreatedEvent {
