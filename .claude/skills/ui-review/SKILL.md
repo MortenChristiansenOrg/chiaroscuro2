@@ -5,7 +5,7 @@ description: Review the app's UI/UX by launching it, taking screenshots, checkin
 
 # Goal
 
-Perform a comprehensive UI/UX review of the running Chiaroscuro app **or the design system website** using Chrome DevTools MCP. Verify behavior, visual quality, UX, and error-free operation.
+Perform a comprehensive UI/UX review of the running Chiaroscuro app **or the design system website** using the Playwright MCP server. Verify behavior, visual quality, UX, and error-free operation.
 
 ## Invocation
 
@@ -21,32 +21,41 @@ There are two review targets with different launch procedures:
 |               | **App**                                 | **Design System**              |
 | ------------- | --------------------------------------- | ------------------------------ |
 | What          | Electron browser app                    | Vite-served documentation site |
-| URL           | Electron window (no URL)                | `http://<wsl-ip>:5200`         |
-| Launch        | `launch-app.sh`                         | `launch-docs.sh`               |
-| Teardown      | `teardown-app.sh`                       | `teardown-docs.sh`             |
+| URL           | Electron window (no URL)                | `http://localhost:5200`        |
+| Launch        | `launch-app.sh`                         | `launch-docs.sh`              |
+| Teardown      | `teardown-app.sh`                       | `teardown-docs.sh`            |
 | Browser       | Electron (built-in)                     | Edge with CDP                  |
-| Build         | `electron-vite build` + sync to Windows | `bun run docs:dev --host`      |
-| Window chrome | Yes (custom title bar)                  | No                             |
+| Build         | `electron-vite build` + sync to Windows | `bun run docs:dev --host`     |
+| Window chrome | Yes (custom title bar)                  | No                            |
 
-Both targets use the same CDP proxy and virtual desktop isolation.
+Both targets expose CDP on port 9333 which the Playwright MCP server connects to directly via WSL2 mirrored networking.
 
 ## Prerequisites
 
-Chrome DevTools MCP is configured globally at `http://127.0.0.1:9222`. The target must be running with `--remote-debugging-port=9222`.
+Playwright MCP must be configured to connect to the app's CDP endpoint. Add to your MCP config:
+
+```json
+{
+  "playwright": {
+    "command": "npx",
+    "args": ["@playwright/mcp@latest", "--cdp-url", "http://127.0.0.1:9333"]
+  }
+}
+```
 
 ## WSL Environment Setup
 
-This project runs in WSL2. The browser (Electron or Edge) must launch on the Windows host. WSL2 uses NAT networking so it can't reach Windows' `127.0.0.1` directly — a two-hop CDP proxy bridges this gap.
+This project runs in WSL2 with `networkingMode=mirrored`. WSL and Windows share the same port space, so the Playwright MCP server on WSL can reach the Windows-side browser's CDP endpoint directly at `127.0.0.1:9333`.
 
 **Architecture:**
 
 ```text
-Chrome DevTools MCP → WSL 127.0.0.1:9222 → [cdp-proxy] → Windows 0.0.0.0:9223 → 127.0.0.1:9222 (Browser CDP)
+Playwright MCP (WSL) → 127.0.0.1:9333 → Browser CDP (Windows)
 ```
 
-### Starting the app (Electron)
+No CDP proxy is needed.
 
-The launcher handles everything: build, sync, launch on separate virtual desktop, start CDP proxy.
+### Starting the app (Electron)
 
 ```bash
 .claude/skills/ui-review/scripts/launch-app.sh          # build if needed + launch
@@ -55,15 +64,11 @@ The launcher handles everything: build, sync, launch on separate virtual desktop
 
 ### Starting the design system (Edge)
 
-The launcher starts the Vite dev server with `--host` (so Windows can reach WSL), opens Edge with CDP, and starts the proxy.
-
 ```bash
 .claude/skills/ui-review/scripts/launch-docs.sh
 ```
 
 ### Stopping
-
-After the review, tear down everything:
 
 ```bash
 # For app reviews:
@@ -71,14 +76,6 @@ After the review, tear down everything:
 
 # For design system reviews:
 .claude/skills/ui-review/scripts/teardown-docs.sh
-```
-
-### Shared infrastructure
-
-If the app/browser is already running with CDP and just needs the proxy:
-
-```bash
-node .claude/skills/ui-review/scripts/cdp-proxy.mjs &
 ```
 
 ### One-time setup (optional, for virtual desktop isolation)
@@ -90,26 +87,22 @@ Install-Module VirtualDesktop -Scope CurrentUser -Force
 ### Verifying connectivity
 
 ```bash
-curl -s http://127.0.0.1:9222/json/version
+curl -s http://127.0.0.1:9333/json/version
 ```
 
 ## Workflow
 
 ### Phase 0: Connect
 
-1. Run `check-cdp.sh` to verify the target is reachable
-2. If not reachable, run the appropriate launch script and wait for confirmation:
+1. Run the appropriate launch script and wait for confirmation:
    - **App:** `launch-app.sh`
    - **Design system:** `launch-docs.sh`
-3. Use `mcp__chrome-devtools__list_pages` to enumerate open pages
-4. Use `mcp__chrome-devtools__select_page` to pick the correct page
-   - **App:** Select the main app window
-   - **Design system:** Select the tab showing `localhost:5200`
-5. Take an initial screenshot to confirm connection
+2. Use `browser_snapshot` to confirm the connection and see the current page
+3. Take an initial screenshot with `browser_take_screenshot` to confirm visuals
 
 If the review was invoked with a specific feature/area/page, navigate to the relevant view before proceeding.
 
-**Design system navigation:** Use `mcp__chrome-devtools__navigate_page` to go to specific pages (e.g., `http://<wsl-ip>:5200/colors`), or click sidebar links.
+**Design system navigation:** Use `browser_navigate` to go to specific pages (e.g., `http://localhost:5200/colors`), or click sidebar links.
 
 ### Phase 1: Behavior Verification
 
@@ -119,7 +112,7 @@ Verify that implemented features work correctly.
 
 1. **Read the spec** — Check `docs/features/` for the relevant spec file
 2. **Walk through workflows** — Execute each workflow from the spec:
-   - Use `click`, `fill`, `press_key` to simulate user actions
+   - Use `browser_click`, `browser_type`, `browser_press_key` to simulate user actions
    - Take screenshots after each significant state change
    - Verify expected outcomes match spec requirements
 3. **Test edge cases** — Empty states, long text, rapid interactions
@@ -137,10 +130,10 @@ Verify that implemented features work correctly.
 
 **Tools to use:**
 
-- `take_screenshot` — after each action to verify visual state
-- `take_snapshot` — to verify element existence/state when screenshot is ambiguous
-- `click`, `fill`, `press_key` — to simulate user interactions
-- `evaluate_script` — to check app state programmatically if needed
+- `browser_take_screenshot` — after each action to verify visual state
+- `browser_snapshot` — to verify element existence/state when screenshot is ambiguous
+- `browser_click`, `browser_type`, `browser_press_key` — to simulate user interactions
+- `browser_evaluate` — to check app state programmatically if needed
 
 ### Phase 2: Visual Design Review
 
@@ -155,9 +148,9 @@ Evaluate visual quality. Apply the principles from the `frontend-design` skill.
 5. **Polish** — Hover states, transitions, focus indicators, loading states. No raw unstyled elements.
 6. **Responsive behavior** — Resize the window to test narrow/wide layouts:
    ```
-   mcp__chrome-devtools__resize_page width=800 height=600
-   mcp__chrome-devtools__resize_page width=1920 height=1080
-   mcp__chrome-devtools__resize_page width=1280 height=720
+   browser_resize width=800 height=600
+   browser_resize width=1920 height=1080
+   browser_resize width=1280 height=720
    ```
 
 **Design system specific:**
@@ -192,34 +185,32 @@ Check for hidden errors that the user wouldn't see.
 **Console errors:**
 
 ```
-mcp__chrome-devtools__list_console_messages types=["error","warn"]
+browser_console_messages
 ```
 
-- For each error, use `get_console_message` to get full details
 - Distinguish between: app errors (bugs), expected warnings, third-party noise
 - Check for React rendering errors, unhandled promise rejections, failed imports
 
 **Network errors:**
 
 ```
-mcp__chrome-devtools__list_network_requests
+browser_network_requests
 ```
 
 - Check for failed requests (4xx, 5xx status codes)
 - Check for unexpectedly slow requests
 - Look for CORS issues or blocked resources
-- Use `get_network_request` to inspect specific failures
 
 **Runtime state:**
 
-- Use `evaluate_script` to check for:
-  - Uncaught error handlers: `() => window.__errorCount || 'none'`
-  - Memory leaks (large detached DOM trees): `() => document.querySelectorAll('*').length`
+- Use `browser_evaluate` to check for:
+  - Uncaught error handlers: `window.__errorCount || 'none'`
+  - DOM size: `document.querySelectorAll('*').length`
   - React errors in dev mode
 
 ### Phase 5: Cross-Cutting Concerns
 
-1. **Performance feel** — Does the UI feel snappy? Any visible jank or delayed renders? Use `performance_start_trace` if something feels slow.
+1. **Performance feel** — Does the UI feel snappy? Any visible jank or delayed renders?
 2. **State persistence** — Navigate away and back. Is state preserved correctly?
 3. **Window chrome integration** — _(App only)_ Does the custom title bar work? Minimize/maximize/close? Draggable regions?
 
@@ -289,7 +280,5 @@ Reference screenshots taken during review (saved to scratchpad directory).
 - Take screenshots liberally — they're the primary evidence
 - When something looks wrong, take a snapshot too to understand the DOM structure
 - Resize to multiple viewport sizes during visual review
-- Check both light and dark mode if supported: `mcp__chrome-devtools__emulate colorScheme="dark"`
-- Use `includePreservedMessages=true` on console messages to catch errors from previous navigations
-- If the app has multiple windows, review each one via `list_pages` + `select_page`
+- If the app has multiple windows, review each one via `browser_tabs`
 - For design system reviews, check each page in the sidebar — don't just review the landing page

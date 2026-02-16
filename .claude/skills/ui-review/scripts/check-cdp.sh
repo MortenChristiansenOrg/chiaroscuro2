@@ -3,7 +3,7 @@
 # Usage: ./check-cdp.sh
 set -e
 
-PORT="${CHIAROSCURO_DEBUG_PORT:-9222}"
+PORT=9333
 URL="http://127.0.0.1:$PORT"
 
 echo "Checking CDP at $URL..."
@@ -13,9 +13,6 @@ if ! curl -s "$URL/json/version" >/dev/null 2>&1; then
   echo ""
   echo "To start the app with debugging:"
   echo "  .claude/skills/ui-review/scripts/launch-app.sh"
-  echo ""
-  echo "Or manually from Windows:"
-  echo "  npx electron . --remote-debugging-port=$PORT"
   exit 1
 fi
 

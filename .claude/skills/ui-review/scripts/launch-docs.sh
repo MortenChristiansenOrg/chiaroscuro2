@@ -1,21 +1,16 @@
 #!/usr/bin/env bash
 # Start the design system Vite dev server in WSL and open it in Edge on Windows
-# with CDP enabled. Uses the same CDP proxy as the Electron app launcher.
+# with CDP enabled. Uses mirrored networking — no CDP proxy needed.
 #
 # Usage: ./launch-docs.sh
 set -euo pipefail
 
-PORT="${CHIAROSCURO_DEBUG_PORT:-9222}"
+CDP_PORT=9333
 DESKTOP_NAME="Chiaroscuro Dev"
 DOCS_PORT=5200
 PROJECT_DIR="$(cd "$(dirname "$0")/../../../.." && pwd)"
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# Get WSL IP that Windows can reach
-WSL_IP=$(hostname -I | awk '{print $1}')
-DOCS_URL="http://${WSL_IP}:${DOCS_PORT}"
-
-# Kill any existing browser debug session and Vite server
+# Kill any existing Edge debug session for docs (not other Edge instances)
 powershell.exe -NoProfile -Command "
   Get-Process -Name msedge -ErrorAction SilentlyContinue |
     Where-Object { \$_.CommandLine -match 'chiaroscuro-docs-profile' } |
@@ -51,6 +46,9 @@ done
 WIN_USER=$(powershell.exe -NoProfile -Command '[System.Environment]::UserName' | tr -d '\r')
 WIN_PROFILE_DIR="C:\\Users\\${WIN_USER}\\.chiaroscuro-docs-profile"
 
+# Use localhost (mirrored networking shares port space)
+DOCS_URL="http://localhost:${DOCS_PORT}"
+
 # Check if VirtualDesktop module is available
 HAS_VDESKTOP=$(powershell.exe -NoProfile -Command "
   if (Get-Module -ListAvailable -Name VirtualDesktop) { 'yes' } else { 'no' }
@@ -79,37 +77,23 @@ if [ "$HAS_VDESKTOP" = "yes" ]; then
     Set-DesktopName \$targetDesktop '$DESKTOP_NAME'
 
     Switch-Desktop \$targetIdx
-    Start-Process 'msedge.exe' -ArgumentList '--remote-debugging-port=$PORT','--user-data-dir=$WIN_PROFILE_DIR','--no-first-run','--no-default-browser-check','$DOCS_URL'
+    Start-Process 'msedge.exe' -ArgumentList '--remote-debugging-port=$CDP_PORT','--user-data-dir=$WIN_PROFILE_DIR','--no-first-run','--no-default-browser-check','$DOCS_URL'
     Start-Sleep -Milliseconds 1000
     Switch-Desktop \$origIdx
   "
 else
   echo "VirtualDesktop module not found — launching Edge on current desktop."
   powershell.exe -NoProfile -Command "
-    Start-Process 'msedge.exe' -ArgumentList '--remote-debugging-port=$PORT','--user-data-dir=$WIN_PROFILE_DIR','--no-first-run','--no-default-browser-check','$DOCS_URL'
+    Start-Process 'msedge.exe' -ArgumentList '--remote-debugging-port=$CDP_PORT','--user-data-dir=$WIN_PROFILE_DIR','--no-first-run','--no-default-browser-check','$DOCS_URL'
   "
 fi
 
-# Start CDP proxy
-RELAY_PORT=$((PORT + 1))
-pkill -f "cdp-proxy.mjs" 2>/dev/null || true
-powershell.exe -NoProfile -Command "
-  Get-NetTCPConnection -LocalPort $RELAY_PORT -State Listen -ErrorAction SilentlyContinue |
-    ForEach-Object { Stop-Process -Id \$_.OwningProcess -Force -ErrorAction SilentlyContinue }
-" 2>/dev/null || true
-sleep 1
-
-echo "Starting CDP proxy..."
-node "$SCRIPT_DIR/cdp-proxy.mjs" &
-CDP_PROXY_PID=$!
-echo "CDP proxy PID: $CDP_PROXY_PID"
-
-# Wait for CDP endpoint
-echo -n "Waiting for CDP endpoint..."
+# Wait for CDP endpoint (mirrored networking — direct access, no proxy needed)
+echo -n "Waiting for CDP endpoint on port $CDP_PORT..."
 for i in $(seq 1 30); do
-  if curl -s "http://127.0.0.1:$PORT/json/version" >/dev/null 2>&1; then
+  if curl -s "http://127.0.0.1:$CDP_PORT/json/version" >/dev/null 2>&1; then
     echo " ready."
-    curl -s "http://127.0.0.1:$PORT/json/version" | python3 -m json.tool 2>/dev/null || true
+    curl -s "http://127.0.0.1:$CDP_PORT/json/version" | python3 -m json.tool 2>/dev/null || true
     exit 0
   fi
   echo -n "."
@@ -118,5 +102,4 @@ done
 
 echo " timeout. Check that Edge launched correctly on Windows."
 kill $VITE_PID 2>/dev/null
-kill $CDP_PROXY_PID 2>/dev/null
 exit 1

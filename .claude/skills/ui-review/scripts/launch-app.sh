@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Build in WSL, launch Electron on Windows with remote debugging enabled.
 # App opens on a separate virtual desktop so it doesn't disturb user's work.
+# Only kills Chiaroscuro Electron instances, not other Electron apps.
 #
 # Usage: ./launch-app.sh [--rebuild]
 #   --rebuild  Force rebuild even if out/ exists
@@ -8,7 +9,7 @@
 # Requires (one-time): powershell.exe -Command "Install-Module VirtualDesktop -Scope CurrentUser -Force"
 set -e
 
-PORT="${CHIAROSCURO_DEBUG_PORT:-9222}"
+CDP_PORT=9333
 DESKTOP_NAME="Chiaroscuro Dev"
 
 WIN_USER=$(powershell.exe -NoProfile -Command '[System.Environment]::UserName' | tr -d '\r')
@@ -42,9 +43,10 @@ if [ ! -f "$ELECTRON_EXE" ]; then
 fi
 WIN_ELECTRON="$WIN_PATH\\node_modules\\electron\\dist\\electron.exe"
 
-# Kill any existing Electron debug session
+# Kill any existing Chiaroscuro Electron session (not other Electron apps)
 powershell.exe -NoProfile -Command "
   Get-Process -Name electron -ErrorAction SilentlyContinue |
+    Where-Object { \$_.Path -match 'chiaroscuro-dev' } |
     Stop-Process -Force -ErrorAction SilentlyContinue
 " 2>/dev/null || true
 
@@ -83,7 +85,7 @@ if [ "$HAS_VDESKTOP" = "yes" ]; then
     Set-DesktopName \$targetDesktop '$DESKTOP_NAME'
 
     Switch-Desktop \$targetIdx
-    Start-Process -FilePath '$WIN_ELECTRON' -ArgumentList '.','--remote-debugging-port=$PORT' -WorkingDirectory '$WIN_PATH'
+    Start-Process -FilePath '$WIN_ELECTRON' -ArgumentList '.','--remote-debugging-port=$CDP_PORT' -WorkingDirectory '$WIN_PATH'
     Start-Sleep -Milliseconds 1000
     Switch-Desktop \$origIdx
   "
@@ -93,32 +95,16 @@ else
   echo "  powershell.exe -Command \"Install-Module VirtualDesktop -Scope CurrentUser -Force\""
   echo ""
   powershell.exe -NoProfile -Command "
-    Start-Process -FilePath '$WIN_ELECTRON' -ArgumentList '.','--remote-debugging-port=$PORT' -WorkingDirectory '$WIN_PATH'
+    Start-Process -FilePath '$WIN_ELECTRON' -ArgumentList '.','--remote-debugging-port=$CDP_PORT' -WorkingDirectory '$WIN_PATH'
   "
 fi
 
-# Start CDP proxy (WSL2 NAT mode can't reach Windows' 127.0.0.1 directly)
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-
-# Kill any existing proxy (WSL side + Windows-side relay on port 9223)
-pkill -f "cdp-proxy.mjs" 2>/dev/null || true
-powershell.exe -NoProfile -Command "
-  Get-NetTCPConnection -LocalPort 9223 -State Listen -ErrorAction SilentlyContinue |
-    ForEach-Object { Stop-Process -Id \$_.OwningProcess -Force -ErrorAction SilentlyContinue }
-" 2>/dev/null || true
-sleep 1
-
-echo "Starting CDP proxy..."
-node "$SCRIPT_DIR/cdp-proxy.mjs" &
-CDP_PROXY_PID=$!
-echo "CDP proxy PID: $CDP_PROXY_PID"
-
-# Wait for CDP endpoint to become available through the proxy
-echo -n "Waiting for CDP endpoint..."
+# Wait for CDP endpoint (mirrored networking — direct access, no proxy needed)
+echo -n "Waiting for CDP endpoint on port $CDP_PORT..."
 for i in $(seq 1 30); do
-  if curl -s "http://127.0.0.1:$PORT/json/version" >/dev/null 2>&1; then
+  if curl -s "http://127.0.0.1:$CDP_PORT/json/version" >/dev/null 2>&1; then
     echo " ready."
-    curl -s "http://127.0.0.1:$PORT/json/version" | python3 -m json.tool 2>/dev/null || true
+    curl -s "http://127.0.0.1:$CDP_PORT/json/version" | python3 -m json.tool 2>/dev/null || true
     exit 0
   fi
   echo -n "."
@@ -126,5 +112,4 @@ for i in $(seq 1 30); do
 done
 
 echo " timeout. Check that Electron launched correctly on Windows."
-kill $CDP_PROXY_PID 2>/dev/null
 exit 1

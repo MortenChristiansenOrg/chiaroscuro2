@@ -314,6 +314,11 @@ export function register(deps: Deps): void {
     if (isPinned(tabId)) return;
 
     tab.bookmarked = !tab.bookmarked;
+    // Place at end of new section
+    const siblingsInNewSection = [...tabs.values()].filter(
+      (t) => t.workspaceId === tab.workspaceId && t.bookmarked === tab.bookmarked && t.id !== tabId,
+    );
+    tab.order = siblingsInNewSection.length;
     events.emit(TABS_UPDATED, { tab: { ...tab } });
     scheduleListChanged();
     persistTab(tab);
@@ -345,11 +350,25 @@ export function register(deps: Deps): void {
       tab.bookmarked = false;
     }
 
-    tab.order = targetIndex;
+    // Get sibling tabs in the target section (same workspace + same bookmark status)
+    const siblings = [...tabs.values()]
+      .filter(
+        (t) =>
+          t.workspaceId === tab.workspaceId && t.bookmarked === targetBookmarked && t.id !== tabId,
+      )
+      .sort((a, b) => a.order - b.order);
+
+    // Splice the dragged tab into the target position and re-index all
+    siblings.splice(targetIndex, 0, tab);
+    for (const [i, sib] of siblings.entries()) {
+      if (sib.order !== i) {
+        sib.order = i;
+        persistTab(sib);
+      }
+    }
 
     events.emit(TABS_UPDATED, { tab: { ...tab } });
     scheduleListChanged();
-    persistTab(tab);
   });
 
   commands.handle(TABS_REPORT_CONTENT_BOUNDS, async (payload) => {
