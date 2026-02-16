@@ -64,21 +64,7 @@ function useExitAnimation(tabs: Map<TabId, Tab>) {
 
 // ── Components ──────────────────────────────────────────────────
 
-export function Favicon({ tab }: { tab: Tab }) {
-  if (tab.favicon) {
-    return (
-      <img
-        src={tab.favicon}
-        alt=""
-        className="shrink-0 rounded-full"
-        style={{ width: 16, height: 16 }}
-      />
-    );
-  }
-
-  const letter = tab.title?.[0]?.toUpperCase() || tab.url?.[0]?.toUpperCase() || "?";
-  const hue = hashToHue(tab.url || tab.title);
-
+function LetterAvatar({ label, hue }: { label: string; hue: number }) {
   return (
     <div
       className="shrink-0 flex items-center justify-center rounded-full"
@@ -92,9 +78,30 @@ export function Favicon({ tab }: { tab: Tab }) {
         background: `oklch(0.55 0.15 ${hue})`,
       }}
     >
-      {letter}
+      {label}
     </div>
   );
+}
+
+export function Favicon({ tab }: { tab: Pick<Tab, "favicon" | "title" | "url"> }) {
+  const [imgFailed, setImgFailed] = useState(false);
+
+  const letter = tab.title?.[0]?.toUpperCase() || tab.url?.[0]?.toUpperCase() || "?";
+  const hue = hashToHue(tab.url || tab.title);
+
+  if (tab.favicon && !imgFailed) {
+    return (
+      <img
+        src={tab.favicon}
+        alt=""
+        className="shrink-0 rounded-full"
+        style={{ width: 16, height: 16 }}
+        onError={() => setImgFailed(true)}
+      />
+    );
+  }
+
+  return <LetterAvatar label={letter} hue={hue} />;
 }
 
 export function TabItem({
@@ -268,26 +275,7 @@ export function PinnedTabsStrip({
             data-tip={pt.title || pt.url}
             aria-label={pt.title || pt.url}
           >
-            {tab ? (
-              <Favicon tab={tab} />
-            ) : pt.favicon ? (
-              <img
-                src={pt.favicon}
-                alt=""
-                className="rounded-full"
-                style={{ width: 16, height: 16 }}
-              />
-            ) : (
-              <span
-                style={{
-                  fontSize: "var(--text-xs)",
-                  fontWeight: 600,
-                  color: "var(--glass-text-default)",
-                }}
-              >
-                {(pt.title || pt.url)?.[0]?.toUpperCase() || "?"}
-              </span>
-            )}
+            <Favicon tab={tab ?? pt} />
           </button>
         );
       })}
@@ -451,7 +439,7 @@ export function SidebarPanel() {
     >
       <nav
         aria-label="Sidebar"
-        className="flex flex-col overflow-y-auto"
+        className="flex flex-col overflow-y-auto h-full"
         style={{ width: "var(--sidebar-width)" }}
       >
         <div className="sr-only" aria-live="polite" aria-atomic="true">
