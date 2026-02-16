@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Icon } from "../../renderer/src/components/Icon";
 import type { TabId, WorkspaceId } from "../../shared/types";
 import type { PinnedTabsCommands } from "../pinned-tabs/pinned-tabs.shared";
@@ -45,7 +45,8 @@ function useExitAnimation(tabs: Map<TabId, Tab>) {
   const prevTabsRef = useRef(new Map<TabId, Tab>());
   const [exitingTabs, setExitingTabs] = useState<Tab[]>([]);
 
-  useEffect(() => {
+  // useLayoutEffect so the exiting tab stays in the DOM before the browser paints
+  useLayoutEffect(() => {
     const prev = prevTabsRef.current;
     const removed: Tab[] = [];
     for (const [id, tab] of prev) {
@@ -54,7 +55,7 @@ function useExitAnimation(tabs: Map<TabId, Tab>) {
     prevTabsRef.current = new Map(tabs);
     if (removed.length === 0) return;
     setExitingTabs(removed);
-    const timer = setTimeout(() => setExitingTabs([]), 150);
+    const timer = setTimeout(() => setExitingTabs([]), 200);
     return () => clearTimeout(timer);
   }, [tabs]);
 
@@ -123,7 +124,10 @@ export function TabItem({
   const elRef = useRef<HTMLDivElement>(null);
   const [dropIndicator, setDropIndicator] = useState<"above" | "below" | null>(null);
   useEffect(() => {
-    mountedRef.current = true;
+    const t = setTimeout(() => {
+      mountedRef.current = true;
+    }, 200);
+    return () => clearTimeout(t);
   }, []);
 
   const handleClick = () => {
@@ -188,10 +192,10 @@ export function TabItem({
         boxShadow: isActive ? "var(--shadow-subtle)" : undefined,
         pointerEvents: exiting ? "none" : undefined,
         animation: exiting
-          ? "tab-out 150ms cubic-bezier(0.4, 0, 1, 1) forwards"
+          ? "tab-out 200ms cubic-bezier(0.4, 0, 1, 1) forwards"
           : mountedRef.current
             ? undefined
-            : "tab-in 200ms cubic-bezier(0, 0, 0.2, 1)",
+            : "tab-in 200ms cubic-bezier(0, 0, 0.2, 1) both",
       }}
       onClick={handleClick}
       onDragStart={handleDragStart}
@@ -476,13 +480,13 @@ export function SidebarPanel() {
     (t) => t.workspaceId === activeWorkspaceId && !pinnedTabIds.has(t.id),
   );
   const bookmarked = [
-    ...all.filter((t) => t.bookmarked).sort((a, b) => a.order - b.order),
+    ...all.filter((t) => t.bookmarked),
     ...exitingInWorkspace.filter((t) => t.bookmarked),
-  ];
+  ].sort((a, b) => a.order - b.order);
   const ephemeral = [
-    ...all.filter((t) => !t.bookmarked).sort((a, b) => a.order - b.order),
+    ...all.filter((t) => !t.bookmarked),
     ...exitingInWorkspace.filter((t) => !t.bookmarked),
-  ];
+  ].sort((a, b) => a.order - b.order);
   // Drag & drop
   const dragTabIdRef = useRef<TabId | null>(null);
   const [isDragging, setIsDragging] = useState(false);
