@@ -441,41 +441,47 @@ export function SidebarPanel() {
     }
   };
 
-  if (!visible) return null;
-
   return (
-    <nav
-      aria-label="Sidebar"
-      className="flex flex-col overflow-y-auto shrink-0"
-      style={{ width: "var(--sidebar-width)" }}
+    <div
+      className="shrink-0 overflow-hidden"
+      style={{
+        width: visible ? "var(--sidebar-width)" : "0",
+        transition: "width var(--duration-normal) var(--ease-in-out)",
+      }}
     >
-      <div className="sr-only" aria-live="polite" aria-atomic="true">
-        {announcement}
-      </div>
+      <nav
+        aria-label="Sidebar"
+        className="flex flex-col overflow-y-auto"
+        style={{ width: "var(--sidebar-width)" }}
+      >
+        <div className="sr-only" aria-live="polite" aria-atomic="true">
+          {announcement}
+        </div>
 
-      {pinnedTabs.length > 0 && (
-        <PinnedTabsStrip pinnedTabs={pinnedTabs} tabs={tabs} activeTabId={activeTabId} />
-      )}
+        {pinnedTabs.length > 0 && (
+          <PinnedTabsStrip pinnedTabs={pinnedTabs} tabs={tabs} activeTabId={activeTabId} />
+        )}
 
-      <TabSection
-        bookmarked={bookmarked}
-        ephemeral={ephemeral}
-        activeTabId={activeTabId}
-        exitingIds={exitingIds}
-        onDragStart={handleDragStart}
-        onDragOver={handleDragOver}
-        onDrop={handleDrop}
-        onClearEphemeral={handleClearEphemeral}
-      />
+        <TabSection
+          bookmarked={bookmarked}
+          ephemeral={ephemeral}
+          activeTabId={activeTabId}
+          exitingIds={exitingIds}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDrop={handleDrop}
+          onClearEphemeral={handleClearEphemeral}
+        />
 
-      <div className="flex-1" />
+        <div className="flex-1" />
 
-      <WorkspaceSwitcher
-        workspaces={workspaces}
-        activeWorkspaceId={activeWorkspaceId}
-        editorMode={editorMode}
-        onEditorModeChange={setEditorMode}
-      />
-    </nav>
+        <WorkspaceSwitcher
+          workspaces={workspaces}
+          activeWorkspaceId={activeWorkspaceId}
+          editorMode={editorMode}
+          onEditorModeChange={setEditorMode}
+        />
+      </nav>
+    </div>
   );
 }
