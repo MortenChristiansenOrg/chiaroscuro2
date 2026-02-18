@@ -83,20 +83,22 @@ This project runs in WSL2. The Electron app runs on Windows.
 
 ### Starting the app (Electron)
 
-The launcher builds, syncs to Windows, and launches Electron on a separate virtual desktop.
+The launcher builds, syncs to Windows, launches Electron, and auto-connects `playwright-cli` via CDP.
 
 ```bash
-.claude/skills/ui-review/scripts/launch-app.sh          # build if needed + launch
-.claude/skills/ui-review/scripts/launch-app.sh --rebuild # force rebuild
+.claude/skills/ui-review/scripts/launch-app.sh                        # build if needed + launch + connect
+.claude/skills/ui-review/scripts/launch-app.sh --rebuild               # force rebuild
+.claude/skills/ui-review/scripts/launch-app.sh --cdp-port 9444         # custom CDP port
 ```
 
-After Electron launches, start `playwright-cli` separately to review the renderer UI:
+`playwright-cli` connects directly to the Electron renderer via CDP — no separate browser window. You can interact with the actual Electron UI including WebContentsView tabs.
+
+To reconnect manually (e.g., after daemon dies):
 
 ```bash
-playwright-cli open http://localhost:5173  # Vite dev server for renderer
+.claude/skills/ui-review/scripts/connect-app.sh                       # default port 9333
+.claude/skills/ui-review/scripts/connect-app.sh --cdp-port 9444       # custom port
 ```
-
-> **Note:** `playwright-cli` opens its own browser — it does not connect to the Electron window. Use it to review renderer UI (layout, components, interactions). Electron-specific features (native title bar, window chrome, WebContentsView) must be verified manually or via the Electron window directly.
 
 ### Starting the design system
 
@@ -133,12 +135,12 @@ Install-Module VirtualDesktop -Scope CurrentUser -Force
 
 ### Phase 0: Connect
 
-1. Run the appropriate launch script and wait for confirmation
-2. Open the target in `playwright-cli`:
-   - **App:** `playwright-cli open http://localhost:5173`
-   - **Design system:** `playwright-cli open http://localhost:5200`
-3. Run `playwright-cli snapshot` to confirm the page loaded
-4. Run `playwright-cli screenshot` and read the image to confirm visuals
+1. Run the appropriate launch script and wait for confirmation:
+   - **App:** `launch-app.sh` — builds, launches Electron, and auto-connects `playwright-cli` via CDP
+   - **Design system:** `launch-docs.sh` then `playwright-cli open http://localhost:5200`
+2. Run `playwright-cli snapshot` to confirm the page loaded
+3. Run `playwright-cli screenshot` and read the image to confirm visuals
+4. For app reviews, use `playwright-cli tab-list` to see all Electron pages and `playwright-cli tab-select <n>` to switch
 
 If the review was invoked with a specific feature/area/page, navigate with `playwright-cli goto <url>`.
 

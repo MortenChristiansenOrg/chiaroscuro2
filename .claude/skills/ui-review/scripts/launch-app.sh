@@ -3,14 +3,25 @@
 # App opens on a separate virtual desktop so it doesn't disturb user's work.
 # Only kills Chiaroscuro Electron instances, not other Electron apps.
 #
-# Usage: ./launch-app.sh [--rebuild]
-#   --rebuild  Force rebuild even if out/ exists
+# Usage: ./launch-app.sh [--rebuild] [--cdp-port PORT]
+#   --rebuild         Force rebuild even if out/ exists
+#   --cdp-port PORT   CDP port (default: 9333)
 #
 # Requires (one-time): powershell.exe -Command "Install-Module VirtualDesktop -Scope CurrentUser -Force"
 set -e
 
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CDP_PORT=9333
+REBUILD=false
 DESKTOP_NAME="Chiaroscuro Dev"
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --rebuild) REBUILD=true; shift ;;
+    --cdp-port) CDP_PORT="$2"; shift 2 ;;
+    *) echo "Unknown arg: $1"; exit 1 ;;
+  esac
+done
 
 WIN_USER=$(powershell.exe -NoProfile -Command '[System.Environment]::UserName' | tr -d '\r')
 WIN_DIR="/mnt/c/Users/${WIN_USER}/.chiaroscuro-dev"
@@ -19,7 +30,7 @@ WIN_PATH="C:\\Users\\${WIN_USER}\\.chiaroscuro-dev"
 mkdir -p "$WIN_DIR"
 
 # Build unless skipped
-if [ "$1" = "--rebuild" ] || [ ! -d "out" ]; then
+if [ "$REBUILD" = true ] || [ ! -d "out" ]; then
   echo "Building..."
   bunx electron-vite build
 fi
@@ -105,6 +116,9 @@ for i in $(seq 1 30); do
   if curl -s "http://127.0.0.1:$CDP_PORT/json/version" >/dev/null 2>&1; then
     echo " ready."
     curl -s "http://127.0.0.1:$CDP_PORT/json/version" | python3 -m json.tool 2>/dev/null || true
+    echo ""
+    echo "Connecting playwright-cli via CDP..."
+    "$SCRIPT_DIR/connect-app.sh" --cdp-port "$CDP_PORT"
     exit 0
   fi
   echo -n "."

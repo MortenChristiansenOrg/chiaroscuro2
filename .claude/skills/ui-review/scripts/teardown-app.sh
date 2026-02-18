@@ -6,6 +6,9 @@ set -e
 
 echo "Tearing down Chiaroscuro dev session..."
 
+# 0. Close playwright-cli daemon
+playwright-cli close 2>/dev/null || true
+
 # 1. Remove virtual desktop BEFORE killing Electron (so desktop still exists)
 powershell.exe -NoProfile -Command "
   Import-Module VirtualDesktop 2>\$null
