@@ -585,7 +585,7 @@ export function SidebarPanel() {
                 left: 0,
                 right: 0,
                 willChange: "transform, opacity",
-                animation: `${wsTransition.direction === "right" ? "ws-out-left" : "ws-out-right"} ${WS_SLIDE_MS}ms cubic-bezier(0.4, 0, 1, 1) forwards`,
+                animation: `${wsTransition.direction === "right" ? "ws-out-left" : "ws-out-right"} ${WS_SLIDE_MS}ms cubic-bezier(0.4, 0, 0.2, 1) forwards`,
               }}
             >
               <TabSection
@@ -607,7 +607,7 @@ export function SidebarPanel() {
               wsTransition
                 ? {
                     willChange: "transform, opacity",
-                    animation: `${wsTransition.direction === "right" ? "ws-in-from-right" : "ws-in-from-left"} ${WS_SLIDE_MS}ms cubic-bezier(0, 0, 0.2, 1) both`,
+                    animation: `${wsTransition.direction === "right" ? "ws-in-from-right" : "ws-in-from-left"} ${WS_SLIDE_MS}ms cubic-bezier(0.4, 0, 0.2, 1) both`,
                   }
                 : undefined
             }
