@@ -5,7 +5,7 @@ description: Review the app's UI/UX by launching it, taking screenshots, checkin
 
 # Goal
 
-Perform a comprehensive UI/UX review of the running Chiaroscuro app **or the design system website** using `playwright-cli`. Verify behavior, visual quality, UX, and error-free operation.
+Perform a comprehensive UI/UX review of the running Chiaroscuro app **or the design system website**. Verify behavior, visual quality, UX, and error-free operation.
 
 ## Invocation
 
@@ -14,127 +14,20 @@ Perform a comprehensive UI/UX review of the running Chiaroscuro app **or the des
 - `/ui-review design-system` — Full design system website review
 - `/ui-review design-system <page>` — Focused review (e.g., `/ui-review design-system colors`)
 
-## Review Targets
-
-There are two review targets with different launch procedures:
-
-|               | **App**                                 | **Design System**              |
-| ------------- | --------------------------------------- | ------------------------------ |
-| What          | Electron browser app                    | Vite-served documentation site |
-| Launch        | `launch-app.sh`                         | `launch-docs.sh`              |
-| Teardown      | `teardown-app.sh`                       | `teardown-docs.sh`            |
-| Build         | `electron-vite build` + sync to Windows | `bun run docs:dev --host`     |
-| Window chrome | Yes (custom title bar)                  | No                            |
-
 ## Prerequisites
 
-`playwright-cli` must be installed globally (already on `PATH`). No MCP configuration needed.
+Use the `browse-app` skill for all app launching, connecting, and browser interaction. Refer to its SKILL.md at `.claude/skills/browse-app/SKILL.md` for:
 
-## Browser Interaction via `playwright-cli`
-
-All browser interaction uses `playwright-cli` via the Bash tool. The CLI manages its own headless Chromium browser with persistent sessions.
-
-### Key commands
-
-```bash
-# Browser lifecycle
-playwright-cli open [url]             # open browser (optionally navigate)
-playwright-cli close                  # close browser
-playwright-cli goto <url>            # navigate to URL
-
-# Page inspection
-playwright-cli snapshot              # get page accessibility tree with element refs
-playwright-cli screenshot            # screenshot current page
-playwright-cli screenshot <ref>      # screenshot specific element
-playwright-cli screenshot --full-page # full scrollable page
-
-# Interaction (refs come from snapshot output)
-playwright-cli click <ref>           # click element
-playwright-cli fill <ref> <text>     # fill input
-playwright-cli type <text>           # type text into focused element
-playwright-cli press <key>           # press key (e.g., Enter, ArrowDown)
-playwright-cli hover <ref>           # hover over element
-playwright-cli select <ref> <val>    # select dropdown option
-playwright-cli resize <w> <h>        # resize viewport
-
-# Debugging
-playwright-cli console               # list console messages
-playwright-cli console error         # errors only
-playwright-cli network               # list network requests
-playwright-cli eval '<func>'         # evaluate JS on page
-
-# Tabs
-playwright-cli tab-list              # list tabs
-playwright-cli tab-new [url]         # open new tab
-playwright-cli tab-close [index]     # close tab
-```
-
-### Workflow pattern
-
-1. Take a `snapshot` to get element refs
-2. Use refs to `click`, `fill`, `hover` etc.
-3. Take `screenshot` to verify visual state
-4. Read the screenshot image file with the Read tool to see the result
-5. Repeat
-
-## WSL Environment Setup
-
-This project runs in WSL2. The Electron app runs on Windows.
-
-### Starting the app (Electron)
-
-The launcher builds, syncs to Windows, launches Electron, and auto-connects `playwright-cli` via CDP.
-
-```bash
-.claude/skills/ui-review/scripts/launch-app.sh                        # build if needed + launch + connect
-.claude/skills/ui-review/scripts/launch-app.sh --rebuild               # force rebuild
-.claude/skills/ui-review/scripts/launch-app.sh --cdp-port 9444         # custom CDP port
-```
-
-`playwright-cli` connects directly to the Electron renderer via CDP — no separate browser window. You can interact with the actual Electron UI including WebContentsView tabs.
-
-To reconnect manually (e.g., after daemon dies):
-
-```bash
-.claude/skills/ui-review/scripts/connect-app.sh                       # default port 9333
-.claude/skills/ui-review/scripts/connect-app.sh --cdp-port 9444       # custom port
-```
-
-### Starting the design system
-
-```bash
-.claude/skills/ui-review/scripts/launch-docs.sh
-```
-
-Then open in `playwright-cli`:
-
-```bash
-playwright-cli open http://localhost:5200
-```
-
-### Stopping
-
-```bash
-# Close playwright-cli browser:
-playwright-cli close
-
-# For app reviews:
-.claude/skills/ui-review/scripts/teardown-app.sh
-
-# For design system reviews:
-.claude/skills/ui-review/scripts/teardown-docs.sh
-```
+- Launch/teardown scripts and their usage
+- `playwright-cli` command reference
+- WSL environment setup
+- Connect workflow
 
 ## Workflow
 
 ### Phase 0: Connect
 
-1. Run the appropriate launch script and wait for confirmation:
-   - **App:** `launch-app.sh` — builds, launches Electron, and auto-connects `playwright-cli` via CDP
-   - **Design system:** `launch-docs.sh` then `playwright-cli open http://localhost:5200`
-2. Run `playwright-cli snapshot` to confirm the page loaded
-3. Run `playwright-cli screenshot` and read the image to confirm visuals
-4. For app reviews, use `playwright-cli tab-list` to see all Electron pages and `playwright-cli tab-select <n>` to switch
+Use the `browse-app` connect workflow to launch and connect to the target.
 
 If the review was invoked with a specific feature/area/page, navigate with `playwright-cli goto <url>`.
 
@@ -229,15 +122,7 @@ playwright-cli eval '() => document.querySelectorAll("*").length'
 
 ### Phase 6: Teardown
 
-```bash
-playwright-cli close
-
-# App:
-.claude/skills/ui-review/scripts/teardown-app.sh
-
-# Design system:
-.claude/skills/ui-review/scripts/teardown-docs.sh
-```
+Use the `browse-app` teardown scripts to stop the app/design system.
 
 ## Output Format
 
@@ -289,10 +174,6 @@ Reference screenshots taken during review (saved to scratchpad directory).
 
 ## Tips
 
-- Save screenshots to the scratchpad directory, not the project
 - Take screenshots liberally — they're the primary evidence
-- Always `snapshot` before interacting to get fresh element refs
-- When something looks wrong, take a snapshot too to understand the DOM structure
 - Resize to multiple viewport sizes during visual review
-- Use `--full-page` on screenshots to capture scrollable content
 - For design system reviews, check each page in the sidebar — don't just review the landing page

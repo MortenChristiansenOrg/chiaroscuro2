@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build in WSL, launch Electron on Windows with remote debugging enabled.
-# Only kills Chiaroscuro Electron instances, not other Electron apps.
+# Only kills the Electron process listening on the target CDP port.
 #
 # Usage: ./launch-app.sh [--rebuild] [--cdp-port PORT]
 #   --rebuild         Force rebuild even if out/ exists
@@ -50,11 +50,13 @@ if [ ! -f "$ELECTRON_EXE" ]; then
 fi
 WIN_ELECTRON="$WIN_PATH\\node_modules\\electron\\dist\\electron.exe"
 
-# Kill any existing Chiaroscuro Electron session (not other Electron apps)
+# Kill any existing process listening on the CDP port
 powershell.exe -NoProfile -Command "
-  Get-Process -Name electron -ErrorAction SilentlyContinue |
-    Where-Object { \$_.Path -match 'chiaroscuro-dev' } |
-    Stop-Process -Force -ErrorAction SilentlyContinue
+  \$conn = Get-NetTCPConnection -LocalPort $CDP_PORT -State Listen -ErrorAction SilentlyContinue
+  if (\$conn) {
+    Stop-Process -Id \$conn.OwningProcess -Force -ErrorAction SilentlyContinue
+    Write-Host 'Killed process on port $CDP_PORT'
+  }
 " 2>/dev/null || true
 
 sleep 1
