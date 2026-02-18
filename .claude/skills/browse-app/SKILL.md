@@ -78,6 +78,12 @@ playwright-cli tab-close [index]     # close tab
 
 This project runs in WSL2. The Electron app runs on Windows.
 
+### CDP Port Configuration
+
+The CDP port is read from `ELECTRON_APP_PORT` in `.env.local`. All scripts (`launch-app.sh`, `connect-app.sh`, `teardown-app.sh`) use this value automatically. If the env var is missing, scripts will error with instructions.
+
+You can override with `--cdp-port PORT` on any script.
+
 ### Starting the app (Electron)
 
 The launcher builds, syncs to Windows, launches Electron, and auto-connects `playwright-cli` via CDP.
@@ -85,7 +91,6 @@ The launcher builds, syncs to Windows, launches Electron, and auto-connects `pla
 ```bash
 .claude/skills/browse-app/scripts/launch-app.sh                        # build if needed + launch + connect
 .claude/skills/browse-app/scripts/launch-app.sh --rebuild               # force rebuild
-.claude/skills/browse-app/scripts/launch-app.sh --cdp-port 9444         # custom CDP port
 ```
 
 `playwright-cli` connects directly to the Electron renderer via CDP — no separate browser window. You can interact with the actual Electron UI including WebContentsView tabs.
@@ -93,8 +98,7 @@ The launcher builds, syncs to Windows, launches Electron, and auto-connects `pla
 To reconnect manually (e.g., after daemon dies):
 
 ```bash
-.claude/skills/browse-app/scripts/connect-app.sh                       # default port 9333
-.claude/skills/browse-app/scripts/connect-app.sh --cdp-port 9444       # custom port
+.claude/skills/browse-app/scripts/connect-app.sh
 ```
 
 ### Starting the design system
@@ -116,8 +120,7 @@ playwright-cli open http://localhost:5200
 playwright-cli close
 
 # For app:
-.claude/skills/browse-app/scripts/teardown-app.sh                       # default port 9333
-.claude/skills/browse-app/scripts/teardown-app.sh --cdp-port 9444       # custom port
+.claude/skills/browse-app/scripts/teardown-app.sh
 
 # For design system:
 .claude/skills/browse-app/scripts/teardown-docs.sh

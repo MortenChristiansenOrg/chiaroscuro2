@@ -8,8 +8,9 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-CDP_PORT=9333
+PROJECT_DIR="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 REBUILD=false
+CDP_PORT=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -18,6 +19,18 @@ while [[ $# -gt 0 ]]; do
     *) echo "Unknown arg: $1"; exit 1 ;;
   esac
 done
+
+# Read from .env.local if --cdp-port not provided
+if [ -z "$CDP_PORT" ]; then
+  if [ -f "$PROJECT_DIR/.env.local" ]; then
+    CDP_PORT=$(grep -oP '^ELECTRON_APP_PORT=\K.*' "$PROJECT_DIR/.env.local" | tr -d '[:space:]')
+  fi
+  if [ -z "$CDP_PORT" ]; then
+    echo "Error: ELECTRON_APP_PORT not set in .env.local and no --cdp-port flag provided."
+    echo "Add ELECTRON_APP_PORT=<port> to $PROJECT_DIR/.env.local"
+    exit 1
+  fi
+fi
 
 WIN_USER=$(powershell.exe -NoProfile -Command '[System.Environment]::UserName' | tr -d '\r')
 WIN_DIR="/mnt/c/Users/${WIN_USER}/.chiaroscuro-dev"

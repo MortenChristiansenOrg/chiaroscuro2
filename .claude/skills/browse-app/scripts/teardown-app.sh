@@ -7,7 +7,7 @@
 #   --cdp-port PORT   CDP port (default: 9333)
 set -e
 
-CDP_PORT=9333
+CDP_PORT=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -15,6 +15,20 @@ while [[ $# -gt 0 ]]; do
     *) echo "Unknown arg: $1"; exit 1 ;;
   esac
 done
+
+# Read from .env.local if --cdp-port not provided
+if [ -z "$CDP_PORT" ]; then
+  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+  PROJECT_DIR="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
+  if [ -f "$PROJECT_DIR/.env.local" ]; then
+    CDP_PORT=$(grep -oP '^ELECTRON_APP_PORT=\K.*' "$PROJECT_DIR/.env.local" | tr -d '[:space:]')
+  fi
+  if [ -z "$CDP_PORT" ]; then
+    echo "Error: ELECTRON_APP_PORT not set in .env.local and no --cdp-port flag provided."
+    echo "Add ELECTRON_APP_PORT=<port> to $PROJECT_DIR/.env.local"
+    exit 1
+  fi
+fi
 
 echo "Tearing down Chiaroscuro dev session (port $CDP_PORT)..."
 
