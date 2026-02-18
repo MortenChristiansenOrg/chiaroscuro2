@@ -34,9 +34,10 @@ if [ ! -f "$ELECTRON_EXE" ]; then
 fi
 WIN_ELECTRON="$WIN_PATH\\node_modules\\electron\\dist\\electron.exe"
 
-# Kill any existing Electron from previous run
+# Kill any existing Electron from previous run (only ours, not other Electron apps)
 powershell.exe -NoProfile -Command "
   Get-Process -Name electron -ErrorAction SilentlyContinue |
+    Where-Object { \$_.Path -like '*chiaroscuro-dev*' } |
     Stop-Process -Force -ErrorAction SilentlyContinue
 " 2>/dev/null || true
 
@@ -47,6 +48,7 @@ cleanup() {
   [ -n "$VITE_PID" ] && kill "$VITE_PID" 2>/dev/null
   powershell.exe -NoProfile -Command "
     Get-Process -Name electron -ErrorAction SilentlyContinue |
+      Where-Object { \$_.Path -like '*chiaroscuro-dev*' } |
       Stop-Process -Force -ErrorAction SilentlyContinue
   " 2>/dev/null || true
 }
