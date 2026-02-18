@@ -125,12 +125,6 @@ playwright-cli close
 .claude/skills/ui-review/scripts/teardown-docs.sh
 ```
 
-### One-time setup (optional, for virtual desktop isolation)
-
-```powershell
-Install-Module VirtualDesktop -Scope CurrentUser -Force
-```
-
 ## Workflow
 
 ### Phase 0: Connect

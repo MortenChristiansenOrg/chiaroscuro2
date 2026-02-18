@@ -1,19 +1,15 @@
 #!/usr/bin/env bash
 # Build in WSL, launch Electron on Windows with remote debugging enabled.
-# App opens on a separate virtual desktop so it doesn't disturb user's work.
 # Only kills Chiaroscuro Electron instances, not other Electron apps.
 #
 # Usage: ./launch-app.sh [--rebuild] [--cdp-port PORT]
 #   --rebuild         Force rebuild even if out/ exists
 #   --cdp-port PORT   CDP port (default: 9333)
-#
-# Requires (one-time): powershell.exe -Command "Install-Module VirtualDesktop -Scope CurrentUser -Force"
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CDP_PORT=9333
 REBUILD=false
-DESKTOP_NAME="Chiaroscuro Dev"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -63,52 +59,10 @@ powershell.exe -NoProfile -Command "
 
 sleep 1
 
-# Check if VirtualDesktop module is available
-HAS_VDESKTOP=$(powershell.exe -NoProfile -Command "
-  if (Get-Module -ListAvailable -Name VirtualDesktop) { 'yes' } else { 'no' }
-" | tr -d '\r')
-
-if [ "$HAS_VDESKTOP" = "yes" ]; then
-  echo "Launching on virtual desktop '$DESKTOP_NAME'..."
-  powershell.exe -NoProfile -Command "
-    Import-Module VirtualDesktop 2>\$null
-
-    # Remember current desktop index
-    \$origDesktop = Get-CurrentDesktop
-    \$origIdx = 0
-    \$desktops = @(Get-Desktop 0)
-    for (\$i = 1; \$i -lt (Get-DesktopCount); \$i++) {
-      \$desktops += Get-Desktop \$i
-    }
-    for (\$i = 0; \$i -lt \$desktops.Count; \$i++) {
-      if (Test-CurrentDesktop \$desktops[\$i]) { \$origIdx = \$i; break }
-    }
-
-    # Ensure a second desktop exists for the app
-    \$targetIdx = Get-DesktopCount
-    if (\$targetIdx -lt 2) {
-      New-Desktop | Out-Null
-    }
-    \$targetIdx = if (\$origIdx -eq 0) { 1 } else { 0 }
-
-    # Name the target desktop
-    \$targetDesktop = Get-Desktop \$targetIdx
-    Set-DesktopName \$targetDesktop '$DESKTOP_NAME'
-
-    Switch-Desktop \$targetIdx
-    Start-Process -FilePath '$WIN_ELECTRON' -ArgumentList '.','--remote-debugging-port=$CDP_PORT' -WorkingDirectory '$WIN_PATH'
-    Start-Sleep -Milliseconds 1000
-    Switch-Desktop \$origIdx
-  "
-else
-  echo "VirtualDesktop module not found — launching on current desktop."
-  echo "To launch on a separate desktop, run once:"
-  echo "  powershell.exe -Command \"Install-Module VirtualDesktop -Scope CurrentUser -Force\""
-  echo ""
-  powershell.exe -NoProfile -Command "
-    Start-Process -FilePath '$WIN_ELECTRON' -ArgumentList '.','--remote-debugging-port=$CDP_PORT' -WorkingDirectory '$WIN_PATH'
-  "
-fi
+echo "Launching Electron..."
+powershell.exe -NoProfile -Command "
+  Start-Process -FilePath '$WIN_ELECTRON' -ArgumentList '.','--remote-debugging-port=$CDP_PORT' -WorkingDirectory '$WIN_PATH'
+"
 
 # Wait for CDP endpoint (mirrored networking — direct access, no proxy needed)
 echo -n "Waiting for CDP endpoint on port $CDP_PORT..."
