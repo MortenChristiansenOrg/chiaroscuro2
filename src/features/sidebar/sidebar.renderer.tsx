@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../../renderer/src/components/Icon";
 import type { TabId, WorkspaceId } from "../../shared/types";
 import type { PinnedTabsCommands } from "../pinned-tabs/pinned-tabs.shared";
@@ -10,6 +10,7 @@ import { TABS_ACTIVATE, TABS_CLEAR_EPHEMERAL, TABS_CLOSE, TABS_REORDER } from ".
 // shell-composite: read-only cross-feature store access
 import { useTabsStore } from "../tabs/tabs.store";
 import { WorkspaceSwitcher } from "../workspaces/workspaces.renderer";
+import type { Workspace } from "../workspaces/workspaces.shared";
 // shell-composite: read-only cross-feature store access
 import { useWorkspacesStore } from "../workspaces/workspaces.store";
 import { useSidebarStore } from "./sidebar.store";
@@ -63,6 +64,35 @@ function useExitAnimation(tabs: Map<TabId, Tab>) {
   return { exitingTabs, exitingIds };
 }
 
+const WS_SLIDE_MS = 300;
+
+function useWorkspaceSlide(activeWorkspaceId: WorkspaceId | null, workspaces: Workspace[]) {
+  const prevWsIdRef = useRef(activeWorkspaceId);
+  const [transition, setTransition] = useState<{
+    direction: "left" | "right";
+    fromWorkspaceId: WorkspaceId;
+  } | null>(null);
+
+  useLayoutEffect(() => {
+    const prevId = prevWsIdRef.current;
+    prevWsIdRef.current = activeWorkspaceId;
+
+    if (!prevId || !activeWorkspaceId || prevId === activeWorkspaceId) return;
+
+    const prevIndex = workspaces.findIndex((w) => w.id === prevId);
+    const newIndex = workspaces.findIndex((w) => w.id === activeWorkspaceId);
+    if (prevIndex === -1 || newIndex === -1) return;
+
+    const direction = newIndex > prevIndex ? "right" : "left";
+    setTransition({ direction, fromWorkspaceId: prevId });
+
+    const timer = setTimeout(() => setTransition(null), WS_SLIDE_MS);
+    return () => clearTimeout(timer);
+  }, [activeWorkspaceId, workspaces]);
+
+  return transition;
+}
+
 // ── Components ──────────────────────────────────────────────────
 
 function LetterAvatar({ label, hue }: { label: string; hue: number }) {
@@ -112,6 +142,7 @@ export function TabItem({
   exiting,
   isBookmarkedSection,
   dragTabIdRef,
+  disableEntryAnimation,
 }: {
   tab: Tab;
   isActive: boolean;
@@ -119,6 +150,7 @@ export function TabItem({
   exiting?: boolean;
   isBookmarkedSection: boolean;
   dragTabIdRef: React.RefObject<TabId | null>;
+  disableEntryAnimation?: boolean;
 }) {
   const mountedRef = useRef(false);
   const elRef = useRef<HTMLDivElement>(null);
@@ -193,7 +225,7 @@ export function TabItem({
         pointerEvents: exiting ? "none" : undefined,
         animation: exiting
           ? "tab-out 200ms cubic-bezier(0.4, 0, 1, 1) forwards"
-          : mountedRef.current
+          : mountedRef.current || disableEntryAnimation
             ? undefined
             : "tab-in 200ms cubic-bezier(0, 0, 0.2, 1) both",
       }}
@@ -352,6 +384,7 @@ function TabSection({
   dragTabIdRef,
   isDragging,
   onClearEphemeral,
+  disableEntryAnimation,
 }: {
   bookmarked: Tab[];
   ephemeral: Tab[];
@@ -360,6 +393,7 @@ function TabSection({
   dragTabIdRef: React.RefObject<TabId | null>;
   isDragging: boolean;
   onClearEphemeral: () => void;
+  disableEntryAnimation?: boolean;
 }) {
   // Divider visible when ephemeral tabs exist or during drag; lingers for fade-out
   const dividerTarget = ephemeral.length > 0 || isDragging;
@@ -385,6 +419,7 @@ function TabSection({
             exiting={exitingIds.has(tab.id)}
             isBookmarkedSection={true}
             dragTabIdRef={dragTabIdRef}
+            disableEntryAnimation={disableEntryAnimation}
           />
         ))
       ) : (
@@ -440,6 +475,7 @@ function TabSection({
             exiting={exitingIds.has(tab.id)}
             isBookmarkedSection={false}
             dragTabIdRef={dragTabIdRef}
+            disableEntryAnimation={disableEntryAnimation}
           />
         ))
       ) : (
@@ -471,6 +507,9 @@ export function SidebarPanel() {
   // Exit animation
   const { exitingTabs, exitingIds } = useExitAnimation(tabs);
 
+  // Workspace slide transition
+  const wsTransition = useWorkspaceSlide(activeWorkspaceId, workspaces);
+
   // Derive filtered tab lists
   const all = [...tabs.values()].filter(
     (t) => t.workspaceId === activeWorkspaceId && !pinnedTabIds.has(t.id),
@@ -486,6 +525,19 @@ export function SidebarPanel() {
     ...all.filter((t) => !t.bookmarked),
     ...exitingInWorkspace.filter((t) => !t.bookmarked),
   ].sort((a, b) => a.order - b.order);
+
+  // Previous workspace tabs (for slide-out during transition)
+  const prevTabs = useMemo(() => {
+    if (!wsTransition) return null;
+    const prevAll = [...tabs.values()].filter(
+      (t) => t.workspaceId === wsTransition.fromWorkspaceId && !pinnedTabIds.has(t.id),
+    );
+    return {
+      bookmarked: prevAll.filter((t) => t.bookmarked).sort((a, b) => a.order - b.order),
+      ephemeral: prevAll.filter((t) => !t.bookmarked).sort((a, b) => a.order - b.order),
+    };
+  }, [wsTransition, tabs, pinnedTabIds]);
+
   // Drag & drop
   const dragTabIdRef = useRef<TabId | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -522,15 +574,56 @@ export function SidebarPanel() {
           <PinnedTabsStrip pinnedTabs={pinnedTabs} tabs={tabs} activeTabId={activeTabId} />
         )}
 
-        <TabSection
-          bookmarked={bookmarked}
-          ephemeral={ephemeral}
-          activeTabId={activeTabId}
-          exitingIds={exitingIds}
-          dragTabIdRef={dragTabIdRef}
-          isDragging={isDragging}
-          onClearEphemeral={handleClearEphemeral}
-        />
+        <div style={{ position: "relative", overflow: "hidden" }}>
+          {/* Exiting workspace tabs (slide out) */}
+          {wsTransition && prevTabs && (
+            <div
+              key={`exit-${wsTransition.fromWorkspaceId}`}
+              style={{
+                position: "absolute",
+                top: 0,
+                left: 0,
+                right: 0,
+                willChange: "transform, opacity",
+                animation: `${wsTransition.direction === "right" ? "ws-out-left" : "ws-out-right"} ${WS_SLIDE_MS}ms cubic-bezier(0.4, 0, 1, 1) forwards`,
+              }}
+            >
+              <TabSection
+                bookmarked={prevTabs.bookmarked}
+                ephemeral={prevTabs.ephemeral}
+                activeTabId={null}
+                exitingIds={new Set()}
+                dragTabIdRef={dragTabIdRef}
+                isDragging={false}
+                onClearEphemeral={() => {}}
+                disableEntryAnimation
+              />
+            </div>
+          )}
+          {/* Current workspace tabs (slide in) */}
+          <div
+            key={activeWorkspaceId ?? undefined}
+            style={
+              wsTransition
+                ? {
+                    willChange: "transform, opacity",
+                    animation: `${wsTransition.direction === "right" ? "ws-in-from-right" : "ws-in-from-left"} ${WS_SLIDE_MS}ms cubic-bezier(0, 0, 0.2, 1) both`,
+                  }
+                : undefined
+            }
+          >
+            <TabSection
+              bookmarked={bookmarked}
+              ephemeral={ephemeral}
+              activeTabId={activeTabId}
+              exitingIds={exitingIds}
+              dragTabIdRef={dragTabIdRef}
+              isDragging={isDragging}
+              onClearEphemeral={handleClearEphemeral}
+              disableEntryAnimation={!!wsTransition}
+            />
+          </div>
+        </div>
 
         <div className="flex-1" />
 

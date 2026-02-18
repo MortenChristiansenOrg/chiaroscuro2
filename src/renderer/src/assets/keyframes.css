@@ -79,6 +79,35 @@
   }
 }
 
+/* ── Workspace slide transitions ── */
+@keyframes ws-out-left {
+  to {
+    transform: translateX(-40%);
+    opacity: 0;
+  }
+}
+
+@keyframes ws-in-from-right {
+  from {
+    transform: translateX(40%);
+    opacity: 0;
+  }
+}
+
+@keyframes ws-out-right {
+  to {
+    transform: translateX(40%);
+    opacity: 0;
+  }
+}
+
+@keyframes ws-in-from-left {
+  from {
+    transform: translateX(-40%);
+    opacity: 0;
+  }
+}
+
 /* ── Tab entrance / exit ── */
 @keyframes tab-in {
   from {
