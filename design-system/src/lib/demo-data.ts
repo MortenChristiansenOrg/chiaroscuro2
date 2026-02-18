@@ -53,7 +53,7 @@ export const DEMO_WORKSPACES: Workspace[] = [
     id: WS_WORK,
     name: "Work",
     color: "oklch(0.65 0.15 230)",
-    icon: "W",
+    icon: "fa:briefcase",
     activeTabId: tabId("tab-github"),
   },
   {
