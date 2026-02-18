@@ -558,7 +558,7 @@ export function SidebarPanel() {
     >
       <nav
         aria-label="Sidebar"
-        className="flex flex-col overflow-y-auto h-full"
+        className="flex flex-col overflow-hidden h-full"
         style={{ width: "var(--sidebar-width)" }}
         onDragStart={() => requestAnimationFrame(() => setIsDragging(true))}
         onDragEnd={() => {
@@ -574,58 +574,58 @@ export function SidebarPanel() {
           <PinnedTabsStrip pinnedTabs={pinnedTabs} tabs={tabs} activeTabId={activeTabId} />
         )}
 
-        <div style={{ position: "relative", overflow: "hidden" }}>
-          {/* Exiting workspace tabs (slide out) */}
-          {wsTransition && prevTabs && (
+        <div className="flex-1 overflow-y-auto">
+          <div style={{ position: "relative", overflow: "hidden" }}>
+            {/* Exiting workspace tabs (slide out) */}
+            {wsTransition && prevTabs && (
+              <div
+                key={`exit-${wsTransition.fromWorkspaceId}`}
+                style={{
+                  position: "absolute",
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  willChange: "transform, opacity",
+                  animation: `${wsTransition.direction === "right" ? "ws-out-left" : "ws-out-right"} ${WS_SLIDE_MS}ms cubic-bezier(0.4, 0, 0.2, 1) forwards`,
+                }}
+              >
+                <TabSection
+                  bookmarked={prevTabs.bookmarked}
+                  ephemeral={prevTabs.ephemeral}
+                  activeTabId={null}
+                  exitingIds={new Set()}
+                  dragTabIdRef={dragTabIdRef}
+                  isDragging={false}
+                  onClearEphemeral={() => {}}
+                  disableEntryAnimation
+                />
+              </div>
+            )}
+            {/* Current workspace tabs (slide in) */}
             <div
-              key={`exit-${wsTransition.fromWorkspaceId}`}
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                right: 0,
-                willChange: "transform, opacity",
-                animation: `${wsTransition.direction === "right" ? "ws-out-left" : "ws-out-right"} ${WS_SLIDE_MS}ms cubic-bezier(0.4, 0, 0.2, 1) forwards`,
-              }}
+              key={activeWorkspaceId ?? undefined}
+              style={
+                wsTransition
+                  ? {
+                      willChange: "transform, opacity",
+                      animation: `${wsTransition.direction === "right" ? "ws-in-from-right" : "ws-in-from-left"} ${WS_SLIDE_MS}ms cubic-bezier(0.4, 0, 0.2, 1) both`,
+                    }
+                  : undefined
+              }
             >
               <TabSection
-                bookmarked={prevTabs.bookmarked}
-                ephemeral={prevTabs.ephemeral}
-                activeTabId={null}
-                exitingIds={new Set()}
+                bookmarked={bookmarked}
+                ephemeral={ephemeral}
+                activeTabId={activeTabId}
+                exitingIds={exitingIds}
                 dragTabIdRef={dragTabIdRef}
-                isDragging={false}
-                onClearEphemeral={() => {}}
-                disableEntryAnimation
+                isDragging={isDragging}
+                onClearEphemeral={handleClearEphemeral}
+                disableEntryAnimation={!!wsTransition}
               />
             </div>
-          )}
-          {/* Current workspace tabs (slide in) */}
-          <div
-            key={activeWorkspaceId ?? undefined}
-            style={
-              wsTransition
-                ? {
-                    willChange: "transform, opacity",
-                    animation: `${wsTransition.direction === "right" ? "ws-in-from-right" : "ws-in-from-left"} ${WS_SLIDE_MS}ms cubic-bezier(0.4, 0, 0.2, 1) both`,
-                  }
-                : undefined
-            }
-          >
-            <TabSection
-              bookmarked={bookmarked}
-              ephemeral={ephemeral}
-              activeTabId={activeTabId}
-              exitingIds={exitingIds}
-              dragTabIdRef={dragTabIdRef}
-              isDragging={isDragging}
-              onClearEphemeral={handleClearEphemeral}
-              disableEntryAnimation={!!wsTransition}
-            />
           </div>
         </div>
-
-        <div className="flex-1" />
 
         <WorkspaceSwitcher
           workspaces={workspaces}

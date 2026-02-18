@@ -71,17 +71,10 @@ None. No console errors, warnings, or failed network requests.
 
 ## Recommendations
 
-1. **[MED]** Clear URL bar when switching to empty workspace (or show workspace name)
-2. **[MED]** Verify tooltips render on hover — `data-tip` attrs exist but may not trigger visually
-3. **[LOW]** Add confirmation for workspace deletion (at minimum if workspace has tabs)
-4. **[LOW]** Make selected color swatch more obvious (checkmark or scale-up)
-5. **[LOW]** Add visual bookmark/pin indicators on tab items (star icon, pin icon)
-   Transition between workspaces should be smoother
-   The ui review should not shut down the agent manager and it should use playwright-cli
-   Review our test documentation
-   Workspace favicon support - or use the solid FA icons
-   UI review should check if components are in the design system where it can evaluate them in isolation.
-   You cannot reorder ephemeral tabs, but you can move to other lists.
-   The ctrl-s shortcut is not handled nicely.
-   Reordering tabs styling is bad
-   The workspace switcher and the pinned tabs should not scroll with all the other tabs
+Review our test documentation
+Better transition for the web content when switching tabs or workspaces (will this be too annoying?)
+UI review should check if components are in the design system where it can evaluate them in isolation.
+Reordering tabs styling should be updated to not have a shadow component and instead just swap tabs as you drag. I have a feeling this looks better.
+The workspace switcher and the pinned tabs should not scroll with all the other tabs
+The background should always show the acrylic effect
+Before finishing the branch, get it to add test coverage for everything missing, based on updated docs
