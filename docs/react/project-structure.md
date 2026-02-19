@@ -100,39 +100,4 @@ Catch in command handlers, return structured error responses through IPC.
 
 ## Testing
 
-### What to test (priority)
-1. User-visible behavior (click X → see Y)
-2. Critical business logic (command handlers, state transformations)
-3. Edge cases (empty states, error states)
-4. Integration (features via command/event bus)
-
-### What NOT to test
-- Implementation details (internal state values)
-- That React hooks work
-- Styling/layout (use visual regression instead)
-
-### React Testing Library
-```tsx
-import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-
-test("creates tab when URL submitted", async () => {
-  const user = userEvent.setup();
-  render(<CommandPalette />);
-  await user.type(screen.getByRole("combobox"), "https://example.com");
-  await user.keyboard("{Enter}");
-  expect(screen.getByText("example.com")).toBeInTheDocument();
-});
-```
-
-- Query by role, label, text — the way a user finds elements
-- Use `userEvent` over `fireEvent`
-- Avoid `getByTestId` except as last resort
-
-### Testing by file type
-| File | How to test |
-|---|---|
-| `.shared.ts` | Pure types/constants — no runtime tests needed |
-| `.store.ts` | `renderHook` or via component that consumes the store |
-| `.main.ts` | Unit test command handlers directly |
-| `.renderer.tsx` | React Testing Library component tests |
+See [docs/testing/](../testing/README.md) for comprehensive testing documentation.

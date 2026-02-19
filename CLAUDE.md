@@ -17,13 +17,21 @@
 - Performance (React Compiler, structural patterns, code splitting, virtualization, profiling): docs/react/performance.md
 - Project structure & conventions (file organization, module boundaries, naming, testing, a11y, error handling): docs/react/project-structure.md
 
+# Testing
+
+- Strategy (tiers, what to test, coverage goals): docs/testing/strategy.md
+- Unit & component tests (Vitest, RTL, mocking, a11y): docs/testing/unit-and-component-tests.md
+- E2E tests (Playwright, Electron, page object model): docs/testing/e2e-tests.md
+- Feature test guide (mapping specs → tests, worked example): docs/testing/feature-test-guide.md
+- Test organization (file layout, naming, shared utilities): docs/testing/test-organization.md
+
 # Development
 
 - `bun dev` — start dev server + Electron (Linux/WSLg)
 - `bun run dev:win` — build in WSL, run Electron natively on Windows
 - `bun run verify` — run all checks (typecheck + lint + tests)
 
-The UI must adhere to the design system defined in the companion website found in the design-system folder.
+The UI must adhere to the design system defined in the companion website found at design-system/.
 
 For each logically distinct part of the UI, separate it into a React component. Add a page for the component in the design system and make sure the component follow all the requirements from the design system. The component pages in the design system must map to actual components, not just conceptual components.
 
@@ -31,4 +39,5 @@ For each logically distinct part of the UI, separate it into a React component. 
 
 Always verify your work compiles and passes checks. Run `bun run verify` for a full check (typecheck, lint, tests). The pre-commit hook runs this automatically, so don't run it redundantly right before committing.
 
-Always run the application to verify styling changes. Do not assume that CSS changes are correct without verifying.
+Always browse the application to verify changes affecting the UI.
+Do not assume that CSS changes are correct without verifying.

@@ -71,11 +71,11 @@ This guarantees all handlers are wired before any events flow.
 
 ## Testability
 
-Three tiers:
+See [docs/testing/](../testing/README.md) for comprehensive testing documentation. Summary:
 
-- **Unit tests** — feature tested with MockPlatform + InMemoryDataStore (RxDB Memory RxStorage). No Electron dependency. Verify command handling and event emission in isolation.
-- **Integration tests** — multiple features wired together with mocks. Verify cross-feature command/event flows.
-- **E2E tests** — real Electron app. Cover user workflows from feature specs (e.g. "Open a page", "Switch workspace", "Bookmark the current tab"). Full stack from UI through platform to persisted state.
+- **Unit tests** — feature + MockPlatform + InMemoryDataStore, no Electron
+- **Integration tests** — multiple features wired with mocks
+- **E2E tests** — real Electron app, Playwright, page object model
 
 ## Directory Structure
 
