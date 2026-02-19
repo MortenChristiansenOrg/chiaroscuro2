@@ -1,49 +1,17 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TabId } from "../../shared/types";
-import type { Tab } from "../tabs/tabs.shared";
+import { makeTab } from "../../test-utils";
 import { TabItem } from "./sidebar.renderer";
 
 // ── Mocks ───────────────────────────────────────────────────────
 
 const mockSendCommand = vi.fn(() => Promise.resolve());
 Object.defineProperty(window, "chiaroscuro", {
-  value: { sendCommand: mockSendCommand },
+  value: { ...window.chiaroscuro, sendCommand: mockSendCommand },
   writable: true,
+  configurable: true,
 });
-
-// jsdom lacks DataTransfer
-class MockDataTransfer {
-  data = new Map<string, string>();
-  effectAllowed = "uninitialized";
-  dropEffect = "none";
-  setData(format: string, val: string) {
-    this.data.set(format, val);
-  }
-  getData(format: string) {
-    return this.data.get(format) ?? "";
-  }
-  setDragImage() {}
-}
-Object.defineProperty(globalThis, "DataTransfer", { value: MockDataTransfer, writable: true });
-
-// ── Helpers ─────────────────────────────────────────────────────
-
-function makeTab(overrides: Partial<Tab> = {}): Tab {
-  return {
-    id: "tab-1" as TabId,
-    workspaceId: "ws-1" as never,
-    url: "https://example.com",
-    title: "Example",
-    favicon: "",
-    loading: false,
-    bookmarked: true,
-    lastAccessedAt: 0,
-    createdAt: 0,
-    order: 0,
-    ...overrides,
-  };
-}
 
 function makeRef<T>(val: T) {
   return { current: val };

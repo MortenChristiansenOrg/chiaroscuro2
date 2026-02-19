@@ -168,28 +168,6 @@ class MockDataTransfer {
 Object.defineProperty(globalThis, "DataTransfer", { value: MockDataTransfer, writable: true });
 ```
 
-## Accessibility Testing
-
-Use `vitest-axe` for automated a11y checks at the component level:
-
-```ts
-import { axe } from "vitest-axe";
-
-it("has no a11y violations", async () => {
-  const { container } = render(<TabItem {...defaultProps()} />);
-  const results = await axe(container);
-  expect(results).toHaveNoViolations();
-});
-```
-
-Limitations: color contrast doesn't work in jsdom. Use `@axe-core/playwright` in E2E for full-fidelity a11y audits.
-
-Manual a11y checks to include in component tests:
-- Correct ARIA roles (`role="tablist"`, `role="combobox"`, etc.)
-- `aria-label` / `aria-labelledby` on interactive elements
-- Focus management (focus traps in modals, focus restoration on close)
-- Keyboard navigation (Tab, Enter, Space, Arrow keys, Escape)
-
 ## Snapshot Testing
 
 Use sparingly and intentionally. Best for:

@@ -138,7 +138,6 @@ Copy this for each feature you implement:
 - [ ] Click interaction: {describe}
 - [ ] Keyboard shortcut: {describe}
 - [ ] State change: {describe}
-- [ ] Accessibility: correct ARIA roles and labels
 
 ### Store Tests (`{feature}.store.test.ts`)
 - [ ] Initial state

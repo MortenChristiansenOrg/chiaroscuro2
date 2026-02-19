@@ -19,8 +19,8 @@
 
 # Testing
 
-- Strategy (tiers, what to test, coverage goals): docs/testing/strategy.md
-- Unit & component tests (Vitest, RTL, mocking, a11y): docs/testing/unit-and-component-tests.md
+- Strategy (tiers, what to test): docs/testing/strategy.md
+- Unit & component tests (Vitest, RTL, mocking): docs/testing/unit-and-component-tests.md
 - E2E tests (Playwright, Electron, page object model): docs/testing/e2e-tests.md
 - Feature test guide (mapping specs → tests, worked example): docs/testing/feature-test-guide.md
 - Test organization (file layout, naming, shared utilities): docs/testing/test-organization.md

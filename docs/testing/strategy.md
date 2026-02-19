@@ -14,7 +14,7 @@ Feature tested with `MockPlatform` + `InMemoryDataStore` (RxDB Memory RxStorage)
 
 React components rendered in jsdom with mocked `window.chiaroscuro` bridge. Verify that UI responds correctly to user interactions and state changes.
 
-**Scope:** renderer components, Zustand store subscriptions, keyboard/mouse interactions, accessibility.
+**Scope:** renderer components, Zustand store subscriptions, keyboard/mouse interactions.
 
 ### E2E Tests
 
@@ -28,7 +28,6 @@ Real Electron app driven by Playwright. Cover primary user workflows from featur
 2. **Critical business logic** — command handlers, state transformations, data mutations
 3. **Edge cases** — empty states, error states, boundary conditions
 4. **Cross-feature integration** — features communicating via command/event bus
-5. **Accessibility** — keyboard navigation, ARIA attributes, focus management
 
 ## What NOT to Test
 
@@ -37,18 +36,6 @@ Real Electron app driven by Playwright. Cover primary user workflows from featur
 - Styling/layout at the unit level (use E2E screenshot comparison)
 - Pure type definitions and constants (`.shared.ts` files with no runtime logic)
 - Barrel files / re-exports
-
-## Coverage Goals
-
-Start conservative, ratchet up as coverage improves. Never lower thresholds.
-
-| Metric | Initial Target | Long-term Target |
-|---|---|---|
-| Lines | 60% | 80%+ |
-| Functions | 60% | 80%+ |
-| Branches | 50% | 70%+ |
-
-Use `perFile: true` in coverage config to prevent one well-tested file from masking an untested file. Don't pursue 100% — the cost/benefit ratio drops sharply above 85%.
 
 ## Testing by File Type
 

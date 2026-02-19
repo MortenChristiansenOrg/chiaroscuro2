@@ -18,6 +18,7 @@ export default defineConfig({
           name: "renderer",
           environment: "jsdom",
           include: ["src/**/*.test.tsx"],
+          setupFiles: ["src/test-utils/renderer-setup.ts"],
         },
       },
     ],

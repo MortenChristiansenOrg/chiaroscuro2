@@ -6,8 +6,8 @@ Thorough test coverage is a project requirement. Every implemented feature must 
 
 | Document | Contents |
 |---|---|
-| [Strategy](./strategy.md) | Test tiers, what to test, what not to test, coverage goals |
-| [Unit & Component Tests](./unit-and-component-tests.md) | Vitest + React Testing Library patterns, mocking, accessibility |
+| [Strategy](./strategy.md) | Test tiers, what to test, what not to test |
+| [Unit & Component Tests](./unit-and-component-tests.md) | Vitest + React Testing Library patterns, mocking |
 | [E2E Tests](./e2e-tests.md) | Playwright + Electron, page object model, fixtures |
 | [Feature Test Guide](./feature-test-guide.md) | How to write tests for a feature spec, with worked example |
 | [Test Organization](./test-organization.md) | File layout, naming, shared utilities, avoiding conflicts |
