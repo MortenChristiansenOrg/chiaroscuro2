@@ -72,9 +72,5 @@ None. No console errors, warnings, or failed network requests.
 ## Recommendations
 
 Review our test documentation
-Better transition for the web content when switching tabs or workspaces (will this be too annoying?)
 UI review should check if components are in the design system where it can evaluate them in isolation.
-Reordering tabs styling should be updated to not have a shadow component and instead just swap tabs as you drag. I have a feeling this looks better.
-The workspace switcher and the pinned tabs should not scroll with all the other tabs
-The background should always show the acrylic effect
 Before finishing the branch, get it to add test coverage for everything missing, based on updated docs

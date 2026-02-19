@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../../renderer/src/components/Icon";
 import type { TabId, WorkspaceId } from "../../shared/types";
 import type { PinnedTabsCommands } from "../pinned-tabs/pinned-tabs.shared";
@@ -142,6 +142,11 @@ export function TabItem({
   exiting,
   isBookmarkedSection,
   dragTabIdRef,
+  isDragged,
+  isDragging,
+  onBeforeReorder,
+  lastSwapRef,
+  lastSwapTimeRef,
   disableEntryAnimation,
 }: {
   tab: Tab;
@@ -150,11 +155,15 @@ export function TabItem({
   exiting?: boolean;
   isBookmarkedSection: boolean;
   dragTabIdRef: React.RefObject<TabId | null>;
+  isDragged: boolean;
+  isDragging: boolean;
+  onBeforeReorder: () => void;
+  lastSwapRef: React.RefObject<{ targetId: TabId; position: string } | null>;
+  lastSwapTimeRef: React.RefObject<number>;
   disableEntryAnimation?: boolean;
 }) {
   const mountedRef = useRef(false);
   const elRef = useRef<HTMLDivElement>(null);
-  const [dropIndicator, setDropIndicator] = useState<"above" | "below" | null>(null);
   useEffect(() => {
     const t = setTimeout(() => {
       mountedRef.current = true;
@@ -175,30 +184,28 @@ export function TabItem({
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("text/plain", tab.id);
     dragTabIdRef.current = tab.id;
+    // Hide browser's default drag ghost
+    const img = new Image();
+    img.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+    e.dataTransfer.setDragImage(img, 0, 0);
+    lastSwapRef.current = null;
+    lastSwapTimeRef.current = 0;
   };
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
-    const rect = elRef.current?.getBoundingClientRect();
-    if (rect) {
-      const midY = rect.top + rect.height / 2;
-      setDropIndicator(e.clientY < midY ? "above" : "below");
-    }
-  };
-
-  const handleDragLeave = () => {
-    setDropIndicator(null);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setDropIndicator(null);
     const tabId = dragTabIdRef.current;
-    dragTabIdRef.current = null;
     if (!tabId || tabId === tab.id) return;
+    if (Date.now() - lastSwapTimeRef.current < 100) return;
     const rect = elRef.current?.getBoundingClientRect();
-    const position = rect && e.clientY > rect.top + rect.height / 2 ? "after" : "before";
+    if (!rect) return;
+    const position = e.clientY > rect.top + rect.height / 2 ? "after" : "before";
+    if (lastSwapRef.current?.targetId === tab.id && lastSwapRef.current?.position === position)
+      return;
+    lastSwapRef.current = { targetId: tab.id, position };
+    lastSwapTimeRef.current = Date.now();
+    onBeforeReorder();
     sendCommand(TABS_REORDER, {
       tabId,
       targetBookmarked: isBookmarkedSection,
@@ -207,21 +214,33 @@ export function TabItem({
     });
   };
 
-  const accentColor = "oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250))";
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+  };
 
   return (
     // biome-ignore lint/a11y/useKeyWithClickEvents: chrome elements are not keyboard-navigable
     <div
       ref={elRef}
+      data-tab-id={tab.id}
       draggable={!exiting}
-      className="group relative flex items-center cursor-pointer transition-colors duration-150 hover:bg-glass-hover hover:text-glass-text-hover active:bg-glass-pressed active:text-glass-text-pressed"
+      className={`${isDragging ? "" : "group"} relative flex items-center cursor-pointer transition-colors duration-150 ${isDragging ? "" : "hover:bg-glass-hover hover:text-glass-text-hover active:bg-glass-pressed active:text-glass-text-pressed"}`}
       style={{
         gap: "0.625rem",
         padding: "0.375rem 0.75rem",
         margin: "0.25rem 0.375rem",
         borderRadius: "var(--radius-md)",
-        background: isActive ? "var(--glass-active)" : undefined,
-        boxShadow: isActive ? "var(--shadow-subtle)" : undefined,
+        background: isDragged
+          ? "oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250) / 0.06)"
+          : isActive
+            ? "var(--glass-active)"
+            : undefined,
+        boxShadow: isDragged
+          ? "inset 0 0 0 1px oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250) / 0.25)"
+          : isActive
+            ? "var(--shadow-subtle)"
+            : undefined,
+        zIndex: isDragged ? 10 : undefined,
         pointerEvents: exiting ? "none" : undefined,
         animation: exiting
           ? "tab-out 200ms cubic-bezier(0.4, 0, 1, 1) forwards"
@@ -232,26 +251,8 @@ export function TabItem({
       onClick={handleClick}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      {/* Drop indicator line — sits centered in the margin gap between tabs */}
-      {dropIndicator && (
-        <div
-          style={{
-            position: "absolute",
-            left: "0.75rem",
-            right: "0.75rem",
-            height: 2,
-            borderRadius: 1,
-            background: accentColor,
-            boxShadow: `0 0 6px ${accentColor}`,
-            ...(dropIndicator === "above"
-              ? { top: 0, transform: "translateY(calc(-0.25rem - 1px))" }
-              : { bottom: 0, transform: "translateY(calc(0.25rem + 1px))" }),
-          }}
-        />
-      )}
       <Favicon tab={tab} />
       <span
         className={`flex-1 min-w-0 truncate group-hover:text-glass-text-hover group-hover:mr-5 group-active:text-glass-text-pressed ${isActive ? "text-glass-text-primary" : isEphemeral ? "text-glass-text-muted" : "text-glass-text-default"}`}
@@ -336,10 +337,12 @@ function SectionDropZone({
   targetBookmarked,
   dragTabIdRef,
   visible,
+  onBeforeReorder,
 }: {
   targetBookmarked: boolean;
   dragTabIdRef: React.RefObject<TabId | null>;
   visible: boolean;
+  onBeforeReorder?: () => void;
 }) {
   const [over, setOver] = useState(false);
   return (
@@ -370,6 +373,7 @@ function SectionDropZone({
         const tabId = dragTabIdRef.current;
         dragTabIdRef.current = null;
         if (!tabId) return;
+        onBeforeReorder?.();
         sendCommand(TABS_REORDER, { tabId, targetBookmarked });
       }}
     />
@@ -407,8 +411,70 @@ function TabSection({
     return () => clearTimeout(t);
   }, [dividerTarget]);
 
+  // ── FLIP animation for smooth tab reordering ──
+  const flipContainerRef = useRef<HTMLDivElement>(null);
+  const prevRectsRef = useRef<Map<string, DOMRect>>(new Map());
+
+  const snapshotPositions = useCallback(() => {
+    const container = flipContainerRef.current;
+    if (!container) return;
+    const rects = new Map<string, DOMRect>();
+    for (const el of container.querySelectorAll<HTMLElement>("[data-tab-id]")) {
+      const id = el.dataset.tabId;
+      if (id) rects.set(id, el.getBoundingClientRect());
+    }
+    prevRectsRef.current = rects;
+  }, []);
+
+  useLayoutEffect(() => {
+    const container = flipContainerRef.current;
+    const prev = prevRectsRef.current;
+    if (!container || prev.size === 0) return;
+    prevRectsRef.current = new Map();
+
+    const elements = container.querySelectorAll<HTMLElement>("[data-tab-id]");
+    const toAnimate: { el: HTMLElement; deltaY: number }[] = [];
+
+    for (const el of elements) {
+      const id = el.dataset.tabId;
+      if (!id) continue;
+      const oldRect = prev.get(id);
+      if (!oldRect) continue;
+      const newRect = el.getBoundingClientRect();
+      const deltaY = oldRect.top - newRect.top;
+      if (Math.abs(deltaY) < 1) continue;
+      toAnimate.push({ el, deltaY });
+    }
+
+    if (toAnimate.length === 0) return;
+
+    for (const { el, deltaY } of toAnimate) {
+      el.style.transform = `translateY(${deltaY}px)`;
+      el.style.transition = "none";
+    }
+
+    void container.offsetHeight;
+    requestAnimationFrame(() => {
+      for (const { el } of toAnimate) {
+        el.style.transition = "transform 200ms cubic-bezier(0.25, 0.1, 0.25, 1)";
+        el.style.transform = "";
+      }
+      setTimeout(() => {
+        for (const { el } of toAnimate) {
+          el.style.removeProperty("transition");
+          el.style.removeProperty("transform");
+        }
+      }, 210);
+    });
+  });
+
+  // ── Drag swap tracking ──
+  const lastSwapRef = useRef<{ targetId: TabId; position: string } | null>(null);
+  const lastSwapTimeRef = useRef(0);
+  const draggedTabId = isDragging ? dragTabIdRef.current : null;
+
   return (
-    <div>
+    <div ref={flipContainerRef}>
       {bookmarked.length > 0 ? (
         bookmarked.map((tab) => (
           <TabItem
@@ -419,11 +485,21 @@ function TabSection({
             exiting={exitingIds.has(tab.id)}
             isBookmarkedSection={true}
             dragTabIdRef={dragTabIdRef}
+            isDragged={tab.id === draggedTabId}
+            isDragging={isDragging}
+            onBeforeReorder={snapshotPositions}
+            lastSwapRef={lastSwapRef}
+            lastSwapTimeRef={lastSwapTimeRef}
             disableEntryAnimation={disableEntryAnimation}
           />
         ))
       ) : (
-        <SectionDropZone targetBookmarked={true} dragTabIdRef={dragTabIdRef} visible={isDragging} />
+        <SectionDropZone
+          targetBookmarked={true}
+          dragTabIdRef={dragTabIdRef}
+          visible={isDragging}
+          onBeforeReorder={snapshotPositions}
+        />
       )}
 
       {/* Ephemeral divider — fades in/out based on content or drag state */}
@@ -475,6 +551,11 @@ function TabSection({
             exiting={exitingIds.has(tab.id)}
             isBookmarkedSection={false}
             dragTabIdRef={dragTabIdRef}
+            isDragged={tab.id === draggedTabId}
+            isDragging={isDragging}
+            onBeforeReorder={snapshotPositions}
+            lastSwapRef={lastSwapRef}
+            lastSwapTimeRef={lastSwapTimeRef}
             disableEntryAnimation={disableEntryAnimation}
           />
         ))
@@ -483,6 +564,7 @@ function TabSection({
           targetBookmarked={false}
           dragTabIdRef={dragTabIdRef}
           visible={isDragging}
+          onBeforeReorder={snapshotPositions}
         />
       )}
     </div>
@@ -542,6 +624,28 @@ export function SidebarPanel() {
   const dragTabIdRef = useRef<TabId | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
+  // Safety net: when React repositions the drag source DOM node mid-drag
+  // (cross-section reorder), Chrome loses track of it and never fires dragend.
+  // Listen for drop (which does fire) + dragend + Escape as fallbacks.
+  useEffect(() => {
+    if (!isDragging) return;
+    const reset = () => {
+      setIsDragging(false);
+      dragTabIdRef.current = null;
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") reset();
+    };
+    document.addEventListener("dragend", reset);
+    document.addEventListener("drop", reset);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("dragend", reset);
+      document.removeEventListener("drop", reset);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [isDragging]);
+
   const handleClearEphemeral = () => {
     if (activeWorkspaceId) {
       sendCommand(TABS_CLEAR_EPHEMERAL, { workspaceId: activeWorkspaceId });
@@ -560,7 +664,7 @@ export function SidebarPanel() {
         aria-label="Sidebar"
         className="flex flex-col overflow-hidden h-full"
         style={{ width: "var(--sidebar-width)" }}
-        onDragStart={() => requestAnimationFrame(() => setIsDragging(true))}
+        onDragStart={() => setIsDragging(true)}
         onDragEnd={() => {
           setIsDragging(false);
           dragTabIdRef.current = null;
