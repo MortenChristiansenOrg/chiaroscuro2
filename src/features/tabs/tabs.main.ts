@@ -370,8 +370,10 @@ export function register(deps: Deps): void {
     // Splice the dragged tab into position and re-index all
     siblings.splice(insertAt, 0, tab);
     for (const [i, sib] of siblings.entries()) {
-      if (sib.order !== i) {
-        sib.order = i;
+      const orderChanged = sib.order !== i;
+      sib.order = i;
+      // Always persist the dragged tab (bookmarked may have changed even if order didn't)
+      if (orderChanged || sib.id === tabId) {
         persistTab(sib);
       }
     }

@@ -90,6 +90,9 @@ export class JsonDataStore implements DataStore {
 
   collection<T>(name: string): Collection<T> {
     if (name === "settings") throw new Error(`Collection name "settings" is reserved`);
+    if (!name || /[/\\]|\.\./.test(name)) {
+      throw new Error(`Invalid collection name: "${name}"`);
+    }
     if (!this.collections.has(name)) {
       const filePath = path.join(this.dataDir, `${name}.json`);
       this.collections.set(name, new JsonCollection<unknown>(filePath));
