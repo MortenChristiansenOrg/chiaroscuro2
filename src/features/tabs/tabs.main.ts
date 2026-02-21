@@ -343,6 +343,9 @@ export function register(deps: Deps): void {
     const tab = tabs.get(tabId);
     if (!tab) return;
 
+    // Skip pinned tabs
+    if (isPinned(tabId)) return;
+
     // Auto-bookmark/unbookmark when moving between sections
     if (targetBookmarked && !tab.bookmarked) {
       tab.bookmarked = true;
