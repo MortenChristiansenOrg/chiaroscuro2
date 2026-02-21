@@ -79,8 +79,12 @@ export class JsonDataStore implements DataStore {
     }
     // Flush settings
     if (this.dirty) {
-      fs.writeFileSync(this.settingsPath, JSON.stringify(this.settings, null, 2));
-      this.dirty = false;
+      try {
+        fs.writeFileSync(this.settingsPath, JSON.stringify(this.settings, null, 2));
+        this.dirty = false;
+      } catch (err) {
+        console.error("Failed to flush settings on destroy:", err);
+      }
     }
   }
 

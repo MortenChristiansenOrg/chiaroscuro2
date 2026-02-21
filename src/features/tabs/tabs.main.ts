@@ -424,6 +424,9 @@ export async function start(
 
   if (toRestore.length === 0) return { idMap, urlMap };
 
+  // Restore most recently accessed tab first so it becomes the active one
+  toRestore.sort((a, b) => b.lastAccessedAt - a.lastAccessedAt);
+
   if (!_tabs || !_attachTabListeners) {
     throw new Error("tabs.main: register() must be called before start()");
   }
@@ -454,9 +457,9 @@ export async function start(
       urlMap.set(pt.url, tabId);
 
       // Update persisted doc with new tabId (platform assigns new IDs)
-      await tabsCollection.remove(pt.id).catch(() => {});
       const { loading, ...newPersisted } = tab;
-      await tabsCollection.insert(newPersisted as PersistedTab).catch(() => {});
+      await tabsCollection.upsert(newPersisted as PersistedTab).catch(console.error);
+      await tabsCollection.remove(pt.id).catch(() => {});
 
       // Track first tab in active workspace for activation
       if (tab.workspaceId === activeWsId && !firstTabInActiveWs) {
