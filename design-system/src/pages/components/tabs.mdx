@@ -71,16 +71,14 @@ Three tab types exist with different default text brightness:
 
 ## Keyboard & Focus
 
-- **Tab** moves focus into the sidebar tab list.
-- **Enter** activates the focused tab.
-- **Arrow Up / Arrow Down** moves focus between tabs within the sidebar list.
-- **Delete** or **Backspace** closes the focused tab (if closeable).
+- Tab items use `tabIndex={-1}` — they are not in the natural tab order.
+- Keyboard navigation uses global shortcuts: **Ctrl+1–9** switches workspaces, **Ctrl+W** closes the active tab.
+- Future: roving `tabIndex` for Arrow Up/Down within the sidebar list.
 
 ## Accessibility
 
 - Each tab uses `role="listitem"` within a `role="list"` sidebar container.
 - Close button has `aria-label="Close tab"`.
-- Tab items are not keyboard-focusable (`tabIndex={-1}`).
 - Active tab indicated with `aria-selected="true"`.
 
 ## Layout & Composition

@@ -18,8 +18,10 @@ function evaluateQuery<T>(docs: Iterable<T>, query: Query<T>): T[] {
       for (const { field, direction } of query.sort as NonNullable<typeof query.sort>) {
         const av = (a as Record<string, unknown>)[field as string];
         const bv = (b as Record<string, unknown>)[field as string];
-        if ((av as string) < (bv as string)) return direction === "asc" ? -1 : 1;
-        if ((av as string) > (bv as string)) return direction === "asc" ? 1 : -1;
+        const a_ = av as number | string;
+        const b_ = bv as number | string;
+        if (a_ < b_) return direction === "asc" ? -1 : 1;
+        if (a_ > b_) return direction === "asc" ? 1 : -1;
       }
       return 0;
     });

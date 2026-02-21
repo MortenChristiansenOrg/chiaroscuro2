@@ -253,8 +253,10 @@ export async function sendCommand(
   payload: unknown,
 ): Promise<unknown> {
   return app.evaluate(
-    async ({ __testHooks }, { name, payload }) => {
-      return __testHooks.commandBus.send(name, payload);
+    async (_electron, { name, payload }) => {
+      const hooks = (globalThis as any).__testHooks;
+      if (!hooks) throw new Error("Test hooks not available — is NODE_ENV=test?");
+      return hooks.commandBus.send(name, payload);
     },
     { name, payload },
   );

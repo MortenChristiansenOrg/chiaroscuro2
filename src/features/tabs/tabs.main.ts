@@ -46,6 +46,7 @@ interface Deps {
 
 // Shared state exposed via accessor for cross-feature queries
 let _tabs: Map<TabId, Tab> | undefined;
+let _attachTabListeners: ((tabId: TabId) => void) | undefined;
 
 export function register(deps: Deps): void {
   const {
@@ -64,8 +65,9 @@ export function register(deps: Deps): void {
   const eventCleanups = new Map<TabId, (() => void)[]>();
   const tabsCollection: Collection<PersistedTab> = dataStore.collection("tabs");
 
-  // Expose for getTabsForWorkspace
+  // Expose for getTabsForWorkspace and start()
   _tabs = tabs;
+  _attachTabListeners = attachTabListeners;
 
   // ── Persistence helpers ──────────────────────────────────────────
 
@@ -446,6 +448,7 @@ export async function start(
 
       if (!_tabs) continue;
       _tabs.set(tabId, tab);
+      _attachTabListeners?.(tabId);
       idMap.set(pt.id as TabId, tabId);
       urlMap.set(pt.url, tabId);
 

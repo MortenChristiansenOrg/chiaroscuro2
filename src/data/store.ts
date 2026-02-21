@@ -37,12 +37,17 @@ class JsonCollection<T> extends MemoryCollection<T> {
 
   flush(): void {
     if (!this.dirty) return;
-    this.dirty = false;
     if (this.flushTimer !== undefined) {
       clearTimeout(this.flushTimer);
       this.flushTimer = undefined;
     }
-    fs.writeFileSync(this.filePath, JSON.stringify(this._getAllDocs()));
+    try {
+      fs.writeFileSync(this.filePath, JSON.stringify(this._getAllDocs()));
+      this.dirty = false;
+    } catch (err) {
+      this.scheduleFlush();
+      console.error(`Failed to flush ${this.filePath}:`, err);
+    }
   }
 }
 
