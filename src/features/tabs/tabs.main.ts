@@ -73,10 +73,7 @@ export function register(deps: Deps): void {
 
   function persistTab(tab: Tab): void {
     const { loading, ...persisted } = tab;
-    tabsCollection.update(persisted.id, persisted as PersistedTab).catch(() => {
-      // Insert if update fails (doc doesn't exist yet)
-      tabsCollection.insert(persisted as PersistedTab).catch(console.error);
-    });
+    tabsCollection.upsert(persisted as PersistedTab).catch(console.error);
   }
 
   function removePersistedTab(tabId: TabId): void {
@@ -320,7 +317,8 @@ export function register(deps: Deps): void {
     const siblingsInNewSection = [...tabs.values()].filter(
       (t) => t.workspaceId === tab.workspaceId && t.bookmarked === tab.bookmarked && t.id !== tabId,
     );
-    tab.order = siblingsInNewSection.length;
+    const maxOrder = siblingsInNewSection.reduce((m, t) => Math.max(m, t.order), -1);
+    tab.order = maxOrder + 1;
     events.emit(TABS_UPDATED, { tab: { ...tab } });
     scheduleListChanged();
     persistTab(tab);
@@ -426,6 +424,10 @@ export async function start(
 
   if (toRestore.length === 0) return { idMap, urlMap };
 
+  if (!_tabs || !_attachTabListeners) {
+    throw new Error("tabs.main: register() must be called before start()");
+  }
+
   // Recreate tabs from persisted data
   const activeWsId = getActiveWorkspaceId();
   let firstTabInActiveWs: TabId | undefined;
@@ -446,9 +448,8 @@ export async function start(
         order: pt.order,
       };
 
-      if (!_tabs) continue;
       _tabs.set(tabId, tab);
-      _attachTabListeners?.(tabId);
+      _attachTabListeners(tabId);
       idMap.set(pt.id as TabId, tabId);
       urlMap.set(pt.url, tabId);
 
@@ -475,9 +476,7 @@ export async function start(
   }
 
   // Emit full list
-  if (_tabs) {
-    deps.events.emit(TABS_LIST_CHANGED, { tabs: [..._tabs.values()] });
-  }
+  deps.events.emit(TABS_LIST_CHANGED, { tabs: [..._tabs.values()] });
 
   return { idMap, urlMap };
 }

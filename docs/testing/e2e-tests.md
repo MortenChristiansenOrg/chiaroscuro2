@@ -9,11 +9,11 @@ E2E tests use Playwright's Electron API to launch the real app and drive it thro
 `playwright.config.ts`:
 - Test directory: `./e2e`
 - Timeout: 30 seconds per test
-- Retries: 1 (with trace recording on first retry)
+- Retries: 2 on CI, 0 locally (trace recorded on first retry)
 
 ## Directory Structure
 
-```
+```text
 e2e/
   fixtures/
     electron-app.ts           # Electron launch fixture
@@ -221,6 +221,9 @@ test.describe("tab management", () => {
     }).toPass({ timeout: 5000 });
   });
 
+  // Note: these tests assume tabs created in beforeEach or prior tests.
+  // In real test files, use a beforeEach fixture to seed required tabs.
+
   test("closes tab via close button", async ({ sidebarPage }) => {
     await sidebarPage.closeTab("Example");
     await expect(async () => {
@@ -304,9 +307,12 @@ electronApp: async ({}, use) => {
     args: ["./out/main/index.js"],
     env: { ...process.env, NODE_ENV: "test", DATA_DIR: tmpDir },
   });
-  await use(app);
-  await app.close();
-  await fs.rm(tmpDir, { recursive: true });
+  try {
+    await use(app);
+  } finally {
+    await app.close().catch(() => {});
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  }
 },
 ```
 

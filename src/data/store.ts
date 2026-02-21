@@ -85,6 +85,7 @@ export class JsonDataStore implements DataStore {
   }
 
   collection<T>(name: string): Collection<T> {
+    if (name === "settings") throw new Error(`Collection name "settings" is reserved`);
     if (!this.collections.has(name)) {
       const filePath = path.join(this.dataDir, `${name}.json`);
       this.collections.set(name, new JsonCollection<unknown>(filePath));
@@ -99,9 +100,13 @@ export class JsonDataStore implements DataStore {
   async setSetting<T>(key: string, value: T): Promise<void> {
     this.settings[key] = value;
     this.dirty = true;
-    // Settings writes are relatively rare, flush immediately
-    fs.writeFileSync(this.settingsPath, JSON.stringify(this.settings, null, 2));
-    this.dirty = false;
+    try {
+      fs.writeFileSync(this.settingsPath, JSON.stringify(this.settings, null, 2));
+      this.dirty = false;
+    } catch (err) {
+      // dirty remains true; destroy() will retry on shutdown
+      console.error("Failed to write settings:", err);
+    }
   }
 }
 

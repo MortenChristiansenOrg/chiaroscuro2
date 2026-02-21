@@ -53,6 +53,17 @@ class MemoryCollection<T> implements Collection<T> {
   async insert(doc: T): Promise<T> {
     const id = (doc as Record<string, unknown>).id as string;
     if (!id) throw new Error("Document must have an id field");
+    if (this.docs.has(id)) throw new Error(`Document "${id}" already exists`);
+    const copy = { ...doc };
+    this.docs.set(id, copy);
+    this.notifyObservers();
+    this.onMutate?.();
+    return copy;
+  }
+
+  async upsert(doc: T): Promise<T> {
+    const id = (doc as Record<string, unknown>).id as string;
+    if (!id) throw new Error("Document must have an id field");
     const copy = { ...doc };
     this.docs.set(id, copy);
     this.notifyObservers();

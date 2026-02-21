@@ -53,7 +53,7 @@ jobs:
 
   e2e:
     name: E2E
-    needs: build
+    needs: [build, typecheck, lint, test]
     runs-on: blacksmith-2vcpu-ubuntu-2404
     steps:
       - uses: actions/checkout@v4
@@ -63,7 +63,10 @@ jobs:
         with:
           name: build-output
           path: out/
-      - run: bun run e2e
+      - name: Install Xvfb
+        run: sudo apt-get install -y xvfb
+      - name: Run E2E tests
+        run: xvfb-run --auto-servernum -- bun run e2e
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
