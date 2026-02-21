@@ -76,6 +76,7 @@ function ZoneFallback({ error, resetErrorBoundary }: FallbackProps) {
 export function Shell() {
   return (
     <ErrorBoundary FallbackComponent={ZoneFallback}>
+      <div data-testid="shell-ready" style={{ display: "contents" }} />
       {/* Chrome zone */}
       {features.map(
         (f) =>

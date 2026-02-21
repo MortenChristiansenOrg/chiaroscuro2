@@ -126,6 +126,7 @@ export function CommandPaletteOverlay() {
   return (
     // biome-ignore lint/a11y/useKeyWithClickEvents: Esc handler covers keyboard close
     <div
+      data-testid="command-palette"
       className="fixed inset-0 flex items-center justify-center"
       style={{
         zIndex: 50,

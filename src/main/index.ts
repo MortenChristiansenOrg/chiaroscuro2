@@ -90,7 +90,8 @@ let activeTabId: TabId | undefined;
 let activeWorkspaceId: WorkspaceId | undefined;
 
 const platform = new ElectronPlatform(() => activeWindowId);
-const dataStore: DataStore = createDataStore(path.join(app.getPath("userData"), "data"));
+const dataDir = process.env.DATA_DIR ?? path.join(app.getPath("userData"), "data");
+const dataStore: DataStore = createDataStore(dataDir);
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -183,7 +184,9 @@ app.whenReady().then(async () => {
   bridgeBusToIpc(commands, events, () => BrowserWindow.getAllWindows());
 
   createWindow();
-  if (activeWindowId) platform.initTooltipOverlay(activeWindowId);
+  if (activeWindowId && process.env.NODE_ENV !== "test") {
+    platform.initTooltipOverlay(activeWindowId);
+  }
 
   // Phase 2: wait for renderer subscriptions, then emit initial state
   ipcMain.once("renderer:ready", async () => {

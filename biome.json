@@ -39,7 +39,9 @@
       "node_modules/",
       "src/renderer/src/components/ui/",
       "design-system/dist/",
-      "**/*.generated.ts"
+      "**/*.generated.ts",
+      ".agent-project/",
+      "test-results/"
     ]
   }
 }
