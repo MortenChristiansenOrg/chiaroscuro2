@@ -9,6 +9,10 @@ export default defineConfig({
   renderer: {
     server: {
       port: 5199,
+      watch: {
+        usePolling: true,
+        interval: 500,
+      },
     },
     resolve: {
       alias: {

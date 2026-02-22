@@ -2,8 +2,6 @@
 title: Overview
 ---
 
-import { AppMockup } from "../components/AppMockup";
-
 # Chiaroscuro Design System
 
 Rules and principles for building the Chiaroscuro browser UI. This document is the canonical reference — all UI code must conform to it. When in doubt, follow the rule. When a rule doesn't cover a situation, follow the nearest principle and flag the gap.
@@ -19,21 +17,12 @@ Chiaroscuro is a personal browser. Its chrome should disappear — web content i
 3. **Soft geometry.** Pill shapes for interactive elements (tabs, URL bar), rounded rects for containers. Never sharp corners in the chrome UI.
 4. **Quiet until needed.** Default states are subdued. Elements reveal themselves through interaction — hover brightens, focus highlights, active promotes.
 5. **Density over sprawl.** Browser chrome should be compact. Prefer smaller text, tighter spacing, and fewer visual elements. Every saved pixel goes to web content.
-6. **Keyboard-first.** Every action reachable by keyboard. Mouse is a convenience, not a requirement.
-
-## Reference Design
-
-The reference design for the application. Eventually it will use actual components from the application
-but initially it is a hard-coded mockup.
-
-<div className="my-8 rounded-xl border border-border overflow-hidden shadow-lg">
-  <AppMockup />
-</div>
+6. **Command-driven.** Chrome actions are triggered via commands and shortcuts, not Tab navigation. Chrome elements use `tabIndex={-1}` — only overlays and form inputs receive keyboard focus.
 
 ## Structure
 
 **Foundations** — [Color](/colors), [typography](/typography), [spacing](/spacing), [borders & radius](/borders-radius), [shadows & depth](/shadows-effects), [motion & animation](/motion), and [icons](/icons).
 
-**Behavior** — [Interaction feedback](/interaction), [keyboard & focus](/keyboard-focus), [accessibility](/accessibility), and [layout composition](/layout).
+**Behavior** — [Interaction feedback](/interaction), [accessibility](/accessibility), and [layout composition](/layout).
 
 **Components** — Individual UI elements ([buttons](/components/buttons), [tabs](/components/tabs), [sidebar](/components/sidebar), [address bar](/components/address-bar), [tooltips](/components/tooltips), [workspace switcher](/components/workspace-switcher)) shown in isolation with their token values.

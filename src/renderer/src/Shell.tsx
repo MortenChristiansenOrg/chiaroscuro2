@@ -1,5 +1,6 @@
-import { type ComponentType, useCallback, useEffect, useRef } from "react";
-import { useTabsStore } from "../../features/tabs/tabs.store";
+import type { ComponentType } from "react";
+import { ErrorBoundary, type FallbackProps } from "react-error-boundary";
+import { ContentArea } from "./components/ContentArea";
 import { TooltipLayer } from "./components/TooltipLayer";
 
 type EventSubscriber = (
@@ -29,89 +30,62 @@ export function signalReady(): void {
   window.chiaroscuro.signalReady();
 }
 
-export function ContentArea() {
-  const ref = useRef<HTMLDivElement>(null);
-  const pendingRaf = useRef(false);
-  const activeTabId = useTabsStore((s) => s.activeTabId);
-
-  const reportBounds = useCallback(() => {
-    if (pendingRaf.current) return;
-    pendingRaf.current = true;
-    requestAnimationFrame(() => {
-      pendingRaf.current = false;
-      const el = ref.current;
-      if (!el) return;
-      const rect = el.getBoundingClientRect();
-      window.chiaroscuro.sendCommand("tabs:report-content-bounds", {
-        x: Math.round(rect.left),
-        y: Math.round(rect.top),
-        width: Math.round(rect.width),
-        height: Math.round(rect.height),
-      });
-    });
-  }, []);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-
-    const observer = new ResizeObserver(reportBounds);
-    observer.observe(el);
-
-    // Also report on window resize (can change position without size change)
-    window.addEventListener("resize", reportBounds);
-
-    // Initial report
-    reportBounds();
-
-    return () => {
-      observer.disconnect();
-      window.removeEventListener("resize", reportBounds);
-    };
-  }, [reportBounds]);
-
+function ZoneFallback({ error, resetErrorBoundary }: FallbackProps) {
   return (
-    <main
-      ref={ref}
-      className="relative flex-1 rounded-lg overflow-hidden"
+    <div
+      className="flex flex-col items-center justify-center"
       style={{
-        margin: "0 var(--content-inset) var(--content-inset)",
-        boxShadow: "var(--shadow-medium)",
-        background: activeTabId ? "var(--content-bg)" : "var(--glass-subtle)",
+        padding: "1rem",
+        gap: "0.5rem",
+        color: "var(--glass-text-muted)",
+        fontSize: "var(--text-sm)",
       }}
     >
-      {!activeTabId && (
-        <div
-          className="absolute inset-0 flex items-center justify-center select-none"
-          style={{ color: "var(--glass-text-muted)" }}
-        >
-          <span style={{ fontSize: "var(--text-base)", letterSpacing: "0.01em" }}>
-            Press{" "}
-            <kbd
-              style={{
-                padding: "0.0625rem 0.375rem",
-                borderRadius: "var(--radius-sm)",
-                border: "1px solid var(--glass-border)",
-                background: "var(--glass-subtle)",
-                fontSize: "var(--text-sm)",
-                fontFamily: "inherit",
-              }}
-            >
-              Ctrl+T
-            </kbd>{" "}
-            to open a tab
-          </span>
-        </div>
-      )}
-    </main>
+      <span>Something went wrong</span>
+      <span
+        style={{
+          fontSize: "var(--text-xs)",
+          color: "var(--glass-text-hint)",
+          maxWidth: 300,
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+          whiteSpace: "nowrap",
+        }}
+      >
+        {error instanceof Error ? error.message : String(error)}
+      </span>
+      <button
+        type="button"
+        onClick={resetErrorBoundary}
+        className="cursor-pointer text-glass-text-default hover:bg-glass-hover"
+        style={{
+          fontSize: "var(--text-xs)",
+          padding: "0.25rem 0.75rem",
+          borderRadius: "var(--radius-sm)",
+          border: "1px solid var(--glass-border)",
+          background: "var(--glass-subtle)",
+          fontFamily: "inherit",
+        }}
+      >
+        Retry
+      </button>
+    </div>
   );
 }
 
 export function Shell() {
   return (
-    <>
+    <ErrorBoundary FallbackComponent={ZoneFallback}>
+      <div data-testid="shell-ready" style={{ display: "contents" }} />
       {/* Chrome zone */}
-      {features.map((f) => f.Chrome && <f.Chrome key={f.name} />)}
+      {features.map(
+        (f) =>
+          f.Chrome && (
+            <ErrorBoundary key={f.name} FallbackComponent={ZoneFallback}>
+              <f.Chrome />
+            </ErrorBoundary>
+          ),
+      )}
 
       {/* Body: sidebar + content */}
       <div
@@ -121,14 +95,30 @@ export function Shell() {
           backdropFilter: "blur(var(--glass-backdrop-blur))",
         }}
       >
-        {features.map((f) => f.Sidebar && <f.Sidebar key={`sidebar-${f.name}`} />)}
-        <ContentArea />
+        {features.map(
+          (f) =>
+            f.Sidebar && (
+              <ErrorBoundary key={`sidebar-${f.name}`} FallbackComponent={ZoneFallback}>
+                <f.Sidebar />
+              </ErrorBoundary>
+            ),
+        )}
+        <ErrorBoundary FallbackComponent={ZoneFallback}>
+          <ContentArea />
+        </ErrorBoundary>
       </div>
 
       {/* Overlay zone */}
-      {features.map((f) => f.Overlay && <f.Overlay key={`overlay-${f.name}`} />)}
+      {features.map(
+        (f) =>
+          f.Overlay && (
+            <ErrorBoundary key={`overlay-${f.name}`} FallbackComponent={ZoneFallback}>
+              <f.Overlay />
+            </ErrorBoundary>
+          ),
+      )}
 
       <TooltipLayer />
-    </>
+    </ErrorBoundary>
   );
 }

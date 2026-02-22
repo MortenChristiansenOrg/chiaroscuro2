@@ -19,7 +19,8 @@
     "src/features/**/*.feature.ts",
     "src/features/**/*.renderer.tsx",
     "src/features/**/*.store.ts",
-    "src/features/**/*.shared.ts"
+    "src/features/**/*.shared.ts",
+    "src/features/command-palette/resolve-input.ts"
   ],
   "exclude": ["src/bus/ipc-main-bridge.ts"]
 }

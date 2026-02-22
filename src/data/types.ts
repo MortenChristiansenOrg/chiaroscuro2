@@ -15,6 +15,7 @@ export interface Collection<T> {
   findOne(id: string): Promise<T | undefined>;
   findMany(query: Query<T>): Promise<T[]>;
   insert(doc: T): Promise<T>;
+  upsert(doc: T): Promise<T>;
   update(id: string, patch: Partial<T>): Promise<T>;
   remove(id: string): Promise<void>;
   observe(query: Query<T>): Observable<T[]>;

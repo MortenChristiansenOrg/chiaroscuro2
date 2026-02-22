@@ -1,0 +1,136 @@
+---
+title: Pinned Tabs
+---
+
+import { LivePreview } from "../../components/LivePreview"
+import { TooltipPreview } from "../../components/TooltipPreview"
+import { PinnedTabsStrip } from "@features/sidebar/sidebar.renderer"
+import { DEMO_PINNED_TABS, makeDemoPinnedTabMap, tabId } from "../../lib/demo-data"
+
+# Pinned Tabs
+
+Horizontal strip of favicon-only buttons for globally pinned tabs. Always visible at the top of the sidebar, independent of the active workspace.
+
+---
+
+## Anatomy
+
+- **Strip container** — horizontal flex row with `0.5rem` gap
+- **Pin button** — equal-width flex item, `32px` tall, centered favicon or letter fallback
+- Active pin gets `var(--glass-active)` background + `var(--shadow-subtle)`; inactive gets `var(--glass-subtle)`
+
+---
+
+## Default State
+
+<LivePreview label="Pinned tabs — none active">
+  <TooltipPreview>
+    <div style={{ padding: 12, width: 230 }}>
+      <PinnedTabsStrip
+        pinnedTabs={DEMO_PINNED_TABS}
+        tabs={makeDemoPinnedTabMap()}
+        activeTabId={null}
+      />
+    </div>
+  </TooltipPreview>
+</LivePreview>
+
+## Active State
+
+<LivePreview label="Pinned tabs — first active">
+  <TooltipPreview>
+    <div style={{ padding: 12, width: 230 }}>
+      <PinnedTabsStrip
+        pinnedTabs={DEMO_PINNED_TABS}
+        tabs={makeDemoPinnedTabMap()}
+        activeTabId={tabId("pin-gmail")}
+      />
+    </div>
+  </TooltipPreview>
+</LivePreview>
+
+## Single Pin
+
+<LivePreview label="Pinned tabs — single">
+  <TooltipPreview>
+    <div style={{ padding: 12, width: 230 }}>
+      <PinnedTabsStrip
+        pinnedTabs={DEMO_PINNED_TABS.slice(0, 1)}
+        tabs={makeDemoPinnedTabMap()}
+        activeTabId={tabId("pin-gmail")}
+      />
+    </div>
+  </TooltipPreview>
+</LivePreview>
+
+---
+
+## Specs
+
+| Property | Token/Value |
+|----------|-------------|
+| Height | `32px` |
+| Min width | `0` (flex `1`, equal distribution) |
+| Border radius | `--radius-md` |
+| Gap | `0.5rem` |
+| Padding | `0 0.375rem 0.25rem` |
+| Active bg | `var(--glass-active)` |
+| Inactive bg | `var(--glass-subtle)` |
+| Active shadow | `var(--shadow-subtle)` |
+
+## Favicon / Fallback
+
+- If the tab exists in the tabs store, uses the shared `<Favicon>` component (16×16 circular image or letter).
+- If only pinned tab data is available with a favicon URL, renders a 16×16 `<img>`.
+- Otherwise, shows the first character of title/URL at `--text-xs`, weight 600.
+
+---
+
+## States
+
+| State | Background | Shadow |
+|-------|-----------|--------|
+| Inactive | `var(--glass-subtle)` | none |
+| Hover | `var(--glass-hover)` | none |
+| Active (current tab) | `var(--glass-active)` | `var(--shadow-subtle)` |
+
+---
+
+## Behavior
+
+- **Click** activates the pinned tab via `pinned-tabs:activate` command.
+- **No close button** — pinned tabs are managed through a separate pin/unpin flow.
+- **No drag reorder** — order is persisted and managed via settings.
+- **Tooltip** — `data-tip` shows the tab title/URL on hover.
+
+---
+
+## Keyboard & Focus
+
+- Each pin is a native `<button>` — focusable via Tab.
+- **Enter / Space** activates the pinned tab.
+- Focus ring follows the standard `:focus-visible` style.
+
+---
+
+## Accessibility
+
+- Each button has `aria-label` set to the tab title or URL.
+- Semantic `<button type="button">` elements.
+- Touch targets are at least 32px tall.
+
+---
+
+## Layout & Composition
+
+- Sits at the **top** of the [Sidebar](/components/sidebar), above workspace tabs.
+- Only rendered when `pinnedTabs.length > 0`.
+- Pins distribute equally within sidebar width (`flex: 1` per button).
+
+---
+
+## Related
+
+- [Sidebar](/components/sidebar) — parent container
+- [Tabs](/components/tabs) — regular tab items in the sidebar list
+- [Workspace Switcher](/components/workspace-switcher) — sits at sidebar bottom

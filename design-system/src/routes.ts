@@ -71,12 +71,6 @@ export const routes: Route[] = [
     component: lazy(() => import("./pages/interaction.mdx")),
   },
   {
-    path: "/keyboard-focus",
-    title: "Keyboard & Focus",
-    group: "Behavior",
-    component: lazy(() => import("./pages/keyboard-focus.mdx")),
-  },
-  {
     path: "/accessibility",
     title: "Accessibility",
     group: "Behavior",
@@ -125,6 +119,12 @@ export const routes: Route[] = [
     title: "Command Palette",
     group: "Components",
     component: lazy(() => import("./pages/components/command-palette.mdx")),
+  },
+  {
+    path: "/components/pinned-tabs",
+    title: "Pinned Tabs",
+    group: "Components",
+    component: lazy(() => import("./pages/components/pinned-tabs.mdx")),
   },
   {
     path: "/components/workspace-switcher",

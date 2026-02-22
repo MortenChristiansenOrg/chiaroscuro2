@@ -80,7 +80,7 @@ Sub-element states (tabs, workspace bubbles, folder headers) are documented in t
 - **Collapse toggle** — a global shortcut or button hides the sidebar entirely (no narrow icon-rail mode). Content area expands to fill. Collapse behavior is an [unresolved question](/layout).
 - **Scrolling** — only the tab list (bookmarked + folders) scrolls. Pinned strip, section labels, and workspace bar remain fixed.
 - **Workspace switching** — clicking a workspace bubble swaps the bookmarked + ephemeral tab lists. Pinned tabs persist across workspaces.
-- **Folder expand/collapse** — click or keyboard (`Right` expand, `Left` collapse) toggles folder children visibility.
+- **Folder expand/collapse** — click toggles folder children visibility.
 - **Tab actions** — click to navigate, middle-click or close button to close. Close button reveals on parent hover. See [Tabs](/components/tabs).
 - **Drag reorder** — tabs and folders are reorderable via drag. Drop target highlight follows glass-hover style.
 - **"Clear" button** — clears all ephemeral tabs in the current workspace.
@@ -98,24 +98,12 @@ All transitions respect `prefers-reduced-motion` (instant/static fallback).
 
 ## Keyboard & Focus
 
-The sidebar is a **focus zone**. `Tab` moves focus into/out of the sidebar; arrow keys navigate within.
-
-| Key | Action |
-|-----|--------|
-| `Up` / `Down` | Move between tabs in the list |
-| `Right` | Expand folder |
-| `Left` | Collapse folder |
-| `Enter` | Activate focused tab |
-| `Delete` | Close focused tab |
-| `Home` / `End` | Jump to first / last tab |
-
-Focus return: when the sidebar hides, focus moves to the content area. When a tab is closed, focus moves to the next tab (or previous if last).
+The sidebar is **not keyboard-navigable**. All interactive elements use `tabIndex={-1}`. Tab/workspace actions are available via commands and keyboard shortcuts.
 
 ## Accessibility
 
 - **Landmark**: `<nav aria-label="Sidebar">` wrapping the entire sidebar
-- **Tab list**: `role="listbox"` or semantic `<ul>`, each tab as `role="option"` / `<li>`
-- **Active tab**: `aria-current="page"` on the selected tab
+- **Active tab**: visual indicator only
 - **Folders**: `aria-expanded="true|false"` on folder headers
 - **Pinned tabs**: icon-only buttons require `aria-label` with page title
 - **Contrast**: glass text at default opacity meets 3:1 chrome interactive threshold
@@ -137,4 +125,3 @@ Focus return: when the sidebar hides, focus moves to the content area. When a ta
 - [Workspace Switcher](/components/workspace-switcher) — workspace bar bubbles and controls
 - [Buttons](/components/buttons) — close buttons, workspace edit/add buttons
 - [Interaction Rules](/interaction) — state ladder, progressive disclosure
-- [Keyboard & Focus](/keyboard-focus) — focus zone model

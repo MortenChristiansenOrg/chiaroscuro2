@@ -11,7 +11,7 @@ Object.defineProperty(window, "chiaroscuro", {
 
 describe("TooltipLayer", () => {
   beforeEach(() => {
-    vi.useFakeTimers();
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
     mockSendCommand.mockClear();
   });
 
