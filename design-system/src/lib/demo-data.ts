@@ -21,6 +21,7 @@ export const DEMO_TABS: Tab[] = [
     lastAccessedAt: Date.now(),
     createdAt: Date.now(),
     order: 0,
+    folderId: null,
   },
   {
     id: tabId("tab-figma"),
@@ -33,6 +34,7 @@ export const DEMO_TABS: Tab[] = [
     lastAccessedAt: Date.now() - 60_000,
     createdAt: Date.now() - 60_000,
     order: 1,
+    folderId: null,
   },
   {
     id: tabId("tab-reddit"),
@@ -45,6 +47,7 @@ export const DEMO_TABS: Tab[] = [
     lastAccessedAt: Date.now() - 120_000,
     createdAt: Date.now() - 120_000,
     order: 2,
+    folderId: null,
   },
 ];
 
@@ -101,6 +104,7 @@ const DEMO_PINNED_AS_TABS: Tab[] = DEMO_PINNED_TABS.map((pt, i) => ({
   lastAccessedAt: Date.now(),
   createdAt: Date.now(),
   order: i,
+  folderId: null,
 }));
 
 export function makeDemoTabMap(): Map<TabId, Tab> {

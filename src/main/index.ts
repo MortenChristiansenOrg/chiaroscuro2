@@ -15,6 +15,11 @@ import type {
   CommandPaletteEvents,
 } from "../features/command-palette/command-palette.shared";
 import {
+  register as registerFolders,
+  start as startFolders,
+} from "../features/folders/folders.main";
+import type { FoldersCommands, FoldersEvents } from "../features/folders/folders.shared";
+import {
   register as registerPinnedTabs,
   start as startPinnedTabs,
 } from "../features/pinned-tabs/pinned-tabs.main";
@@ -66,6 +71,7 @@ type AllCommands = MergeRegistries<
     SidebarCommands,
     CommandPaletteCommands,
     TooltipCommands,
+    FoldersCommands,
   ]
 >;
 
@@ -78,6 +84,7 @@ type AllEvents = MergeRegistries<
     SidebarEvents,
     CommandPaletteEvents,
     TooltipEvents,
+    FoldersEvents,
   ]
 >;
 
@@ -153,6 +160,7 @@ app.whenReady().then(async () => {
   registerSidebar(deps);
   registerCommandPalette(deps);
   registerTooltip(deps);
+  registerFolders(deps);
 
   // ── Global keyboard shortcuts ──────────────────────────────────
   // Ctrl+W: Close current tab
@@ -195,6 +203,7 @@ app.whenReady().then(async () => {
     const restoredTabs = await startTabs(deps);
     await startPinnedTabs(deps, restoredTabs);
     startSidebar(deps);
+    await startFolders(deps);
     await startCommandPalette(deps);
   });
 

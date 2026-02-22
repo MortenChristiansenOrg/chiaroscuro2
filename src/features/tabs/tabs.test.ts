@@ -5,9 +5,13 @@ import { MemoryDataStore } from "../../data/memory-store";
 import type { TabId, WindowId, WorkspaceId } from "../../shared/types";
 import { createMockPlatform } from "../../test-utils";
 
-// Must mock pinned-tabs before importing tabs.main
+// Must mock pinned-tabs and folders before importing tabs.main
 vi.mock("../pinned-tabs/pinned-tabs.main", () => ({
   isPinned: vi.fn(() => false),
+}));
+vi.mock("../folders/folders.main", () => ({
+  getFoldersForLevel: vi.fn(() => []),
+  setFolderOrder: vi.fn(),
 }));
 
 import { isPinned } from "../pinned-tabs/pinned-tabs.main";
