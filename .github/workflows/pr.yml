@@ -45,3 +45,36 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bun run build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: out/
+          retention-days: 1
+
+  e2e:
+    name: E2E
+    needs: [build, typecheck, lint, test]
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-output
+          path: out/
+      - name: Install Xvfb
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y xvfb
+      - name: Run E2E tests
+        run: xvfb-run --auto-servernum -- bun run e2e
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: e2e-results
+          path: |
+            test-results/
+            playwright-report/
+          retention-days: 7

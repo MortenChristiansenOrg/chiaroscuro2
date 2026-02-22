@@ -1,4 +1,6 @@
 import { useCommandPaletteStore } from "@features/command-palette/command-palette.store";
+import type { PinnedTab } from "@features/pinned-tabs/pinned-tabs.shared";
+import { usePinnedTabsStore } from "@features/pinned-tabs/pinned-tabs.store";
 import { useSidebarStore } from "@features/sidebar/sidebar.store";
 import type { Tab } from "@features/tabs/tabs.shared";
 import { useTabsStore } from "@features/tabs/tabs.store";
@@ -15,6 +17,7 @@ interface StoreOverrides {
   sidebar?: { visible: boolean };
   commandPalette?: { open: boolean };
   windowChrome?: { maximized: boolean; loadingTabs: Set<TabId> };
+  pinnedTabs?: { pinnedTabs: PinnedTab[]; activePinnedTabId: TabId | null };
 }
 
 export function LivePreview({
@@ -33,6 +36,7 @@ export function LivePreview({
     if (stores?.sidebar) useSidebarStore.setState(stores.sidebar);
     if (stores?.commandPalette) useCommandPaletteStore.setState(stores.commandPalette);
     if (stores?.windowChrome) useWindowChromeStore.setState(stores.windowChrome);
+    if (stores?.pinnedTabs) usePinnedTabsStore.setState(stores.pinnedTabs);
 
     return () => {
       if (stores?.tabs) useTabsStore.setState({ tabs: new Map(), activeTabId: null });
@@ -42,6 +46,8 @@ export function LivePreview({
       if (stores?.commandPalette) useCommandPaletteStore.setState({ open: false });
       if (stores?.windowChrome)
         useWindowChromeStore.setState({ maximized: false, loadingTabs: new Set() });
+      if (stores?.pinnedTabs)
+        usePinnedTabsStore.setState({ pinnedTabs: [], activePinnedTabId: null });
     };
   }, []);
 

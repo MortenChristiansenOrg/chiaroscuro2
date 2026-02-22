@@ -94,3 +94,6 @@ out/
 
 .env.local
 .agent-project
+.playwright/
+.playwright-cli/
+test-results/

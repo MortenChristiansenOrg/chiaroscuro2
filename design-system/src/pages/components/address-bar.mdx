@@ -103,11 +103,7 @@ Uses `@property --url-angle` with a `conic-gradient` masked to the border edge. 
 
 ## Keyboard & Focus
 
-- **Pill itself:** not directly keyboard-focusable (click-only interaction for URL selection).
-- **Copy button:** natively focusable `<button>`, reachable via Tab.
-- **Enter / Space:** activates copy button when focused.
-- **Focus ring:** `:focus-visible` on copy button — `2px solid accent`, `outline-offset: 2px`.
-- **Focus return:** focus stays on copy button after copy action.
+- **Not keyboard-navigable.** All address bar elements use `tabIndex={-1}`. Interaction is mouse/trackpad only; URL copying is available via command palette or keyboard shortcut.
 
 ---
 
@@ -141,5 +137,4 @@ Uses `@property --url-angle` with a `conic-gradient` masked to the border edge. 
 - [Tooltips](/components/tooltips) — copy confirmation tooltip
 - [Motion & Animation](/motion) — spinning gradient tokens and implementation
 - [Interaction Feedback](/interaction) — state ladder
-- [Keyboard & Focus](/keyboard-focus) — focus zone model
 - [Accessibility](/accessibility) — ARIA and contrast requirements

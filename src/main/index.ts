@@ -4,6 +4,8 @@ import { CommandBus } from "../bus/command-bus";
 import { EventBus } from "../bus/event-bus";
 import { bridgeBusToIpc } from "../bus/ipc-main-bridge";
 import type { MergeRegistries } from "../bus/types";
+import { createDataStore } from "../data/store";
+import type { DataStore } from "../data/types";
 import {
   register as registerCommandPalette,
   start as startCommandPalette,
@@ -12,6 +14,14 @@ import type {
   CommandPaletteCommands,
   CommandPaletteEvents,
 } from "../features/command-palette/command-palette.shared";
+import {
+  register as registerPinnedTabs,
+  start as startPinnedTabs,
+} from "../features/pinned-tabs/pinned-tabs.main";
+import type {
+  PinnedTabsCommands,
+  PinnedTabsEvents,
+} from "../features/pinned-tabs/pinned-tabs.shared";
 import {
   register as registerSidebar,
   start as startSidebar,
@@ -33,6 +43,7 @@ import {
   register as registerWorkspaces,
   start as startWorkspaces,
 } from "../features/workspaces/workspaces.main";
+import { getAllWorkspaces } from "../features/workspaces/workspaces.main";
 import type {
   WorkspacesCommands,
   WorkspacesEvents,
@@ -51,6 +62,7 @@ type AllCommands = MergeRegistries<
     WindowChromeCommands,
     TabsCommands,
     WorkspacesCommands,
+    PinnedTabsCommands,
     SidebarCommands,
     CommandPaletteCommands,
     TooltipCommands,
@@ -62,6 +74,7 @@ type AllEvents = MergeRegistries<
     WindowChromeEvents,
     TabsEvents,
     WorkspacesEvents,
+    PinnedTabsEvents,
     SidebarEvents,
     CommandPaletteEvents,
     TooltipEvents,
@@ -77,6 +90,8 @@ let activeTabId: TabId | undefined;
 let activeWorkspaceId: WorkspaceId | undefined;
 
 const platform = new ElectronPlatform(() => activeWindowId);
+const dataDir = process.env.DATA_DIR ?? path.join(app.getPath("userData"), "data");
+const dataStore: DataStore = createDataStore(dataDir);
 
 function createWindow(): void {
   const win = new BrowserWindow({
@@ -115,6 +130,7 @@ const deps = {
   commands,
   events,
   platform,
+  dataStore,
   getActiveWindowId: () => activeWindowId,
   getActiveTabId: () => activeTabId,
   setActiveTabId: (id: TabId | undefined) => {
@@ -126,28 +142,60 @@ const deps = {
   },
 };
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
+  await dataStore.initialize();
+
   // Phase 1: register all command handlers
   registerWindowChrome(deps);
   registerTabs(deps);
   registerWorkspaces(deps);
+  registerPinnedTabs(deps);
   registerSidebar(deps);
   registerCommandPalette(deps);
   registerTooltip(deps);
+
+  // ── Global keyboard shortcuts ──────────────────────────────────
+  // Ctrl+W: Close current tab
+  platform.registerShortcut("CommandOrControl+W", () => {
+    const tabId = deps.getActiveTabId();
+    if (tabId) commands.send("tabs:close", { tabId }).catch(console.error);
+  });
+
+  // Ctrl+1..9: Switch to workspace N
+  for (let n = 1; n <= 9; n++) {
+    platform.registerShortcut(`CommandOrControl+${n}`, () => {
+      const all = getAllWorkspaces();
+      const ws = all[n - 1];
+      if (ws) commands.send("workspaces:switch", { workspaceId: ws.id }).catch(console.error);
+    });
+  }
+
+  // Ctrl+Shift+1..9: Move current tab to workspace N
+  for (let n = 1; n <= 9; n++) {
+    platform.registerShortcut(`CommandOrControl+Shift+${n}`, () => {
+      const all = getAllWorkspaces();
+      const ws = all[n - 1];
+      if (ws)
+        commands.send("workspaces:move-tab", { targetWorkspaceId: ws.id }).catch(console.error);
+    });
+  }
 
   // Bridge bus to IPC (once, before any window creation)
   bridgeBusToIpc(commands, events, () => BrowserWindow.getAllWindows());
 
   createWindow();
-  if (activeWindowId) platform.initTooltipOverlay(activeWindowId);
+  if (activeWindowId && process.env.NODE_ENV !== "test") {
+    platform.initTooltipOverlay(activeWindowId);
+  }
 
   // Phase 2: wait for renderer subscriptions, then emit initial state
-  ipcMain.once("renderer:ready", () => {
-    startWorkspaces(deps);
+  ipcMain.once("renderer:ready", async () => {
+    await startWorkspaces(deps);
     startWindowChrome(deps);
-    startTabs(deps);
+    const restoredTabs = await startTabs(deps);
+    await startPinnedTabs(deps, restoredTabs);
     startSidebar(deps);
-    startCommandPalette(deps);
+    await startCommandPalette(deps);
   });
 
   app.on("activate", () => {
@@ -155,6 +203,10 @@ app.whenReady().then(() => {
       createWindow();
     }
   });
+});
+
+app.on("before-quit", () => {
+  dataStore.destroy().catch(console.error);
 });
 
 app.on("window-all-closed", () => {

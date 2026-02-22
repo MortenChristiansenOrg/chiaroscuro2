@@ -1,0 +1,39 @@
+import { vi } from "vitest";
+import type { Platform } from "../platform/types";
+
+export function createMockPlatform(overrides: Partial<Platform> = {}): Platform {
+  return {
+    createWindow: vi.fn(),
+    closeWindow: vi.fn(),
+    minimizeWindow: vi.fn(),
+    maximizeWindow: vi.fn(),
+    unmaximizeWindow: vi.fn(),
+    isWindowMaximized: vi.fn(() => false),
+    focusWindow: vi.fn(),
+    createTab: vi.fn(),
+    closeTab: vi.fn(),
+    navigateTab: vi.fn(),
+    getTabUrl: vi.fn(() => undefined),
+    getTabTitle: vi.fn(() => undefined),
+    setTabBounds: vi.fn(),
+    hideTab: vi.fn(),
+    hideAllTabs: vi.fn(),
+    onTabEvent: vi.fn(() => () => {}),
+    goBack: vi.fn(),
+    goForward: vi.fn(),
+    reload: vi.fn(),
+    canGoBack: vi.fn(() => false),
+    canGoForward: vi.fn(() => false),
+    registerShortcut: vi.fn(),
+    unregisterShortcut: vi.fn(),
+    hookWebContents: vi.fn(),
+    focusShell: vi.fn(),
+    initTooltipOverlay: vi.fn(),
+    showTooltip: vi.fn(),
+    hideTooltip: vi.fn(),
+    openExternal: vi.fn(),
+    readClipboard: vi.fn(() => ""),
+    writeClipboard: vi.fn(),
+    ...overrides,
+  } as Platform;
+}

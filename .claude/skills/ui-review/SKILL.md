@@ -5,7 +5,7 @@ description: Review the app's UI/UX by launching it, taking screenshots, checkin
 
 # Goal
 
-Perform a comprehensive UI/UX review of the running Chiaroscuro app **or the design system website** using Chrome DevTools MCP. Verify behavior, visual quality, UX, and error-free operation.
+Perform a comprehensive UI/UX review of the running Chiaroscuro app **or the design system website**. Verify behavior, visual quality, UX, and error-free operation.
 
 ## Invocation
 
@@ -14,102 +14,22 @@ Perform a comprehensive UI/UX review of the running Chiaroscuro app **or the des
 - `/ui-review design-system` — Full design system website review
 - `/ui-review design-system <page>` — Focused review (e.g., `/ui-review design-system colors`)
 
-## Review Targets
-
-There are two review targets with different launch procedures:
-
-|               | **App**                                 | **Design System**              |
-| ------------- | --------------------------------------- | ------------------------------ |
-| What          | Electron browser app                    | Vite-served documentation site |
-| URL           | Electron window (no URL)                | `http://<wsl-ip>:5200`         |
-| Launch        | `launch-app.sh`                         | `launch-docs.sh`               |
-| Teardown      | `teardown-app.sh`                       | `teardown-docs.sh`             |
-| Browser       | Electron (built-in)                     | Edge with CDP                  |
-| Build         | `electron-vite build` + sync to Windows | `bun run docs:dev --host`      |
-| Window chrome | Yes (custom title bar)                  | No                             |
-
-Both targets use the same CDP proxy and virtual desktop isolation.
-
 ## Prerequisites
 
-Chrome DevTools MCP is configured globally at `http://127.0.0.1:9222`. The target must be running with `--remote-debugging-port=9222`.
+Use the `browse-app` skill for all app launching, connecting, and browser interaction. Refer to its SKILL.md at `.claude/skills/browse-app/SKILL.md` for:
 
-## WSL Environment Setup
-
-This project runs in WSL2. The browser (Electron or Edge) must launch on the Windows host. WSL2 uses NAT networking so it can't reach Windows' `127.0.0.1` directly — a two-hop CDP proxy bridges this gap.
-
-**Architecture:**
-
-```text
-Chrome DevTools MCP → WSL 127.0.0.1:9222 → [cdp-proxy] → Windows 0.0.0.0:9223 → 127.0.0.1:9222 (Browser CDP)
-```
-
-### Starting the app (Electron)
-
-The launcher handles everything: build, sync, launch on separate virtual desktop, start CDP proxy.
-
-```bash
-.claude/skills/ui-review/scripts/launch-app.sh          # build if needed + launch
-.claude/skills/ui-review/scripts/launch-app.sh --rebuild # force rebuild
-```
-
-### Starting the design system (Edge)
-
-The launcher starts the Vite dev server with `--host` (so Windows can reach WSL), opens Edge with CDP, and starts the proxy.
-
-```bash
-.claude/skills/ui-review/scripts/launch-docs.sh
-```
-
-### Stopping
-
-After the review, tear down everything:
-
-```bash
-# For app reviews:
-.claude/skills/ui-review/scripts/teardown-app.sh
-
-# For design system reviews:
-.claude/skills/ui-review/scripts/teardown-docs.sh
-```
-
-### Shared infrastructure
-
-If the app/browser is already running with CDP and just needs the proxy:
-
-```bash
-node .claude/skills/ui-review/scripts/cdp-proxy.mjs &
-```
-
-### One-time setup (optional, for virtual desktop isolation)
-
-```powershell
-Install-Module VirtualDesktop -Scope CurrentUser -Force
-```
-
-### Verifying connectivity
-
-```bash
-curl -s http://127.0.0.1:9222/json/version
-```
+- Launch/teardown scripts and their usage
+- `playwright-cli` command reference
+- WSL environment setup
+- Connect workflow
 
 ## Workflow
 
 ### Phase 0: Connect
 
-1. Run `check-cdp.sh` to verify the target is reachable
-2. If not reachable, run the appropriate launch script and wait for confirmation:
-   - **App:** `launch-app.sh`
-   - **Design system:** `launch-docs.sh`
-3. Use `mcp__chrome-devtools__list_pages` to enumerate open pages
-4. Use `mcp__chrome-devtools__select_page` to pick the correct page
-   - **App:** Select the main app window
-   - **Design system:** Select the tab showing `localhost:5200`
-5. Take an initial screenshot to confirm connection
+Use the `browse-app` connect workflow to launch and connect to the target.
 
-If the review was invoked with a specific feature/area/page, navigate to the relevant view before proceeding.
-
-**Design system navigation:** Use `mcp__chrome-devtools__navigate_page` to go to specific pages (e.g., `http://<wsl-ip>:5200/colors`), or click sidebar links.
+If the review was invoked with a specific feature/area/page, navigate with `playwright-cli goto <url>`.
 
 ### Phase 1: Behavior Verification
 
@@ -119,7 +39,7 @@ Verify that implemented features work correctly.
 
 1. **Read the spec** — Check `docs/features/` for the relevant spec file
 2. **Walk through workflows** — Execute each workflow from the spec:
-   - Use `click`, `fill`, `press_key` to simulate user actions
+   - Use `snapshot` to find element refs, then `click`, `fill`, `press` to interact
    - Take screenshots after each significant state change
    - Verify expected outcomes match spec requirements
 3. **Test edge cases** — Empty states, long text, rapid interactions
@@ -128,19 +48,12 @@ Verify that implemented features work correctly.
 **For design system reviews:**
 
 1. **Check route coverage** — Verify all routes in `design-system/src/routes.ts` are navigable
-2. **Walk through pages** — Visit each page via sidebar navigation:
+2. **Walk through pages** — Navigate via `goto` or click sidebar links:
    - Verify content renders (MDX, code blocks, examples)
    - Check interactive components (previews, toggles, swatches)
    - Verify code syntax highlighting works
 3. **Test sidebar navigation** — Active state, group headers, scroll behavior
 4. **Test theme toggle** — Light/dark mode switching, persistence
-
-**Tools to use:**
-
-- `take_screenshot` — after each action to verify visual state
-- `take_snapshot` — to verify element existence/state when screenshot is ambiguous
-- `click`, `fill`, `press_key` — to simulate user interactions
-- `evaluate_script` — to check app state programmatically if needed
 
 ### Phase 2: Visual Design Review
 
@@ -148,16 +61,19 @@ Evaluate visual quality. Apply the principles from the `frontend-design` skill.
 
 **Take full-page screenshots and evaluate:**
 
-1. **Typography** — Are fonts distinctive and readable? Consistent hierarchy? Avoid generic system font stacks without intentional styling.
-2. **Color & contrast** — Cohesive palette? Sufficient contrast for readability (poor contrast = bad UX for everyone, not an a11y concern)? Dark/light mode consistency?
-3. **Spacing & layout** — Consistent spacing rhythm? Proper alignment? Nothing cramped or floating in excess whitespace?
-4. **Visual hierarchy** — Clear primary/secondary/tertiary importance? User's eye guided to the right place?
-5. **Polish** — Hover states, transitions, focus indicators, loading states. No raw unstyled elements.
-6. **Responsive behavior** — Resize the window to test narrow/wide layouts:
-   ```
-   mcp__chrome-devtools__resize_page width=800 height=600
-   mcp__chrome-devtools__resize_page width=1920 height=1080
-   mcp__chrome-devtools__resize_page width=1280 height=720
+1. **Typography** — Distinctive and readable fonts? Consistent hierarchy?
+2. **Color & contrast** — Cohesive palette? Sufficient contrast?
+3. **Spacing & layout** — Consistent rhythm? Proper alignment?
+4. **Visual hierarchy** — Clear primary/secondary/tertiary importance?
+5. **Polish** — Hover states, transitions, loading states. No raw unstyled elements.
+6. **Responsive behavior** — Resize to test different viewports:
+   ```bash
+   playwright-cli resize 800 600
+   playwright-cli screenshot
+   playwright-cli resize 1920 1080
+   playwright-cli screenshot
+   playwright-cli resize 1280 720
+   playwright-cli screenshot
    ```
 
 **Design system specific:**
@@ -171,69 +87,42 @@ Evaluate visual quality. Apply the principles from the `frontend-design` skill.
 
 Evaluate interaction quality and efficiency.
 
-1. **Task efficiency** — Count clicks/keystrokes for common tasks. Identify unnecessary steps. Can the user accomplish goals with minimal interaction?
-2. **Discoverability** — Are actions findable? Proper labels, icons, tooltips? Would a new user understand what to do?
+1. **Task efficiency** — Count clicks/keystrokes for common tasks. Identify unnecessary steps.
+2. **Discoverability** — Are actions findable? Proper labels, icons, tooltips?
 3. **Feedback** — Does the UI respond to actions? Loading indicators, success/error states, hover effects?
-4. **Consistency** — Same patterns used for similar actions? Buttons look/behave the same way?
-5. **Error states** — What happens on invalid input? Network failure? Empty data?
-6. **Navigation flow** — Is it clear where you are? Can you go back? Breadcrumbs or other wayfinding?
+4. **Consistency** — Same patterns used for similar actions?
+5. **Error states** — What happens on invalid input? Empty data?
+6. **Navigation flow** — Is it clear where you are? Can you go back?
 7. **Keyboard navigation** — Can primary workflows be completed without mouse?
-
-**Design system specific:**
-
-- Is the sidebar navigation intuitive? Are pages grouped logically?
-- Can users quickly find the component/token they need?
-- Are examples copy-pasteable and clearly presented?
 
 ### Phase 4: Error Audit
 
-Check for hidden errors that the user wouldn't see.
+Check for hidden errors.
 
-**Console errors:**
+```bash
+# Console errors:
+playwright-cli console error
 
+# Network requests (check for failures):
+playwright-cli network
+
+# Runtime state:
+playwright-cli eval '() => document.querySelectorAll("*").length'
 ```
-mcp__chrome-devtools__list_console_messages types=["error","warn"]
-```
 
-- For each error, use `get_console_message` to get full details
 - Distinguish between: app errors (bugs), expected warnings, third-party noise
 - Check for React rendering errors, unhandled promise rejections, failed imports
-
-**Network errors:**
-
-```
-mcp__chrome-devtools__list_network_requests
-```
-
-- Check for failed requests (4xx, 5xx status codes)
-- Check for unexpectedly slow requests
-- Look for CORS issues or blocked resources
-- Use `get_network_request` to inspect specific failures
-
-**Runtime state:**
-
-- Use `evaluate_script` to check for:
-  - Uncaught error handlers: `() => window.__errorCount || 'none'`
-  - Memory leaks (large detached DOM trees): `() => document.querySelectorAll('*').length`
-  - React errors in dev mode
+- Check for failed requests (4xx, 5xx), CORS issues
 
 ### Phase 5: Cross-Cutting Concerns
 
-1. **Performance feel** — Does the UI feel snappy? Any visible jank or delayed renders? Use `performance_start_trace` if something feels slow.
-2. **State persistence** — Navigate away and back. Is state preserved correctly?
-3. **Window chrome integration** — _(App only)_ Does the custom title bar work? Minimize/maximize/close? Draggable regions?
+1. **Performance feel** — Does the UI feel snappy? Any visible jank?
+2. **State persistence** — Navigate away and back. Is state preserved?
+3. **Window chrome integration** — _(App only, verify in Electron window)_ Custom title bar, minimize/maximize/close, draggable regions
 
 ### Phase 6: Teardown
 
-After collecting all findings, tear down:
-
-```bash
-# App:
-.claude/skills/ui-review/scripts/teardown-app.sh
-
-# Design system:
-.claude/skills/ui-review/scripts/teardown-docs.sh
-```
+Use the `browse-app` teardown scripts to stop the app/design system.
 
 ## Output Format
 
@@ -285,11 +174,6 @@ Reference screenshots taken during review (saved to scratchpad directory).
 
 ## Tips
 
-- Save screenshots to the scratchpad directory, not the project
 - Take screenshots liberally — they're the primary evidence
-- When something looks wrong, take a snapshot too to understand the DOM structure
 - Resize to multiple viewport sizes during visual review
-- Check both light and dark mode if supported: `mcp__chrome-devtools__emulate colorScheme="dark"`
-- Use `includePreservedMessages=true` on console messages to catch errors from previous navigations
-- If the app has multiple windows, review each one via `list_pages` + `select_page`
 - For design system reviews, check each page in the sidebar — don't just review the landing page

@@ -2,12 +2,16 @@ import { create } from "zustand";
 import type { WorkspaceId } from "../../shared/types";
 import {
   WORKSPACES_CREATED,
+  WORKSPACES_DELETED,
   WORKSPACES_LIST_CHANGED,
   WORKSPACES_SWITCHED,
+  WORKSPACES_UPDATED,
   type Workspace,
   type WorkspacesCreatedEvent,
+  type WorkspacesDeletedEvent,
   type WorkspacesListChangedEvent,
   type WorkspacesSwitchedEvent,
+  type WorkspacesUpdatedEvent,
 } from "./workspaces.shared";
 
 interface WorkspacesState {
@@ -39,6 +43,24 @@ export function subscribeToEvents(
         workspaces: [...state.workspaces, workspace],
         // Auto-set first workspace as active
         activeWorkspaceId: state.activeWorkspaceId ?? workspace.id,
+      }));
+    }),
+  );
+
+  unsubs.push(
+    onEvent(WORKSPACES_UPDATED, (payload) => {
+      const { workspace } = payload as WorkspacesUpdatedEvent;
+      useWorkspacesStore.setState((state) => ({
+        workspaces: state.workspaces.map((w) => (w.id === workspace.id ? workspace : w)),
+      }));
+    }),
+  );
+
+  unsubs.push(
+    onEvent(WORKSPACES_DELETED, (payload) => {
+      const { workspaceId } = payload as WorkspacesDeletedEvent;
+      useWorkspacesStore.setState((state) => ({
+        workspaces: state.workspaces.filter((w) => w.id !== workspaceId),
       }));
     }),
   );

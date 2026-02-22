@@ -3,6 +3,7 @@ import { CommandBus } from "../../bus/command-bus";
 import { EventBus } from "../../bus/event-bus";
 import type { Platform } from "../../platform/types";
 import type { TabId, WindowId } from "../../shared/types";
+import { createMockPlatform } from "../../test-utils";
 import { register, start, stripTrackingParams } from "./window-chrome.main";
 import {
   WINDOW_CLOSE,
@@ -19,40 +20,6 @@ import {
 
 const WIN_ID = "win-1" as WindowId;
 const TAB_ID = "tab-1" as TabId;
-
-function createMockPlatform(overrides: Partial<Platform> = {}): Platform {
-  return {
-    createWindow: vi.fn(),
-    closeWindow: vi.fn(),
-    minimizeWindow: vi.fn(),
-    maximizeWindow: vi.fn(),
-    unmaximizeWindow: vi.fn(),
-    isWindowMaximized: vi.fn(() => false),
-    focusWindow: vi.fn(),
-    createTab: vi.fn(),
-    closeTab: vi.fn(),
-    navigateTab: vi.fn(),
-    getTabUrl: vi.fn(() => undefined),
-    getTabTitle: vi.fn(() => undefined),
-    setTabBounds: vi.fn(),
-    hideTab: vi.fn(),
-    hideAllTabs: vi.fn(),
-    onTabEvent: vi.fn(() => () => {}),
-    goBack: vi.fn(),
-    goForward: vi.fn(),
-    reload: vi.fn(),
-    canGoBack: vi.fn(() => false),
-    canGoForward: vi.fn(() => false),
-    registerShortcut: vi.fn(),
-    unregisterShortcut: vi.fn(),
-    hookWebContents: vi.fn(),
-    focusShell: vi.fn(),
-    openExternal: vi.fn(),
-    readClipboard: vi.fn(() => ""),
-    writeClipboard: vi.fn(),
-    ...overrides,
-  } as Platform;
-}
 
 function setup(platformOverrides: Partial<Platform> = {}) {
   const commands = new CommandBus<WindowChromeCommands>();
