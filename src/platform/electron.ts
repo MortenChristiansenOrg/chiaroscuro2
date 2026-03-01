@@ -100,14 +100,38 @@ animation:ci .12s ease both}
 .i{display:flex;align-items:center;padding:6px 12px;margin:0 4px;border-radius:6px;
 color:rgb(224,224,224);font-size:13px;font-weight:500;letter-spacing:.01em;
 cursor:pointer;user-select:none;transition:background 60ms}
-.i:hover{background:rgba(255,255,255,.1)}
+.i:hover,.i.focused{background:rgba(255,255,255,.1)}
 .i:active{background:rgba(255,255,255,.15)}
 .i[data-disabled]{color:rgba(210,210,210,.35);pointer-events:none}
 @keyframes ci{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
 </style></head><body><div id="m"></div>
 <script>
-let _resolve=null;
+let _resolve=null,_focus=-1,_items=[];
+function _setFocus(idx){
+  const els=document.querySelectorAll('.i');
+  if(_focus>=0&&_focus<els.length)els[_focus].classList.remove('focused');
+  _focus=idx;
+  if(_focus>=0&&_focus<els.length)els[_focus].classList.add('focused');
+}
+function _moveFocus(dir){
+  if(!_items.length)return;
+  let next=_focus;
+  for(let t=0;t<_items.length;t++){
+    next=(next+dir+_items.length)%_items.length;
+    if(!_items[next].disabled){_setFocus(next);return}
+  }
+}
+function _dismiss(){if(_resolve){_resolve(-1);_resolve=null}}
+function _select(){if(_focus>=0&&!_items[_focus].disabled&&_resolve){_resolve(_focus);_resolve=null}}
+document.addEventListener('keydown',e=>{
+  if(!_resolve)return;
+  if(e.key==='Escape'){e.preventDefault();_dismiss()}
+  else if(e.key==='ArrowDown'){e.preventDefault();_moveFocus(1)}
+  else if(e.key==='ArrowUp'){e.preventDefault();_moveFocus(-1)}
+  else if(e.key==='Enter'){e.preventDefault();_select()}
+});
 function renderMenu(items){
+  _items=items;_focus=-1;
   const m=document.getElementById('m');
   m.innerHTML='';
   items.forEach((it,i)=>{
@@ -119,6 +143,7 @@ function renderMenu(items){
     m.appendChild(d);
   });
   m.style.animation='none';void m.offsetWidth;m.style.animation='';
+  _moveFocus(1);
 }
 function awaitSelection(){
   return new Promise(r=>{_resolve=r});

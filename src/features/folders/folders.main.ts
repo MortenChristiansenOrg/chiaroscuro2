@@ -252,6 +252,7 @@ export function register(deps: Deps): void {
     let tabsReordered = false;
     for (const [i, item] of items.entries()) {
       if (item.type === "folder") {
+        if (item.folder.order === i) continue;
         item.folder.order = i;
         persistFolder(item.folder);
       } else if (item.tab.order !== i) {
