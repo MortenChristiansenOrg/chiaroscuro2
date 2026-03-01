@@ -53,7 +53,6 @@ import {
   register as registerWorkspaces,
   start as startWorkspaces,
 } from "../features/workspaces/workspaces.main";
-import { getAllWorkspaces } from "../features/workspaces/workspaces.main";
 import type {
   WorkspacesCommands,
   WorkspacesEvents,
@@ -174,32 +173,6 @@ app.whenReady().then(async () => {
   registerContextMenu(deps);
   registerFolders(deps);
   registerZoom(deps);
-
-  // ── Global keyboard shortcuts ──────────────────────────────────
-  // Ctrl+W: Close current tab
-  platform.registerShortcut("CommandOrControl+W", () => {
-    const tabId = deps.getActiveTabId();
-    if (tabId) commands.send("tabs:close", { tabId }).catch(console.error);
-  });
-
-  // Ctrl+1..9: Switch to workspace N
-  for (let n = 1; n <= 9; n++) {
-    platform.registerShortcut(`CommandOrControl+${n}`, () => {
-      const all = getAllWorkspaces();
-      const ws = all[n - 1];
-      if (ws) commands.send("workspaces:switch", { workspaceId: ws.id }).catch(console.error);
-    });
-  }
-
-  // Ctrl+Shift+1..9: Move current tab to workspace N
-  for (let n = 1; n <= 9; n++) {
-    platform.registerShortcut(`CommandOrControl+Shift+${n}`, () => {
-      const all = getAllWorkspaces();
-      const ws = all[n - 1];
-      if (ws)
-        commands.send("workspaces:move-tab", { targetWorkspaceId: ws.id }).catch(console.error);
-    });
-  }
 
   // Bridge bus to IPC (once, before any window creation)
   bridgeBusToIpc(commands, events, () => BrowserWindow.getAllWindows());

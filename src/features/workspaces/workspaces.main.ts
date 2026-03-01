@@ -5,7 +5,13 @@ import type { Platform } from "../../platform/types";
 import type { TabId, WindowId, WorkspaceId } from "../../shared/types";
 import { getTabsForWorkspace } from "../tabs/tabs.main";
 import type { TabsCommands, TabsEvents } from "../tabs/tabs.shared";
-import { TABS_ACTIVATE, TABS_ACTIVATED, TABS_NAVIGATE, TABS_UPDATED } from "../tabs/tabs.shared";
+import {
+  TABS_ACTIVATE,
+  TABS_ACTIVATED,
+  TABS_CLOSE,
+  TABS_NAVIGATE,
+  TABS_UPDATED,
+} from "../tabs/tabs.shared";
 import {
   type PersistedWorkspace,
   WORKSPACES_CREATE,
@@ -246,6 +252,31 @@ export function register(deps: Deps): void {
 
     await commands.send(TABS_NAVIGATE, { url: originalUrl, tabId });
   });
+
+  // ── Keyboard shortcuts ──────────────────────────────────────────
+  // Ctrl+W: Close current tab
+  platform.registerShortcut("CommandOrControl+W", () => {
+    const tabId = getActiveTabId();
+    if (tabId) commands.send(TABS_CLOSE, { tabId }).catch(console.error);
+  });
+
+  // Ctrl+1..9: Switch to workspace N
+  for (let n = 1; n <= 9; n++) {
+    platform.registerShortcut(`CommandOrControl+${n}`, () => {
+      const all = getAllWorkspaces();
+      const ws = all[n - 1];
+      if (ws) commands.send(WORKSPACES_SWITCH, { workspaceId: ws.id }).catch(console.error);
+    });
+  }
+
+  // Ctrl+Shift+1..9: Move current tab to workspace N
+  for (let n = 1; n <= 9; n++) {
+    platform.registerShortcut(`CommandOrControl+Shift+${n}`, () => {
+      const all = getAllWorkspaces();
+      const ws = all[n - 1];
+      if (ws) commands.send(WORKSPACES_MOVE_TAB, { targetWorkspaceId: ws.id }).catch(console.error);
+    });
+  }
 }
 
 export async function start(deps: Deps): Promise<void> {
