@@ -713,7 +713,7 @@ function FolderHeader({
       style={{
         gap: "0.625rem",
         padding: "0.375rem 0.75rem",
-        paddingLeft: `${0.75 + depth * 1}rem`,
+        paddingLeft: "0.75rem",
         margin: "0.25rem 0.375rem",
         borderRadius: "var(--radius-md)",
         background: dropOver
@@ -888,7 +888,7 @@ function FolderGroup({
         onContextMenu={onContextMenu}
       />
       {!folder.collapsed && (
-        <div style={{ paddingLeft: `${depth > 0 ? 1 : 0.5}rem` }}>
+        <div style={{ paddingLeft: "0.5rem" }}>
           {items.map((item) =>
             item.type === "tab" ? (
               <TabItem
