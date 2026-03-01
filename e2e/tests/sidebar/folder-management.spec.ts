@@ -83,8 +83,9 @@ test.describe("folder creation", () => {
     await sidebarPage.page.waitForTimeout(200);
     await createNamedFolder(sidebarPage, "Test Folder");
 
-    // Drag tab B into folder
-    await sidebarPage.dragTabByIndexToFolder(1, "Test Folder");
+    // Drag tab B into folder by data-tab-id (not brittle positional index)
+    const tabBNode = sidebarPage.sidebar.locator(`[data-tab-id="${tabB}"]`);
+    await tabBNode.dragTo(sidebarPage.folder("Test Folder").locator("span").first());
     await expect(async () => {
       expect(await sidebarPage.getFolderTabCount("Test Folder")).toBe(2);
     }).toPass({ timeout: 3_000 });

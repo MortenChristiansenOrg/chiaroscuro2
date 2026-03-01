@@ -404,6 +404,7 @@ export class ElectronPlatform implements Platform {
   initContextMenuOverlay(windowId: WindowId): void {
     const parent = this.getWin(windowId);
     if (!parent) return;
+    if (this.ctxWin && !this.ctxWin.isDestroyed()) return;
 
     this.ctxWin = new BrowserWindow({
       parent,

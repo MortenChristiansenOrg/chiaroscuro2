@@ -56,11 +56,21 @@ export function register(deps: Deps): void {
   }
 
   function removePersistedFolder(folderId: FolderId): void {
-    foldersCollection.remove(folderId).catch(() => {});
+    foldersCollection.remove(folderId).catch(console.error);
   }
 
   function emitChanged(): void {
     events.emit(FOLDERS_CHANGED, { folders: [...folders.values()] });
+  }
+
+  function nextOrderForLevel(workspaceId: WorkspaceId, parentFolderId: FolderId | null): number {
+    const folderOrders = [...folders.values()]
+      .filter((f) => f.workspaceId === workspaceId && f.parentFolderId === parentFolderId)
+      .map((f) => f.order);
+    const tabOrders = getTabsForWorkspace(workspaceId)
+      .filter((t) => t.bookmarked && (t.folderId ?? null) === parentFolderId)
+      .map((t) => t.order);
+    return Math.max(-1, ...folderOrders, ...tabOrders) + 1;
   }
 
   _setFolderOrder = (folderId: FolderId, order: number) => {
@@ -83,8 +93,10 @@ export function register(deps: Deps): void {
       // Remove tab from folder
       const oldFolderId = tab.folderId;
       const folder = folders.get(oldFolderId);
-      // Move tab to folder's parent (or root)
-      setTabFolderId(tabId, folder?.parentFolderId ?? null);
+      // Move tab to folder's parent (or root) with correct order
+      const targetParentId = folder?.parentFolderId ?? null;
+      setTabFolderId(tabId, targetParentId);
+      setTabOrder(tabId, nextOrderForLevel(tab.workspaceId, targetParentId));
       const updatedTab = getTab(tabId);
       if (updatedTab) {
         events.emit(TABS_UPDATED, { tab: { ...updatedTab } });
@@ -143,18 +155,22 @@ export function register(deps: Deps): void {
     const folder = folders.get(payload.folderId);
     if (!folder) return;
 
-    // Move contained tabs to parent folder (or root)
+    // Move contained tabs to parent folder (or root) with correct order
+    const targetParentId = folder.parentFolderId ?? null;
     const tabsInFolder = getTabsForWorkspace(folder.workspaceId).filter(
       (t) => t.folderId === folder.id,
     );
+    let order = nextOrderForLevel(folder.workspaceId, targetParentId);
     for (const tab of tabsInFolder) {
-      setTabFolderId(tab.id, folder.parentFolderId ?? null);
+      setTabFolderId(tab.id, targetParentId);
+      setTabOrder(tab.id, order++);
     }
 
     // Promote child folders to parent level
     for (const child of folders.values()) {
       if (child.parentFolderId === folder.id) {
-        child.parentFolderId = folder.parentFolderId;
+        child.parentFolderId = targetParentId;
+        child.order = order++;
         persistFolder(child);
       }
     }
