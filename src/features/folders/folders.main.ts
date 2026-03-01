@@ -70,50 +70,6 @@ export function register(deps: Deps): void {
     persistFolder(folder);
   };
 
-  // Auto-cleanup empty folders when tabs change
-  events.on(TABS_LIST_CHANGED, () => {
-    let changed = false;
-    let didDelete = true;
-    while (didDelete) {
-      didDelete = false;
-      for (const folder of [...folders.values()]) {
-        const tabsInFolder = getTabsForWorkspace(folder.workspaceId).filter(
-          (t) => t.folderId === folder.id,
-        );
-        const childFolders = [...folders.values()].filter((f) => f.parentFolderId === folder.id);
-        if (tabsInFolder.length === 0 && childFolders.length === 0) {
-          folders.delete(folder.id);
-          removePersistedFolder(folder.id);
-          didDelete = true;
-          changed = true;
-        }
-      }
-    }
-    if (changed) emitChanged();
-  });
-
-  function autoDeleteIfEmpty(folderId: FolderId): void {
-    const folder = folders.get(folderId);
-    if (!folder) return;
-
-    // Check if any tabs remain in this folder
-    const tabsInFolder = getTabsForWorkspace(folder.workspaceId).filter(
-      (t) => t.folderId === folderId,
-    );
-    // Check if any child folders remain
-    const childFolders = [...folders.values()].filter((f) => f.parentFolderId === folderId);
-
-    if (tabsInFolder.length === 0 && childFolders.length === 0) {
-      folders.delete(folderId);
-      removePersistedFolder(folderId);
-      // Recurse: parent might now be empty too
-      if (folder.parentFolderId) {
-        autoDeleteIfEmpty(folder.parentFolderId);
-      }
-      emitChanged();
-    }
-  }
-
   // ── Command handlers ───────────────────────────────────────────
 
   commands.handle(FOLDERS_TOGGLE, async (payload) => {
@@ -133,7 +89,6 @@ export function register(deps: Deps): void {
         events.emit(TABS_UPDATED, { tab: { ...updatedTab } });
       }
       events.emit(TABS_LIST_CHANGED, { tabs: getTabsForWorkspace(tab.workspaceId) });
-      autoDeleteIfEmpty(oldFolderId);
     } else {
       // Create new folder containing this tab
       const folderId = crypto.randomUUID() as FolderId;
@@ -207,11 +162,6 @@ export function register(deps: Deps): void {
       events.emit(TABS_LIST_CHANGED, { tabs: getTabsForWorkspace(folder.workspaceId) });
     }
     emitChanged();
-
-    // Check if parent is now empty
-    if (folder.parentFolderId) {
-      autoDeleteIfEmpty(folder.parentFolderId);
-    }
   });
 
   commands.handle(FOLDERS_REORDER, async (payload) => {
