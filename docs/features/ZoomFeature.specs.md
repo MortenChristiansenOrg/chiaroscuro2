@@ -35,8 +35,10 @@ Zoom is applied to the active tab's `WebContentsView` using Electron's `webConte
 
 This feature uses the following shortcuts:
 
-- **Ctrl-MouseWheel**: Change zoom level.
-- **Ctrl-Delete**: Reset zoom level.
+- **Ctrl+Plus (+)**: Zoom in.
+- **Ctrl+Minus (-)**: Zoom out.
+- **Ctrl+0**: Reset zoom level.
+- **Ctrl+MouseWheel**: Change zoom level (native Chromium behavior).
 
 ### Mouse interactions
 
@@ -53,9 +55,3 @@ This feature uses the following shortcuts:
 ### Events
 
 - `zoom:changed` — Zoom level changed. Payload: `{ tabId: string, zoomLevel: number }`.
-
-## Unresolved Issues
-
-- **Standard zoom shortcuts**: Most browsers also support Ctrl+Plus / Ctrl+Minus for zoom in/out. These should probably be supported in addition to Ctrl+MouseWheel.
-- **Ctrl-Delete for reset**: This is non-standard. Most browsers use Ctrl-0 to reset zoom. Consider using Ctrl-0 instead.
-- **Per-domain zoom memory**: Should zoom levels be remembered per-domain (like Chrome) so that returning to a site restores its previous zoom level?

@@ -1,4 +1,5 @@
-import { BrowserWindow, WebContentsView, clipboard, shell } from "electron";
+import path from "node:path";
+import { BrowserWindow, WebContentsView, clipboard, ipcMain, shell } from "electron";
 import type { TabId, WindowId } from "../shared/types";
 import type { Bounds } from "../shared/types";
 import type { Platform } from "./types";
@@ -39,6 +40,9 @@ function parseAccelerator(accelerator: string): ParsedAccelerator {
       case "cmd":
       case "super":
         result.meta = true;
+        break;
+      case "plus":
+        result.key = "+";
         break;
       default:
         result.key = part;
@@ -214,6 +218,7 @@ export class ElectronPlatform implements Platform {
         contextIsolation: true,
         nodeIntegration: false,
         webSecurity: true,
+        preload: path.join(__dirname, "../preload/tab.js"),
       },
     });
 
@@ -244,6 +249,19 @@ export class ElectronPlatform implements Platform {
     });
 
     this.hookWebContents(view.webContents);
+
+    // The tab preload applies Ctrl+wheel zoom via webFrame and sends
+    // the resulting level here. We re-emit as a synthetic zoom-changed
+    // event so the zoom feature can read the new level and update state.
+    const onZoomApplied = (event: Electron.IpcMainEvent): void => {
+      if (event.sender === view.webContents) {
+        view.webContents.emit("zoom-changed");
+      }
+    };
+    ipcMain.on("tab:zoom-applied", onZoomApplied);
+    view.webContents.once("destroyed", () => {
+      ipcMain.removeListener("tab:zoom-applied", onZoomApplied);
+    });
 
     if (!isAllowedUrl(url)) throw new Error(`Blocked URL scheme: ${url}`);
     view.webContents.loadURL(url);
@@ -335,6 +353,16 @@ export class ElectronPlatform implements Platform {
 
   canGoForward(tabId: TabId): boolean {
     return this.views.get(tabId)?.webContents.canGoForward() ?? false;
+  }
+
+  // ── Zoom ──────────────────────────────────────────────────────
+
+  setTabZoomLevel(tabId: TabId, level: number): void {
+    this.views.get(tabId)?.webContents.setZoomLevel(level);
+  }
+
+  getTabZoomLevel(tabId: TabId): number {
+    return this.views.get(tabId)?.webContents.getZoomLevel() ?? 0;
   }
 
   // ── Focus ──────────────────────────────────────────────────────

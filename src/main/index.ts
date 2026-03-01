@@ -58,6 +58,8 @@ import type {
   WorkspacesCommands,
   WorkspacesEvents,
 } from "../features/workspaces/workspaces.shared";
+import { register as registerZoom } from "../features/zoom/zoom.main";
+import type { ZoomCommands, ZoomEvents } from "../features/zoom/zoom.shared";
 import { ElectronPlatform } from "../platform/electron";
 import type { TabId, WindowId, WorkspaceId } from "../shared/types";
 
@@ -78,6 +80,7 @@ type AllCommands = MergeRegistries<
     TooltipCommands,
     ContextMenuCommands,
     FoldersCommands,
+    ZoomCommands,
   ]
 >;
 
@@ -92,6 +95,7 @@ type AllEvents = MergeRegistries<
     TooltipEvents,
     ContextMenuEvents,
     FoldersEvents,
+    ZoomEvents,
   ]
 >;
 
@@ -169,6 +173,7 @@ app.whenReady().then(async () => {
   registerTooltip(deps);
   registerContextMenu(deps);
   registerFolders(deps);
+  registerZoom(deps);
 
   // ── Global keyboard shortcuts ──────────────────────────────────
   // Ctrl+W: Close current tab

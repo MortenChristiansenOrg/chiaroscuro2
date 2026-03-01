@@ -5,7 +5,16 @@ import { defineConfig } from "electron-vite";
 
 export default defineConfig({
   main: {},
-  preload: {},
+  preload: {
+    build: {
+      rollupOptions: {
+        input: {
+          index: resolve(__dirname, "src/preload/index.ts"),
+          tab: resolve(__dirname, "src/preload/tab.ts"),
+        },
+      },
+    },
+  },
   renderer: {
     server: {
       port: 5199,
