@@ -23,6 +23,7 @@ Work through each step sequentially. Use the Task tool with sub-agents to parall
 ### Step 1: Gather Requirements
 
 Ask the user clarifying questions about the feature:
+
 - What user problem does it solve?
 - What are the key workflows?
 - Which existing features does it interact with?
@@ -42,37 +43,50 @@ Create `docs/features/<FeatureName>Feature.specs.md` following this template:
 # Specification for <Feature Name> Feature
 
 ## Overview
+
 Brief description of what the feature does and why.
 
 ## Terminology
+
 - **Term**: Definition of domain terms used in this spec.
 
 ## Requirements
+
 - Bullet list of functional requirements.
 - Each requirement is testable and unambiguous.
 
 ## Workflows
+
 ### <Workflow Name>
+
 Step-by-step user workflow description.
 
 ## Interactions
+
 ### Keyboard shortcuts
+
 - **Shortcut**: Description.
 
 ### Mouse interactions
+
 - **Action**: Description.
 
 ### Cross-feature interactions
+
 - Which features this one communicates with and how.
 
 ## Commands & Events
+
 ### Commands
+
 - `feature:command-name` — Description. Payload: `{ field: type }`.
 
 ### Events
+
 - `feature:event-name` — Description. Payload: `{ field: type }`.
 
 ## Unresolved Issues
+
 - Open questions or deferred decisions.
 ```
 
@@ -88,15 +102,16 @@ Launch a **Plan** sub-agent to design the implementation. The plan must cover:
 
 **Files to create** (only include files the feature needs):
 
-| File | Purpose |
-|------|---------|
-| `<feature>.shared.ts` | Command/event names, payload types, type registry maps |
-| `<feature>.main.ts` | Main-process logic: command handlers, platform/data access, event emission |
-| `<feature>.renderer.tsx` | React components for the feature's UI |
-| `<feature>.store.ts` | Renderer-side Zustand store with event listeners |
-| `<feature>.test.ts` | Unit tests with MockPlatform + InMemoryDataStore |
+| File                     | Purpose                                                                    |
+| ------------------------ | -------------------------------------------------------------------------- |
+| `<feature>.shared.ts`    | Command/event names, payload types, type registry maps                     |
+| `<feature>.main.ts`      | Main-process logic: command handlers, platform/data access, event emission |
+| `<feature>.renderer.tsx` | React components for the feature's UI                                      |
+| `<feature>.store.ts`     | Renderer-side Zustand store with event listeners                           |
+| `<feature>.test.ts`      | Unit tests with MockPlatform + InMemoryDataStore                           |
 
 **Design decisions the plan must address:**
+
 - Command and event type definitions (in `.shared.ts`)
 - What state is authoritative (main-process) vs ephemeral (renderer-only)
 - RxDB collection schema (if persistent storage needed)
@@ -189,6 +204,7 @@ Create `src/features/<feature-name>/<feature>.test.ts`:
 Launch sub-agents in parallel for:
 
 **Unit tests:**
+
 - Test each command handler in isolation
 - Use MockPlatform + InMemoryDataStore (RxDB Memory RxStorage)
 - Verify correct events emitted for each command
@@ -196,6 +212,7 @@ Launch sub-agents in parallel for:
 - Test edge cases and error conditions
 
 **Integration tests** (if cross-feature interactions exist):
+
 - Wire multiple features together with mocks
 - Verify command/event flows between features
 
@@ -215,10 +232,12 @@ Launch sub-agents in parallel for:
 If the feature introduces new UI components visible to the user, create or update design system documentation.
 
 **When to create a new component page:**
+
 - The feature adds a distinct, reusable UI element (e.g., a panel, dialog, bar, list)
 - The component has its own visual specs, states, or interaction patterns
 
 **When to update an existing page:**
+
 - The feature adds a variant or state to an existing component (e.g., a new button type, a new tab state)
 
 **Creating a new component page** — `design-system/src/pages/components/<component-name>.mdx`:
@@ -241,6 +260,7 @@ Read `design-system/src/pages/component-guide.mdx` for the full 12-section templ
 Use `import { ComponentPreview } from "../../components/ComponentPreview"` for previews.
 
 **Add the route** in `design-system/src/routes.ts`:
+
 ```ts
 {
   path: "/components/<component-name>",
@@ -302,6 +322,7 @@ Invoke `/ui-review <feature-name>` (which launches the app, connects via CDP, an
 Launch a sub-agent to review the completed feature against the project architecture. This agent should read `SPEC.md` and verify:
 
 **Structural conformance:**
+
 - [ ] Feature lives in `src/features/<feature-name>/`
 - [ ] Files follow naming convention: `.main.ts`, `.renderer.tsx`, `.shared.ts`, `.store.ts`, `.test.ts`
 - [ ] No direct Electron imports in feature code (uses Platform abstraction)
@@ -309,6 +330,7 @@ Launch a sub-agent to review the completed feature against the project architect
 - [ ] Feature registered in entry points (no auto-discovery magic)
 
 **Bus architecture:**
+
 - [ ] Commands are imperative, one handler per command
 - [ ] Events are past-tense, zero or more listeners
 - [ ] Command/event names prefixed with `feature:`
@@ -316,6 +338,7 @@ Launch a sub-agent to review the completed feature against the project architect
 - [ ] Bus bridges IPC transparently — feature doesn't know which process it talks to
 
 **State management:**
+
 - [ ] Zustand store per feature (not global)
 - [ ] Authoritative state owned by main process, synced via events
 - [ ] Ephemeral UI state in Zustand store or React local state
@@ -323,15 +346,18 @@ Launch a sub-agent to review the completed feature against the project architect
 - [ ] Inline selectors used (`useStore(s => s.field)`)
 
 **Two-phase startup:**
+
 - [ ] `register()` has no side effects (only wiring handlers/listeners)
 - [ ] `start()` only runs after all features complete registration
 
 **Testability:**
+
 - [ ] Tests use MockPlatform + InMemoryDataStore
 - [ ] No Electron dependency in tests
 - [ ] Command handling and event emission verified
 
 **Design system compliance:**
+
 - [ ] All icons use Font Awesome 7 Free (`<i>` elements) — no inline SVGs
 - [ ] Colors reference design tokens from `tokens.css` — no hardcoded oklch/hex/rgb values
 - [ ] Correct color context used (glass tokens for chrome/overlay, content tokens for panels)
@@ -347,6 +373,7 @@ Launch a sub-agent to review the completed feature against the project architect
 - [ ] Component route added to `design-system/src/routes.ts`
 
 **Technology best practices:**
+
 - [ ] React 19 patterns (no deprecated APIs)
 - [ ] TypeScript strict mode compliance
 - [ ] Tailwind CSS 4 for styling (no inline styles or CSS modules)
@@ -354,6 +381,7 @@ Launch a sub-agent to review the completed feature against the project architect
 - [ ] Zustand v5 patterns (inline selectors, useShallow for multi-field)
 
 **Cross-cutting:**
+
 - [ ] No security vulnerabilities (XSS, injection, etc.)
 - [ ] Performance: no unnecessary re-renders, efficient subscriptions
 - [ ] Feature spec in `docs/features/` matches implementation
@@ -373,6 +401,7 @@ Report any violations with specific file:line references and suggested fixes. Fi
 ## Output
 
 When complete, summarize:
+
 - Feature name and description
 - Files created
 - Commands and events registered
