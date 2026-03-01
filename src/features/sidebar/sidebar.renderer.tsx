@@ -544,11 +544,6 @@ function FolderHeader({
           icon: "folder-plus",
           onSelect: () => sendFolderCommand(FOLDERS_CREATE, { parentFolderId: folder.id }),
         },
-        {
-          label: "Remove folder",
-          icon: "folder-minus",
-          onSelect: () => sendFolderCommand(FOLDERS_REMOVE, { folderId: folder.id }),
-        },
       ],
       e,
     );
