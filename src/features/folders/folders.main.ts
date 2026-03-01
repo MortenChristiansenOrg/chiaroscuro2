@@ -65,9 +65,10 @@ export function register(deps: Deps): void {
 
   _setFolderOrder = (folderId: FolderId, order: number) => {
     const folder = folders.get(folderId);
-    if (!folder) return;
+    if (!folder || folder.order === order) return;
     folder.order = order;
     persistFolder(folder);
+    emitChanged();
   };
 
   // ── Command handlers ───────────────────────────────────────────
@@ -92,10 +93,13 @@ export function register(deps: Deps): void {
     } else {
       // Create new folder containing this tab
       const folderId = crypto.randomUUID() as FolderId;
-      const siblings = [...folders.values()].filter(
-        (f) => f.workspaceId === tab.workspaceId && f.parentFolderId === null,
-      );
-      const maxOrder = siblings.reduce((m, f) => Math.max(m, f.order), -1);
+      const folderOrders = [...folders.values()]
+        .filter((f) => f.workspaceId === tab.workspaceId && f.parentFolderId === null)
+        .map((f) => f.order);
+      const tabOrders = getTabsForWorkspace(tab.workspaceId)
+        .filter((t) => t.bookmarked && (t.folderId ?? null) === null && t.id !== tabId)
+        .map((t) => t.order);
+      const maxOrder = Math.max(-1, ...folderOrders, ...tabOrders);
 
       const folder: Folder = {
         id: folderId,
@@ -227,15 +231,20 @@ export function register(deps: Deps): void {
 
     // Splice and re-index all items at the level
     items.splice(insertAt, 0, { type: "folder", folder });
+    let tabsReordered = false;
     for (const [i, item] of items.entries()) {
       if (item.type === "folder") {
         item.folder.order = i;
         persistFolder(item.folder);
       } else if (item.tab.order !== i) {
         setTabOrder(item.tab.id, i);
+        tabsReordered = true;
       }
     }
 
+    if (tabsReordered) {
+      events.emit(TABS_LIST_CHANGED, { tabs: getTabsForWorkspace(folder.workspaceId) });
+    }
     emitChanged();
   });
 
@@ -244,10 +253,13 @@ export function register(deps: Deps): void {
     if (!workspaceId) return;
 
     const parentFolderId = (payload.parentFolderId as FolderId | null) ?? null;
-    const siblings = [...folders.values()].filter(
-      (f) => f.workspaceId === workspaceId && f.parentFolderId === parentFolderId,
-    );
-    const maxOrder = siblings.reduce((m, f) => Math.max(m, f.order), -1);
+    const folderOrders = [...folders.values()]
+      .filter((f) => f.workspaceId === workspaceId && f.parentFolderId === parentFolderId)
+      .map((f) => f.order);
+    const tabOrders = getTabsForWorkspace(workspaceId)
+      .filter((t) => t.bookmarked && (t.folderId ?? null) === parentFolderId)
+      .map((t) => t.order);
+    const maxOrder = Math.max(-1, ...folderOrders, ...tabOrders);
 
     const folderId = crypto.randomUUID() as FolderId;
     const folder: Folder = {

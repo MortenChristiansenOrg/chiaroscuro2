@@ -441,10 +441,16 @@ export class ElectronPlatform implements Platform {
 
     // Render items and measure
     const itemsJson = JSON.stringify(opts.items);
-    await this.ctxWin.webContents.executeJavaScript(`renderMenu(${itemsJson})`);
-    const size: [number, number] = await this.ctxWin.webContents.executeJavaScript(
-      `[document.getElementById('m').offsetWidth, document.getElementById('m').offsetHeight]`,
-    );
+    let size: [number, number];
+    try {
+      await this.ctxWin.webContents.executeJavaScript(`renderMenu(${itemsJson})`);
+      size = await this.ctxWin.webContents.executeJavaScript(
+        `[document.getElementById('m').offsetWidth, document.getElementById('m').offsetHeight]`,
+      );
+    } catch {
+      this.dismissCtxMenu();
+      return -1;
+    }
 
     // Edge detection — keep menu within parent window bounds
     let x = cb.x + opts.x;
@@ -473,14 +479,24 @@ export class ElectronPlatform implements Platform {
 
     return new Promise<number>((resolve) => {
       this.ctxResolve = resolve;
-      this.ctxWin?.webContents.executeJavaScript("awaitSelection()").then((index: number) => {
-        if (this.ctxResolve === resolve) {
-          this.ctxResolve = null;
-          this.ctxWin?.hide();
-          this.refocusParent();
-          resolve(index);
-        }
-      });
+      this.ctxWin?.webContents
+        .executeJavaScript("awaitSelection()")
+        .then((index: number) => {
+          if (this.ctxResolve === resolve) {
+            this.ctxResolve = null;
+            this.ctxWin?.hide();
+            this.refocusParent();
+            resolve(index);
+          }
+        })
+        .catch(() => {
+          if (this.ctxResolve === resolve) {
+            this.ctxResolve = null;
+            this.ctxWin?.hide();
+            this.refocusParent();
+            resolve(-1);
+          }
+        });
     });
   }
 

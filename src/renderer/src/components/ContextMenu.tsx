@@ -40,7 +40,8 @@ export function useContextMenu(): {
         if (index >= 0 && index < callbacksRef.current.length) {
           callbacksRef.current[index]?.();
         }
-      });
+      })
+      .catch(() => {});
   }, []);
 
   // portal kept for API compatibility — no longer renders anything
