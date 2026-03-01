@@ -91,7 +91,10 @@ export function register({
     const url = resolveInput(payload.command);
     if (!url) return;
 
-    if (payload.inCurrentTab) {
+    // Built-in pages always open via tabs:create (handles singleton + builtIn flag)
+    if (url.startsWith("app:")) {
+      await commands.send("tabs:create", { url });
+    } else if (payload.inCurrentTab) {
       const tabId = getActiveTabId();
       if (tabId) {
         await commands.send("tabs:navigate", { url });

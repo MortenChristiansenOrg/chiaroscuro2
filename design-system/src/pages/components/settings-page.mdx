@@ -1,0 +1,171 @@
+---
+title: Settings Page
+---
+
+# Settings Page
+
+Built-in page for editing global browser settings. Opens as a tab via `settings:open` command. VS Code-inspired layout with category navigation, search filtering, and live auto-save.
+
+## Anatomy
+
+1. **Settings header** — title with gear icon + search input
+2. **Category nav** — left sidebar with scroll-spy active indicator
+3. **Settings content** — scrollable area with categorized setting items
+4. **Setting item** — label, description, and inline control
+5. **Provider editor** — CRUD list for search providers with inline editing
+
+---
+
+## Visual Specs
+
+### Header
+
+| Property | Token/Value |
+|----------|-------------|
+| Padding | `1.5rem 2rem 1rem` |
+| Border bottom | `1px solid var(--border)` |
+| Title font size | `var(--text-lg)` |
+| Title font weight | `600` |
+| Title color | `var(--foreground)` |
+| Icon size | `0.875rem` |
+
+### Search Input
+
+| Property | Token/Value |
+|----------|-------------|
+| Width | `14rem` |
+| Padding | `0.375rem 0.625rem 0.375rem 1.75rem` |
+| Font size | `var(--text-sm)` |
+| Background | `var(--background)` |
+| Border | `1px solid var(--input)` |
+| Border radius | `var(--radius-sm)` |
+| Search icon size | `0.625rem` |
+| Search icon color | `var(--muted-foreground)` |
+
+### Category Nav
+
+| Property | Token/Value |
+|----------|-------------|
+| Width | `10rem` |
+| Border right | `1px solid var(--border)` |
+| Item padding | `0.375rem 1rem` |
+| Item font size | `var(--text-sm)` |
+| Active color | `var(--foreground)`, weight `600` |
+| Inactive color | `var(--muted-foreground)`, weight `400` |
+| Active indicator | `2px solid var(--foreground)` right border |
+
+### Category Heading
+
+| Property | Token/Value |
+|----------|-------------|
+| Font size | `var(--text-sm)` |
+| Font weight | `600` |
+| Text transform | `uppercase` |
+| Letter spacing | `0.05em` |
+| Color | `var(--muted-foreground)` |
+| Border bottom | `1px solid var(--border)` |
+
+### Setting Item
+
+| Property | Token/Value |
+|----------|-------------|
+| Label font size | `var(--text-base)` |
+| Label font weight | `500` |
+| Label color | `var(--foreground)` |
+| Description font size | `var(--text-sm)` |
+| Description color | `var(--content-text-secondary)` |
+| Vertical padding | `0.75rem` |
+
+### Form Inputs
+
+| Property | Token/Value |
+|----------|-------------|
+| Padding | `0.375rem 0.5rem` |
+| Font size | `var(--text-sm)` |
+| Color | `var(--foreground)` |
+| Background | `var(--background)` |
+| Border | `1px solid var(--input)` |
+| Border radius | `var(--radius-sm)` |
+
+### Provider Editor Grid
+
+| Property | Token/Value |
+|----------|-------------|
+| Grid columns | `4rem 1fr 1fr auto` |
+| Gap | `0.5rem` |
+| Column header font size | `var(--text-xs)` |
+| Column header color | `var(--muted-foreground)` |
+| URL template font | `var(--font-mono)`, `var(--text-xs)` |
+
+### Add Button
+
+| Property | Token/Value |
+|----------|-------------|
+| Border | `1px dashed var(--border)` |
+| Font size | `var(--text-sm)` |
+| Color | `var(--muted-foreground)` |
+| Icon size | `0.5rem` |
+| Padding | `0.375rem 0.75rem` |
+
+---
+
+## States
+
+### Loading
+When settings haven't been received yet, centered "Loading settings..." text in `var(--muted-foreground)`.
+
+### Empty Search
+When search query matches no settings, centered message: "No settings match [query]".
+
+### Default
+Full settings UI visible with all categories expanded.
+
+---
+
+## Behavior
+
+- **Auto-save**: Changes are saved optimistically to the store and debounced (300ms) before persisting to main process.
+- **Singleton tab**: Only one settings tab can exist at a time. Re-opening activates the existing tab.
+- **Search filtering**: Client-side filter on setting definitions. Hides non-matching categories entirely.
+- **Scroll-spy**: IntersectionObserver on category sections updates active nav link.
+
+---
+
+## Keyboard & Focus
+
+| Key | Action |
+|-----|--------|
+| Tab | Move between form controls |
+| Enter | Confirm select changes |
+
+---
+
+## Accessibility
+
+- All form inputs have associated labels via `aria-label`
+- Remove buttons include `aria-label="Remove provider"`
+- Category nav links use standard `<a>` elements
+- Semantic heading hierarchy: `<h1>` for title, `<h2>` for categories
+
+---
+
+## Layout & Composition
+
+```
+SettingsPage                  # root, flex column, full height
+  SettingsHeader              # title + search, border-bottom
+  [flex row, flex-1]
+    SettingsCategoryNav       # fixed-width left nav
+    SettingsContent           # flex-1, overflow-y auto
+      section#settings-*      # per-category section
+        h2                    # category heading
+        SettingItem           # label + description + control
+          ProviderEditor      # CRUD grid for providers
+          select              # dropdown for default provider
+```
+
+---
+
+## Related
+
+- [Command Palette](/components/command-palette) — consumes search provider settings

@@ -23,6 +23,11 @@ import type {
   PinnedTabsEvents,
 } from "../features/pinned-tabs/pinned-tabs.shared";
 import {
+  register as registerSettings,
+  start as startSettings,
+} from "../features/settings/settings.main";
+import type { SettingsCommands, SettingsEvents } from "../features/settings/settings.shared";
+import {
   register as registerSidebar,
   start as startSidebar,
 } from "../features/sidebar/sidebar.main";
@@ -65,6 +70,7 @@ type AllCommands = MergeRegistries<
     PinnedTabsCommands,
     SidebarCommands,
     CommandPaletteCommands,
+    SettingsCommands,
     TooltipCommands,
   ]
 >;
@@ -77,6 +83,7 @@ type AllEvents = MergeRegistries<
     PinnedTabsEvents,
     SidebarEvents,
     CommandPaletteEvents,
+    SettingsEvents,
     TooltipEvents,
   ]
 >;
@@ -152,6 +159,7 @@ app.whenReady().then(async () => {
   registerPinnedTabs(deps);
   registerSidebar(deps);
   registerCommandPalette(deps);
+  registerSettings(deps);
   registerTooltip(deps);
 
   // ── Global keyboard shortcuts ──────────────────────────────────
@@ -196,6 +204,7 @@ app.whenReady().then(async () => {
     await startPinnedTabs(deps, restoredTabs);
     startSidebar(deps);
     await startCommandPalette(deps);
+    await startSettings(deps);
   });
 
   app.on("activate", () => {

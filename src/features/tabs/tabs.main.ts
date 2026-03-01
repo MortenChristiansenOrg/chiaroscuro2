@@ -64,6 +64,7 @@ export function register(deps: Deps): void {
   let contentBounds: Bounds = { x: 0, y: 0, width: 0, height: 0 };
   const eventCleanups = new Map<TabId, (() => void)[]>();
   const tabsCollection: Collection<PersistedTab> = dataStore.collection("tabs");
+  let builtInCounter = 0;
 
   // Expose for getTabsForWorkspace and start()
   _tabs = tabs;
@@ -72,7 +73,8 @@ export function register(deps: Deps): void {
   // ── Persistence helpers ──────────────────────────────────────────
 
   function persistTab(tab: Tab): void {
-    const { loading, ...persisted } = tab;
+    if (tab.builtIn) return;
+    const { loading, builtIn, ...persisted } = tab;
     tabsCollection.upsert(persisted as PersistedTab).catch(console.error);
   }
 
@@ -199,28 +201,37 @@ export function register(deps: Deps): void {
     const workspaceId = payload.workspaceId ?? getActiveWorkspaceId();
     if (!workspaceId) throw new Error("No active workspace");
 
-    const tabId = await platform.createTab(windowId, payload.url);
+    const isBuiltIn = payload.url.startsWith("app:");
+    const tabId = isBuiltIn
+      ? (`builtin-${++builtInCounter}` as TabId)
+      : await platform.createTab(windowId, payload.url);
     const now = Date.now();
+
+    // Built-in pages get a human-readable title from the app: URL
+    const builtInTitles: Record<string, string> = { "app:settings": "Settings" };
 
     const tab: Tab = {
       id: tabId,
       workspaceId,
       url: payload.url,
-      title: payload.url,
+      title: (isBuiltIn && builtInTitles[payload.url]) || payload.url,
       favicon: "",
-      loading: true,
+      loading: !isBuiltIn,
       bookmarked: false,
+      ...(isBuiltIn && { builtIn: true }),
       lastAccessedAt: now,
       createdAt: now,
       order: tabs.size,
     };
 
     tabs.set(tabId, tab);
-    attachTabListeners(tabId);
-    persistTab(tab);
+    if (!isBuiltIn) {
+      attachTabListeners(tabId);
+      persistTab(tab);
+      events.emit("tab:loading-changed", { tabId, loading: true });
+    }
 
     events.emit(TABS_CREATED, { tab });
-    events.emit("tab:loading-changed", { tabId, loading: true });
     scheduleListChanged();
 
     // Activate by default
@@ -244,9 +255,11 @@ export function register(deps: Deps): void {
     }
 
     const wasActive = getActiveTabId() === tabId;
-    await platform.closeTab(tabId);
+    if (!tab.builtIn) {
+      await platform.closeTab(tabId);
+      removePersistedTab(tabId);
+    }
     tabs.delete(tabId);
-    removePersistedTab(tabId);
 
     let activatedTabId: TabId | null = null;
     if (wasActive) {
@@ -273,15 +286,20 @@ export function register(deps: Deps): void {
 
     const previousTabId = getActiveTabId() ?? null;
 
-    // Hide previous tab
+    // Hide previous tab (skip if previous was built-in — no WCV to hide)
     if (previousTabId && previousTabId !== tabId) {
-      platform.hideTab(previousTabId);
+      const prevTab = tabs.get(previousTabId);
+      if (!prevTab?.builtIn) {
+        platform.hideTab(previousTabId);
+      }
     }
 
-    // Show new tab
+    // Show new tab (skip platform calls for built-in tabs)
     setActiveTabId(tabId);
     tab.lastAccessedAt = Date.now();
-    platform.setTabBounds(tabId, contentBounds);
+    if (!tab.builtIn && contentBounds.width > 0 && contentBounds.height > 0) {
+      platform.setTabBounds(tabId, contentBounds);
+    }
 
     events.emit(TABS_ACTIVATED, { tabId, previousTabId });
     events.emit(TABS_UPDATED, { tab: { ...tab } });
@@ -389,7 +407,10 @@ export function register(deps: Deps): void {
     contentBounds = payload;
     const activeTabId = getActiveTabId();
     if (activeTabId) {
-      platform.setTabBounds(activeTabId, contentBounds);
+      const activeTab = tabs.get(activeTabId);
+      if (!activeTab?.builtIn) {
+        platform.setTabBounds(activeTabId, contentBounds);
+      }
     }
   });
 

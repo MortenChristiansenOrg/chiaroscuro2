@@ -76,6 +76,12 @@ function buildSearchUrl(provider: SearchProvider, query: string): string {
   return provider.urlTemplate.replace("{query}", encodeURIComponent(query));
 }
 
+// ── Built-in pages ──────────────────────────────────────────────
+
+const builtInRoutes: Record<string, string> = {
+  "/settings": "app:settings",
+};
+
 // ── Resolution ──────────────────────────────────────────────────
 
 /**
@@ -85,6 +91,10 @@ function buildSearchUrl(provider: SearchProvider, query: string): string {
 export function resolveInputDetailed(input: string): ResolvedInput {
   const trimmed = input.trim();
   if (!trimmed) return { type: "empty" };
+
+  // Built-in page route
+  const builtInUrl = builtInRoutes[trimmed];
+  if (builtInUrl) return { type: "url", url: builtInUrl };
 
   // Bang at start: !g query
   const bangStartMatch = trimmed.match(/^(![\w]+)\s+(.+)/);

@@ -24,6 +24,7 @@
     "../src/renderer/src/components/TooltipLayer.tsx",
     "../src/renderer/src/components/Icon.tsx",
     "../src/renderer/src/components/ContentArea.tsx",
+    "../src/renderer/src/components/BuiltInPage.tsx",
     "../src/features/**/*.renderer.tsx",
     "../src/features/**/*.store.ts",
     "../src/features/**/*.shared.ts",

@@ -26,6 +26,7 @@ export interface Tab {
   favicon: string;
   loading: boolean;
   bookmarked: boolean;
+  builtIn?: boolean;
   lastAccessedAt: number;
   createdAt: number;
   order: number;

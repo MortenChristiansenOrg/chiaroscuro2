@@ -75,6 +75,11 @@ describe("resolveInputDetailed", () => {
     expect(result).toEqual({ type: "url", url: "https://example.com" });
   });
 
+  it("/settings → built-in app:settings URL", () => {
+    const result = resolveInputDetailed("/settings");
+    expect(result).toEqual({ type: "url", url: "app:settings" });
+  });
+
   it("single word → default search", () => {
     const result = resolveInputDetailed("hello");
     expect(result).toMatchObject({
