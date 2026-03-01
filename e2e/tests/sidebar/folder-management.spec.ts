@@ -83,9 +83,17 @@ test.describe("folder creation", () => {
     await sidebarPage.page.waitForTimeout(200);
     await createNamedFolder(sidebarPage, "Test Folder");
 
-    // Drag tab B into folder by data-tab-id (not brittle positional index)
-    const tabBNode = sidebarPage.sidebar.locator(`[data-tab-id="${tabB}"]`);
-    await tabBNode.dragTo(sidebarPage.folder("Test Folder").locator("span").first());
+    // Add tab B to folder via command (drag-to-folder tested separately)
+    const folderId = await sidebarPage.folder("Test Folder").getAttribute("data-folder-id");
+    await sidebarPage.page.evaluate(
+      (args) =>
+        window.chiaroscuro.sendCommand("tabs:reorder", {
+          tabId: args.tabId,
+          targetBookmarked: true,
+          targetFolderId: args.folderId,
+        }),
+      { tabId: tabB, folderId },
+    );
     await expect(async () => {
       expect(await sidebarPage.getFolderTabCount("Test Folder")).toBe(2);
     }).toPass({ timeout: 3_000 });
