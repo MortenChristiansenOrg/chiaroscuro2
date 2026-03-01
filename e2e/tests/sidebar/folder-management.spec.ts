@@ -186,38 +186,36 @@ test.describe("folder deletion", () => {
     expect(await sidebarPage.getTabCount()).toBe(tabsBefore);
   });
 
-  test("empty folder auto-deletes when last tab removed via toggle", async ({
+  test("empty folder persists when last tab removed via toggle", async ({
     sidebarPage,
     commandPalettePage,
   }) => {
     await createBookmarkedTab(sidebarPage, commandPalettePage, "https://example.com");
-    await createNamedFolder(sidebarPage, "AutoDelete");
+    await createNamedFolder(sidebarPage, "EmptyFolder");
 
-    // Toggle removes tab from folder, folder becomes empty → auto-deletes
+    // Toggle removes tab from folder, folder becomes empty but persists
     await sidebarPage.createFolder(); // toggles off
 
     await expect(async () => {
-      expect(await sidebarPage.getFolderCount()).toBe(0);
+      expect(await sidebarPage.getFolderCount()).toBe(1);
     }).toPass({ timeout: 5_000 });
   });
 
-  // BUG: Closing the last tab in a folder should auto-delete the folder,
-  // but TABS_CLOSE doesn't call autoDeleteIfEmpty.
-  test.fail(
-    "empty folder auto-deletes when last tab is closed",
-    async ({ sidebarPage, commandPalettePage }) => {
-      await createBookmarkedTab(sidebarPage, commandPalettePage, "https://example.com");
-      await createNamedFolder(sidebarPage, "AutoDelete");
+  test("empty folder persists when last tab is closed", async ({
+    sidebarPage,
+    commandPalettePage,
+  }) => {
+    await createBookmarkedTab(sidebarPage, commandPalettePage, "https://example.com");
+    await createNamedFolder(sidebarPage, "EmptyFolder");
 
-      // Close the tab inside the folder
-      await sidebarPage.closeTabByIndex(0);
+    // Close the tab inside the folder
+    await sidebarPage.closeTabByIndex(0);
 
-      // Folder should auto-delete but doesn't (bug)
-      await expect(async () => {
-        expect(await sidebarPage.getFolderCount()).toBe(0);
-      }).toPass({ timeout: 5_000 });
-    },
-  );
+    // Folder persists even when empty
+    await expect(async () => {
+      expect(await sidebarPage.getFolderCount()).toBe(1);
+    }).toPass({ timeout: 5_000 });
+  });
 });
 
 // ── Drag and drop ────────────────────────────────────────────────
