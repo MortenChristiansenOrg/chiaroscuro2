@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Suggestion } from "./command-palette.shared";
 import { useCommandPaletteStore } from "./command-palette.store";
-import { type ResolvedInput, resolveInputDetailed } from "./resolve-input";
+import { type ResolvedInput, getBuiltInPages, resolveInputDetailed } from "./resolve-input";
 
 export function CommandPaletteOverlay() {
   const open = useCommandPaletteStore((s) => s.open);
@@ -65,15 +65,31 @@ export function CommandPaletteOverlay() {
 
   const handleInputChange = () => {
     const value = inputRef.current?.value ?? "";
+    const trimmed = value.trim();
     setResolution(resolveInputDetailed(value));
     setSelectedSuggestion(-1);
 
-    // Debounce suggestion search
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (value.trim().length >= 2) {
+
+    // "/" prefix → show only built-in pages (filtered by remainder)
+    if (trimmed.startsWith("/")) {
+      const filter = trimmed.toLowerCase();
+      const pages = getBuiltInPages()
+        .filter(
+          (p) =>
+            p.route.toLowerCase().includes(filter) ||
+            p.title.toLowerCase().includes(filter.slice(1)),
+        )
+        .map((p) => ({ url: p.route, title: p.title, visitCount: 0 }));
+      setSuggestions(pages);
+      return;
+    }
+
+    // Debounce suggestion search
+    if (trimmed.length >= 2) {
       debounceRef.current = setTimeout(() => {
         window.chiaroscuro
-          .sendCommand("command-palette:search-visits", { query: value.trim() })
+          .sendCommand("command-palette:search-visits", { query: trimmed })
           .then((results) => setSuggestions(results as Suggestion[]))
           .catch(() => setSuggestions([]));
       }, 150);

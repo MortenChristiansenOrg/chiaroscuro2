@@ -78,9 +78,23 @@ function buildSearchUrl(provider: SearchProvider, query: string): string {
 
 // ── Built-in pages ──────────────────────────────────────────────
 
-const builtInRoutes: Record<string, string> = {
-  "/settings": "app:settings",
-};
+export interface BuiltInPage {
+  route: string; // e.g. "/settings"
+  url: string; // e.g. "app:settings"
+  title: string; // e.g. "Settings"
+}
+
+const builtInPages: BuiltInPage[] = [
+  { route: "/settings", title: "Settings", url: "app:settings" },
+];
+
+const builtInRoutes: Record<string, string> = Object.fromEntries(
+  builtInPages.map((p) => [p.route, p.url]),
+);
+
+export function getBuiltInPages(): BuiltInPage[] {
+  return builtInPages;
+}
 
 // ── Resolution ──────────────────────────────────────────────────
 
