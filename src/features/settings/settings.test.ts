@@ -49,7 +49,7 @@ describe("settings commands", () => {
       const { commands } = setup();
       const settings = await commands.send(SETTINGS_GET, undefined);
       expect(settings.searchProviders).toEqual(DEFAULT_PROVIDERS);
-      expect(settings.defaultSearchProviderId).toBe("!d");
+      expect(settings.defaultSearchProviderId).toBe("!g");
     });
   });
 
@@ -187,7 +187,7 @@ describe("settings commands", () => {
 
       const emitted = listener.mock.calls[0][0] as SettingsChangedEvent;
       expect(emitted.settings.searchProviders).toEqual(DEFAULT_PROVIDERS);
-      expect(emitted.settings.defaultSearchProviderId).toBe("!d");
+      expect(emitted.settings.defaultSearchProviderId).toBe("!g");
     });
   });
 });

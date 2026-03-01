@@ -40,7 +40,7 @@ let currentSettings: Settings;
 function getDefaultSettings(): Settings {
   return {
     searchProviders: [...DEFAULT_PROVIDERS],
-    defaultSearchProviderId: "!d",
+    defaultSearchProviderId: "!g",
   };
 }
 

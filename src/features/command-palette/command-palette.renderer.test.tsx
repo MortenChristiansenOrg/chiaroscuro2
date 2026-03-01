@@ -74,7 +74,7 @@ describe("CommandPaletteOverlay", () => {
     fireEvent.input(input);
 
     expect(screen.getByText(/Search with/)).toBeDefined();
-    expect(screen.getByText("DuckDuckGo")).toBeDefined();
+    expect(screen.getByText("Google")).toBeDefined();
   });
 
   it("shows URL resolution indicator for URLs", () => {

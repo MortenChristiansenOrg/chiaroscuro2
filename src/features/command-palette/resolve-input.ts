@@ -48,7 +48,7 @@ export const DEFAULT_PROVIDERS: SearchProvider[] = [
 ];
 
 let _providers: SearchProvider[] = DEFAULT_PROVIDERS;
-let _defaultProviderBang = "!d";
+let _defaultProviderBang = "!g";
 
 export function setProviders(providers: SearchProvider[]): void {
   _providers = providers;

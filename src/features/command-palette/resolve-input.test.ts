@@ -12,7 +12,7 @@ describe("resolveInputDetailed", () => {
   afterEach(() => {
     // Reset to defaults
     setProviders(DEFAULT_PROVIDERS);
-    setDefaultProvider("!d");
+    setDefaultProvider("!g");
   });
 
   it("empty input → type:empty", () => {
@@ -54,10 +54,10 @@ describe("resolveInputDetailed", () => {
     const result = resolveInputDetailed("hello world");
     expect(result).toMatchObject({
       type: "search",
-      provider: "DuckDuckGo",
+      provider: "Google",
       query: "hello world",
     });
-    expect((result as { url: string }).url).toContain("duckduckgo.com");
+    expect((result as { url: string }).url).toContain("google.com");
   });
 
   it("localhost:3000 → http://localhost:3000", () => {
@@ -84,7 +84,7 @@ describe("resolveInputDetailed", () => {
     const result = resolveInputDetailed("hello");
     expect(result).toMatchObject({
       type: "search",
-      provider: "DuckDuckGo",
+      provider: "Google",
       query: "hello",
     });
   });
@@ -94,7 +94,7 @@ describe("resolveInputDetailed", () => {
     // !xyz is not a known provider, but matches bang pattern — falls through
     // Since it has a space, it'll be a default search
     expect(result.type).toBe("search");
-    expect((result as { provider: string }).provider).toBe("DuckDuckGo");
+    expect((result as { provider: string }).provider).toBe("Google");
   });
 
   it("setProviders replaces providers", () => {
@@ -106,16 +106,16 @@ describe("resolveInputDetailed", () => {
   });
 
   it("setDefaultProvider changes default", () => {
-    setDefaultProvider("!g");
+    setDefaultProvider("!d");
     const result = resolveInputDetailed("single word query");
-    expect((result as { provider: string }).provider).toBe("Google");
+    expect((result as { provider: string }).provider).toBe("DuckDuckGo");
   });
 });
 
 describe("resolveInput (legacy)", () => {
   afterEach(() => {
     setProviders(DEFAULT_PROVIDERS);
-    setDefaultProvider("!d");
+    setDefaultProvider("!g");
   });
 
   it("returns URL string for search", () => {
