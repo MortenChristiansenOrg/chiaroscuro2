@@ -1,7 +1,12 @@
-import { resolve } from "node:path";
+import { createRequire } from "node:module";
+import { dirname, resolve } from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "electron-vite";
+
+const _require = createRequire(import.meta.url);
+// Resolve actual node_modules root (may differ from project root in git worktrees)
+const nodeModulesRoot = resolve(dirname(_require.resolve("vite/package.json")), "../..");
 
 export default defineConfig({
   main: {},
@@ -12,6 +17,9 @@ export default defineConfig({
       watch: {
         usePolling: true,
         interval: 500,
+      },
+      fs: {
+        allow: [resolve("."), nodeModulesRoot],
       },
     },
     resolve: {
