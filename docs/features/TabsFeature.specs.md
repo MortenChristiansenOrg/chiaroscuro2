@@ -92,7 +92,7 @@ In the Sidebar tab list:
 - **Folder interactions (persistent list)**:
   - Click a folder header to open/close it.
   - Drag tabs into/out of folders by reordering.
-  - Drag folders as a unit (folders cannot be nested, and folders cannot be moved into the ephemeral list).
+  - Drag folders as a unit (folders cannot be moved into the ephemeral list). See `FoldersFeature.specs.md` for folder nesting and reorder details.
   - Rename a folder via the folder UI.
 
 ## Commands & Events
