@@ -1,13 +1,13 @@
 import type { CommandBus } from "../../bus/command-bus";
 import type { EventBus } from "../../bus/event-bus";
 import type { Collection, DataStore } from "../../data/types";
-import type { Platform } from "../../platform/types";
 import type { FolderId, TabId, WorkspaceId } from "../../shared/types";
 import { getTab, getTabsForWorkspace, setTabFolderId, setTabOrder } from "../tabs/tabs.main";
 import type { TabsEvents } from "../tabs/tabs.shared";
 import { TABS_LIST_CHANGED, TABS_UPDATED } from "../tabs/tabs.shared";
 import {
   FOLDERS_CHANGED,
+  FOLDERS_CREATE,
   FOLDERS_REMOVE,
   FOLDERS_RENAME,
   FOLDERS_RENAME_REQUESTED,
@@ -26,7 +26,6 @@ type AllEvents = FoldersEvents & Pick<TabsEvents, typeof TABS_UPDATED | typeof T
 interface Deps {
   commands: CommandBus<AllCommands>;
   events: EventBus<AllEvents>;
-  platform: Platform;
   dataStore: DataStore;
   getActiveTabId: () => TabId | undefined;
   getActiveWorkspaceId: () => WorkspaceId | undefined;
@@ -36,7 +35,7 @@ let _folders: Map<FolderId, Folder> | undefined;
 let _setFolderOrder: ((folderId: FolderId, order: number) => void) | undefined;
 
 export function register(deps: Deps): void {
-  const { commands, events, platform, dataStore, getActiveTabId, getActiveWorkspaceId } = deps;
+  const { commands, events, dataStore, getActiveTabId, getActiveWorkspaceId } = deps;
 
   const folders = new Map<FolderId, Folder>();
   _folders = folders;
@@ -290,10 +289,30 @@ export function register(deps: Deps): void {
     emitChanged();
   });
 
-  // ── Keyboard shortcut ──────────────────────────────────────────
+  commands.handle(FOLDERS_CREATE, async (payload) => {
+    const workspaceId = (payload.workspaceId as WorkspaceId) ?? getActiveWorkspaceId();
+    if (!workspaceId) return;
 
-  platform.registerShortcut("CommandOrControl+G", () => {
-    commands.send(FOLDERS_TOGGLE, {}).catch(console.error);
+    const parentFolderId = (payload.parentFolderId as FolderId | null) ?? null;
+    const siblings = [...folders.values()].filter(
+      (f) => f.workspaceId === workspaceId && f.parentFolderId === parentFolderId,
+    );
+    const maxOrder = siblings.reduce((m, f) => Math.max(m, f.order), -1);
+
+    const folderId = crypto.randomUUID() as FolderId;
+    const folder: Folder = {
+      id: folderId,
+      workspaceId,
+      name: "New Folder",
+      parentFolderId,
+      collapsed: false,
+      order: maxOrder + 1,
+    };
+
+    folders.set(folderId, folder);
+    persistFolder(folder);
+    emitChanged();
+    events.emit(FOLDERS_RENAME_REQUESTED, { folderId });
   });
 }
 

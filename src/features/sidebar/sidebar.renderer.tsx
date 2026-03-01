@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type ContextMenuItem, useContextMenu } from "../../renderer/src/components/ContextMenu";
 import { Icon } from "../../renderer/src/components/Icon";
 import type { FolderId, TabId, WorkspaceId } from "../../shared/types";
 import type { Folder } from "../folders/folders.shared";
 import {
+  FOLDERS_CREATE,
   FOLDERS_REMOVE,
   FOLDERS_RENAME,
   FOLDERS_REORDER,
@@ -11,11 +13,17 @@ import {
 // shell-composite: read-only cross-feature store access
 import { useFoldersStore } from "../folders/folders.store";
 import type { PinnedTabsCommands } from "../pinned-tabs/pinned-tabs.shared";
-import { PINNED_TABS_ACTIVATE } from "../pinned-tabs/pinned-tabs.shared";
+import { PINNED_TABS_ACTIVATE, PINNED_TABS_TOGGLE_PIN } from "../pinned-tabs/pinned-tabs.shared";
 // shell-composite: read-only cross-feature store access
 import { usePinnedTabsStore } from "../pinned-tabs/pinned-tabs.store";
 import type { Tab, TabsCommands } from "../tabs/tabs.shared";
-import { TABS_ACTIVATE, TABS_CLEAR_EPHEMERAL, TABS_CLOSE, TABS_REORDER } from "../tabs/tabs.shared";
+import {
+  TABS_ACTIVATE,
+  TABS_CLEAR_EPHEMERAL,
+  TABS_CLOSE,
+  TABS_REORDER,
+  TABS_TOGGLE_BOOKMARK,
+} from "../tabs/tabs.shared";
 // shell-composite: read-only cross-feature store access
 import { useTabsStore } from "../tabs/tabs.store";
 import { WorkspaceSwitcher } from "../workspaces/workspaces.renderer";
@@ -220,6 +228,7 @@ export function TabItem({
   tab,
   isActive,
   isEphemeral,
+  isPinned,
   exiting,
   isBookmarkedSection,
   folderId,
@@ -233,10 +242,12 @@ export function TabItem({
   lastFolderSwapRef,
   lastFolderSwapTimeRef,
   disableEntryAnimation,
+  onContextMenu,
 }: {
   tab: Tab;
   isActive: boolean;
   isEphemeral: boolean;
+  isPinned?: boolean;
   exiting?: boolean;
   isBookmarkedSection: boolean;
   folderId?: FolderId | null;
@@ -250,6 +261,7 @@ export function TabItem({
   lastFolderSwapRef?: React.RefObject<{ targetId: string; position: string } | null>;
   lastFolderSwapTimeRef?: React.RefObject<number>;
   disableEntryAnimation?: boolean;
+  onContextMenu?: (items: ContextMenuItem[], e: React.MouseEvent) => void;
 }) {
   const mountedRef = useRef(false);
   const elRef = useRef<HTMLDivElement>(null);
@@ -267,6 +279,45 @@ export function TabItem({
   const handleClose = (e: React.MouseEvent) => {
     e.stopPropagation();
     sendCommand(TABS_CLOSE, { tabId: tab.id });
+  };
+
+  const handleContextMenu = (e: React.MouseEvent) => {
+    if (!onContextMenu) return;
+    const items: ContextMenuItem[] = [];
+    if (isEphemeral) {
+      items.push({
+        label: "Bookmark",
+        icon: "bookmark",
+        onSelect: () => sendFolderCommand(TABS_TOGGLE_BOOKMARK, { tabId: tab.id }),
+      });
+    }
+    if (isBookmarkedSection && !isPinned) {
+      items.push({
+        label: "Remove bookmark",
+        icon: "bookmark",
+        onSelect: () => sendFolderCommand(TABS_TOGGLE_BOOKMARK, { tabId: tab.id }),
+      });
+    }
+    if (!isPinned) {
+      items.push({
+        label: "Pin tab",
+        icon: "thumbtack",
+        onSelect: () => sendFolderCommand(PINNED_TABS_TOGGLE_PIN, { tabId: tab.id }),
+      });
+    }
+    if (isPinned) {
+      items.push({
+        label: "Unpin tab",
+        icon: "thumbtack-slash",
+        onSelect: () => sendFolderCommand(PINNED_TABS_TOGGLE_PIN, { tabId: tab.id }),
+      });
+      items.push({
+        label: "Close tab",
+        icon: "xmark",
+        onSelect: () => sendCommand(TABS_CLOSE, { tabId: tab.id }),
+      });
+    }
+    onContextMenu(items, e);
   };
 
   const handleDragStart = (e: React.DragEvent) => {
@@ -370,6 +421,7 @@ export function TabItem({
             : "tab-in 200ms cubic-bezier(0, 0, 0.2, 1) both",
       }}
       onClick={handleClick}
+      onContextMenu={handleContextMenu}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
@@ -425,6 +477,7 @@ function FolderHeader({
   lastSwapTimeRef,
   firstSubtreeTabId,
   lastSubtreeTabId,
+  onContextMenu,
 }: {
   folder: Folder;
   isRenaming: boolean;
@@ -439,6 +492,7 @@ function FolderHeader({
   lastSwapTimeRef: React.RefObject<number>;
   firstSubtreeTabId: TabId | null;
   lastSubtreeTabId: TabId | null;
+  onContextMenu?: (items: ContextMenuItem[], e: React.MouseEvent) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   const [renameValue, setRenameValue] = useState(folder.name);
@@ -478,6 +532,26 @@ function FolderHeader({
   const handleRemove = (e: React.MouseEvent) => {
     e.stopPropagation();
     sendFolderCommand(FOLDERS_REMOVE, { folderId: folder.id });
+  };
+
+  const handleFolderContextMenu = (e: React.MouseEvent) => {
+    if (!onContextMenu) return;
+    e.stopPropagation();
+    onContextMenu(
+      [
+        {
+          label: "Add subfolder",
+          icon: "folder-plus",
+          onSelect: () => sendFolderCommand(FOLDERS_CREATE, { parentFolderId: folder.id }),
+        },
+        {
+          label: "Remove folder",
+          icon: "folder-minus",
+          onSelect: () => sendFolderCommand(FOLDERS_REMOVE, { folderId: folder.id }),
+        },
+      ],
+      e,
+    );
   };
 
   const handleFolderDragStart = (e: React.DragEvent) => {
@@ -655,6 +729,7 @@ function FolderHeader({
         zIndex: isDraggedFolder ? 10 : undefined,
       }}
       onClick={handleHeaderClick}
+      onContextMenu={handleFolderContextMenu}
       onDoubleClick={handleDoubleClick}
       onDragStart={handleFolderDragStart}
       onDragOver={handleDragOver}
@@ -772,6 +847,7 @@ function FolderGroup({
   disableEntryAnimation,
   renamingFolderId,
   depth,
+  onContextMenu,
 }: {
   folder: Folder;
   items: TreeItem[];
@@ -788,6 +864,7 @@ function FolderGroup({
   disableEntryAnimation?: boolean;
   renamingFolderId: FolderId | null;
   depth: number;
+  onContextMenu?: (items: ContextMenuItem[], e: React.MouseEvent) => void;
 }) {
   const firstTab = findFirstTabId(items);
   const lastTab = findLastTabId(items);
@@ -808,6 +885,7 @@ function FolderGroup({
         lastSwapTimeRef={lastSwapTimeRef}
         firstSubtreeTabId={firstTab}
         lastSubtreeTabId={lastTab}
+        onContextMenu={onContextMenu}
       />
       {!folder.collapsed && (
         <div style={{ paddingLeft: `${depth > 0 ? 1 : 0.5}rem` }}>
@@ -831,6 +909,7 @@ function FolderGroup({
                 lastFolderSwapRef={lastFolderSwapRef}
                 lastFolderSwapTimeRef={lastFolderSwapTimeRef}
                 disableEntryAnimation={disableEntryAnimation}
+                onContextMenu={onContextMenu}
               />
             ) : (
               <FolderGroup
@@ -850,6 +929,7 @@ function FolderGroup({
                 disableEntryAnimation={disableEntryAnimation}
                 renamingFolderId={renamingFolderId}
                 depth={depth + 1}
+                onContextMenu={onContextMenu}
               />
             ),
           )}
@@ -873,6 +953,7 @@ function BookmarkedTree({
   lastFolderSwapTimeRef,
   disableEntryAnimation,
   renamingFolderId,
+  onContextMenu,
 }: {
   tree: TreeItem[];
   activeTabId: TabId | null;
@@ -887,6 +968,7 @@ function BookmarkedTree({
   lastFolderSwapTimeRef: React.RefObject<number>;
   disableEntryAnimation?: boolean;
   renamingFolderId: FolderId | null;
+  onContextMenu?: (items: ContextMenuItem[], e: React.MouseEvent) => void;
 }) {
   return (
     <>
@@ -910,6 +992,7 @@ function BookmarkedTree({
             lastFolderSwapRef={lastFolderSwapRef}
             lastFolderSwapTimeRef={lastFolderSwapTimeRef}
             disableEntryAnimation={disableEntryAnimation}
+            onContextMenu={onContextMenu}
           />
         ) : (
           <FolderGroup
@@ -929,6 +1012,7 @@ function BookmarkedTree({
             disableEntryAnimation={disableEntryAnimation}
             renamingFolderId={renamingFolderId}
             depth={0}
+            onContextMenu={onContextMenu}
           />
         ),
       )}
@@ -940,10 +1024,12 @@ export function PinnedTabsStrip({
   pinnedTabs,
   tabs,
   activeTabId,
+  onContextMenu,
 }: {
   pinnedTabs: { id: TabId; url: string; title: string; favicon: string }[];
   tabs: Map<TabId, Tab>;
   activeTabId: TabId | null;
+  onContextMenu?: (items: ContextMenuItem[], e: React.MouseEvent) => void;
 }) {
   return (
     <div
@@ -970,6 +1056,25 @@ export function PinnedTabsStrip({
             }}
             tabIndex={-1}
             onClick={() => sendCommand(PINNED_TABS_ACTIVATE, { tabId: pt.id })}
+            onContextMenu={(e) => {
+              if (!onContextMenu) return;
+              onContextMenu(
+                [
+                  {
+                    label: "Unpin tab",
+                    icon: "thumbtack-slash",
+                    onSelect: () => sendFolderCommand(PINNED_TABS_TOGGLE_PIN, { tabId: pt.id }),
+                  },
+                  {
+                    label: "Close tab",
+                    icon: "xmark",
+                    onSelect: () => sendCommand(TABS_CLOSE, { tabId: pt.id }),
+                  },
+                ],
+                e,
+              );
+            }}
+            data-pinned-tab={pt.id}
             data-tip={pt.title || pt.url}
             aria-label={pt.title || pt.url}
           >
@@ -1060,6 +1165,7 @@ function TabSection({
   onClearEphemeral,
   disableEntryAnimation,
   renamingFolderId,
+  onContextMenu,
 }: {
   bookmarked: Tab[];
   bookmarkedTree: TreeItem[];
@@ -1072,6 +1178,7 @@ function TabSection({
   onClearEphemeral: () => void;
   disableEntryAnimation?: boolean;
   renamingFolderId: FolderId | null;
+  onContextMenu?: (items: ContextMenuItem[], e: React.MouseEvent) => void;
 }) {
   // Divider visible when ephemeral tabs exist or during drag; lingers for fade-out
   const dividerTarget = ephemeral.length > 0 || isDragging;
@@ -1166,6 +1273,7 @@ function TabSection({
             lastFolderSwapTimeRef={lastFolderSwapTimeRef}
             disableEntryAnimation={disableEntryAnimation}
             renamingFolderId={renamingFolderId}
+            onContextMenu={onContextMenu}
           />
           {/* Root-level drop zone — visible during drag so tabs/folders can be placed outside folders */}
           <SectionDropZone
@@ -1241,6 +1349,7 @@ function TabSection({
             lastSwapRef={lastSwapRef}
             lastSwapTimeRef={lastSwapTimeRef}
             disableEntryAnimation={disableEntryAnimation}
+            onContextMenu={onContextMenu}
           />
         ))
       ) : (
@@ -1348,6 +1457,26 @@ export function SidebarPanel() {
     }
   };
 
+  // Context menu
+  const { open: openContextMenu, portal: contextMenuPortal } = useContextMenu();
+
+  const handleSidebarContextMenu = (e: React.MouseEvent) => {
+    // Only fire if right-clicking empty sidebar area (not a tab/folder)
+    if ((e.target as HTMLElement).closest("[data-tab-id], [data-folder-id], [data-pinned-tab]")) {
+      return;
+    }
+    openContextMenu(
+      [
+        {
+          label: "Add folder",
+          icon: "folder-plus",
+          onSelect: () => sendFolderCommand(FOLDERS_CREATE, {}),
+        },
+      ],
+      e,
+    );
+  };
+
   return (
     <div
       className="shrink-0 overflow-hidden"
@@ -1366,14 +1495,21 @@ export function SidebarPanel() {
           dragTabIdRef.current = null;
           dragFolderIdRef.current = null;
         }}
+        onContextMenu={handleSidebarContextMenu}
       >
         <div className="sr-only" aria-live="polite" aria-atomic="true">
           {announcement}
         </div>
 
         {pinnedTabs.length > 0 && (
-          <PinnedTabsStrip pinnedTabs={pinnedTabs} tabs={tabs} activeTabId={activeTabId} />
+          <PinnedTabsStrip
+            pinnedTabs={pinnedTabs}
+            tabs={tabs}
+            activeTabId={activeTabId}
+            onContextMenu={openContextMenu}
+          />
         )}
+        {contextMenuPortal}
 
         <div className="flex-1 overflow-y-auto">
           <div style={{ position: "relative", overflow: "hidden" }}>
@@ -1429,6 +1565,7 @@ export function SidebarPanel() {
                 onClearEphemeral={handleClearEphemeral}
                 disableEntryAnimation={!!wsTransition}
                 renamingFolderId={renamingFolderId}
+                onContextMenu={openContextMenu}
               />
             </div>
           </div>

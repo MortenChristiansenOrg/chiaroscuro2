@@ -89,10 +89,48 @@ letter-spacing:.01em;white-space:nowrap}
 .a{animation:i .12s ease}@keyframes i{from{opacity:0;transform:scale(.96)}}
 </style></head><body><span id="t"></span></body></html>`;
 
+// HTML for the context menu overlay — interactive, styled to match the app
+const CONTEXT_MENU_HTML = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{background:transparent;overflow:hidden;font-family:system-ui,-apple-system,sans-serif}
+#m{display:inline-block;min-width:160px;padding:4px 0;border-radius:8px;
+background:rgb(28,28,28,.92);backdrop-filter:blur(20px);
+box-shadow:0 8px 32px rgba(0,0,0,.5),0 2px 8px rgba(0,0,0,.3),inset 0 0 0 1px rgba(255,255,255,.08);
+animation:ci .12s ease both}
+.i{display:flex;align-items:center;padding:6px 12px;margin:0 4px;border-radius:6px;
+color:rgb(224,224,224);font-size:13px;font-weight:500;letter-spacing:.01em;
+cursor:pointer;user-select:none;transition:background 60ms}
+.i:hover{background:rgba(255,255,255,.1)}
+.i:active{background:rgba(255,255,255,.15)}
+.i[data-disabled]{color:rgba(210,210,210,.35);pointer-events:none}
+@keyframes ci{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
+</style></head><body><div id="m"></div>
+<script>
+let _resolve=null;
+function renderMenu(items){
+  const m=document.getElementById('m');
+  m.innerHTML='';
+  items.forEach((it,i)=>{
+    const d=document.createElement('div');
+    d.className='i';
+    d.textContent=it.label;
+    if(it.disabled)d.dataset.disabled='1';
+    else d.addEventListener('click',()=>{if(_resolve){_resolve(i);_resolve=null}});
+    m.appendChild(d);
+  });
+  m.style.animation='none';void m.offsetWidth;m.style.animation='';
+}
+function awaitSelection(){
+  return new Promise(r=>{_resolve=r});
+}
+</script></body></html>`;
+
 export class ElectronPlatform implements Platform {
   private shortcuts = new Map<string, { parsed: ParsedAccelerator; callback: () => void }>();
   private views = new Map<TabId, WebContentsView>();
   private tooltipWin: BrowserWindow | null = null;
+  private ctxWin: BrowserWindow | null = null;
+  private ctxResolve: ((index: number) => void) | null = null;
   private permissionHandlerSet = false;
 
   constructor(private getActiveWindowId: () => WindowId | undefined) {}
@@ -359,6 +397,111 @@ export class ElectronPlatform implements Platform {
     if (this.tooltipWin?.isVisible()) {
       this.tooltipWin.hide();
     }
+  }
+
+  // ── Context menu overlay ──────────────────────────────────────
+
+  initContextMenuOverlay(windowId: WindowId): void {
+    const parent = this.getWin(windowId);
+    if (!parent) return;
+
+    this.ctxWin = new BrowserWindow({
+      parent,
+      frame: false,
+      transparent: true,
+      focusable: true,
+      skipTaskbar: true,
+      resizable: false,
+      show: false,
+      hasShadow: false,
+      webPreferences: { sandbox: true },
+    });
+    this.ctxWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(CONTEXT_MENU_HTML)}`);
+
+    // Dismiss on blur (click outside)
+    this.ctxWin.on("blur", () => this.hideContextMenu());
+
+    // Dismiss when parent moves/resizes
+    parent.on("move", () => this.hideContextMenu());
+    parent.on("resize", () => this.hideContextMenu());
+  }
+
+  async showContextMenu(opts: {
+    items: { label: string; disabled?: boolean }[];
+    x: number;
+    y: number;
+  }): Promise<number> {
+    const win = this.getWin();
+    if (!win || !this.ctxWin) return -1;
+
+    // Dismiss any pending menu
+    this.dismissCtxMenu();
+
+    const cb = win.getContentBounds();
+
+    // Render items and measure
+    const itemsJson = JSON.stringify(opts.items);
+    await this.ctxWin.webContents.executeJavaScript(`renderMenu(${itemsJson})`);
+    const size: [number, number] = await this.ctxWin.webContents.executeJavaScript(
+      `[document.getElementById('m').offsetWidth, document.getElementById('m').offsetHeight]`,
+    );
+
+    // Edge detection — keep menu within parent window bounds
+    let x = cb.x + opts.x;
+    let y = cb.y + opts.y;
+    const parentBounds = win.getBounds();
+    const margin = 6;
+    if (x + size[0] > parentBounds.x + parentBounds.width - margin) {
+      x = parentBounds.x + parentBounds.width - size[0] - margin;
+    }
+    if (y + size[1] > parentBounds.y + parentBounds.height - margin) {
+      y = parentBounds.y + parentBounds.height - size[1] - margin;
+    }
+    if (x < parentBounds.x + margin) x = parentBounds.x + margin;
+    if (y < parentBounds.y + margin) y = parentBounds.y + margin;
+
+    this.ctxWin.setBounds({
+      x: Math.round(x),
+      y: Math.round(y),
+      width: Math.round(size[0]),
+      height: Math.round(size[1]),
+    });
+    this.ctxWin.show();
+
+    // Also hide tooltip so it doesn't overlap
+    this.hideTooltip();
+
+    return new Promise<number>((resolve) => {
+      this.ctxResolve = resolve;
+      this.ctxWin?.webContents.executeJavaScript("awaitSelection()").then((index: number) => {
+        if (this.ctxResolve === resolve) {
+          this.ctxResolve = null;
+          this.ctxWin?.hide();
+          this.refocusParent();
+          resolve(index);
+        }
+      });
+    });
+  }
+
+  hideContextMenu(): void {
+    this.dismissCtxMenu();
+  }
+
+  private dismissCtxMenu(): void {
+    if (this.ctxResolve) {
+      this.ctxResolve(-1);
+      this.ctxResolve = null;
+    }
+    if (this.ctxWin?.isVisible()) {
+      this.ctxWin.hide();
+      this.refocusParent();
+    }
+  }
+
+  private refocusParent(): void {
+    const win = this.getWin();
+    if (win) win.webContents.focus();
   }
 
   // ── Shell / clipboard ───────────────────────────────────────────

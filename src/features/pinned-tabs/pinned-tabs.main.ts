@@ -87,8 +87,8 @@ export function register(deps: Deps): void {
     }
   });
 
-  commands.handle(PINNED_TABS_TOGGLE_PIN, async () => {
-    const tabId = getActiveTabId();
+  commands.handle(PINNED_TABS_TOGGLE_PIN, async (payload) => {
+    const tabId = payload?.tabId ?? getActiveTabId();
     if (!tabId) return;
 
     if (_pinnedTabs.has(tabId)) {
@@ -122,7 +122,7 @@ export function register(deps: Deps): void {
   });
 
   platform.registerShortcut("CommandOrControl+P", () => {
-    commands.send(PINNED_TABS_TOGGLE_PIN, undefined).catch(console.error);
+    commands.send(PINNED_TABS_TOGGLE_PIN, {}).catch(console.error);
   });
 }
 

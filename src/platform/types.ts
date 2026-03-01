@@ -43,6 +43,15 @@ export interface Platform {
   showTooltip(opts: { text: string; x: number; y: number; width: number; height: number }): void;
   hideTooltip(): void;
 
+  // Context menu overlay
+  initContextMenuOverlay(windowId: WindowId): void;
+  showContextMenu(opts: {
+    items: { label: string; disabled?: boolean }[];
+    x: number;
+    y: number;
+  }): Promise<number>;
+  hideContextMenu(): void;
+
   // Shell / clipboard
   openExternal(url: string): Promise<void>;
   readClipboard(): string;

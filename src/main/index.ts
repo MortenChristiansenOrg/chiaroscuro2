@@ -14,6 +14,11 @@ import type {
   CommandPaletteCommands,
   CommandPaletteEvents,
 } from "../features/command-palette/command-palette.shared";
+import { register as registerContextMenu } from "../features/context-menu/context-menu.main";
+import type {
+  ContextMenuCommands,
+  ContextMenuEvents,
+} from "../features/context-menu/context-menu.shared";
 import {
   register as registerFolders,
   start as startFolders,
@@ -71,6 +76,7 @@ type AllCommands = MergeRegistries<
     SidebarCommands,
     CommandPaletteCommands,
     TooltipCommands,
+    ContextMenuCommands,
     FoldersCommands,
   ]
 >;
@@ -84,6 +90,7 @@ type AllEvents = MergeRegistries<
     SidebarEvents,
     CommandPaletteEvents,
     TooltipEvents,
+    ContextMenuEvents,
     FoldersEvents,
   ]
 >;
@@ -160,6 +167,7 @@ app.whenReady().then(async () => {
   registerSidebar(deps);
   registerCommandPalette(deps);
   registerTooltip(deps);
+  registerContextMenu(deps);
   registerFolders(deps);
 
   // ── Global keyboard shortcuts ──────────────────────────────────
@@ -194,6 +202,7 @@ app.whenReady().then(async () => {
   createWindow();
   if (activeWindowId && process.env.NODE_ENV !== "test") {
     platform.initTooltipOverlay(activeWindowId);
+    platform.initContextMenuOverlay(activeWindowId);
   }
 
   // Phase 2: wait for renderer subscriptions, then emit initial state

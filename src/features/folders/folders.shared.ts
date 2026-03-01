@@ -6,6 +6,7 @@ export const FOLDERS_RENAME = "folders:rename" as const;
 export const FOLDERS_TOGGLE_COLLAPSE = "folders:toggle-collapse" as const;
 export const FOLDERS_REMOVE = "folders:remove" as const;
 export const FOLDERS_REORDER = "folders:reorder" as const;
+export const FOLDERS_CREATE = "folders:create" as const;
 
 // ── Event names ──────────────────────────────────────────────────
 export const FOLDERS_CHANGED = "folders:changed" as const;
@@ -62,6 +63,13 @@ export interface FoldersReorderPayload {
   parentFolderId?: FolderId | null;
 }
 
+export interface FoldersCreatePayload {
+  /** Parent folder to create inside. null = root level. */
+  parentFolderId?: FolderId | null;
+  /** Workspace to create in. Uses active workspace if omitted. */
+  workspaceId?: WorkspaceId;
+}
+
 export interface FoldersChangedEvent {
   folders: Folder[];
 }
@@ -77,6 +85,7 @@ export type FoldersCommands = {
   [FOLDERS_TOGGLE_COLLAPSE]: { payload: FoldersToggleCollapsePayload; response: undefined };
   [FOLDERS_REMOVE]: { payload: FoldersRemovePayload; response: undefined };
   [FOLDERS_REORDER]: { payload: FoldersReorderPayload; response: undefined };
+  [FOLDERS_CREATE]: { payload: FoldersCreatePayload; response: undefined };
 };
 
 // ── Event registry ───────────────────────────────────────────────

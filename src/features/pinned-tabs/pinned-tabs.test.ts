@@ -64,7 +64,7 @@ describe("pinned-tabs commands", () => {
       const changed = vi.fn();
       events.on(PINNED_TABS_CHANGED, changed);
 
-      await commands.send(PINNED_TABS_TOGGLE_PIN, undefined);
+      await commands.send(PINNED_TABS_TOGGLE_PIN, {});
 
       expect(changed).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -77,11 +77,11 @@ describe("pinned-tabs commands", () => {
 
     it("unpins a pinned tab", async () => {
       const { commands, events } = setup();
-      await commands.send(PINNED_TABS_TOGGLE_PIN, undefined); // pin
+      await commands.send(PINNED_TABS_TOGGLE_PIN, {}); // pin
 
       const changed = vi.fn();
       events.on(PINNED_TABS_CHANGED, changed);
-      await commands.send(PINNED_TABS_TOGGLE_PIN, undefined); // unpin
+      await commands.send(PINNED_TABS_TOGGLE_PIN, {}); // unpin
 
       expect(changed).toHaveBeenCalledWith({ pinnedTabs: [] });
     });
@@ -91,7 +91,7 @@ describe("pinned-tabs commands", () => {
       const changed = vi.fn();
       events.on(PINNED_TABS_CHANGED, changed);
 
-      await commands.send(PINNED_TABS_TOGGLE_PIN, undefined);
+      await commands.send(PINNED_TABS_TOGGLE_PIN, {});
 
       expect(changed).not.toHaveBeenCalled();
     });
@@ -101,7 +101,7 @@ describe("pinned-tabs commands", () => {
     it("activates tab and emits ACTIVE_CHANGED", async () => {
       const { commands, events } = setup();
       // Pin first
-      await commands.send(PINNED_TABS_TOGGLE_PIN, undefined);
+      await commands.send(PINNED_TABS_TOGGLE_PIN, {});
 
       const activeChanged = vi.fn();
       events.on(PINNED_TABS_ACTIVE_CHANGED, activeChanged);
@@ -125,7 +125,7 @@ describe("pinned-tabs commands", () => {
   describe("TABS_UPDATED syncs pinned tab data", () => {
     it("updates url/title/favicon for pinned tab", async () => {
       const { commands, events } = setup();
-      await commands.send(PINNED_TABS_TOGGLE_PIN, undefined);
+      await commands.send(PINNED_TABS_TOGGLE_PIN, {});
 
       const changed = vi.fn();
       events.on(PINNED_TABS_CHANGED, changed);
@@ -153,7 +153,7 @@ describe("pinned-tabs commands", () => {
   describe("TABS_CLOSED removes stale pinned entry", () => {
     it("removes pinned tab when underlying tab closes", async () => {
       const { commands, events } = setup();
-      await commands.send(PINNED_TABS_TOGGLE_PIN, undefined);
+      await commands.send(PINNED_TABS_TOGGLE_PIN, {});
 
       const changed = vi.fn();
       events.on(PINNED_TABS_CHANGED, changed);
