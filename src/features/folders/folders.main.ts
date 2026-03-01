@@ -125,6 +125,7 @@ export function register(deps: Deps): void {
       folders.set(folderId, folder);
       persistFolder(folder);
       setTabFolderId(tabId, folderId);
+      setTabOrder(tabId, 0);
       const updatedTab2 = getTab(tabId);
       if (updatedTab2) {
         events.emit(TABS_UPDATED, { tab: { ...updatedTab2 } });
@@ -193,7 +194,8 @@ export function register(deps: Deps): void {
       // Prevent circular nesting (can't nest a folder into itself or its descendants)
       if (payload.parentFolderId !== null) {
         let ancestor = folders.get(payload.parentFolderId);
-        while (ancestor) {
+        let depth = 0;
+        while (ancestor && depth++ < folders.size) {
           if (ancestor.id === folder.id) return; // circular
           ancestor = ancestor.parentFolderId ? folders.get(ancestor.parentFolderId) : undefined;
         }

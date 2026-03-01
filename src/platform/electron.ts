@@ -131,6 +131,7 @@ export class ElectronPlatform implements Platform {
   private tooltipWin: BrowserWindow | null = null;
   private ctxWin: BrowserWindow | null = null;
   private ctxResolve: ((index: number) => void) | null = null;
+  private ctxParentListenersSet = false;
   private permissionHandlerSet = false;
 
   constructor(private getActiveWindowId: () => WindowId | undefined) {}
@@ -422,9 +423,12 @@ export class ElectronPlatform implements Platform {
     // Dismiss on blur (click outside)
     this.ctxWin.on("blur", () => this.hideContextMenu());
 
-    // Dismiss when parent moves/resizes
-    parent.on("move", () => this.hideContextMenu());
-    parent.on("resize", () => this.hideContextMenu());
+    // Dismiss when parent moves/resizes (register once to avoid accumulation)
+    if (!this.ctxParentListenersSet) {
+      parent.on("move", () => this.hideContextMenu());
+      parent.on("resize", () => this.hideContextMenu());
+      this.ctxParentListenersSet = true;
+    }
   }
 
   async showContextMenu(opts: {

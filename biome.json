@@ -41,6 +41,7 @@
       "design-system/dist/",
       "**/*.generated.ts",
       ".agent-project/",
+      ".claude/worktrees/",
       "test-results/"
     ]
   }

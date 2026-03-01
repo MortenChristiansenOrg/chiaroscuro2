@@ -217,8 +217,10 @@ test.describe("folder deletion", () => {
     await createBookmarkedTab(sidebarPage, commandPalettePage, "https://example.com");
     await createNamedFolder(sidebarPage, "EmptyFolder");
 
-    // Close the tab inside the folder
-    await sidebarPage.closeTabByIndex(0);
+    // Close the tab inside the folder (target folder-scoped tab, not global index)
+    const folderTab = sidebarPage.folder("EmptyFolder").locator("[data-tab-id]").first();
+    await folderTab.hover();
+    await folderTab.locator("[aria-label='Close tab']").click();
 
     // Folder persists even when empty
     await expect(async () => {
