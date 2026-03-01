@@ -2,7 +2,8 @@ import type { CommandBus } from "../../bus/command-bus";
 import type { EventBus } from "../../bus/event-bus";
 import type { Collection, DataStore } from "../../data/types";
 import type { Bounds, Platform } from "../../platform/types";
-import type { TabId, WindowId, WorkspaceId } from "../../shared/types";
+import type { FolderId, TabId, WindowId, WorkspaceId } from "../../shared/types";
+import { getFoldersForLevel, setFolderOrder } from "../folders/folders.main";
 import { isPinned } from "../pinned-tabs/pinned-tabs.main";
 import type {
   TAB_LOADING_CHANGED,
@@ -47,6 +48,7 @@ interface Deps {
 // Shared state exposed via accessor for cross-feature queries
 let _tabs: Map<TabId, Tab> | undefined;
 let _attachTabListeners: ((tabId: TabId) => void) | undefined;
+let _persistTab: ((tab: Tab) => void) | undefined;
 
 export function register(deps: Deps): void {
   const {
@@ -65,9 +67,10 @@ export function register(deps: Deps): void {
   const eventCleanups = new Map<TabId, (() => void)[]>();
   const tabsCollection: Collection<PersistedTab> = dataStore.collection("tabs");
 
-  // Expose for getTabsForWorkspace and start()
+  // Expose for getTabsForWorkspace, start(), and cross-feature accessors
   _tabs = tabs;
   _attachTabListeners = attachTabListeners;
+  _persistTab = persistTab;
 
   // ── Persistence helpers ──────────────────────────────────────────
 
@@ -213,6 +216,7 @@ export function register(deps: Deps): void {
       lastAccessedAt: now,
       createdAt: now,
       order: tabs.size,
+      folderId: null,
     };
 
     tabs.set(tabId, tab);
@@ -313,6 +317,10 @@ export function register(deps: Deps): void {
     if (isPinned(tabId)) return;
 
     tab.bookmarked = !tab.bookmarked;
+    // Clear folder when unbookmarking
+    if (!tab.bookmarked) {
+      tab.folderId = null;
+    }
     // Place at end of new section
     const siblingsInNewSection = [...tabs.values()].filter(
       (t) => t.workspaceId === tab.workspaceId && t.bookmarked === tab.bookmarked && t.id !== tabId,
@@ -339,7 +347,7 @@ export function register(deps: Deps): void {
   });
 
   commands.handle(TABS_REORDER, async (payload) => {
-    const { tabId, targetBookmarked, targetTabId, position } = payload;
+    const { tabId, targetBookmarked, targetTabId, position, targetFolderId } = payload;
     const tab = tabs.get(tabId);
     if (!tab) return;
 
@@ -353,31 +361,61 @@ export function register(deps: Deps): void {
       tab.bookmarked = false;
     }
 
-    // Get sibling tabs in the target section (excluding the dragged tab)
-    const siblings = [...tabs.values()]
+    // Update folder membership if specified
+    if (targetFolderId !== undefined) {
+      tab.folderId = targetFolderId;
+    }
+
+    // Per-level ordering: get sibling tabs at the same level (same folderId)
+    const targetLevel = tab.folderId ?? null;
+    const tabSiblings = [...tabs.values()]
       .filter(
         (t) =>
-          t.workspaceId === tab.workspaceId && t.bookmarked === targetBookmarked && t.id !== tabId,
+          t.workspaceId === tab.workspaceId &&
+          t.bookmarked === targetBookmarked &&
+          (t.folderId ?? null) === targetLevel &&
+          t.id !== tabId,
       )
       .sort((a, b) => a.order - b.order);
 
+    // Include folders at same level for unified ordering
+    const folderSiblings = targetBookmarked ? getFoldersForLevel(tab.workspaceId, targetLevel) : [];
+
+    type Item = { type: "tab"; tab: Tab } | { type: "folder"; id: FolderId; order: number };
+    const items: Item[] = [
+      ...tabSiblings.map((t) => ({ type: "tab" as const, tab: t })),
+      ...folderSiblings.map((f) => ({ type: "folder" as const, id: f.id, order: f.order })),
+    ].sort((a, b) => {
+      const orderA = a.type === "tab" ? a.tab.order : a.order;
+      const orderB = b.type === "tab" ? b.tab.order : b.order;
+      if (orderA !== orderB) return orderA - orderB;
+      // Tiebreaker: folders before tabs
+      if (a.type !== b.type) return a.type === "folder" ? -1 : 1;
+      return 0;
+    });
+
     // Determine insert index
-    let insertAt = siblings.length; // default: append
+    let insertAt = items.length; // default: append
     if (targetTabId) {
-      const targetIdx = siblings.findIndex((t) => t.id === targetTabId);
+      const targetIdx = items.findIndex(
+        (item) => item.type === "tab" && item.tab.id === targetTabId,
+      );
       if (targetIdx !== -1) {
         insertAt = position === "after" ? targetIdx + 1 : targetIdx;
       }
     }
 
     // Splice the dragged tab into position and re-index all
-    siblings.splice(insertAt, 0, tab);
-    for (const [i, sib] of siblings.entries()) {
-      const orderChanged = sib.order !== i;
-      sib.order = i;
-      // Always persist the dragged tab (bookmarked may have changed even if order didn't)
-      if (orderChanged || sib.id === tabId) {
-        persistTab(sib);
+    items.splice(insertAt, 0, { type: "tab", tab });
+    for (const [i, item] of items.entries()) {
+      if (item.type === "tab") {
+        const orderChanged = item.tab.order !== i;
+        item.tab.order = i;
+        if (orderChanged || item.tab.id === tabId) {
+          persistTab(item.tab);
+        }
+      } else if (item.order !== i) {
+        setFolderOrder(item.id, i);
       }
     }
 
@@ -454,6 +492,7 @@ export async function start(
         lastAccessedAt: pt.lastAccessedAt,
         createdAt: pt.createdAt,
         order: pt.order,
+        folderId: (pt.folderId as FolderId) ?? null,
       };
 
       _tabs.set(tabId, tab);
@@ -492,4 +531,24 @@ export async function start(
 export function getTabsForWorkspace(workspaceId: WorkspaceId): Tab[] {
   if (!_tabs) return [];
   return [..._tabs.values()].filter((t) => t.workspaceId === workspaceId);
+}
+
+export function getTab(tabId: TabId): Tab | undefined {
+  return _tabs?.get(tabId);
+}
+
+export function setTabFolderId(tabId: TabId, folderId: FolderId | null): void {
+  if (!_tabs || !_persistTab) return;
+  const tab = _tabs.get(tabId);
+  if (!tab) return;
+  tab.folderId = folderId;
+  _persistTab(tab);
+}
+
+export function setTabOrder(tabId: TabId, order: number): void {
+  if (!_tabs || !_persistTab) return;
+  const tab = _tabs.get(tabId);
+  if (!tab) return;
+  tab.order = order;
+  _persistTab(tab);
 }

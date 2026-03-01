@@ -14,6 +14,16 @@ import type {
   CommandPaletteCommands,
   CommandPaletteEvents,
 } from "../features/command-palette/command-palette.shared";
+import { register as registerContextMenu } from "../features/context-menu/context-menu.main";
+import type {
+  ContextMenuCommands,
+  ContextMenuEvents,
+} from "../features/context-menu/context-menu.shared";
+import {
+  register as registerFolders,
+  start as startFolders,
+} from "../features/folders/folders.main";
+import type { FoldersCommands, FoldersEvents } from "../features/folders/folders.shared";
 import {
   register as registerPinnedTabs,
   start as startPinnedTabs,
@@ -66,6 +76,8 @@ type AllCommands = MergeRegistries<
     SidebarCommands,
     CommandPaletteCommands,
     TooltipCommands,
+    ContextMenuCommands,
+    FoldersCommands,
   ]
 >;
 
@@ -78,6 +90,8 @@ type AllEvents = MergeRegistries<
     SidebarEvents,
     CommandPaletteEvents,
     TooltipEvents,
+    ContextMenuEvents,
+    FoldersEvents,
   ]
 >;
 
@@ -153,6 +167,8 @@ app.whenReady().then(async () => {
   registerSidebar(deps);
   registerCommandPalette(deps);
   registerTooltip(deps);
+  registerContextMenu(deps);
+  registerFolders(deps);
 
   // ── Global keyboard shortcuts ──────────────────────────────────
   // Ctrl+W: Close current tab
@@ -186,6 +202,7 @@ app.whenReady().then(async () => {
   createWindow();
   if (activeWindowId && process.env.NODE_ENV !== "test") {
     platform.initTooltipOverlay(activeWindowId);
+    platform.initContextMenuOverlay(activeWindowId);
   }
 
   // Phase 2: wait for renderer subscriptions, then emit initial state
@@ -195,6 +212,7 @@ app.whenReady().then(async () => {
     const restoredTabs = await startTabs(deps);
     await startPinnedTabs(deps, restoredTabs);
     startSidebar(deps);
+    await startFolders(deps);
     await startCommandPalette(deps);
   });
 

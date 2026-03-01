@@ -1,12 +1,29 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { type ContextMenuItem, useContextMenu } from "../../renderer/src/components/ContextMenu";
 import { Icon } from "../../renderer/src/components/Icon";
-import type { TabId, WorkspaceId } from "../../shared/types";
+import type { FolderId, TabId, WorkspaceId } from "../../shared/types";
+import type { Folder } from "../folders/folders.shared";
+import {
+  FOLDERS_CREATE,
+  FOLDERS_REMOVE,
+  FOLDERS_RENAME,
+  FOLDERS_REORDER,
+  FOLDERS_TOGGLE_COLLAPSE,
+} from "../folders/folders.shared";
+// shell-composite: read-only cross-feature store access
+import { useFoldersStore } from "../folders/folders.store";
 import type { PinnedTabsCommands } from "../pinned-tabs/pinned-tabs.shared";
-import { PINNED_TABS_ACTIVATE } from "../pinned-tabs/pinned-tabs.shared";
+import { PINNED_TABS_ACTIVATE, PINNED_TABS_TOGGLE_PIN } from "../pinned-tabs/pinned-tabs.shared";
 // shell-composite: read-only cross-feature store access
 import { usePinnedTabsStore } from "../pinned-tabs/pinned-tabs.store";
 import type { Tab, TabsCommands } from "../tabs/tabs.shared";
-import { TABS_ACTIVATE, TABS_CLEAR_EPHEMERAL, TABS_CLOSE, TABS_REORDER } from "../tabs/tabs.shared";
+import {
+  TABS_ACTIVATE,
+  TABS_CLEAR_EPHEMERAL,
+  TABS_CLOSE,
+  TABS_REORDER,
+  TABS_TOGGLE_BOOKMARK,
+} from "../tabs/tabs.shared";
 // shell-composite: read-only cross-feature store access
 import { useTabsStore } from "../tabs/tabs.store";
 import { WorkspaceSwitcher } from "../workspaces/workspaces.renderer";
@@ -30,6 +47,10 @@ function sendCommand<K extends keyof SidebarUsedCommands>(
   window.chiaroscuro.sendCommand(name, payload);
 }
 
+function sendFolderCommand(name: string, payload: unknown) {
+  window.chiaroscuro.sendCommand(name, payload);
+}
+
 // ── Helpers ─────────────────────────────────────────────────────
 
 export function hashToHue(str: string): number {
@@ -38,6 +59,74 @@ export function hashToHue(str: string): number {
     hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
   }
   return Math.abs(hash) % 360;
+}
+
+// ── Tree building ───────────────────────────────────────────────
+
+type TreeItem =
+  | { type: "tab"; tab: Tab }
+  | { type: "folder"; folder: Folder; children: TreeItem[] };
+
+function buildBookmarkedTree(
+  tabs: Tab[],
+  folders: Map<FolderId, Folder>,
+  workspaceId: WorkspaceId | null,
+): TreeItem[] {
+  if (!workspaceId) return tabs.map((t) => ({ type: "tab" as const, tab: t }));
+
+  const wsFolders = [...folders.values()].filter((f) => f.workspaceId === workspaceId);
+
+  function buildLevel(parentFolderId: FolderId | null): TreeItem[] {
+    const levelFolders = wsFolders
+      .filter((f) => f.parentFolderId === parentFolderId)
+      .sort((a, b) => a.order - b.order);
+
+    const levelTabs = tabs
+      .filter((t) => (t.folderId ?? null) === parentFolderId)
+      .sort((a, b) => a.order - b.order);
+
+    // Merge folders and tabs into a single list sorted by order (unified ordering)
+    type Entry =
+      | { type: "folder"; order: number; folder: Folder }
+      | { type: "tab"; order: number; tab: Tab };
+    const entries: Entry[] = [
+      ...levelFolders.map((f) => ({ type: "folder" as const, order: f.order, folder: f })),
+      ...levelTabs.map((t) => ({ type: "tab" as const, order: t.order, tab: t })),
+    ].sort((a, b) => {
+      if (a.order !== b.order) return a.order - b.order;
+      // Tiebreaker: folders before tabs
+      if (a.type !== b.type) return a.type === "folder" ? -1 : 1;
+      return 0;
+    });
+
+    return entries.map((entry) =>
+      entry.type === "folder"
+        ? { type: "folder" as const, folder: entry.folder, children: buildLevel(entry.folder.id) }
+        : { type: "tab" as const, tab: entry.tab },
+    );
+  }
+
+  return buildLevel(null);
+}
+
+function findFirstTabId(items: TreeItem[]): TabId | null {
+  for (const item of items) {
+    if (item.type === "tab") return item.tab.id;
+    const found = findFirstTabId(item.children);
+    if (found) return found;
+  }
+  return null;
+}
+
+function findLastTabId(items: TreeItem[]): TabId | null {
+  for (let i = items.length - 1; i >= 0; i--) {
+    const item = items[i];
+    if (!item) continue;
+    if (item.type === "tab") return item.tab.id;
+    const found = findLastTabId(item.children);
+    if (found) return found;
+  }
+  return null;
 }
 
 // ── Hooks ───────────────────────────────────────────────────────
@@ -139,28 +228,40 @@ export function TabItem({
   tab,
   isActive,
   isEphemeral,
+  isPinned,
   exiting,
   isBookmarkedSection,
+  folderId,
   dragTabIdRef,
+  dragFolderIdRef,
   isDragged,
   isDragging,
   onBeforeReorder,
   lastSwapRef,
   lastSwapTimeRef,
+  lastFolderSwapRef,
+  lastFolderSwapTimeRef,
   disableEntryAnimation,
+  onContextMenu,
 }: {
   tab: Tab;
   isActive: boolean;
   isEphemeral: boolean;
+  isPinned?: boolean;
   exiting?: boolean;
   isBookmarkedSection: boolean;
+  folderId?: FolderId | null;
   dragTabIdRef: React.RefObject<TabId | null>;
+  dragFolderIdRef?: React.RefObject<FolderId | null>;
   isDragged: boolean;
   isDragging: boolean;
   onBeforeReorder: () => void;
   lastSwapRef: React.RefObject<{ targetId: TabId; position: string } | null>;
   lastSwapTimeRef: React.RefObject<number>;
+  lastFolderSwapRef?: React.RefObject<{ targetId: string; position: string } | null>;
+  lastFolderSwapTimeRef?: React.RefObject<number>;
   disableEntryAnimation?: boolean;
+  onContextMenu?: (items: ContextMenuItem[], e: React.MouseEvent) => void;
 }) {
   const mountedRef = useRef(false);
   const elRef = useRef<HTMLDivElement>(null);
@@ -180,6 +281,45 @@ export function TabItem({
     sendCommand(TABS_CLOSE, { tabId: tab.id });
   };
 
+  const handleContextMenu = (e: React.MouseEvent) => {
+    if (!onContextMenu) return;
+    const items: ContextMenuItem[] = [];
+    if (isEphemeral) {
+      items.push({
+        label: "Bookmark",
+        icon: "bookmark",
+        onSelect: () => sendFolderCommand(TABS_TOGGLE_BOOKMARK, { tabId: tab.id }),
+      });
+    }
+    if (isBookmarkedSection && !isPinned) {
+      items.push({
+        label: "Remove bookmark",
+        icon: "bookmark",
+        onSelect: () => sendFolderCommand(TABS_TOGGLE_BOOKMARK, { tabId: tab.id }),
+      });
+    }
+    if (!isPinned) {
+      items.push({
+        label: "Pin tab",
+        icon: "thumbtack",
+        onSelect: () => sendFolderCommand(PINNED_TABS_TOGGLE_PIN, { tabId: tab.id }),
+      });
+    }
+    if (isPinned) {
+      items.push({
+        label: "Unpin tab",
+        icon: "thumbtack-slash",
+        onSelect: () => sendFolderCommand(PINNED_TABS_TOGGLE_PIN, { tabId: tab.id }),
+      });
+      items.push({
+        label: "Close tab",
+        icon: "xmark",
+        onSelect: () => sendCommand(TABS_CLOSE, { tabId: tab.id }),
+      });
+    }
+    onContextMenu(items, e);
+  };
+
   const handleDragStart = (e: React.DragEvent) => {
     e.dataTransfer.effectAllowed = "move";
     e.dataTransfer.setData("text/plain", tab.id);
@@ -195,6 +335,37 @@ export function TabItem({
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.dataTransfer.dropEffect = "move";
+
+    // Handle folder being dragged over this tab
+    const draggingFolderId = dragFolderIdRef?.current;
+    if (draggingFolderId && isBookmarkedSection) {
+      if (
+        !lastFolderSwapRef ||
+        !lastFolderSwapTimeRef ||
+        Date.now() - lastFolderSwapTimeRef.current < 100
+      )
+        return;
+      const rect = elRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const position = e.clientY > rect.top + rect.height / 2 ? "after" : "before";
+      if (
+        lastFolderSwapRef.current?.targetId === tab.id &&
+        lastFolderSwapRef.current?.position === position
+      )
+        return;
+      lastFolderSwapRef.current = { targetId: tab.id, position };
+      lastFolderSwapTimeRef.current = Date.now();
+      onBeforeReorder();
+      sendFolderCommand(FOLDERS_REORDER, {
+        folderId: draggingFolderId,
+        parentFolderId: folderId ?? null,
+        targetTabId: tab.id,
+        position,
+      });
+      return;
+    }
+
+    // Handle tab being dragged over this tab
     const tabId = dragTabIdRef.current;
     if (!tabId || tabId === tab.id) return;
     if (Date.now() - lastSwapTimeRef.current < 100) return;
@@ -211,6 +382,7 @@ export function TabItem({
       targetBookmarked: isBookmarkedSection,
       targetTabId: tab.id,
       position,
+      targetFolderId: folderId ?? null,
     });
   };
 
@@ -249,6 +421,7 @@ export function TabItem({
             : "tab-in 200ms cubic-bezier(0, 0, 0.2, 1) both",
       }}
       onClick={handleClick}
+      onContextMenu={handleContextMenu}
       onDragStart={handleDragStart}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
@@ -288,14 +461,570 @@ export function TabItem({
   );
 }
 
+// ── Folder Components ───────────────────────────────────────────
+
+function FolderHeader({
+  folder,
+  isRenaming,
+  isDragging,
+  dragTabIdRef,
+  dragFolderIdRef,
+  depth,
+  onBeforeReorder,
+  lastFolderSwapRef,
+  lastFolderSwapTimeRef,
+  lastSwapRef,
+  lastSwapTimeRef,
+  firstSubtreeTabId,
+  lastSubtreeTabId,
+  onContextMenu,
+}: {
+  folder: Folder;
+  isRenaming: boolean;
+  isDragging: boolean;
+  dragTabIdRef: React.RefObject<TabId | null>;
+  dragFolderIdRef: React.RefObject<FolderId | null>;
+  depth: number;
+  onBeforeReorder: () => void;
+  lastFolderSwapRef: React.RefObject<{ targetId: FolderId; position: string } | null>;
+  lastFolderSwapTimeRef: React.RefObject<number>;
+  lastSwapRef: React.RefObject<{ targetId: TabId; position: string } | null>;
+  lastSwapTimeRef: React.RefObject<number>;
+  firstSubtreeTabId: TabId | null;
+  lastSubtreeTabId: TabId | null;
+  onContextMenu?: (items: ContextMenuItem[], e: React.MouseEvent) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [renameValue, setRenameValue] = useState(folder.name);
+  const [dropOver, setDropOver] = useState(false);
+
+  // Reset drop highlight when global drag ends (fallback for lost events)
+  useEffect(() => {
+    if (!isDragging) setDropOver(false);
+  }, [isDragging]);
+
+  useEffect(() => {
+    if (isRenaming && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+      setRenameValue(folder.name);
+    }
+  }, [isRenaming, folder.name]);
+
+  const commitRename = () => {
+    const trimmed = renameValue.trim();
+    if (trimmed && trimmed !== folder.name) {
+      sendFolderCommand(FOLDERS_RENAME, { folderId: folder.id, name: trimmed });
+    }
+    useFoldersStore.setState({ renamingFolderId: null });
+  };
+
+  const handleHeaderClick = () => {
+    if (!isRenaming) {
+      sendFolderCommand(FOLDERS_TOGGLE_COLLAPSE, { folderId: folder.id });
+    }
+  };
+
+  const handleDoubleClick = () => {
+    useFoldersStore.setState({ renamingFolderId: folder.id });
+  };
+
+  const handleRemove = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    sendFolderCommand(FOLDERS_REMOVE, { folderId: folder.id });
+  };
+
+  const handleFolderContextMenu = (e: React.MouseEvent) => {
+    if (!onContextMenu) return;
+    e.stopPropagation();
+    onContextMenu(
+      [
+        {
+          label: "Add subfolder",
+          icon: "folder-plus",
+          onSelect: () => sendFolderCommand(FOLDERS_CREATE, { parentFolderId: folder.id }),
+        },
+      ],
+      e,
+    );
+  };
+
+  const handleFolderDragStart = (e: React.DragEvent) => {
+    if (isRenaming) {
+      e.preventDefault();
+      return;
+    }
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/x-folder", folder.id);
+    dragFolderIdRef.current = folder.id;
+    // Hide browser's default drag ghost
+    const img = new Image();
+    img.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+    e.dataTransfer.setDragImage(img, 0, 0);
+    lastFolderSwapRef.current = null;
+    lastFolderSwapTimeRef.current = 0;
+  };
+
+  const elRef = useRef<HTMLDivElement>(null);
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = "move";
+
+    const draggingFolderId = dragFolderIdRef.current;
+    if (draggingFolderId) {
+      // Folder-on-folder: reorder as siblings or nest
+      if (draggingFolderId === folder.id) return;
+      if (Date.now() - lastFolderSwapTimeRef.current < 100) return;
+      const rect = elRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const relY = (e.clientY - rect.top) / rect.height;
+      if (relY > 0.25 && relY < 0.75) {
+        // Middle zone: nest into this folder
+        setDropOver(true);
+        if (
+          lastFolderSwapRef.current?.targetId === folder.id &&
+          lastFolderSwapRef.current?.position === "inside"
+        )
+          return;
+        lastFolderSwapRef.current = { targetId: folder.id, position: "inside" };
+        lastFolderSwapTimeRef.current = Date.now();
+        sendFolderCommand(FOLDERS_REORDER, {
+          folderId: draggingFolderId,
+          parentFolderId: folder.id,
+        });
+      } else {
+        // Top/bottom zone: reorder as sibling
+        setDropOver(false);
+        const position = relY >= 0.75 ? "after" : "before";
+        if (
+          lastFolderSwapRef.current?.targetId === folder.id &&
+          lastFolderSwapRef.current?.position === position
+        )
+          return;
+        lastFolderSwapRef.current = { targetId: folder.id, position };
+        lastFolderSwapTimeRef.current = Date.now();
+        sendFolderCommand(FOLDERS_REORDER, {
+          folderId: draggingFolderId,
+          targetFolderId: folder.id,
+          position,
+          parentFolderId: folder.parentFolderId,
+        });
+      }
+    } else {
+      // Tab being dragged over folder header
+      const tabId = dragTabIdRef.current;
+      if (!tabId) return;
+      const rect = elRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const relY = (e.clientY - rect.top) / rect.height;
+
+      if (relY > 0.25 && relY < 0.75) {
+        // Middle zone: show drop highlight (nesting happens on drop)
+        setDropOver(true);
+      } else {
+        // Top/bottom zone: live reorder to position adjacent to folder
+        setDropOver(false);
+        if (Date.now() - lastSwapTimeRef.current < 100) return;
+
+        if (relY <= 0.25 && firstSubtreeTabId) {
+          // Before folder
+          if (
+            lastSwapRef.current?.targetId === firstSubtreeTabId &&
+            lastSwapRef.current?.position === "before"
+          )
+            return;
+          lastSwapRef.current = { targetId: firstSubtreeTabId, position: "before" };
+          lastSwapTimeRef.current = Date.now();
+          onBeforeReorder();
+          sendCommand(TABS_REORDER, {
+            tabId,
+            targetBookmarked: true,
+            targetTabId: firstSubtreeTabId,
+            position: "before",
+            targetFolderId: folder.parentFolderId ?? null,
+          });
+        } else if (relY >= 0.75 && lastSubtreeTabId) {
+          // After folder
+          if (
+            lastSwapRef.current?.targetId === lastSubtreeTabId &&
+            lastSwapRef.current?.position === "after"
+          )
+            return;
+          lastSwapRef.current = { targetId: lastSubtreeTabId, position: "after" };
+          lastSwapTimeRef.current = Date.now();
+          onBeforeReorder();
+          sendCommand(TABS_REORDER, {
+            tabId,
+            targetBookmarked: true,
+            targetTabId: lastSubtreeTabId,
+            position: "after",
+            targetFolderId: folder.parentFolderId ?? null,
+          });
+        } else {
+          // No subtree tabs — treat as nest zone
+          setDropOver(true);
+        }
+      }
+    }
+  };
+
+  const handleDragLeave = () => {
+    setDropOver(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setDropOver(false);
+    // Tab drop — only nest if in middle zone
+    const tabId = dragTabIdRef.current;
+    if (tabId) {
+      const rect = elRef.current?.getBoundingClientRect();
+      if (rect) {
+        const relY = (e.clientY - rect.top) / rect.height;
+        if (relY > 0.25 && relY < 0.75) {
+          onBeforeReorder();
+          sendCommand(TABS_REORDER, {
+            tabId,
+            targetBookmarked: true,
+            targetFolderId: folder.id,
+          });
+        }
+        // Top/bottom zones already handled by dragOver live reorder
+      }
+    }
+    // Folder drop handled in dragOver already (live reorder)
+  };
+
+  const isDraggedFolder = isDragging && dragFolderIdRef.current === folder.id;
+
+  return (
+    // biome-ignore lint/a11y/useKeyWithClickEvents: chrome elements are not keyboard-navigable
+    <div
+      ref={elRef}
+      draggable={!isRenaming}
+      className={`${isDragging ? "" : "group"} relative flex items-center cursor-pointer transition-colors duration-150 ${isDragging ? "" : "hover:bg-glass-hover hover:text-glass-text-hover active:bg-glass-pressed active:text-glass-text-pressed"}`}
+      style={{
+        gap: "0.625rem",
+        padding: "0.375rem 0.75rem",
+        paddingLeft: "0.75rem",
+        margin: "0.25rem 0.375rem",
+        borderRadius: "var(--radius-md)",
+        background: dropOver
+          ? "oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250) / 0.1)"
+          : isDraggedFolder
+            ? "oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250) / 0.06)"
+            : undefined,
+        boxShadow: dropOver
+          ? "inset 0 0 0 1px oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250) / 0.3)"
+          : isDraggedFolder
+            ? "inset 0 0 0 1px oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250) / 0.25)"
+            : undefined,
+        zIndex: isDraggedFolder ? 10 : undefined,
+      }}
+      onClick={handleHeaderClick}
+      onContextMenu={handleFolderContextMenu}
+      onDoubleClick={handleDoubleClick}
+      onDragStart={handleFolderDragStart}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      <div
+        className="text-glass-text-default group-hover:text-glass-text-hover group-active:text-glass-text-pressed"
+        style={{ position: "relative", width: 16, height: 16, transition: "color 150ms" }}
+      >
+        <Icon
+          name="folder"
+          css={{
+            fontSize: 14,
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            opacity: folder.collapsed ? 1 : 0,
+            transform: folder.collapsed ? "scale(1)" : "scale(0.8)",
+            transition: "opacity 150ms, transform 150ms",
+          }}
+        />
+        <Icon
+          name="folder-open"
+          css={{
+            fontSize: 14,
+            position: "absolute",
+            inset: 0,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            opacity: folder.collapsed ? 0 : 1,
+            transform: folder.collapsed ? "scale(0.8)" : "scale(1)",
+            transition: "opacity 150ms, transform 150ms",
+          }}
+        />
+      </div>
+      {isRenaming ? (
+        <input
+          ref={inputRef}
+          type="text"
+          value={renameValue}
+          onChange={(e) => setRenameValue(e.target.value)}
+          onBlur={commitRename}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") commitRename();
+            if (e.key === "Escape") {
+              useFoldersStore.setState({ renamingFolderId: null });
+            }
+          }}
+          className="flex-1 min-w-0 bg-transparent text-glass-text-primary outline-none"
+          style={{
+            fontSize: "var(--text-base)",
+            fontWeight: 500,
+            fontFamily: "inherit",
+            border: "none",
+            padding: 0,
+            margin: 0,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        />
+      ) : (
+        <span
+          className="flex-1 min-w-0 truncate text-glass-text-default group-hover:text-glass-text-hover group-hover:mr-5 group-active:text-glass-text-pressed"
+          style={{
+            fontSize: "var(--text-base)",
+            fontWeight: 500,
+            transition: "margin var(--duration-fast) var(--ease-in-out)",
+          }}
+        >
+          {folder.name}
+        </span>
+      )}
+      {!isRenaming && (
+        <button
+          type="button"
+          className="absolute flex opacity-0 group-hover:opacity-100 items-center justify-center bg-transparent text-glass-text-hint transition-[opacity,color] duration-150 hover:text-destructive"
+          style={{
+            right: "0.375rem",
+            top: "50%",
+            transform: "translateY(-50%)",
+            width: 24,
+            height: 24,
+            borderRadius: "var(--radius-sm)",
+            cursor: "pointer",
+            border: "none",
+          }}
+          tabIndex={-1}
+          onClick={handleRemove}
+          aria-label="Remove folder"
+          data-tip="Remove folder"
+        >
+          <Icon name="xmark" css={{ fontSize: 10 }} />
+        </button>
+      )}
+    </div>
+  );
+}
+
+function FolderGroup({
+  folder,
+  items,
+  activeTabId,
+  exitingIds,
+  dragTabIdRef,
+  dragFolderIdRef,
+  isDragging,
+  onBeforeReorder,
+  lastSwapRef,
+  lastSwapTimeRef,
+  lastFolderSwapRef,
+  lastFolderSwapTimeRef,
+  disableEntryAnimation,
+  renamingFolderId,
+  depth,
+  onContextMenu,
+}: {
+  folder: Folder;
+  items: TreeItem[];
+  activeTabId: TabId | null;
+  exitingIds: Set<TabId>;
+  dragTabIdRef: React.RefObject<TabId | null>;
+  dragFolderIdRef: React.RefObject<FolderId | null>;
+  isDragging: boolean;
+  onBeforeReorder: () => void;
+  lastSwapRef: React.RefObject<{ targetId: TabId; position: string } | null>;
+  lastSwapTimeRef: React.RefObject<number>;
+  lastFolderSwapRef: React.RefObject<{ targetId: FolderId; position: string } | null>;
+  lastFolderSwapTimeRef: React.RefObject<number>;
+  disableEntryAnimation?: boolean;
+  renamingFolderId: FolderId | null;
+  depth: number;
+  onContextMenu?: (items: ContextMenuItem[], e: React.MouseEvent) => void;
+}) {
+  const firstTab = findFirstTabId(items);
+  const lastTab = findLastTabId(items);
+
+  return (
+    <div data-folder-id={folder.id}>
+      <FolderHeader
+        folder={folder}
+        isRenaming={renamingFolderId === folder.id}
+        isDragging={isDragging}
+        dragTabIdRef={dragTabIdRef}
+        dragFolderIdRef={dragFolderIdRef}
+        depth={depth}
+        onBeforeReorder={onBeforeReorder}
+        lastFolderSwapRef={lastFolderSwapRef}
+        lastFolderSwapTimeRef={lastFolderSwapTimeRef}
+        lastSwapRef={lastSwapRef}
+        lastSwapTimeRef={lastSwapTimeRef}
+        firstSubtreeTabId={firstTab}
+        lastSubtreeTabId={lastTab}
+        onContextMenu={onContextMenu}
+      />
+      {!folder.collapsed && (
+        <div style={{ paddingLeft: "0.5rem" }}>
+          {items.map((item) =>
+            item.type === "tab" ? (
+              <TabItem
+                key={item.tab.id}
+                tab={item.tab}
+                isActive={item.tab.id === activeTabId}
+                isEphemeral={false}
+                exiting={exitingIds.has(item.tab.id)}
+                isBookmarkedSection={true}
+                folderId={folder.id}
+                dragTabIdRef={dragTabIdRef}
+                dragFolderIdRef={dragFolderIdRef}
+                isDragged={item.tab.id === (isDragging ? dragTabIdRef.current : null)}
+                isDragging={isDragging}
+                onBeforeReorder={onBeforeReorder}
+                lastSwapRef={lastSwapRef}
+                lastSwapTimeRef={lastSwapTimeRef}
+                lastFolderSwapRef={lastFolderSwapRef}
+                lastFolderSwapTimeRef={lastFolderSwapTimeRef}
+                disableEntryAnimation={disableEntryAnimation}
+                onContextMenu={onContextMenu}
+              />
+            ) : (
+              <FolderGroup
+                key={item.folder.id}
+                folder={item.folder}
+                items={item.children}
+                activeTabId={activeTabId}
+                exitingIds={exitingIds}
+                dragTabIdRef={dragTabIdRef}
+                dragFolderIdRef={dragFolderIdRef}
+                isDragging={isDragging}
+                onBeforeReorder={onBeforeReorder}
+                lastSwapRef={lastSwapRef}
+                lastSwapTimeRef={lastSwapTimeRef}
+                lastFolderSwapRef={lastFolderSwapRef}
+                lastFolderSwapTimeRef={lastFolderSwapTimeRef}
+                disableEntryAnimation={disableEntryAnimation}
+                renamingFolderId={renamingFolderId}
+                depth={depth + 1}
+                onContextMenu={onContextMenu}
+              />
+            ),
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BookmarkedTree({
+  tree,
+  activeTabId,
+  exitingIds,
+  dragTabIdRef,
+  dragFolderIdRef,
+  isDragging,
+  onBeforeReorder,
+  lastSwapRef,
+  lastSwapTimeRef,
+  lastFolderSwapRef,
+  lastFolderSwapTimeRef,
+  disableEntryAnimation,
+  renamingFolderId,
+  onContextMenu,
+}: {
+  tree: TreeItem[];
+  activeTabId: TabId | null;
+  exitingIds: Set<TabId>;
+  dragTabIdRef: React.RefObject<TabId | null>;
+  dragFolderIdRef: React.RefObject<FolderId | null>;
+  isDragging: boolean;
+  onBeforeReorder: () => void;
+  lastSwapRef: React.RefObject<{ targetId: TabId; position: string } | null>;
+  lastSwapTimeRef: React.RefObject<number>;
+  lastFolderSwapRef: React.RefObject<{ targetId: FolderId; position: string } | null>;
+  lastFolderSwapTimeRef: React.RefObject<number>;
+  disableEntryAnimation?: boolean;
+  renamingFolderId: FolderId | null;
+  onContextMenu?: (items: ContextMenuItem[], e: React.MouseEvent) => void;
+}) {
+  return (
+    <>
+      {tree.map((item) =>
+        item.type === "tab" ? (
+          <TabItem
+            key={item.tab.id}
+            tab={item.tab}
+            isActive={item.tab.id === activeTabId}
+            isEphemeral={false}
+            exiting={exitingIds.has(item.tab.id)}
+            isBookmarkedSection={true}
+            folderId={null}
+            dragTabIdRef={dragTabIdRef}
+            dragFolderIdRef={dragFolderIdRef}
+            isDragged={item.tab.id === (isDragging ? dragTabIdRef.current : null)}
+            isDragging={isDragging}
+            onBeforeReorder={onBeforeReorder}
+            lastSwapRef={lastSwapRef}
+            lastSwapTimeRef={lastSwapTimeRef}
+            lastFolderSwapRef={lastFolderSwapRef}
+            lastFolderSwapTimeRef={lastFolderSwapTimeRef}
+            disableEntryAnimation={disableEntryAnimation}
+            onContextMenu={onContextMenu}
+          />
+        ) : (
+          <FolderGroup
+            key={item.folder.id}
+            folder={item.folder}
+            items={item.children}
+            activeTabId={activeTabId}
+            exitingIds={exitingIds}
+            dragTabIdRef={dragTabIdRef}
+            dragFolderIdRef={dragFolderIdRef}
+            isDragging={isDragging}
+            onBeforeReorder={onBeforeReorder}
+            lastSwapRef={lastSwapRef}
+            lastSwapTimeRef={lastSwapTimeRef}
+            lastFolderSwapRef={lastFolderSwapRef}
+            lastFolderSwapTimeRef={lastFolderSwapTimeRef}
+            disableEntryAnimation={disableEntryAnimation}
+            renamingFolderId={renamingFolderId}
+            depth={0}
+            onContextMenu={onContextMenu}
+          />
+        ),
+      )}
+    </>
+  );
+}
+
 export function PinnedTabsStrip({
   pinnedTabs,
   tabs,
   activeTabId,
+  onContextMenu,
 }: {
   pinnedTabs: { id: TabId; url: string; title: string; favicon: string }[];
   tabs: Map<TabId, Tab>;
   activeTabId: TabId | null;
+  onContextMenu?: (items: ContextMenuItem[], e: React.MouseEvent) => void;
 }) {
   return (
     <div
@@ -322,6 +1051,25 @@ export function PinnedTabsStrip({
             }}
             tabIndex={-1}
             onClick={() => sendCommand(PINNED_TABS_ACTIVATE, { tabId: pt.id })}
+            onContextMenu={(e) => {
+              if (!onContextMenu) return;
+              onContextMenu(
+                [
+                  {
+                    label: "Unpin tab",
+                    icon: "thumbtack-slash",
+                    onSelect: () => sendFolderCommand(PINNED_TABS_TOGGLE_PIN, { tabId: pt.id }),
+                  },
+                  {
+                    label: "Close tab",
+                    icon: "xmark",
+                    onSelect: () => sendCommand(TABS_CLOSE, { tabId: pt.id }),
+                  },
+                ],
+                e,
+              );
+            }}
+            data-pinned-tab={pt.id}
             data-tip={pt.title || pt.url}
             aria-label={pt.title || pt.url}
           >
@@ -336,13 +1084,17 @@ export function PinnedTabsStrip({
 function SectionDropZone({
   targetBookmarked,
   dragTabIdRef,
+  dragFolderIdRef,
   visible,
   onBeforeReorder,
+  targetFolderId,
 }: {
   targetBookmarked: boolean;
   dragTabIdRef: React.RefObject<TabId | null>;
+  dragFolderIdRef?: React.RefObject<FolderId | null>;
   visible: boolean;
   onBeforeReorder?: () => void;
+  targetFolderId?: FolderId | null;
 }) {
   const [over, setOver] = useState(false);
   return (
@@ -370,11 +1122,27 @@ function SectionDropZone({
       onDrop={(e) => {
         e.preventDefault();
         setOver(false);
+        // Handle folder drop — move to root level
+        if (dragFolderIdRef?.current) {
+          const folderId = dragFolderIdRef.current;
+          dragFolderIdRef.current = null;
+          onBeforeReorder?.();
+          sendFolderCommand(FOLDERS_REORDER, {
+            folderId,
+            parentFolderId: null,
+          });
+          return;
+        }
+        // Handle tab drop
         const tabId = dragTabIdRef.current;
         dragTabIdRef.current = null;
         if (!tabId) return;
         onBeforeReorder?.();
-        sendCommand(TABS_REORDER, { tabId, targetBookmarked });
+        sendCommand(TABS_REORDER, {
+          tabId,
+          targetBookmarked,
+          targetFolderId: targetFolderId ?? null,
+        });
       }}
     />
   );
@@ -382,22 +1150,30 @@ function SectionDropZone({
 
 function TabSection({
   bookmarked,
+  bookmarkedTree,
   ephemeral,
   activeTabId,
   exitingIds,
   dragTabIdRef,
+  dragFolderIdRef,
   isDragging,
   onClearEphemeral,
   disableEntryAnimation,
+  renamingFolderId,
+  onContextMenu,
 }: {
   bookmarked: Tab[];
+  bookmarkedTree: TreeItem[];
   ephemeral: Tab[];
   activeTabId: TabId | null;
   exitingIds: Set<TabId>;
   dragTabIdRef: React.RefObject<TabId | null>;
+  dragFolderIdRef: React.RefObject<FolderId | null>;
   isDragging: boolean;
   onClearEphemeral: () => void;
   disableEntryAnimation?: boolean;
+  renamingFolderId: FolderId | null;
+  onContextMenu?: (items: ContextMenuItem[], e: React.MouseEvent) => void;
 }) {
   // Divider visible when ephemeral tabs exist or during drag; lingers for fade-out
   const dividerTarget = ephemeral.length > 0 || isDragging;
@@ -471,32 +1247,43 @@ function TabSection({
   // ── Drag swap tracking ──
   const lastSwapRef = useRef<{ targetId: TabId; position: string } | null>(null);
   const lastSwapTimeRef = useRef(0);
-  const draggedTabId = isDragging ? dragTabIdRef.current : null;
+  const lastFolderSwapRef = useRef<{ targetId: FolderId; position: string } | null>(null);
+  const lastFolderSwapTimeRef = useRef(0);
 
   return (
     <div ref={flipContainerRef}>
-      {bookmarked.length > 0 ? (
-        bookmarked.map((tab) => (
-          <TabItem
-            key={tab.id}
-            tab={tab}
-            isActive={tab.id === activeTabId}
-            isEphemeral={false}
-            exiting={exitingIds.has(tab.id)}
-            isBookmarkedSection={true}
+      {bookmarked.length > 0 || bookmarkedTree.some((item) => item.type === "folder") ? (
+        <>
+          <BookmarkedTree
+            tree={bookmarkedTree}
+            activeTabId={activeTabId}
+            exitingIds={exitingIds}
             dragTabIdRef={dragTabIdRef}
-            isDragged={tab.id === draggedTabId}
+            dragFolderIdRef={dragFolderIdRef}
             isDragging={isDragging}
             onBeforeReorder={snapshotPositions}
             lastSwapRef={lastSwapRef}
             lastSwapTimeRef={lastSwapTimeRef}
+            lastFolderSwapRef={lastFolderSwapRef}
+            lastFolderSwapTimeRef={lastFolderSwapTimeRef}
             disableEntryAnimation={disableEntryAnimation}
+            renamingFolderId={renamingFolderId}
+            onContextMenu={onContextMenu}
           />
-        ))
+          {/* Root-level drop zone — visible during drag so tabs/folders can be placed outside folders */}
+          <SectionDropZone
+            targetBookmarked={true}
+            dragTabIdRef={dragTabIdRef}
+            dragFolderIdRef={dragFolderIdRef}
+            visible={isDragging}
+            onBeforeReorder={snapshotPositions}
+          />
+        </>
       ) : (
         <SectionDropZone
           targetBookmarked={true}
           dragTabIdRef={dragTabIdRef}
+          dragFolderIdRef={dragFolderIdRef}
           visible={isDragging}
           onBeforeReorder={snapshotPositions}
         />
@@ -551,12 +1338,13 @@ function TabSection({
             exiting={exitingIds.has(tab.id)}
             isBookmarkedSection={false}
             dragTabIdRef={dragTabIdRef}
-            isDragged={tab.id === draggedTabId}
+            isDragged={tab.id === (isDragging ? dragTabIdRef.current : null)}
             isDragging={isDragging}
             onBeforeReorder={snapshotPositions}
             lastSwapRef={lastSwapRef}
             lastSwapTimeRef={lastSwapTimeRef}
             disableEntryAnimation={disableEntryAnimation}
+            onContextMenu={onContextMenu}
           />
         ))
       ) : (
@@ -582,6 +1370,8 @@ export function SidebarPanel() {
   const pinnedTabIds = new Set(pinnedTabs.map((p) => p.id));
   const workspaces = useWorkspacesStore((s) => s.workspaces);
   const activeWorkspaceId = useWorkspacesStore((s) => s.activeWorkspaceId);
+  const folders = useFoldersStore((s) => s.folders);
+  const renamingFolderId = useFoldersStore((s) => s.renamingFolderId);
 
   // Workspace editor state
   const [editorMode, setEditorMode] = useState<"none" | "new" | WorkspaceId>("none");
@@ -608,20 +1398,29 @@ export function SidebarPanel() {
     ...exitingInWorkspace.filter((t) => !t.bookmarked),
   ].sort((a, b) => a.order - b.order);
 
+  // Build folder tree for bookmarked tabs
+  const bookmarkedTree = useMemo(
+    () => buildBookmarkedTree(bookmarked, folders, activeWorkspaceId),
+    [bookmarked, folders, activeWorkspaceId],
+  );
+
   // Previous workspace tabs (for slide-out during transition)
   const prevTabs = useMemo(() => {
     if (!wsTransition) return null;
     const prevAll = [...tabs.values()].filter(
       (t) => t.workspaceId === wsTransition.fromWorkspaceId && !pinnedTabIds.has(t.id),
     );
+    const prevBookmarked = prevAll.filter((t) => t.bookmarked).sort((a, b) => a.order - b.order);
     return {
-      bookmarked: prevAll.filter((t) => t.bookmarked).sort((a, b) => a.order - b.order),
+      bookmarked: prevBookmarked,
+      bookmarkedTree: buildBookmarkedTree(prevBookmarked, folders, wsTransition.fromWorkspaceId),
       ephemeral: prevAll.filter((t) => !t.bookmarked).sort((a, b) => a.order - b.order),
     };
-  }, [wsTransition, tabs, pinnedTabIds]);
+  }, [wsTransition, tabs, pinnedTabIds, folders]);
 
   // Drag & drop
   const dragTabIdRef = useRef<TabId | null>(null);
+  const dragFolderIdRef = useRef<FolderId | null>(null);
   const [isDragging, setIsDragging] = useState(false);
 
   // Safety net: when React repositions the drag source DOM node mid-drag
@@ -632,6 +1431,7 @@ export function SidebarPanel() {
     const reset = () => {
       setIsDragging(false);
       dragTabIdRef.current = null;
+      dragFolderIdRef.current = null;
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") reset();
@@ -652,6 +1452,26 @@ export function SidebarPanel() {
     }
   };
 
+  // Context menu
+  const { open: openContextMenu, portal: contextMenuPortal } = useContextMenu();
+
+  const handleSidebarContextMenu = (e: React.MouseEvent) => {
+    // Only fire if right-clicking empty sidebar area (not a tab/folder)
+    if ((e.target as HTMLElement).closest("[data-tab-id], [data-folder-id], [data-pinned-tab]")) {
+      return;
+    }
+    openContextMenu(
+      [
+        {
+          label: "Add folder",
+          icon: "folder-plus",
+          onSelect: () => sendFolderCommand(FOLDERS_CREATE, {}),
+        },
+      ],
+      e,
+    );
+  };
+
   return (
     <div
       className="shrink-0 overflow-hidden"
@@ -668,15 +1488,23 @@ export function SidebarPanel() {
         onDragEnd={() => {
           setIsDragging(false);
           dragTabIdRef.current = null;
+          dragFolderIdRef.current = null;
         }}
+        onContextMenu={handleSidebarContextMenu}
       >
         <div className="sr-only" aria-live="polite" aria-atomic="true">
           {announcement}
         </div>
 
         {pinnedTabs.length > 0 && (
-          <PinnedTabsStrip pinnedTabs={pinnedTabs} tabs={tabs} activeTabId={activeTabId} />
+          <PinnedTabsStrip
+            pinnedTabs={pinnedTabs}
+            tabs={tabs}
+            activeTabId={activeTabId}
+            onContextMenu={openContextMenu}
+          />
         )}
+        {contextMenuPortal}
 
         <div className="flex-1 overflow-y-auto">
           <div style={{ position: "relative", overflow: "hidden" }}>
@@ -695,13 +1523,16 @@ export function SidebarPanel() {
               >
                 <TabSection
                   bookmarked={prevTabs.bookmarked}
+                  bookmarkedTree={prevTabs.bookmarkedTree}
                   ephemeral={prevTabs.ephemeral}
                   activeTabId={null}
                   exitingIds={new Set()}
                   dragTabIdRef={dragTabIdRef}
+                  dragFolderIdRef={dragFolderIdRef}
                   isDragging={false}
                   onClearEphemeral={() => {}}
                   disableEntryAnimation
+                  renamingFolderId={null}
                 />
               </div>
             )}
@@ -719,13 +1550,17 @@ export function SidebarPanel() {
             >
               <TabSection
                 bookmarked={bookmarked}
+                bookmarkedTree={bookmarkedTree}
                 ephemeral={ephemeral}
                 activeTabId={activeTabId}
                 exitingIds={exitingIds}
                 dragTabIdRef={dragTabIdRef}
+                dragFolderIdRef={dragFolderIdRef}
                 isDragging={isDragging}
                 onClearEphemeral={handleClearEphemeral}
                 disableEntryAnimation={!!wsTransition}
+                renamingFolderId={renamingFolderId}
+                onContextMenu={openContextMenu}
               />
             </div>
           </div>

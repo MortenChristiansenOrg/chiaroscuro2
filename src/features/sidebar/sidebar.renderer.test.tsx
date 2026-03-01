@@ -292,6 +292,7 @@ describe("TabItem", () => {
         targetBookmarked: true,
         targetTabId: "tab-1",
         position: expect.stringMatching(/^(before|after)$/),
+        targetFolderId: null,
       });
     });
 

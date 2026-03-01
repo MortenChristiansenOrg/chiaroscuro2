@@ -27,6 +27,10 @@ export interface PersistedPinnedTab {
 }
 
 // ── Payload types ────────────────────────────────────────────────
+export interface PinnedTabsTogglePinPayload {
+  tabId?: TabId;
+}
+
 export interface PinnedTabsActivatePayload {
   tabId: TabId;
 }
@@ -41,7 +45,7 @@ export interface PinnedTabsActiveChangedEvent {
 
 // ── Command registry ─────────────────────────────────────────────
 export type PinnedTabsCommands = {
-  [PINNED_TABS_TOGGLE_PIN]: { payload: undefined; response: undefined };
+  [PINNED_TABS_TOGGLE_PIN]: { payload: PinnedTabsTogglePinPayload; response: undefined };
   [PINNED_TABS_ACTIVATE]: { payload: PinnedTabsActivatePayload; response: undefined };
 };
 
