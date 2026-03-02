@@ -1,10 +1,24 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSettingsStore } from "../settings/settings.store";
 import type { Suggestion } from "./command-palette.shared";
 import { useCommandPaletteStore } from "./command-palette.store";
-import { type ResolvedInput, resolveInputDetailed } from "./resolve-input";
+import {
+  type ProviderConfig,
+  type ResolvedInput,
+  getBuiltInPages,
+  resolveInputDetailed,
+} from "./resolve-input";
 
 export function CommandPaletteOverlay() {
   const open = useCommandPaletteStore((s) => s.open);
+  const settings = useSettingsStore((s) => s.settings);
+  const providerConfig = useMemo<ProviderConfig | undefined>(
+    () =>
+      settings
+        ? { providers: settings.searchProviders, defaultBang: settings.defaultSearchProviderId }
+        : undefined,
+    [settings],
+  );
   const inputRef = useRef<HTMLInputElement>(null);
   const triggerRef = useRef<Element | null>(null);
   const [visible, setVisible] = useState(false);
@@ -65,15 +79,31 @@ export function CommandPaletteOverlay() {
 
   const handleInputChange = () => {
     const value = inputRef.current?.value ?? "";
-    setResolution(resolveInputDetailed(value));
+    const trimmed = value.trim();
+    setResolution(resolveInputDetailed(value, providerConfig));
     setSelectedSuggestion(-1);
 
-    // Debounce suggestion search
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (value.trim().length >= 2) {
+
+    // "/" prefix → show only built-in pages (filtered by remainder)
+    if (trimmed.startsWith("/")) {
+      const filter = trimmed.toLowerCase();
+      const pages = getBuiltInPages()
+        .filter(
+          (p) =>
+            p.route.toLowerCase().includes(filter) ||
+            p.title.toLowerCase().includes(filter.slice(1)),
+        )
+        .map((p) => ({ url: p.route, title: p.title, visitCount: 0 }));
+      setSuggestions(pages);
+      return;
+    }
+
+    // Debounce suggestion search
+    if (trimmed.length >= 2) {
       debounceRef.current = setTimeout(() => {
         window.chiaroscuro
-          .sendCommand("command-palette:search-visits", { query: value.trim() })
+          .sendCommand("command-palette:search-visits", { query: trimmed })
           .then((results) => setSuggestions(results as Suggestion[]))
           .catch(() => setSuggestions([]));
       }, 150);

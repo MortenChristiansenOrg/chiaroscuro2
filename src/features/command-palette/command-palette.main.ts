@@ -3,6 +3,8 @@ import type { EventBus } from "../../bus/event-bus";
 import type { DataStore } from "../../data/types";
 import type { Platform } from "../../platform/types";
 import type { TabId, WindowId } from "../../shared/types";
+import type { SettingsChangedEvent, SettingsEvents } from "../settings/settings.shared";
+import { SETTINGS_CHANGED } from "../settings/settings.shared";
 import type { TabsCommands, TabsEvents } from "../tabs/tabs.shared";
 import { TABS_UPDATED } from "../tabs/tabs.shared";
 import {
@@ -16,17 +18,14 @@ import {
   type CommandPaletteCommands,
   type CommandPaletteEvents,
 } from "./command-palette.shared";
-import {
-  type SearchProvider,
-  resolveInput,
-  setDefaultProvider,
-  setProviders,
-} from "./resolve-input";
+import { type ProviderConfig, resolveInput } from "./resolve-input";
 import { initVisitTracking, recordVisit, searchVisits } from "./suggestions";
 
 type AllCommands = CommandPaletteCommands &
   Pick<TabsCommands, "tabs:activate" | "tabs:create" | "tabs:navigate">;
-type AllEvents = CommandPaletteEvents & Pick<TabsEvents, typeof TABS_UPDATED>;
+type AllEvents = CommandPaletteEvents &
+  Pick<TabsEvents, typeof TABS_UPDATED> &
+  Pick<SettingsEvents, typeof SETTINGS_CHANGED>;
 
 interface Deps {
   commands: CommandBus<AllCommands>;
@@ -46,9 +45,19 @@ export function register({
   getActiveTabId,
 }: Deps): void {
   let isOpen = false;
+  let providerConfig: ProviderConfig | undefined;
 
   // Initialize visit tracking
   initVisitTracking(dataStore);
+
+  // Cache provider config from settings events
+  events.on(SETTINGS_CHANGED, (payload) => {
+    const { settings } = payload as SettingsChangedEvent;
+    providerConfig = {
+      providers: settings.searchProviders,
+      defaultBang: settings.defaultSearchProviderId,
+    };
+  });
 
   // Track tab navigations for visit history
   events.on(TABS_UPDATED, (payload) => {
@@ -88,10 +97,13 @@ export function register({
   });
 
   commands.handle(COMMAND_PALETTE_EXECUTE, async (payload) => {
-    const url = resolveInput(payload.command);
+    const url = resolveInput(payload.command, providerConfig);
     if (!url) return;
 
-    if (payload.inCurrentTab) {
+    // Built-in pages always open via tabs:create (handles singleton + builtIn flag)
+    if (url.startsWith("app:")) {
+      await commands.send("tabs:create", { url });
+    } else if (payload.inCurrentTab) {
       const tabId = getActiveTabId();
       if (tabId) {
         await commands.send("tabs:navigate", { url });
@@ -120,11 +132,6 @@ export function register({
   });
 }
 
-export async function start({ dataStore }: Deps): Promise<void> {
-  // Load provider settings
-  const providers = await dataStore.getSetting<SearchProvider[]>("search-providers");
-  if (providers) setProviders(providers);
-
-  const defaultBang = await dataStore.getSetting<string>("default-search-provider");
-  if (defaultBang) setDefaultProvider(defaultBang);
+export async function start(_deps: Deps): Promise<void> {
+  // Provider config now comes from SETTINGS_CHANGED events — nothing to do here
 }

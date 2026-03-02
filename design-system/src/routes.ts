@@ -144,4 +144,10 @@ export const routes: Route[] = [
     group: "Components",
     component: lazy(() => import("./pages/components/web-content-host.mdx")),
   },
+  {
+    path: "/components/settings-page",
+    title: "Settings Page",
+    group: "Components",
+    component: lazy(() => import("./pages/components/settings-page.mdx")),
+  },
 ];

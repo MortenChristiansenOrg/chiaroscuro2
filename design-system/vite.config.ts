@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import mdx from "@mdx-js/rollup";
@@ -10,6 +11,9 @@ import remarkMdxFrontmatter from "remark-mdx-frontmatter";
 import { defineConfig } from "vite";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const _require = createRequire(import.meta.url);
+// Resolve actual node_modules root (may differ from project root in git worktrees)
+const nodeModulesRoot = resolve(dirname(_require.resolve("vite/package.json")), "../..");
 
 export default defineConfig({
   root: __dirname,
@@ -36,6 +40,9 @@ export default defineConfig({
   },
   server: {
     port: 5200,
+    fs: {
+      allow: [resolve(__dirname, ".."), nodeModulesRoot],
+    },
   },
   build: {
     outDir: resolve(__dirname, "dist"),

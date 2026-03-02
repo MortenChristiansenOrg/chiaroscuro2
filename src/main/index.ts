@@ -33,6 +33,11 @@ import type {
   PinnedTabsEvents,
 } from "../features/pinned-tabs/pinned-tabs.shared";
 import {
+  register as registerSettings,
+  start as startSettings,
+} from "../features/settings/settings.main";
+import type { SettingsCommands, SettingsEvents } from "../features/settings/settings.shared";
+import {
   register as registerSidebar,
   start as startSidebar,
 } from "../features/sidebar/sidebar.main";
@@ -75,6 +80,7 @@ type AllCommands = MergeRegistries<
     PinnedTabsCommands,
     SidebarCommands,
     CommandPaletteCommands,
+    SettingsCommands,
     TooltipCommands,
     ContextMenuCommands,
     FoldersCommands,
@@ -89,6 +95,7 @@ type AllEvents = MergeRegistries<
     PinnedTabsEvents,
     SidebarEvents,
     CommandPaletteEvents,
+    SettingsEvents,
     TooltipEvents,
     ContextMenuEvents,
     FoldersEvents,
@@ -166,6 +173,7 @@ app.whenReady().then(async () => {
   registerPinnedTabs(deps);
   registerSidebar(deps);
   registerCommandPalette(deps);
+  registerSettings(deps);
   registerTooltip(deps);
   registerContextMenu(deps);
   registerFolders(deps);
@@ -214,6 +222,7 @@ app.whenReady().then(async () => {
     startSidebar(deps);
     await startFolders(deps);
     await startCommandPalette(deps);
+    await startSettings(deps);
   });
 
   app.on("activate", () => {

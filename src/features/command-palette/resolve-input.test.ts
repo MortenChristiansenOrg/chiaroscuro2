@@ -1,20 +1,13 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_CONFIG,
   DEFAULT_PROVIDERS,
-  getProviders,
+  type ProviderConfig,
   resolveInput,
   resolveInputDetailed,
-  setDefaultProvider,
-  setProviders,
 } from "./resolve-input";
 
 describe("resolveInputDetailed", () => {
-  afterEach(() => {
-    // Reset to defaults
-    setProviders(DEFAULT_PROVIDERS);
-    setDefaultProvider("!d");
-  });
-
   it("empty input → type:empty", () => {
     expect(resolveInputDetailed("")).toEqual({ type: "empty" });
     expect(resolveInputDetailed("   ")).toEqual({ type: "empty" });
@@ -54,10 +47,10 @@ describe("resolveInputDetailed", () => {
     const result = resolveInputDetailed("hello world");
     expect(result).toMatchObject({
       type: "search",
-      provider: "DuckDuckGo",
+      provider: "Google",
       query: "hello world",
     });
-    expect((result as { url: string }).url).toContain("duckduckgo.com");
+    expect((result as { url: string }).url).toContain("google.com");
   });
 
   it("localhost:3000 → http://localhost:3000", () => {
@@ -75,11 +68,16 @@ describe("resolveInputDetailed", () => {
     expect(result).toEqual({ type: "url", url: "https://example.com" });
   });
 
+  it("/settings → built-in app:settings URL", () => {
+    const result = resolveInputDetailed("/settings");
+    expect(result).toEqual({ type: "url", url: "app:settings" });
+  });
+
   it("single word → default search", () => {
     const result = resolveInputDetailed("hello");
     expect(result).toMatchObject({
       type: "search",
-      provider: "DuckDuckGo",
+      provider: "Google",
       query: "hello",
     });
   });
@@ -89,30 +87,34 @@ describe("resolveInputDetailed", () => {
     // !xyz is not a known provider, but matches bang pattern — falls through
     // Since it has a space, it'll be a default search
     expect(result.type).toBe("search");
+    expect((result as { provider: string }).provider).toBe("Google");
+  });
+
+  it("custom providers via config", () => {
+    const config: ProviderConfig = {
+      providers: [{ bang: "!c", name: "Custom", urlTemplate: "https://custom.com/?q={query}" }],
+      defaultBang: "!c",
+    };
+    const result = resolveInputDetailed("!c test", config);
+    expect(result).toMatchObject({ type: "search", provider: "Custom" });
+  });
+
+  it("custom default provider via config", () => {
+    const config: ProviderConfig = {
+      providers: DEFAULT_PROVIDERS,
+      defaultBang: "!d",
+    };
+    const result = resolveInputDetailed("single word query", config);
     expect((result as { provider: string }).provider).toBe("DuckDuckGo");
   });
 
-  it("setProviders replaces providers", () => {
-    setProviders([{ bang: "!c", name: "Custom", urlTemplate: "https://custom.com/?q={query}" }]);
-    const result = resolveInputDetailed("!c test");
-    expect(result).toMatchObject({ type: "search", provider: "Custom" });
-
-    expect(getProviders()).toHaveLength(1);
-  });
-
-  it("setDefaultProvider changes default", () => {
-    setDefaultProvider("!g");
-    const result = resolveInputDetailed("single word query");
-    expect((result as { provider: string }).provider).toBe("Google");
+  it("uses DEFAULT_CONFIG when no config provided", () => {
+    expect(DEFAULT_CONFIG.providers).toBe(DEFAULT_PROVIDERS);
+    expect(DEFAULT_CONFIG.defaultBang).toBe("!g");
   });
 });
 
 describe("resolveInput (legacy)", () => {
-  afterEach(() => {
-    setProviders(DEFAULT_PROVIDERS);
-    setDefaultProvider("!d");
-  });
-
   it("returns URL string for search", () => {
     const url = resolveInput("!g test");
     expect(url).toBe("https://www.google.com/search?q=test");
@@ -120,5 +122,13 @@ describe("resolveInput (legacy)", () => {
 
   it("returns empty string for empty input", () => {
     expect(resolveInput("")).toBe("");
+  });
+
+  it("accepts config param", () => {
+    const config: ProviderConfig = {
+      providers: [{ bang: "!c", name: "Custom", urlTemplate: "https://custom.com/?q={query}" }],
+      defaultBang: "!c",
+    };
+    expect(resolveInput("test", config)).toBe("https://custom.com/?q=test");
   });
 });

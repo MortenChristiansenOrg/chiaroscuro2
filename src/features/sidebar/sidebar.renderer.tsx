@@ -182,6 +182,14 @@ function useWorkspaceSlide(activeWorkspaceId: WorkspaceId | null, workspaces: Wo
   return transition;
 }
 
+// ── Built-in page icons ─────────────────────────────────────────
+
+import type { FaSolidIcon } from "../../shared/fa-icons.generated";
+
+const builtInIcons: Record<string, FaSolidIcon> = {
+  "app:settings": "gear",
+};
+
 // ── Components ──────────────────────────────────────────────────
 
 function LetterAvatar({ label, hue }: { label: string; hue: number }) {
@@ -218,6 +226,15 @@ export function Favicon({ tab }: { tab: Pick<Tab, "favicon" | "title" | "url"> }
         style={{ width: 16, height: 16 }}
         onError={() => setImgFailed(true)}
       />
+    );
+  }
+
+  const builtInIcon = builtInIcons[tab.url];
+  if (builtInIcon) {
+    return (
+      <div className="shrink-0 flex items-center justify-center" style={{ width: 16, height: 16 }}>
+        <Icon name={builtInIcon} css={{ fontSize: 12, color: "var(--glass-text-muted)" }} />
+      </div>
     );
   }
 
