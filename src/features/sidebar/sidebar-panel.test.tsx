@@ -61,8 +61,9 @@ function getNav() {
 }
 
 function getOuterDiv() {
-  const el = getNav().parentElement;
-  if (!el) throw new Error("Sidebar nav has no parent element");
+  // Structure: outer (width/overflow) > inner (relative flex) > nav
+  const el = getNav().parentElement?.parentElement;
+  if (!el) throw new Error("Sidebar nav has no outer container");
   return el;
 }
 
@@ -89,7 +90,7 @@ describe("SidebarPanel", () => {
     it("has sidebar width when visible", () => {
       setStores({ visible: true });
       render(<SidebarPanel />);
-      expect(getOuterDiv().style.width).toBe("var(--sidebar-width)");
+      expect(getOuterDiv().style.width).toBe("240px");
     });
 
     it("has zero width when collapsed", () => {

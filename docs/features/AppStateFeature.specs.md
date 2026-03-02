@@ -4,21 +4,21 @@
 
 The App State feature remembers certain UI layout settings between app launches.
 
-This includes the size of the Sidebar panel, the tab palette, and the window position/size.
+This includes the size of the Sidebar panel and the window position/size.
 
 ## Terminology
 
 - **App state**: user UI preferences that are restored on startup.
 - **Sidebar width**: the width of the Sidebar panel.
-- **Tab palette width**: the width of the tab palette overlay panel.
 
 ## Requirements
 
+- The Sidebar panel must have a draggable resize handle on its right edge.
 - When the user resizes the Sidebar panel, the new width must be saved.
 - The saved Sidebar width must be restored on startup.
-- When the user resizes the tab palette, the new width must be saved.
-- The tab palette should remain closed until the user opens it, but it should use the previously saved width when shown.
 - Window position and size must be persisted and restored on startup.
+- Saves must be debounced to avoid excessive disk writes during resize drags.
+- App state is stored via `DataStore.setSetting()` (JSON key-value).
 
 ## Workflows
 
@@ -30,14 +30,9 @@ This includes the size of the Sidebar panel, the tab palette, and the window pos
 
 ### Resize and persist Sidebar
 
-- Resize the Sidebar panel.
-- When resizing completes, the new width is saved and used next time the app starts.
-
-### Resize and persist tab palette
-
-- Open the tab palette.
-- Resize the tab palette.
-- When resizing completes, the new width is saved and used the next time the tab palette opens.
+- Drag the Sidebar resize handle.
+- The Sidebar width updates in real time during the drag.
+- When the drag ends, the new width is saved (debounced).
 
 ## Interactions
 
@@ -47,21 +42,26 @@ None.
 
 ### Mouse interactions
 
-- **Resize Sidebar**: Drag the Sidebar resize handle.
-- **Resize tab palette**: Drag the tab palette resize handle.
+- **Resize Sidebar**: Drag the Sidebar resize handle on the right edge of the sidebar.
+
+### Cross-feature interactions
+
+- Listens to sidebar visibility events to know when sidebar is shown/hidden.
+- Provides restored sidebar width to the sidebar renderer via event on startup.
+- Tracks window bounds changes from the main process.
 
 ## Commands & Events
 
 ### Commands
 
 - `app-state:save` — Persist current app state to disk.
+- `app-state:set-sidebar-width` — Set sidebar width (from resize handle drag). Payload: `{ width: number }`.
 
 ### Events
 
-- `app-state:restored` — App state was restored on startup. Payload: `{ state: AppState }`.
+- `app-state:restored` — App state was restored on startup. Payload: `{ sidebarWidth: number; windowBounds: { x: number; y: number; width: number; height: number } }`.
+- `app-state:sidebar-width-changed` — Sidebar width changed. Payload: `{ width: number }`.
 
 ## Unresolved Issues
 
-- **Storage mechanism**: Should app state be stored in the SQLite database or in a separate JSON file? JSON is simpler for key-value layout data; SQLite is already used for structured data.
-- **Multi-window state**: If multiple windows are open, which window's position/size is saved? Should each window's state be tracked independently?
-- **Debouncing saves**: Resize events fire frequently. The save must be debounced to avoid excessive disk writes.
+- **Multi-window state**: If multiple windows are open, which window's position/size is saved? For now, save the last-focused window's bounds.
