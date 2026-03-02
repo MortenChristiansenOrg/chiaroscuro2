@@ -41,3 +41,7 @@ Always verify your work compiles and passes checks. Run `bun run verify` for a f
 
 Always browse the application to verify changes affecting the UI.
 Do not assume that CSS changes are correct without verifying.
+
+# Git
+
+For GitHub auth, export GH_TOKEN from .env.local. If not set, ask the user to do so.
