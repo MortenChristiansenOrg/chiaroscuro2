@@ -1,9 +1,6 @@
 /// <reference lib="dom" />
 import { ipcRenderer, webFrame } from "electron";
-
-const ZOOM_MIN = -3;
-const ZOOM_MAX = 3;
-const ZOOM_STEP = 1;
+import { ZOOM_MAX, ZOOM_MIN, ZOOM_STEP } from "../features/zoom/zoom.shared";
 
 // Capture Ctrl+wheel for zoom — the 'zoom-changed' webContents event
 // doesn't fire reliably in WebContentsView, so we handle zoom directly

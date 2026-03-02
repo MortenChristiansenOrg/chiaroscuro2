@@ -110,6 +110,7 @@ export class ElectronPlatform implements Platform {
   private ctxResolve: ((index: number) => void) | null = null;
   private ctxParentListenersSet = false;
   private permissionHandlerSet = false;
+  private zoomIpcHooked = false;
 
   constructor(private getActiveWindowId: () => WindowId | undefined) {}
 
@@ -201,15 +202,14 @@ export class ElectronPlatform implements Platform {
     // The tab preload applies Ctrl+wheel zoom via webFrame and sends
     // the resulting level here. We re-emit as a synthetic zoom-changed
     // event so the zoom feature can read the new level and update state.
-    const onZoomApplied = (event: Electron.IpcMainEvent): void => {
-      if (event.sender === view.webContents) {
-        view.webContents.emit("zoom-changed");
-      }
-    };
-    ipcMain.on("tab:zoom-applied", onZoomApplied);
-    view.webContents.once("destroyed", () => {
-      ipcMain.removeListener("tab:zoom-applied", onZoomApplied);
-    });
+    if (!this.zoomIpcHooked) {
+      ipcMain.on("tab:zoom-applied", (event: Electron.IpcMainEvent) => {
+        if (Array.from(this.views.values()).some((v) => v.webContents === event.sender)) {
+          event.sender.emit("zoom-changed");
+        }
+      });
+      this.zoomIpcHooked = true;
+    }
 
     if (!isAllowedUrl(url)) throw new Error(`Blocked URL scheme: ${url}`);
     view.webContents.loadURL(url);
@@ -336,7 +336,9 @@ export class ElectronPlatform implements Platform {
   /** Unregister all OS-level global shortcuts. */
   deactivateShortcuts(): void {
     if (!this.shortcutsActive) return;
-    globalShortcut.unregisterAll();
+    for (const accelerator of this.shortcuts.keys()) {
+      globalShortcut.unregister(accelerator);
+    }
     this.shortcutsActive = false;
   }
 
