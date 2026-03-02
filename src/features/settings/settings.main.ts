@@ -69,9 +69,11 @@ export function register({ commands, events, dataStore }: Deps): void {
 
   commands.handle(SETTINGS_SAVE, async (payload) => {
     currentSettings = { ...payload };
-    await dataStore.setSetting("search-providers", payload.searchProviders);
-    await dataStore.setSetting("default-search-provider", payload.defaultSearchProviderId);
     events.emit(SETTINGS_CHANGED, { settings: { ...currentSettings } });
+    dataStore.setSetting("search-providers", payload.searchProviders).catch(console.error);
+    dataStore
+      .setSetting("default-search-provider", payload.defaultSearchProviderId)
+      .catch(console.error);
   });
 }
 

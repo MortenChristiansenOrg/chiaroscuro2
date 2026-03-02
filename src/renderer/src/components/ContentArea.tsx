@@ -4,16 +4,15 @@ import { BuiltInPage } from "./BuiltInPage";
 
 export function ContentArea() {
   const ref = useRef<HTMLDivElement>(null);
-  const pendingRaf = useRef(false);
+  const rafId = useRef<number | null>(null);
   const activeTabId = useTabsStore((s) => s.activeTabId);
   const activeTab = useTabsStore((s) => (s.activeTabId ? s.tabs.get(s.activeTabId) : undefined));
   const isBuiltIn = activeTab?.builtIn === true;
 
   const reportBounds = useCallback(() => {
-    if (pendingRaf.current) return;
-    pendingRaf.current = true;
-    requestAnimationFrame(() => {
-      pendingRaf.current = false;
+    if (rafId.current !== null) return;
+    rafId.current = requestAnimationFrame(() => {
+      rafId.current = null;
       const el = ref.current;
       if (!el) return;
       const rect = el.getBoundingClientRect();
@@ -41,6 +40,10 @@ export function ContentArea() {
     if (!el) return;
 
     if (isBuiltIn) {
+      if (rafId.current !== null) {
+        cancelAnimationFrame(rafId.current);
+        rafId.current = null;
+      }
       reportZeroBounds();
       return;
     }
@@ -51,6 +54,10 @@ export function ContentArea() {
     reportBounds();
 
     return () => {
+      if (rafId.current !== null) {
+        cancelAnimationFrame(rafId.current);
+        rafId.current = null;
+      }
       observer.disconnect();
       window.removeEventListener("resize", reportBounds);
     };

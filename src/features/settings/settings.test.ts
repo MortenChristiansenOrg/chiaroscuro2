@@ -115,12 +115,16 @@ describe("settings commands", () => {
       await commands.send(SETTINGS_OPEN, undefined);
 
       // Second open should activate, not create
+      commands.unhandle("tabs:create");
+      const createSpy = vi.fn(async () => "builtin-2" as TabId);
+      commands.handle("tabs:create", createSpy);
       commands.unhandle("tabs:activate");
       const activateSpy = vi.fn(async () => {});
       commands.handle("tabs:activate", activateSpy);
 
       await commands.send(SETTINGS_OPEN, undefined);
       expect(activateSpy).toHaveBeenCalled();
+      expect(createSpy).not.toHaveBeenCalled();
     });
 
     it("creates new tab if singleton tab was closed", async () => {

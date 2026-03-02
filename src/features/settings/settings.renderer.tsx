@@ -299,9 +299,19 @@ function SettingsContent({
           >
             <ProviderEditor
               providers={settings.searchProviders}
-              onChange={(providers) =>
-                onSettingsChange({ ...settings, searchProviders: providers })
-              }
+              onChange={(providers) => {
+                const hasDefault = providers.some(
+                  (p) => p.bang === settings.defaultSearchProviderId,
+                );
+                const fallbackDefault = providers.find((p) => p.bang)?.bang ?? "";
+                onSettingsChange({
+                  ...settings,
+                  searchProviders: providers,
+                  defaultSearchProviderId: hasDefault
+                    ? settings.defaultSearchProviderId
+                    : fallbackDefault,
+                });
+              }}
             />
           </SettingItem>
 
