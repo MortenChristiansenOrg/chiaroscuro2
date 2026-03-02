@@ -3,7 +3,7 @@ import { CommandBus } from "../../bus/command-bus";
 import { EventBus } from "../../bus/event-bus";
 import { MemoryDataStore } from "../../data/memory-store";
 import type { TabId, WorkspaceId } from "../../shared/types";
-import { DEFAULT_PROVIDERS, getProviders } from "../command-palette/resolve-input";
+import { DEFAULT_PROVIDERS } from "../command-palette/resolve-input";
 import type { TabsClosedEvent, TabsCommands, TabsEvents } from "../tabs/tabs.shared";
 import { register, start } from "./settings.main";
 import {
@@ -79,19 +79,6 @@ describe("settings commands", () => {
       const saved = await commands.send(SETTINGS_GET, undefined);
       expect(saved.searchProviders).toEqual(newSettings.searchProviders);
       expect(saved.defaultSearchProviderId).toBe("!test");
-    });
-
-    it("updates command-palette providers", async () => {
-      const { commands } = setup();
-      const newSettings: Settings = {
-        searchProviders: [
-          { bang: "!custom", name: "Custom", urlTemplate: "https://custom.com?q={query}" },
-        ],
-        defaultSearchProviderId: "!custom",
-      };
-
-      await commands.send(SETTINGS_SAVE, newSettings);
-      expect(getProviders()).toEqual(newSettings.searchProviders);
     });
 
     it("persists to data store", async () => {

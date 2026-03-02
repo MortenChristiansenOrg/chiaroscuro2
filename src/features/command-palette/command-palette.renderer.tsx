@@ -1,10 +1,24 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useSettingsStore } from "../settings/settings.store";
 import type { Suggestion } from "./command-palette.shared";
 import { useCommandPaletteStore } from "./command-palette.store";
-import { type ResolvedInput, getBuiltInPages, resolveInputDetailed } from "./resolve-input";
+import {
+  type ProviderConfig,
+  type ResolvedInput,
+  getBuiltInPages,
+  resolveInputDetailed,
+} from "./resolve-input";
 
 export function CommandPaletteOverlay() {
   const open = useCommandPaletteStore((s) => s.open);
+  const settings = useSettingsStore((s) => s.settings);
+  const providerConfig = useMemo<ProviderConfig | undefined>(
+    () =>
+      settings
+        ? { providers: settings.searchProviders, defaultBang: settings.defaultSearchProviderId }
+        : undefined,
+    [settings],
+  );
   const inputRef = useRef<HTMLInputElement>(null);
   const triggerRef = useRef<Element | null>(null);
   const [visible, setVisible] = useState(false);
@@ -66,7 +80,7 @@ export function CommandPaletteOverlay() {
   const handleInputChange = () => {
     const value = inputRef.current?.value ?? "";
     const trimmed = value.trim();
-    setResolution(resolveInputDetailed(value));
+    setResolution(resolveInputDetailed(value, providerConfig));
     setSelectedSuggestion(-1);
 
     if (debounceRef.current) clearTimeout(debounceRef.current);

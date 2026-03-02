@@ -2,12 +2,7 @@ import type { CommandBus } from "../../bus/command-bus";
 import type { EventBus } from "../../bus/event-bus";
 import type { DataStore } from "../../data/types";
 import type { TabId } from "../../shared/types";
-import {
-  DEFAULT_PROVIDERS,
-  type SearchProvider,
-  setDefaultProvider,
-  setProviders,
-} from "../command-palette/resolve-input";
+import { DEFAULT_PROVIDERS, type SearchProvider } from "../command-palette/resolve-input";
 import {
   TABS_CLOSED,
   type TabsClosedEvent,
@@ -44,11 +39,6 @@ function getDefaultSettings(): Settings {
   };
 }
 
-function applyToCommandPalette(settings: Settings): void {
-  setProviders(settings.searchProviders);
-  setDefaultProvider(settings.defaultSearchProviderId);
-}
-
 export function register({ commands, events, dataStore }: Deps): void {
   settingsTabId = undefined;
   currentSettings = getDefaultSettings();
@@ -81,7 +71,6 @@ export function register({ commands, events, dataStore }: Deps): void {
     currentSettings = { ...payload };
     await dataStore.setSetting("search-providers", payload.searchProviders);
     await dataStore.setSetting("default-search-provider", payload.defaultSearchProviderId);
-    applyToCommandPalette(currentSettings);
     events.emit(SETTINGS_CHANGED, { settings: { ...currentSettings } });
   });
 }
@@ -94,6 +83,5 @@ export async function start({ events, dataStore }: Deps): Promise<void> {
   const defaultBang = await dataStore.getSetting<string>("default-search-provider");
   if (defaultBang) currentSettings.defaultSearchProviderId = defaultBang;
 
-  applyToCommandPalette(currentSettings);
   events.emit(SETTINGS_CHANGED, { settings: { ...currentSettings } });
 }

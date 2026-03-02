@@ -47,34 +47,15 @@ export const DEFAULT_PROVIDERS: SearchProvider[] = [
   },
 ];
 
-let _providers: SearchProvider[] = DEFAULT_PROVIDERS;
-let _defaultProviderBang = "!g";
-
-export function setProviders(providers: SearchProvider[]): void {
-  _providers = providers;
+export interface ProviderConfig {
+  providers: SearchProvider[];
+  defaultBang: string;
 }
 
-export function setDefaultProvider(bang: string): void {
-  _defaultProviderBang = bang;
-}
-
-export function getProviders(): SearchProvider[] {
-  return _providers;
-}
-
-function findProvider(bang: string): SearchProvider | undefined {
-  return _providers.find((p) => p.bang === bang);
-}
-
-function getDefaultProvider(): SearchProvider {
-  return (findProvider(_defaultProviderBang) ??
-    _providers[0] ??
-    DEFAULT_PROVIDERS[0]) as SearchProvider;
-}
-
-function buildSearchUrl(provider: SearchProvider, query: string): string {
-  return provider.urlTemplate.replace("{query}", encodeURIComponent(query));
-}
+export const DEFAULT_CONFIG: ProviderConfig = {
+  providers: DEFAULT_PROVIDERS,
+  defaultBang: "!g",
+};
 
 // ── Built-in pages ──────────────────────────────────────────────
 
@@ -102,9 +83,20 @@ export function getBuiltInPages(): BuiltInPage[] {
  * Resolve a raw command-palette input string into a typed resolution.
  * Returns the resolution type + metadata for UI feedback.
  */
-export function resolveInputDetailed(input: string): ResolvedInput {
+export function resolveInputDetailed(
+  input: string,
+  config: ProviderConfig = DEFAULT_CONFIG,
+): ResolvedInput {
   const trimmed = input.trim();
   if (!trimmed) return { type: "empty" };
+
+  const findProvider = (bang: string) => config.providers.find((p) => p.bang === bang);
+  const buildUrl = (p: SearchProvider, q: string) =>
+    p.urlTemplate.replace("{query}", encodeURIComponent(q));
+  const getDefault = () =>
+    (findProvider(config.defaultBang) ??
+      config.providers[0] ??
+      DEFAULT_PROVIDERS[0]) as SearchProvider;
 
   // Built-in page route
   const builtInUrl = builtInRoutes[trimmed];
@@ -119,7 +111,7 @@ export function resolveInputDetailed(input: string): ResolvedInput {
         type: "search",
         provider: provider.name,
         query: bangStartMatch[2],
-        url: buildSearchUrl(provider, bangStartMatch[2]),
+        url: buildUrl(provider, bangStartMatch[2]),
       };
     }
   }
@@ -133,7 +125,7 @@ export function resolveInputDetailed(input: string): ResolvedInput {
         type: "search",
         provider: provider.name,
         query: bangEndMatch[1],
-        url: buildSearchUrl(provider, bangEndMatch[1]),
+        url: buildUrl(provider, bangEndMatch[1]),
       };
     }
   }
@@ -145,12 +137,12 @@ export function resolveInputDetailed(input: string): ResolvedInput {
 
   // Contains a space → search (unless matched by bang above)
   if (trimmed.includes(" ")) {
-    const dp = getDefaultProvider();
+    const dp = getDefault();
     return {
       type: "search",
       provider: dp.name,
       query: trimmed,
-      url: buildSearchUrl(dp, trimmed),
+      url: buildUrl(dp, trimmed),
     };
   }
 
@@ -165,20 +157,20 @@ export function resolveInputDetailed(input: string): ResolvedInput {
   }
 
   // Default: search
-  const dp = getDefaultProvider();
+  const dp = getDefault();
   return {
     type: "search",
     provider: dp.name,
     query: trimmed,
-    url: buildSearchUrl(dp, trimmed),
+    url: buildUrl(dp, trimmed),
   };
 }
 
 /**
  * Legacy API — returns the resolved URL string.
  */
-export function resolveInput(input: string): string {
-  const result = resolveInputDetailed(input);
+export function resolveInput(input: string, config: ProviderConfig = DEFAULT_CONFIG): string {
+  const result = resolveInputDetailed(input, config);
   if (result.type === "empty") return "";
   return result.url;
 }
