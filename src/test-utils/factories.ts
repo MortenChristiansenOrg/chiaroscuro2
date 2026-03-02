@@ -15,6 +15,7 @@ export function makeTab(overrides: Partial<Tab> = {}): Tab {
     lastAccessedAt: 0,
     createdAt: 0,
     order: 0,
+    folderId: null,
     ...overrides,
   };
 }

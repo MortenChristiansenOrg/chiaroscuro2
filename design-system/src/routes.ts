@@ -109,6 +109,12 @@ export const routes: Route[] = [
     component: lazy(() => import("./pages/components/address-bar.mdx")),
   },
   {
+    path: "/components/context-menu",
+    title: "Context Menu",
+    group: "Components",
+    component: lazy(() => import("./pages/components/context-menu.mdx")),
+  },
+  {
     path: "/components/tooltips",
     title: "Tooltips",
     group: "Components",

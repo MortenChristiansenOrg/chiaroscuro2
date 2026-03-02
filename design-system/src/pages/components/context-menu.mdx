@@ -1,0 +1,144 @@
+---
+title: Context Menu
+---
+
+# Context Menu
+
+Right-click overlay for contextual actions on tabs, folders, and sidebar empty space. Rendered in a native BrowserWindow overlay (above WebContentsViews).
+
+## Anatomy
+
+1. **Overlay window** — frameless, transparent child BrowserWindow
+2. **Menu container** — styled `div` inside the overlay
+3. **Menu items** — text-only rows with hover highlight
+
+No icons (native overlay has no FA), no backdrop scrim, no dividers, no submenus.
+
+---
+
+## Visual Specs
+
+### Menu Container
+
+| Property | Token/Value |
+|----------|-------------|
+| Background | `rgb(28, 28, 28, 0.92)` |
+| Backdrop filter | `blur(20px)` |
+| Border | `inset 0 0 0 1px rgba(255,255,255,0.08)` (via box-shadow) |
+| Border radius | `8px` |
+| Box shadow | elevated |
+| Min width | `160px` |
+| Padding | `4px 0` |
+
+### Menu Item
+
+| Property | Token/Value |
+|----------|-------------|
+| Padding | `6px 12px` |
+| Margin | `0 4px` |
+| Border radius | `6px` |
+| Font family | `system-ui` |
+| Font size | `13px` |
+| Font weight | 500 |
+| Letter spacing | `0.01em` |
+| Color | `rgb(224, 224, 224)` |
+
+---
+
+## States
+
+### Menu Item States
+
+| State | Background | Text | Trigger |
+|-------|-----------|------|---------|
+| Default | transparent | `rgb(224, 224, 224)` | — |
+| Hover | `rgba(255, 255, 255, 0.1)` | `rgb(224, 224, 224)` | pointer hover |
+| Active/pressed | `rgba(255, 255, 255, 0.15)` | `rgb(224, 224, 224)` | mousedown |
+| Disabled | transparent | `rgba(210, 210, 210, 0.35)` | `disabled: true` |
+
+Disabled items ignore clicks via `pointer-events: none`.
+
+---
+
+## Behavior
+
+- **Open:** right-click (`contextmenu` event) on a supported element
+- **Close:** click outside (blur), Escape key, parent window move/resize
+- **Position:** appears at cursor (renderer `clientX/Y` → main process screen coords)
+- **Edge clamping:** repositions if menu overflows parent window bounds (6px margin)
+- **Measured before shown:** items rendered via `executeJavaScript`, size measured, then window positioned and shown
+- **No nesting:** only one context menu open at a time
+
+### Context-Dependent Items
+
+| Target | Items |
+|--------|-------|
+| Bookmarked tab | Remove bookmark, Pin tab |
+| Ephemeral tab | Bookmark, Pin tab |
+| Pinned tab (strip) | Unpin tab, Close tab |
+| Pinned tab (inline) | Unpin tab, Close tab |
+| Folder header | Add subfolder |
+| Sidebar empty area | Add folder |
+
+---
+
+## Animation
+
+- **Enter:** `ci` keyframe — `120ms ease`, scale `0.96 → 1`, opacity `0 → 1`
+- **Exit:** window hidden instantly (no exit animation in native overlay)
+
+---
+
+## Keyboard & Focus
+
+- **Blur:** closes the context menu (click anywhere outside)
+- **No tab navigation:** menu items are not focusable (click-only interaction)
+
+---
+
+## Architecture
+
+The context menu uses a native overlay pattern (same as tooltips) to render above WebContentsViews:
+
+1. Renderer calls `sendCommand("context-menu:show", { items, x, y })`
+2. Main process renders items in overlay BrowserWindow via `executeJavaScript`
+3. Overlay shown, awaits click selection or blur dismiss
+4. Command response returns selected index (`-1` for dismiss)
+5. Renderer invokes the stored callback at that index
+
+---
+
+## API
+
+```tsx
+const { open, portal } = useContextMenu();
+
+// In a handler:
+const handleContextMenu = (e: React.MouseEvent) => {
+  open([
+    { label: "Pin tab", onSelect: () => { ... } },
+    { label: "Close tab", onSelect: () => { ... } },
+  ], e);
+};
+
+// In JSX (portal is null, kept for API compat):
+<div onContextMenu={handleContextMenu}>...</div>
+{portal}
+```
+
+### `ContextMenuItem`
+
+| Prop | Type | Description |
+|------|------|-------------|
+| `label` | `string` | Display text |
+| `icon` | `string?` | Ignored in native overlay (reserved for future) |
+| `disabled` | `boolean?` | Grayed out, non-interactive |
+| `onSelect` | `() => void` | Callback when clicked |
+
+---
+
+## Related
+
+- [Tooltips](/components/tooltips) — shares native overlay pattern
+- [Sidebar](/components/sidebar) — primary consumer of context menus
+- [Tabs](/components/tabs) — tab items have contextual actions

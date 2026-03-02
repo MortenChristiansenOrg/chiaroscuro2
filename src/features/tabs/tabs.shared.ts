@@ -1,4 +1,4 @@
-import type { Bounds, TabId, WorkspaceId } from "../../shared/types";
+import type { Bounds, FolderId, TabId, WorkspaceId } from "../../shared/types";
 
 // ── Command names ────────────────────────────────────────────────
 export const TABS_CREATE = "tabs:create" as const;
@@ -30,6 +30,7 @@ export interface Tab {
   lastAccessedAt: number;
   createdAt: number;
   order: number;
+  folderId: FolderId | null;
 }
 
 /** Shape persisted to DataStore (no transient fields like loading). */
@@ -43,6 +44,7 @@ export interface PersistedTab {
   lastAccessedAt: number;
   createdAt: number;
   order: number;
+  folderId: string | null;
 }
 
 // ── Payload types ────────────────────────────────────────────────
@@ -80,6 +82,8 @@ export interface TabsReorderPayload {
   targetTabId?: TabId;
   /** Where to insert relative to targetTabId. Defaults to "before". */
   position?: "before" | "after";
+  /** Target folder to drop into. Omit to place at root level. */
+  targetFolderId?: FolderId | null;
 }
 
 export interface TabsCreatedEvent {

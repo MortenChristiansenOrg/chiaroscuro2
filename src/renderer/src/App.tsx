@@ -4,6 +4,7 @@ import "../../features/tabs/tabs.feature";
 import "../../features/workspaces/workspaces.feature";
 import "../../features/sidebar/sidebar.feature";
 import "../../features/pinned-tabs/pinned-tabs.feature";
+import "../../features/folders/folders.feature";
 import "../../features/command-palette/command-palette.feature";
 import "../../features/settings/settings.feature";
 
