@@ -30,6 +30,10 @@ export interface Platform {
   canGoBack(tabId: TabId): boolean;
   canGoForward(tabId: TabId): boolean;
 
+  // Zoom
+  setTabZoomLevel(tabId: TabId, level: number): void;
+  getTabZoomLevel(tabId: TabId): number;
+
   // Keyboard shortcuts
   registerShortcut(accelerator: string, callback: () => void): void;
   unregisterShortcut(accelerator: string): void;

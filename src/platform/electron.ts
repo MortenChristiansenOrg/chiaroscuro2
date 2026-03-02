@@ -1,51 +1,15 @@
-import { BrowserWindow, WebContentsView, clipboard, shell } from "electron";
+import path from "node:path";
+import {
+  BrowserWindow,
+  WebContentsView,
+  clipboard,
+  globalShortcut,
+  ipcMain,
+  shell,
+} from "electron";
 import type { TabId, WindowId } from "../shared/types";
 import type { Bounds } from "../shared/types";
 import type { Platform } from "./types";
-
-interface ParsedAccelerator {
-  ctrl: boolean;
-  shift: boolean;
-  alt: boolean;
-  meta: boolean;
-  key: string;
-}
-
-function parseAccelerator(accelerator: string): ParsedAccelerator {
-  const parts = accelerator.toLowerCase().split("+");
-  const result: ParsedAccelerator = { ctrl: false, shift: false, alt: false, meta: false, key: "" };
-  for (const part of parts) {
-    switch (part) {
-      case "commandorcontrol":
-      case "cmdorctrl":
-        if (process.platform === "darwin") {
-          result.meta = true;
-        } else {
-          result.ctrl = true;
-        }
-        break;
-      case "control":
-      case "ctrl":
-        result.ctrl = true;
-        break;
-      case "shift":
-        result.shift = true;
-        break;
-      case "alt":
-        result.alt = true;
-        break;
-      case "meta":
-      case "command":
-      case "cmd":
-      case "super":
-        result.meta = true;
-        break;
-      default:
-        result.key = part;
-    }
-  }
-  return result;
-}
 
 const ALLOWED_SCHEMES = new Set(["http:", "https:", "about:", "data:"]);
 const ALLOWED_EXTERNAL_SCHEMES = new Set(["http:", "https:", "mailto:"]);
@@ -66,18 +30,6 @@ function isAllowedExternalUrl(url: string): boolean {
   } catch {
     return false;
   }
-}
-
-function matchesInput(parsed: ParsedAccelerator, input: Electron.Input): boolean {
-  if (input.type !== "keyDown") return false;
-  const key = input.key.toLowerCase();
-  return (
-    key === parsed.key &&
-    input.control === parsed.ctrl &&
-    input.shift === parsed.shift &&
-    input.alt === parsed.alt &&
-    input.meta === parsed.meta
-  );
 }
 
 // Minimal HTML for the tooltip popup — transparent bg, matching app styling
@@ -151,13 +103,14 @@ function awaitSelection(){
 </script></body></html>`;
 
 export class ElectronPlatform implements Platform {
-  private shortcuts = new Map<string, { parsed: ParsedAccelerator; callback: () => void }>();
+  private shortcuts = new Map<string, () => void>();
   private views = new Map<TabId, WebContentsView>();
   private tooltipWin: BrowserWindow | null = null;
   private ctxWin: BrowserWindow | null = null;
   private ctxResolve: ((index: number) => void) | null = null;
   private ctxParentListenersSet = false;
   private permissionHandlerSet = false;
+  private zoomIpcHooked = false;
 
   constructor(private getActiveWindowId: () => WindowId | undefined) {}
 
@@ -214,6 +167,7 @@ export class ElectronPlatform implements Platform {
         contextIsolation: true,
         nodeIntegration: false,
         webSecurity: true,
+        preload: path.join(__dirname, "../preload/tab.js"),
       },
     });
 
@@ -244,6 +198,18 @@ export class ElectronPlatform implements Platform {
     });
 
     this.hookWebContents(view.webContents);
+
+    // The tab preload applies Ctrl+wheel zoom via webFrame and sends
+    // the resulting level here. We re-emit as a synthetic zoom-changed
+    // event so the zoom feature can read the new level and update state.
+    if (!this.zoomIpcHooked) {
+      ipcMain.on("tab:zoom-applied", (event: Electron.IpcMainEvent) => {
+        if (Array.from(this.views.values()).some((v) => v.webContents === event.sender)) {
+          event.sender.emit("zoom-changed");
+        }
+      });
+      this.zoomIpcHooked = true;
+    }
 
     if (!isAllowedUrl(url)) throw new Error(`Blocked URL scheme: ${url}`);
     view.webContents.loadURL(url);
@@ -337,6 +303,16 @@ export class ElectronPlatform implements Platform {
     return this.views.get(tabId)?.webContents.canGoForward() ?? false;
   }
 
+  // ── Zoom ──────────────────────────────────────────────────────
+
+  setTabZoomLevel(tabId: TabId, level: number): void {
+    this.views.get(tabId)?.webContents.setZoomLevel(level);
+  }
+
+  getTabZoomLevel(tabId: TabId): number {
+    return this.views.get(tabId)?.webContents.getZoomLevel() ?? 0;
+  }
+
   // ── Focus ──────────────────────────────────────────────────────
 
   focusShell(windowId?: WindowId): void {
@@ -344,30 +320,44 @@ export class ElectronPlatform implements Platform {
     if (win) win.webContents.focus();
   }
 
-  // ── Keyboard shortcuts ──────────────────────────────────────────
+  // ── Keyboard shortcuts (via globalShortcut, toggled on focus/blur) ──
+
+  private shortcutsActive = false;
+
+  /** Register all stored shortcuts as OS-level global shortcuts. */
+  activateShortcuts(): void {
+    if (this.shortcutsActive) return;
+    for (const [accelerator, callback] of this.shortcuts) {
+      globalShortcut.register(accelerator, callback);
+    }
+    this.shortcutsActive = true;
+  }
+
+  /** Unregister all OS-level global shortcuts. */
+  deactivateShortcuts(): void {
+    if (!this.shortcutsActive) return;
+    for (const accelerator of this.shortcuts.keys()) {
+      globalShortcut.unregister(accelerator);
+    }
+    this.shortcutsActive = false;
+  }
 
   registerShortcut(accelerator: string, callback: () => void): void {
-    this.shortcuts.set(accelerator, {
-      parsed: parseAccelerator(accelerator),
-      callback,
-    });
+    this.shortcuts.set(accelerator, callback);
+    if (this.shortcutsActive) {
+      globalShortcut.register(accelerator, callback);
+    }
   }
 
   unregisterShortcut(accelerator: string): void {
     this.shortcuts.delete(accelerator);
+    if (this.shortcutsActive) {
+      globalShortcut.unregister(accelerator);
+    }
   }
 
-  hookWebContents(webContents: unknown): void {
-    const wc = webContents as Electron.WebContents;
-    wc.on("before-input-event", (event, input) => {
-      for (const { parsed, callback } of this.shortcuts.values()) {
-        if (matchesInput(parsed, input)) {
-          event.preventDefault();
-          callback();
-          return;
-        }
-      }
-    });
+  hookWebContents(_webContents: unknown): void {
+    // No-op: shortcuts handled via globalShortcut
   }
 
   // ── Tooltip overlay ────────────────────────────────────────────

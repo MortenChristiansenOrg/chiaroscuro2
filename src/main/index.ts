@@ -58,11 +58,12 @@ import {
   register as registerWorkspaces,
   start as startWorkspaces,
 } from "../features/workspaces/workspaces.main";
-import { getAllWorkspaces } from "../features/workspaces/workspaces.main";
 import type {
   WorkspacesCommands,
   WorkspacesEvents,
 } from "../features/workspaces/workspaces.shared";
+import { register as registerZoom } from "../features/zoom/zoom.main";
+import type { ZoomCommands, ZoomEvents } from "../features/zoom/zoom.shared";
 import { ElectronPlatform } from "../platform/electron";
 import type { TabId, WindowId, WorkspaceId } from "../shared/types";
 
@@ -84,6 +85,7 @@ type AllCommands = MergeRegistries<
     TooltipCommands,
     ContextMenuCommands,
     FoldersCommands,
+    ZoomCommands,
   ]
 >;
 
@@ -99,6 +101,7 @@ type AllEvents = MergeRegistries<
     TooltipEvents,
     ContextMenuEvents,
     FoldersEvents,
+    ZoomEvents,
   ]
 >;
 
@@ -177,32 +180,7 @@ app.whenReady().then(async () => {
   registerTooltip(deps);
   registerContextMenu(deps);
   registerFolders(deps);
-
-  // ── Global keyboard shortcuts ──────────────────────────────────
-  // Ctrl+W: Close current tab
-  platform.registerShortcut("CommandOrControl+W", () => {
-    const tabId = deps.getActiveTabId();
-    if (tabId) commands.send("tabs:close", { tabId }).catch(console.error);
-  });
-
-  // Ctrl+1..9: Switch to workspace N
-  for (let n = 1; n <= 9; n++) {
-    platform.registerShortcut(`CommandOrControl+${n}`, () => {
-      const all = getAllWorkspaces();
-      const ws = all[n - 1];
-      if (ws) commands.send("workspaces:switch", { workspaceId: ws.id }).catch(console.error);
-    });
-  }
-
-  // Ctrl+Shift+1..9: Move current tab to workspace N
-  for (let n = 1; n <= 9; n++) {
-    platform.registerShortcut(`CommandOrControl+Shift+${n}`, () => {
-      const all = getAllWorkspaces();
-      const ws = all[n - 1];
-      if (ws)
-        commands.send("workspaces:move-tab", { targetWorkspaceId: ws.id }).catch(console.error);
-    });
-  }
+  registerZoom(deps);
 
   // Bridge bus to IPC (once, before any window creation)
   bridgeBusToIpc(commands, events, () => BrowserWindow.getAllWindows());
@@ -212,6 +190,17 @@ app.whenReady().then(async () => {
     platform.initTooltipOverlay(activeWindowId);
     platform.initContextMenuOverlay(activeWindowId);
   }
+
+  // Activate keyboard shortcuts immediately (window is focused on creation)
+  // and toggle on focus/blur so they don't intercept keys from other apps.
+  platform.activateShortcuts();
+  app.on("browser-window-focus", () => platform.activateShortcuts());
+  app.on("browser-window-blur", () => {
+    // Small delay: focus may transfer between app windows (e.g. context menu)
+    setTimeout(() => {
+      if (!BrowserWindow.getFocusedWindow()) platform.deactivateShortcuts();
+    }, 100);
+  });
 
   // Phase 2: wait for renderer subscriptions, then emit initial state
   ipcMain.once("renderer:ready", async () => {
@@ -233,6 +222,7 @@ app.whenReady().then(async () => {
 });
 
 app.on("before-quit", () => {
+  platform.deactivateShortcuts();
   dataStore.destroy().catch(console.error);
 });
 
