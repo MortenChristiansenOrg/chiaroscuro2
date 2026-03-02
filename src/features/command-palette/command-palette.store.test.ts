@@ -36,7 +36,7 @@ describe("command-palette.store", () => {
   it("unsub removes all listeners", () => {
     const { handlers, onEvent } = setupEventBus();
     const unsub = subscribeToEvents(onEvent);
-    expect(handlers.size).toBe(2);
+    expect(handlers.size).toBe(3);
 
     unsub();
     expect(handlers.size).toBe(0);
