@@ -1,55 +1,15 @@
 import path from "node:path";
-import { BrowserWindow, WebContentsView, clipboard, ipcMain, shell } from "electron";
+import {
+  BrowserWindow,
+  WebContentsView,
+  clipboard,
+  globalShortcut,
+  ipcMain,
+  shell,
+} from "electron";
 import type { TabId, WindowId } from "../shared/types";
 import type { Bounds } from "../shared/types";
 import type { Platform } from "./types";
-
-interface ParsedAccelerator {
-  ctrl: boolean;
-  shift: boolean;
-  alt: boolean;
-  meta: boolean;
-  key: string;
-}
-
-function parseAccelerator(accelerator: string): ParsedAccelerator {
-  const parts = accelerator.toLowerCase().split("+");
-  const result: ParsedAccelerator = { ctrl: false, shift: false, alt: false, meta: false, key: "" };
-  for (const part of parts) {
-    switch (part) {
-      case "commandorcontrol":
-      case "cmdorctrl":
-        if (process.platform === "darwin") {
-          result.meta = true;
-        } else {
-          result.ctrl = true;
-        }
-        break;
-      case "control":
-      case "ctrl":
-        result.ctrl = true;
-        break;
-      case "shift":
-        result.shift = true;
-        break;
-      case "alt":
-        result.alt = true;
-        break;
-      case "meta":
-      case "command":
-      case "cmd":
-      case "super":
-        result.meta = true;
-        break;
-      case "plus":
-        result.key = "+";
-        break;
-      default:
-        result.key = part;
-    }
-  }
-  return result;
-}
 
 const ALLOWED_SCHEMES = new Set(["http:", "https:", "about:", "data:"]);
 const ALLOWED_EXTERNAL_SCHEMES = new Set(["http:", "https:", "mailto:"]);
@@ -70,18 +30,6 @@ function isAllowedExternalUrl(url: string): boolean {
   } catch {
     return false;
   }
-}
-
-function matchesInput(parsed: ParsedAccelerator, input: Electron.Input): boolean {
-  if (input.type !== "keyDown") return false;
-  const key = input.key.toLowerCase();
-  return (
-    key === parsed.key &&
-    input.control === parsed.ctrl &&
-    input.shift === parsed.shift &&
-    input.alt === parsed.alt &&
-    input.meta === parsed.meta
-  );
 }
 
 // Minimal HTML for the tooltip popup — transparent bg, matching app styling
@@ -155,7 +103,7 @@ function awaitSelection(){
 </script></body></html>`;
 
 export class ElectronPlatform implements Platform {
-  private shortcuts = new Map<string, { parsed: ParsedAccelerator; callback: () => void }>();
+  private shortcuts = new Map<string, () => void>();
   private views = new Map<TabId, WebContentsView>();
   private tooltipWin: BrowserWindow | null = null;
   private ctxWin: BrowserWindow | null = null;
@@ -372,30 +320,42 @@ export class ElectronPlatform implements Platform {
     if (win) win.webContents.focus();
   }
 
-  // ── Keyboard shortcuts ──────────────────────────────────────────
+  // ── Keyboard shortcuts (via globalShortcut, toggled on focus/blur) ──
+
+  private shortcutsActive = false;
+
+  /** Register all stored shortcuts as OS-level global shortcuts. */
+  activateShortcuts(): void {
+    if (this.shortcutsActive) return;
+    for (const [accelerator, callback] of this.shortcuts) {
+      globalShortcut.register(accelerator, callback);
+    }
+    this.shortcutsActive = true;
+  }
+
+  /** Unregister all OS-level global shortcuts. */
+  deactivateShortcuts(): void {
+    if (!this.shortcutsActive) return;
+    globalShortcut.unregisterAll();
+    this.shortcutsActive = false;
+  }
 
   registerShortcut(accelerator: string, callback: () => void): void {
-    this.shortcuts.set(accelerator, {
-      parsed: parseAccelerator(accelerator),
-      callback,
-    });
+    this.shortcuts.set(accelerator, callback);
+    if (this.shortcutsActive) {
+      globalShortcut.register(accelerator, callback);
+    }
   }
 
   unregisterShortcut(accelerator: string): void {
     this.shortcuts.delete(accelerator);
+    if (this.shortcutsActive) {
+      globalShortcut.unregister(accelerator);
+    }
   }
 
-  hookWebContents(webContents: unknown): void {
-    const wc = webContents as Electron.WebContents;
-    wc.on("before-input-event", (event, input) => {
-      for (const { parsed, callback } of this.shortcuts.values()) {
-        if (matchesInput(parsed, input)) {
-          event.preventDefault();
-          callback();
-          return;
-        }
-      }
-    });
+  hookWebContents(_webContents: unknown): void {
+    // No-op: shortcuts handled via globalShortcut
   }
 
   // ── Tooltip overlay ────────────────────────────────────────────
