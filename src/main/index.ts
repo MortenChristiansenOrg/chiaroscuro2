@@ -1,5 +1,5 @@
 import path from "node:path";
-import { BrowserWindow, Menu, app, ipcMain } from "electron";
+import { BrowserWindow, app, ipcMain } from "electron";
 import { CommandBus } from "../bus/command-bus";
 import { EventBus } from "../bus/event-bus";
 import { bridgeBusToIpc } from "../bus/ipc-main-bridge";
@@ -19,6 +19,8 @@ import type {
   ContextMenuCommands,
   ContextMenuEvents,
 } from "../features/context-menu/context-menu.shared";
+import { register as registerDevTools } from "../features/dev-tools/dev-tools.main";
+import type { DevToolsCommands, DevToolsEvents } from "../features/dev-tools/dev-tools.shared";
 import {
   register as registerFolders,
   start as startFolders,
@@ -67,8 +69,6 @@ import type { ZoomCommands, ZoomEvents } from "../features/zoom/zoom.shared";
 import { ElectronPlatform } from "../platform/electron";
 import type { TabId, WindowId, WorkspaceId } from "../shared/types";
 
-Menu.setApplicationMenu(null);
-
 const iconFile = process.platform === "win32" ? "icon.ico" : "icon.png";
 const iconPath = path.join(__dirname, "../../resources", iconFile);
 
@@ -86,6 +86,7 @@ type AllCommands = MergeRegistries<
     ContextMenuCommands,
     FoldersCommands,
     ZoomCommands,
+    DevToolsCommands,
   ]
 >;
 
@@ -102,6 +103,7 @@ type AllEvents = MergeRegistries<
     ContextMenuEvents,
     FoldersEvents,
     ZoomEvents,
+    DevToolsEvents,
   ]
 >;
 
@@ -113,6 +115,7 @@ let activeWindowId: WindowId | undefined;
 let activeTabId: TabId | undefined;
 let activeWorkspaceId: WorkspaceId | undefined;
 
+const isDev = !!process.env.ELECTRON_RENDERER_URL;
 const platform = new ElectronPlatform(() => activeWindowId);
 const dataDir = process.env.DATA_DIR ?? path.join(app.getPath("userData"), "data");
 const dataStore: DataStore = createDataStore(dataDir);
@@ -143,7 +146,7 @@ function createWindow(): void {
     events.emit("window:maximized-changed", { maximized: false });
   });
 
-  if (process.env.ELECTRON_RENDERER_URL) {
+  if (isDev && process.env.ELECTRON_RENDERER_URL) {
     win.loadURL(process.env.ELECTRON_RENDERER_URL);
   } else {
     win.loadFile(path.join(__dirname, "../renderer/index.html"));
@@ -155,6 +158,7 @@ const deps = {
   events,
   platform,
   dataStore,
+  isDev,
   getActiveWindowId: () => activeWindowId,
   getActiveTabId: () => activeTabId,
   setActiveTabId: (id: TabId | undefined) => {
@@ -181,6 +185,7 @@ app.whenReady().then(async () => {
   registerContextMenu(deps);
   registerFolders(deps);
   registerZoom(deps);
+  registerDevTools(deps);
 
   // Bridge bus to IPC (once, before any window creation)
   bridgeBusToIpc(commands, events, () => BrowserWindow.getAllWindows());

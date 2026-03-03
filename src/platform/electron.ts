@@ -1,6 +1,7 @@
 import path from "node:path";
 import {
   BrowserWindow,
+  Menu,
   WebContentsView,
   clipboard,
   globalShortcut,
@@ -104,6 +105,7 @@ function awaitSelection(){
 
 export class ElectronPlatform implements Platform {
   private shortcuts = new Map<string, () => void>();
+  private localShortcuts = new Map<string, () => void>();
   private views = new Map<TabId, WebContentsView>();
   private tooltipWin: BrowserWindow | null = null;
   private ctxWin: BrowserWindow | null = null;
@@ -313,6 +315,33 @@ export class ElectronPlatform implements Platform {
     return this.views.get(tabId)?.webContents.getZoomLevel() ?? 0;
   }
 
+  // ── DevTools ────────────────────────────────────────────────────
+
+  openTabDevTools(tabId: TabId, mode: "right" | "bottom" | "undocked" | "detach" = "right"): void {
+    this.views.get(tabId)?.webContents.openDevTools({ mode });
+  }
+
+  closeTabDevTools(tabId: TabId): void {
+    const wc = this.views.get(tabId)?.webContents;
+    if (!wc) return;
+    wc.closeDevTools();
+    wc.focus();
+  }
+
+  isTabDevToolsOpened(tabId: TabId): boolean {
+    return this.views.get(tabId)?.webContents.isDevToolsOpened() ?? false;
+  }
+
+  toggleShellDevTools(windowId?: WindowId): void {
+    const win = this.getWin(windowId);
+    if (!win) return;
+    if (win.webContents.isDevToolsOpened()) {
+      win.webContents.closeDevTools();
+    } else {
+      win.webContents.openDevTools({ mode: "detach" });
+    }
+  }
+
   // ── Focus ──────────────────────────────────────────────────────
 
   focusShell(windowId?: WindowId): void {
@@ -356,8 +385,66 @@ export class ElectronPlatform implements Platform {
     }
   }
 
-  hookWebContents(_webContents: unknown): void {
-    // No-op: shortcuts handled via globalShortcut
+  registerLocalShortcut(accelerator: string, callback: () => void): void {
+    this.localShortcuts.set(accelerator, callback);
+    this.rebuildLocalShortcutMenu();
+  }
+
+  /** Rebuild the app menu so local shortcuts also work as menu accelerators
+   *  (needed for keys like F12 that can't be globalShortcut and whose
+   *  before-input-event doesn't fire on devtools webContents). */
+  private rebuildLocalShortcutMenu(): void {
+    const template = Array.from(this.localShortcuts.entries()).map(([accelerator, click]) => ({
+      label: accelerator,
+      accelerator,
+      click,
+    }));
+    Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+  }
+
+  hookWebContents(webContents: unknown): void {
+    const wc = webContents as Electron.WebContents;
+    wc.on("before-input-event", (_event, input) => {
+      if (input.type !== "keyDown") return;
+      for (const [accelerator, cb] of this.localShortcuts) {
+        if (this.matchesAccelerator(input, accelerator)) {
+          _event.preventDefault();
+          cb();
+          return;
+        }
+      }
+    });
+  }
+
+  private matchesAccelerator(input: Electron.Input, accelerator: string): boolean {
+    const parts = accelerator.split("+");
+    let wantCtrl = false;
+    let wantShift = false;
+    let wantAlt = false;
+    let wantMeta = false;
+    let key = "";
+    for (const part of parts) {
+      const p = part.trim();
+      const lower = p.toLowerCase();
+      if (lower === "control" || lower === "ctrl" || lower === "commandorcontrol") {
+        wantCtrl = true;
+      } else if (lower === "shift") {
+        wantShift = true;
+      } else if (lower === "alt") {
+        wantAlt = true;
+      } else if (lower === "meta" || lower === "command" || lower === "super") {
+        wantMeta = true;
+      } else {
+        key = p;
+      }
+    }
+    return (
+      input.key === key &&
+      input.control === wantCtrl &&
+      input.shift === wantShift &&
+      input.alt === wantAlt &&
+      input.meta === wantMeta
+    );
   }
 
   // ── Tooltip overlay ────────────────────────────────────────────
