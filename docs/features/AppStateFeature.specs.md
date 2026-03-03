@@ -46,7 +46,7 @@ None.
 
 ### Cross-feature interactions
 
-- Listens to sidebar visibility events to know when sidebar is shown/hidden.
+- (Planned) Listens to sidebar visibility events to know when sidebar is shown/hidden.
 - Provides restored sidebar width to the sidebar renderer via event on startup.
 - Tracks window bounds changes from the main process.
 

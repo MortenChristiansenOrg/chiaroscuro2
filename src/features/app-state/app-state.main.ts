@@ -98,7 +98,14 @@ export function start({ events }: Deps): void {
 
 /** Ensure window bounds are visible on at least one display. */
 function validateBounds(bounds: Bounds | undefined, displays: Bounds[]): Bounds {
-  if (!bounds || !bounds.width || !bounds.height) return { ...DEFAULT_WINDOW_BOUNDS };
+  if (
+    !bounds ||
+    !Number.isFinite(bounds.width) ||
+    !Number.isFinite(bounds.height) ||
+    bounds.width <= 0 ||
+    bounds.height <= 0
+  )
+    return { ...DEFAULT_WINDOW_BOUNDS };
   if (displays.length === 0) return bounds;
 
   // Check if at least 100px of the window is visible on any display

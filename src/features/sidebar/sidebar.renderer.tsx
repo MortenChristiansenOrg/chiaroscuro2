@@ -1658,8 +1658,12 @@ export function SidebarPanel() {
             if (e.key === "ArrowLeft" || e.key === "ArrowRight") {
               e.preventDefault();
               const delta = e.key === "ArrowRight" ? 10 : -10;
+              const width = Math.max(
+                MIN_SIDEBAR_WIDTH,
+                Math.min(MAX_SIDEBAR_WIDTH, resize.width + delta),
+              );
               window.chiaroscuro.sendCommand(APP_STATE_SET_SIDEBAR_WIDTH, {
-                width: resize.width + delta,
+                width,
               });
             }
           }}

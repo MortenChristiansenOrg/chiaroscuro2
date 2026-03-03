@@ -84,14 +84,17 @@ describe("app-state:set-sidebar-width", () => {
 describe("app-state:save", () => {
   it("persists state to data store", async () => {
     vi.useFakeTimers();
-    const { commands, dataStore } = setup();
+    try {
+      const { commands, dataStore } = setup();
 
-    await commands.send(APP_STATE_SET_SIDEBAR_WIDTH, { width: 350 });
-    await commands.send(APP_STATE_SAVE, undefined);
+      await commands.send(APP_STATE_SET_SIDEBAR_WIDTH, { width: 350 });
+      await commands.send(APP_STATE_SAVE, undefined);
 
-    const saved = await dataStore.getSetting("app-state");
-    expect(saved).toEqual(expect.objectContaining({ sidebarWidth: 350 }));
-    vi.useRealTimers();
+      const saved = await dataStore.getSetting("app-state");
+      expect(saved).toEqual(expect.objectContaining({ sidebarWidth: 350 }));
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
