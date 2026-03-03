@@ -17,7 +17,7 @@ import {
 import { useDomainCssStore } from "./domain-css.store";
 
 function sendCommand(name: string, payload: unknown) {
-  window.chiaroscuro.sendCommand(name, payload);
+  void window.chiaroscuro.sendCommand(name, payload).catch(console.error);
 }
 
 const categories = [{ id: "css", label: "Custom CSS" }];

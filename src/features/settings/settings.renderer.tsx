@@ -8,6 +8,7 @@ import {
   settingsColumnHeaderStyle,
   settingsIconButtonStyle,
   settingsInputStyle,
+  settingsSelectStyle,
   useScrollSpy,
 } from "../../renderer/src/components/SettingsLayout";
 import type { SearchProvider } from "../command-palette/resolve-input";
@@ -203,17 +204,7 @@ function SearchSettings({
           onChange={(e) =>
             onSettingsChange({ ...settings, defaultSearchProviderId: e.target.value })
           }
-          style={{
-            padding: "0.375rem 0.5rem",
-            fontSize: "var(--text-sm)",
-            color: "var(--foreground)",
-            background: "var(--background)",
-            border: "1px solid var(--input)",
-            borderRadius: "var(--radius-sm)",
-            outline: "none",
-            fontFamily: "inherit",
-            minWidth: "12rem",
-          }}
+          style={settingsSelectStyle}
         >
           {settings.searchProviders
             .filter((p) => p.bang)

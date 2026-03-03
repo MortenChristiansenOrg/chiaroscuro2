@@ -97,10 +97,10 @@ async function injectCssForTab(tabId: TabId, domain: string): Promise<void> {
   if (!state?.enabled) return;
 
   const css = readCssFile(domain);
-  if (!css) return;
 
   // Remove any previously injected CSS first
   await removeCssFromTab(tabId);
+  if (!css) return;
 
   try {
     const key = await deps.platform.insertCSS(tabId, css);
@@ -183,7 +183,11 @@ async function persistStates(): Promise<void> {
   for (const [domain, state] of domainStates) {
     serializable[domain] = state;
   }
-  await deps.dataStore.setSetting("domain-css-states", serializable);
+  try {
+    await deps.dataStore.setSetting("domain-css-states", serializable);
+  } catch (error) {
+    console.error("Failed to persist domain CSS states", error);
+  }
 }
 
 export function register(d: DomainCssDeps): void {
@@ -214,11 +218,16 @@ export function register(d: DomainCssDeps): void {
     if (tab.builtIn) return;
 
     const domain = getDomainFromUrl(tab.url);
-    if (!domain) return;
+    if (!domain) {
+      removeCssFromTab(tab.id).catch(console.error);
+      return;
+    }
 
     const state = domainStates.get(domain);
     if (state?.enabled) {
       injectCssForTab(tab.id, domain).catch(console.error);
+    } else {
+      removeCssFromTab(tab.id).catch(console.error);
     }
   });
 
@@ -256,6 +265,7 @@ export function register(d: DomainCssDeps): void {
 
   d.commands.handle(DOMAIN_CSS_TOGGLE, async (payload) => {
     const { domain } = payload;
+    if (!isValidDomain(domain)) throw new Error(`Invalid domain: ${domain}`);
     const state = domainStates.get(domain) ?? { enabled: false };
     state.enabled = !state.enabled;
     domainStates.set(domain, state);
@@ -335,6 +345,10 @@ export async function start(d: DomainCssDeps): Promise<void> {
   const stored = await d.dataStore.getSetting<Record<string, DomainState>>("domain-css-states");
   if (stored) {
     for (const [domain, state] of Object.entries(stored)) {
+      if (!isValidDomain(domain)) {
+        console.error("Skipping invalid persisted domain CSS state", domain);
+        continue;
+      }
       domainStates.set(domain, state);
       if (state.enabled && cssFileExists(domain)) {
         startWatching(domain);

@@ -572,7 +572,7 @@ export function getTab(tabId: TabId): Tab | undefined {
 }
 
 export function getAllTabs(): Map<TabId, Tab> {
-  return _tabs ?? new Map();
+  return _tabs ? new Map(_tabs) : new Map();
 }
 
 export function setTabFolderId(tabId: TabId, folderId: FolderId | null): void {

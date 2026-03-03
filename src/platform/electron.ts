@@ -562,7 +562,10 @@ export class ElectronPlatform implements Platform {
   }
 
   async openPath(filePath: string): Promise<void> {
-    await shell.openPath(filePath);
+    const errorMessage = await shell.openPath(filePath);
+    if (errorMessage) {
+      throw new Error(`Failed to open path "${filePath}": ${errorMessage}`);
+    }
   }
 
   readClipboard(): string {

@@ -86,4 +86,3 @@ Accessed via an icon button in the address bar (left of the URL). Clicking opens
 ## Unresolved Issues
 
 - **CSS injection on navigation**: Need to verify `did-finish-load` is sufficient for re-injection after SPA navigations and redirects.
-- **Multiple tabs same domain**: When toggling CSS, should injection update all open tabs on that domain or just the active one?

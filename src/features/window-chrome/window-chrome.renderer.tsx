@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "../../renderer/src/components/Icon";
+import { DOMAIN_CSS_OPEN } from "../domain-css/domain-css.shared";
 import { useTabsStore } from "../tabs/tabs.store";
 import type { WindowChromeCommands } from "./window-chrome.shared";
 import {
@@ -133,7 +134,7 @@ export function UrlPill() {
 
   const handleDomainCss = () => {
     if (hostname) {
-      window.chiaroscuro.sendCommand("domain-css:open", { domain: hostname });
+      window.chiaroscuro.sendCommand(DOMAIN_CSS_OPEN, { domain: hostname });
     }
   };
 
