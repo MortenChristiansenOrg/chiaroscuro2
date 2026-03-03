@@ -2,48 +2,56 @@
 
 ## Overview
 
-The Domain Customization feature lets you apply per-domain custom CSS in tabs.
+The Domain Customization feature lets users apply per-domain custom CSS in tabs. Users inject a user-managed CSS file into pages on a domain using Electron's `webContents.insertCSS()` and `webContents.removeInsertedCSS()` APIs.
 
-This is used to tweak how specific sites look by injecting a user-managed CSS file into pages on that domain, using Electron's `webContents.insertCSS()` and `webContents.removeInsertedCSS()` APIs.
-
-It is surfaced through the tab palette UI.
+Accessed via an icon button in the address bar (left of the URL). Clicking opens a singleton built-in tab for that domain showing CSS toggle, edit, and remove controls using the shared SettingsLayout scaffold.
 
 ## Terminology
 
-- **Domain**: the current tab's domain (host name).
-- **Domain CSS**: a CSS file associated with a domain.
-- **CSS enabled**: whether custom CSS injection is active for the current domain.
+- **Domain**: the hostname extracted from the active tab's URL.
+- **Domain CSS**: a CSS file stored per domain on disk.
+- **CSS enabled**: whether custom CSS injection is active for a given domain.
 
 ## Requirements
 
-- Domain customization must be stored per domain and persisted across app runs.
-- If CSS is enabled and a CSS file exists for the current domain, the CSS must be injected into the active tab via `webContents.insertCSS()`.
-- If CSS is disabled (or there is no CSS file), any previously injected CSS must be removed via `webContents.removeInsertedCSS()`.
-- When switching tabs or navigating to a different domain, the applied CSS must update accordingly.
-- If the domain CSS file is edited while the app is running, the changes must be applied to the current tab. File watching is handled by the main process using Node.js `fs.watch()`.
-- If the domain CSS file is deleted while CSS is enabled, CSS must be disabled for that domain.
+- Domain customization state (enabled/disabled per domain) persisted across app runs via DataStore.
+- CSS files stored in a `domain-css/` subdirectory of the app's user data directory.
+- If CSS is enabled and a CSS file exists, inject it via `webContents.insertCSS()`.
+- If CSS is disabled or no file exists, remove any injected CSS via `webContents.removeInsertedCSS()`.
+- When switching tabs or navigating to a different domain, update injected CSS accordingly.
+- File watching via `fs.watch()` re-injects CSS on file changes while enabled.
+- If the CSS file is deleted while enabled, auto-disable CSS for that domain.
+- The domain customization tab is a built-in page (`app:domain-css?domain=<host>`), singleton per domain.
+- The icon button in the address bar only appears for web tabs (not built-in tabs).
+- CSS re-applied on `did-finish-load` to survive in-page navigations.
 
 ## Workflows
 
-### Enable/disable CSS for the current domain
+### Open domain customization
 
-- Open the tab palette.
-- Toggle the "CSS enabled" setting for the current domain.
-- When enabled, the app injects the domain CSS (if present) into the page.
-- When disabled, the app removes the injected CSS.
+- Click the customization icon button in the address bar (left of URL).
+- A built-in tab opens for the current domain (or reactivates if already open).
+- The tab shows the domain name and CSS controls.
 
-### Create/edit the CSS file
+### Enable/disable CSS
 
-- Open the tab palette.
-- Choose to edit the domain CSS.
-- The app ensures a CSS file exists for the domain and opens it in the system's default editor.
-- The app automatically enables CSS for the domain.
-- Changes to the file are applied as you edit (via file watching).
+- In the domain customization tab, toggle the "CSS enabled" switch.
+- When enabled: inject CSS file contents (if file exists) into all tabs on that domain.
+- When disabled: remove injected CSS from all tabs on that domain.
 
-### Remove the CSS file
+### Edit CSS file
 
-- Remove the custom CSS file for a domain (either from the UI or by deleting it on disk).
-- The app stops watching the file, removes injected CSS, and disables CSS for that domain.
+- Click "Edit CSS" in the domain customization tab.
+- If no CSS file exists, create an empty one.
+- Auto-enable CSS for the domain.
+- Open the file in the system's default text editor via `shell.openPath()`.
+- File changes detected via `fs.watch()` and re-injected automatically.
+
+### Remove CSS file
+
+- Click "Remove CSS" in the domain customization tab.
+- Delete the CSS file from disk.
+- Stop file watching, remove injected CSS, disable CSS for that domain.
 
 ## Interactions
 
@@ -53,23 +61,29 @@ It is surfaced through the tab palette UI.
 
 ### Mouse interactions
 
-- None (this feature is driven by UI controls inside the tab palette).
+- **Address bar icon button**: opens the domain customization tab for the active tab's domain.
+
+### Cross-feature interactions
+
+- **Tabs**: listens for tab activation/navigation events to inject/remove CSS. Uses `tabs:create` / `tabs:activate` for built-in tab management.
+- **Window Chrome**: icon button rendered inside UrlPill component.
+- **Settings**: shares SettingsLayout scaffold components (SettingItem, section headings, input styles).
 
 ## Commands & Events
 
 ### Commands
 
-- `domain-css:toggle` — Toggle CSS injection for the current domain.
-- `domain-css:edit` — Open the CSS file for the current domain in the system editor.
-- `domain-css:remove` — Remove the CSS file for the current domain.
+- `domain-css:open` — Open domain customization tab for a domain. Payload: `{ domain: string }`.
+- `domain-css:toggle` — Toggle CSS injection for a domain. Payload: `{ domain: string }`.
+- `domain-css:edit` — Create CSS file if needed, enable CSS, open in system editor. Payload: `{ domain: string }`.
+- `domain-css:remove` — Remove the CSS file for a domain. Payload: `{ domain: string }`.
+- `domain-css:get-state` — Get current CSS state for a domain. Payload: `{ domain: string }`. Response: `{ domain: string, enabled: boolean, hasFile: boolean }`.
 
 ### Events
 
-- `domain-css:changed` — CSS state changed for a domain. Payload: `{ domain: string, enabled: boolean }`.
-- `domain-css:file-updated` — A domain CSS file was modified on disk. Payload: `{ domain: string }`.
+- `domain-css:changed` — CSS state changed for a domain. Payload: `{ domain: string, enabled: boolean, hasFile: boolean }`.
 
 ## Unresolved Issues
 
-- **CSS file storage location**: Where should domain CSS files be stored? A subdirectory of the app's user data directory (e.g. `~/.config/chiaroscuro/domain-css/`)? This needs to be defined.
-- **Editor integration**: "Opens it in the editor" — the old version may have had a built-in editor. In Electron, the simplest approach is to open the file in the system's default text editor via `shell.openPath()`. Is this sufficient?
-- **CSS injection on navigation**: When a tab navigates to a new page on the same domain, `insertCSS` may need to be re-applied after the new page loads. Need to verify behavior with Electron's `did-finish-load` or `dom-ready` events.
+- **CSS injection on navigation**: Need to verify `did-finish-load` is sufficient for re-injection after SPA navigations and redirects.
+- **Multiple tabs same domain**: When toggling CSS, should injection update all open tabs on that domain or just the active one?

@@ -45,6 +45,22 @@ interface Deps {
   getActiveWorkspaceId: () => WorkspaceId | undefined;
 }
 
+function resolveBuiltInTitle(url: string): string {
+  const titles: Record<string, string> = { "app:settings": "Settings" };
+  if (titles[url]) return titles[url];
+  // Handle parameterized URLs like app:domain-css?domain=github.com
+  const qIndex = url.indexOf("?");
+  if (qIndex !== -1) {
+    const base = url.slice(0, qIndex);
+    if (base === "app:domain-css") {
+      const params = new URLSearchParams(url.slice(qIndex + 1));
+      const domain = params.get("domain");
+      return domain ? `Customization: ${domain}` : "Customization";
+    }
+  }
+  return url;
+}
+
 // Shared state exposed via accessor for cross-feature queries
 let _tabs: Map<TabId, Tab> | undefined;
 let _attachTabListeners: ((tabId: TabId) => void) | undefined;
@@ -210,14 +226,11 @@ export function register(deps: Deps): void {
       : await platform.createTab(windowId, payload.url);
     const now = Date.now();
 
-    // Built-in pages get a human-readable title from the app: URL
-    const builtInTitles: Record<string, string> = { "app:settings": "Settings" };
-
     const tab: Tab = {
       id: tabId,
       workspaceId,
       url: payload.url,
-      title: (isBuiltIn && builtInTitles[payload.url]) || payload.url,
+      title: isBuiltIn ? resolveBuiltInTitle(payload.url) : payload.url,
       favicon: "",
       loading: !isBuiltIn,
       bookmarked: false,
@@ -556,6 +569,10 @@ export function getTabsForWorkspace(workspaceId: WorkspaceId): Tab[] {
 
 export function getTab(tabId: TabId): Tab | undefined {
   return _tabs?.get(tabId);
+}
+
+export function getAllTabs(): Map<TabId, Tab> {
+  return _tabs ?? new Map();
 }
 
 export function setTabFolderId(tabId: TabId, folderId: FolderId | null): void {

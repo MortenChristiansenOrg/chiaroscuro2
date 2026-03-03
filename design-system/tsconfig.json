@@ -26,6 +26,7 @@
     "../src/renderer/src/components/ContentArea.tsx",
     "../src/renderer/src/components/ContextMenu.tsx",
     "../src/renderer/src/components/BuiltInPage.tsx",
+    "../src/renderer/src/components/SettingsLayout.tsx",
     "../src/features/**/*.renderer.tsx",
     "../src/features/**/*.store.ts",
     "../src/features/**/*.shared.ts",

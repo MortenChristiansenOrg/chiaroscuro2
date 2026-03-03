@@ -20,6 +20,11 @@ import type {
   ContextMenuEvents,
 } from "../features/context-menu/context-menu.shared";
 import {
+  register as registerDomainCss,
+  start as startDomainCss,
+} from "../features/domain-css/domain-css.main";
+import type { DomainCssCommands, DomainCssEvents } from "../features/domain-css/domain-css.shared";
+import {
   register as registerFolders,
   start as startFolders,
 } from "../features/folders/folders.main";
@@ -43,6 +48,7 @@ import {
 } from "../features/sidebar/sidebar.main";
 import type { SidebarCommands, SidebarEvents } from "../features/sidebar/sidebar.shared";
 import { register as registerTabs, start as startTabs } from "../features/tabs/tabs.main";
+import { getAllTabs } from "../features/tabs/tabs.main";
 import type { TabsCommands, TabsEvents } from "../features/tabs/tabs.shared";
 import { register as registerTooltip } from "../features/tooltip/tooltip.main";
 import type { TooltipCommands, TooltipEvents } from "../features/tooltip/tooltip.shared";
@@ -86,6 +92,7 @@ type AllCommands = MergeRegistries<
     ContextMenuCommands,
     FoldersCommands,
     ZoomCommands,
+    DomainCssCommands,
   ]
 >;
 
@@ -102,6 +109,7 @@ type AllEvents = MergeRegistries<
     ContextMenuEvents,
     FoldersEvents,
     ZoomEvents,
+    DomainCssEvents,
   ]
 >;
 
@@ -181,6 +189,11 @@ app.whenReady().then(async () => {
   registerContextMenu(deps);
   registerFolders(deps);
   registerZoom(deps);
+  registerDomainCss({
+    ...deps,
+    dataDir,
+    getTabsSnapshot: getAllTabs,
+  });
 
   // Bridge bus to IPC (once, before any window creation)
   bridgeBusToIpc(commands, events, () => BrowserWindow.getAllWindows());
@@ -212,6 +225,11 @@ app.whenReady().then(async () => {
     await startFolders(deps);
     await startCommandPalette(deps);
     await startSettings(deps);
+    await startDomainCss({
+      ...deps,
+      dataDir,
+      getTabsSnapshot: getAllTabs,
+    });
   });
 
   app.on("activate", () => {
