@@ -156,6 +156,19 @@ export class ElectronPlatform implements Platform {
     this.getWin(windowId)?.focus();
   }
 
+  getWindowBounds(windowId: WindowId): Bounds | undefined {
+    return this.getWin(windowId)?.getBounds();
+  }
+
+  setWindowBounds(windowId: WindowId, bounds: Bounds): void {
+    this.getWin(windowId)?.setBounds({
+      x: Math.round(bounds.x),
+      y: Math.round(bounds.y),
+      width: Math.round(bounds.width),
+      height: Math.round(bounds.height),
+    });
+  }
+
   // ── Tab/WebContentsView management ──────────────────────────────
 
   async createTab(windowId: WindowId, url: string): Promise<TabId> {

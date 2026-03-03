@@ -1,11 +1,18 @@
 import path from "node:path";
-import { BrowserWindow, app, ipcMain } from "electron";
+import { BrowserWindow, Menu, app, ipcMain, screen } from "electron";
 import { CommandBus } from "../bus/command-bus";
 import { EventBus } from "../bus/event-bus";
 import { bridgeBusToIpc } from "../bus/ipc-main-bridge";
 import type { MergeRegistries } from "../bus/types";
 import { createDataStore } from "../data/store";
 import type { DataStore } from "../data/types";
+import {
+  loadPersistedState,
+  onWindowBoundsChanged,
+  register as registerAppState,
+  start as startAppState,
+} from "../features/app-state/app-state.main";
+import type { AppStateCommands, AppStateEvents } from "../features/app-state/app-state.shared";
 import {
   register as registerCommandPalette,
   start as startCommandPalette,
@@ -75,6 +82,7 @@ const iconPath = path.join(__dirname, "../../resources", iconFile);
 // ── Merged bus types ──────────────────────────────────────────────
 type AllCommands = MergeRegistries<
   [
+    AppStateCommands,
     WindowChromeCommands,
     TabsCommands,
     WorkspacesCommands,
@@ -92,6 +100,7 @@ type AllCommands = MergeRegistries<
 
 type AllEvents = MergeRegistries<
   [
+    AppStateEvents,
     WindowChromeEvents,
     TabsEvents,
     WorkspacesEvents,
@@ -120,10 +129,14 @@ const platform = new ElectronPlatform(() => activeWindowId);
 const dataDir = process.env.DATA_DIR ?? path.join(app.getPath("userData"), "data");
 const dataStore: DataStore = createDataStore(dataDir);
 
-function createWindow(): void {
+function createWindow(windowBounds?: {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}): void {
   const win = new BrowserWindow({
-    width: 1200,
-    height: 800,
+    ...(windowBounds ?? { width: 1200, height: 800 }),
     icon: iconPath,
     titleBarStyle: "hidden",
     backgroundMaterial: "acrylic",
@@ -145,6 +158,19 @@ function createWindow(): void {
   win.on("unmaximize", () => {
     events.emit("window:maximized-changed", { maximized: false });
   });
+
+  // Track window bounds for app-state persistence
+  let boundsTimer: ReturnType<typeof setTimeout> | undefined;
+  const trackBounds = () => {
+    if (boundsTimer) clearTimeout(boundsTimer);
+    boundsTimer = setTimeout(() => {
+      if (!win.isMaximized() && !win.isMinimized()) {
+        onWindowBoundsChanged(win.getBounds(), dataStore);
+      }
+    }, 200);
+  };
+  win.on("move", trackBounds);
+  win.on("resize", trackBounds);
 
   if (isDev && process.env.ELECTRON_RENDERER_URL) {
     win.loadURL(process.env.ELECTRON_RENDERER_URL);
@@ -174,6 +200,7 @@ app.whenReady().then(async () => {
   await dataStore.initialize();
 
   // Phase 1: register all command handlers
+  registerAppState(deps);
   registerWindowChrome(deps);
   registerTabs(deps);
   registerWorkspaces(deps);
@@ -187,10 +214,14 @@ app.whenReady().then(async () => {
   registerZoom(deps);
   registerDevTools(deps);
 
+  // Load persisted layout state before creating the window
+  const getDisplayBounds = () => screen.getAllDisplays().map((d) => d.workArea);
+  const appState = await loadPersistedState(dataStore, getDisplayBounds);
+
   // Bridge bus to IPC (once, before any window creation)
   bridgeBusToIpc(commands, events, () => BrowserWindow.getAllWindows());
 
-  createWindow();
+  createWindow(appState.windowBounds);
   if (activeWindowId && process.env.NODE_ENV !== "test") {
     platform.initTooltipOverlay(activeWindowId);
     platform.initContextMenuOverlay(activeWindowId);
@@ -209,6 +240,7 @@ app.whenReady().then(async () => {
 
   // Phase 2: wait for renderer subscriptions, then emit initial state
   ipcMain.once("renderer:ready", async () => {
+    startAppState(deps);
     await startWorkspaces(deps);
     startWindowChrome(deps);
     const restoredTabs = await startTabs(deps);
@@ -228,6 +260,8 @@ app.whenReady().then(async () => {
 
 app.on("before-quit", () => {
   platform.deactivateShortcuts();
+  // Flush app-state immediately before data store teardown
+  commands.send("app-state:save", undefined).catch(console.error);
   dataStore.destroy().catch(console.error);
 });
 

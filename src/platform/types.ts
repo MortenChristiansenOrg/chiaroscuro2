@@ -11,6 +11,8 @@ export interface Platform {
   unmaximizeWindow(windowId: WindowId): Promise<void>;
   isWindowMaximized(windowId: WindowId): boolean;
   focusWindow(windowId: WindowId): Promise<void>;
+  getWindowBounds(windowId: WindowId): Bounds | undefined;
+  setWindowBounds(windowId: WindowId, bounds: Bounds): void;
 
   // Tab/WebContentsView management
   createTab(windowId: WindowId, url: string): Promise<TabId>;

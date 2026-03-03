@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TabId, WorkspaceId } from "../../shared/types";
 import { makePinnedTab, makeTab, makeWorkspace } from "../../test-utils";
+import { useAppStateStore } from "../app-state/app-state.store";
 import type { PinnedTab } from "../pinned-tabs/pinned-tabs.shared";
 import { usePinnedTabsStore } from "../pinned-tabs/pinned-tabs.store";
 import type { Tab } from "../tabs/tabs.shared";
@@ -26,6 +27,7 @@ function setStores(
   opts: {
     visible?: boolean;
     announcement?: string;
+    sidebarWidth?: number;
     tabs?: Tab[];
     activeTabId?: TabId | null;
     pinnedTabs?: PinnedTab[];
@@ -33,6 +35,10 @@ function setStores(
     activeWorkspaceId?: WorkspaceId | null;
   } = {},
 ) {
+  useAppStateStore.setState({
+    sidebarWidth: opts.sidebarWidth ?? 240,
+  });
+
   useSidebarStore.setState({
     visible: opts.visible ?? true,
     announcement: opts.announcement ?? "",
@@ -61,8 +67,9 @@ function getNav() {
 }
 
 function getOuterDiv() {
-  const el = getNav().parentElement;
-  if (!el) throw new Error("Sidebar nav has no parent element");
+  // Structure: outer (width/overflow) > inner (relative flex) > nav
+  const el = getNav().parentElement?.parentElement;
+  if (!el) throw new Error("Sidebar nav has no outer container");
   return el;
 }
 
@@ -89,7 +96,7 @@ describe("SidebarPanel", () => {
     it("has sidebar width when visible", () => {
       setStores({ visible: true });
       render(<SidebarPanel />);
-      expect(getOuterDiv().style.width).toBe("var(--sidebar-width)");
+      expect(getOuterDiv().style.width).toBe("240px");
     });
 
     it("has zero width when collapsed", () => {
