@@ -1,37 +1,26 @@
 import { describe, expect, it, vi } from "vitest";
 import { CommandBus } from "../../bus/command-bus";
-import { EventBus } from "../../bus/event-bus";
 import type { TabId, WindowId } from "../../shared/types";
 import { createMockPlatform } from "../../test-utils";
-import { TABS_CLOSED, type TabsClosedEvent } from "../tabs/tabs.shared";
 import { register } from "./dev-tools.main";
-import {
-  DEVTOOLS_TOGGLE,
-  DEVTOOLS_TOGGLE_CHROME,
-  type DevToolsCommands,
-  type DevToolsEvents,
-} from "./dev-tools.shared";
+import { DEVTOOLS_TOGGLE, DEVTOOLS_TOGGLE_CHROME, type DevToolsCommands } from "./dev-tools.shared";
 
 const TAB_ID = "tab-1" as TabId;
 const WINDOW_ID = "win-1" as WindowId;
 
-type AllEvents = DevToolsEvents & { [K in typeof TABS_CLOSED]: TabsClosedEvent };
-
 function setup(opts: { isDev?: boolean; noActiveTab?: boolean } = {}) {
   const commands = new CommandBus<DevToolsCommands>();
-  const events = new EventBus<AllEvents>();
   const platform = createMockPlatform();
 
   register({
     commands,
-    events,
     platform,
     isDev: opts.isDev ?? false,
     getActiveTabId: () => (opts.noActiveTab ? undefined : TAB_ID),
     getActiveWindowId: () => WINDOW_ID,
   });
 
-  return { commands, events, platform };
+  return { commands, platform };
 }
 
 describe("devtools:toggle", () => {
@@ -96,21 +85,5 @@ describe("keyboard shortcuts", () => {
     const { platform } = setup({ isDev: false });
     const calls = vi.mocked(platform.registerShortcut).mock.calls;
     expect(calls.some(([key]) => key === "F11")).toBe(false);
-  });
-});
-
-describe("tab lifecycle", () => {
-  it("cleans up tracking on tab close", async () => {
-    const { commands, events, platform } = setup();
-    vi.mocked(platform.isTabDevToolsOpened).mockReturnValue(false);
-
-    // Open devtools
-    await commands.send(DEVTOOLS_TOGGLE, undefined);
-    expect(platform.openTabDevTools).toHaveBeenCalled();
-
-    // Close tab
-    events.emit(TABS_CLOSED, { tabId: TAB_ID, activatedTabId: null });
-
-    // No errors from cleanup (smoke test — tracking set is cleaned)
   });
 });
