@@ -36,9 +36,17 @@ export interface Platform {
   setTabZoomLevel(tabId: TabId, level: number): void;
   getTabZoomLevel(tabId: TabId): number;
 
+  // DevTools
+  openTabDevTools(tabId: TabId, mode?: "right" | "bottom" | "undocked" | "detach"): void;
+  closeTabDevTools(tabId: TabId): void;
+  isTabDevToolsOpened(tabId: TabId): boolean;
+  toggleShellDevTools(windowId: WindowId): void;
+
   // Keyboard shortcuts
   registerShortcut(accelerator: string, callback: () => void): void;
   unregisterShortcut(accelerator: string): void;
+  /** Register a window-scoped shortcut via before-input-event (for keys like F12 that can't be global). */
+  registerLocalShortcut(accelerator: string, callback: () => void): void;
   hookWebContents(webContents: unknown): void;
 
   // Focus

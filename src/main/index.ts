@@ -26,6 +26,8 @@ import type {
   ContextMenuCommands,
   ContextMenuEvents,
 } from "../features/context-menu/context-menu.shared";
+import { register as registerDevTools } from "../features/dev-tools/dev-tools.main";
+import type { DevToolsCommands, DevToolsEvents } from "../features/dev-tools/dev-tools.shared";
 import {
   register as registerDomainCss,
   start as startDomainCss,
@@ -80,8 +82,6 @@ import type { ZoomCommands, ZoomEvents } from "../features/zoom/zoom.shared";
 import { ElectronPlatform } from "../platform/electron";
 import type { TabId, WindowId, WorkspaceId } from "../shared/types";
 
-Menu.setApplicationMenu(null);
-
 const iconFile = process.platform === "win32" ? "icon.ico" : "icon.png";
 const iconPath = path.join(__dirname, "../../resources", iconFile);
 
@@ -100,6 +100,7 @@ type AllCommands = MergeRegistries<
     ContextMenuCommands,
     FoldersCommands,
     ZoomCommands,
+    DevToolsCommands,
     DomainCssCommands,
   ]
 >;
@@ -118,6 +119,7 @@ type AllEvents = MergeRegistries<
     ContextMenuEvents,
     FoldersEvents,
     ZoomEvents,
+    DevToolsEvents,
     DomainCssEvents,
   ]
 >;
@@ -130,6 +132,7 @@ let activeWindowId: WindowId | undefined;
 let activeTabId: TabId | undefined;
 let activeWorkspaceId: WorkspaceId | undefined;
 
+const isDev = !!process.env.ELECTRON_RENDERER_URL;
 const platform = new ElectronPlatform(() => activeWindowId);
 const dataDir = process.env.DATA_DIR ?? path.join(app.getPath("userData"), "data");
 const dataStore: DataStore = createDataStore(dataDir);
@@ -177,7 +180,7 @@ function createWindow(windowBounds?: {
   win.on("move", trackBounds);
   win.on("resize", trackBounds);
 
-  if (process.env.ELECTRON_RENDERER_URL) {
+  if (isDev && process.env.ELECTRON_RENDERER_URL) {
     win.loadURL(process.env.ELECTRON_RENDERER_URL);
   } else {
     win.loadFile(path.join(__dirname, "../renderer/index.html"));
@@ -189,6 +192,7 @@ const deps = {
   events,
   platform,
   dataStore,
+  isDev,
   getActiveWindowId: () => activeWindowId,
   getActiveTabId: () => activeTabId,
   setActiveTabId: (id: TabId | undefined) => {
@@ -216,6 +220,7 @@ app.whenReady().then(async () => {
   registerContextMenu(deps);
   registerFolders(deps);
   registerZoom(deps);
+  registerDevTools(deps);
   registerDomainCss({
     ...deps,
     dataDir,
