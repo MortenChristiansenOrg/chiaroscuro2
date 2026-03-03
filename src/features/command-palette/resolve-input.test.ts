@@ -92,7 +92,14 @@ describe("resolveInputDetailed", () => {
 
   it("custom providers via config", () => {
     const config: ProviderConfig = {
-      providers: [{ bang: "!c", name: "Custom", urlTemplate: "https://custom.com/?q={query}" }],
+      providers: [
+        {
+          id: "custom-1",
+          bang: "!c",
+          name: "Custom",
+          urlTemplate: "https://custom.com/?q={query}",
+        },
+      ],
       defaultBang: "!c",
     };
     const result = resolveInputDetailed("!c test", config);
@@ -126,7 +133,14 @@ describe("resolveInput (legacy)", () => {
 
   it("accepts config param", () => {
     const config: ProviderConfig = {
-      providers: [{ bang: "!c", name: "Custom", urlTemplate: "https://custom.com/?q={query}" }],
+      providers: [
+        {
+          id: "custom-1",
+          bang: "!c",
+          name: "Custom",
+          urlTemplate: "https://custom.com/?q={query}",
+        },
+      ],
       defaultBang: "!c",
     };
     expect(resolveInput("test", config)).toBe("https://custom.com/?q=test");

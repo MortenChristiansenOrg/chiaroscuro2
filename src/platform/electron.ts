@@ -553,11 +553,32 @@ export class ElectronPlatform implements Platform {
     if (win) win.webContents.focus();
   }
 
+  // ── CSS injection ───────────────────────────────────────────────
+
+  async insertCSS(tabId: TabId, css: string): Promise<string> {
+    const view = this.views.get(tabId);
+    if (!view) throw new Error(`No view for tab ${tabId}`);
+    return view.webContents.insertCSS(css);
+  }
+
+  async removeInsertedCSS(tabId: TabId, key: string): Promise<void> {
+    const view = this.views.get(tabId);
+    if (!view) return;
+    await view.webContents.removeInsertedCSS(key);
+  }
+
   // ── Shell / clipboard ───────────────────────────────────────────
 
   async openExternal(url: string): Promise<void> {
     if (!isAllowedExternalUrl(url)) return;
     await shell.openExternal(url);
+  }
+
+  async openPath(filePath: string): Promise<void> {
+    const errorMessage = await shell.openPath(filePath);
+    if (errorMessage) {
+      throw new Error(`Failed to open path "${filePath}": ${errorMessage}`);
+    }
   }
 
   readClipboard(): string {

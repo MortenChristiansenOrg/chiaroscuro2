@@ -80,7 +80,12 @@ export function register({ commands, events, dataStore }: Deps): void {
 export async function start({ events, dataStore }: Deps): Promise<void> {
   // Load persisted settings
   const providers = await dataStore.getSetting<SearchProvider[]>("search-providers");
-  if (providers) currentSettings.searchProviders = providers;
+  if (providers) {
+    // Migrate providers missing id (pre-id data)
+    currentSettings.searchProviders = providers.map((p) =>
+      p.id ? p : { ...p, id: crypto.randomUUID() },
+    );
+  }
 
   const defaultBang = await dataStore.getSetting<string>("default-search-provider");
   if (defaultBang) currentSettings.defaultSearchProviderId = defaultBang;

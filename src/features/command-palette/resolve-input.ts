@@ -1,6 +1,7 @@
 // ── Types ───────────────────────────────────────────────────────
 
 export interface SearchProvider {
+  id: string;
   bang: string;
   name: string;
   icon?: string;
@@ -16,30 +17,35 @@ export type ResolvedInput =
 
 export const DEFAULT_PROVIDERS: SearchProvider[] = [
   {
+    id: "builtin-duckduckgo",
     bang: "!d",
     name: "DuckDuckGo",
     icon: "magnifying-glass",
     urlTemplate: "https://duckduckgo.com/?q={query}",
   },
   {
+    id: "builtin-google",
     bang: "!g",
     name: "Google",
     icon: "magnifying-glass",
     urlTemplate: "https://www.google.com/search?q={query}",
   },
   {
+    id: "builtin-github",
     bang: "!gh",
     name: "GitHub",
     icon: "magnifying-glass",
     urlTemplate: "https://github.com/search?q={query}",
   },
   {
+    id: "builtin-youtube",
     bang: "!yt",
     name: "YouTube",
     icon: "magnifying-glass",
     urlTemplate: "https://www.youtube.com/results?search_query={query}",
   },
   {
+    id: "builtin-wikipedia",
     bang: "!w",
     name: "Wikipedia",
     icon: "magnifying-glass",
