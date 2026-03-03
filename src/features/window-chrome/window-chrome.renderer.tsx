@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "../../renderer/src/components/Icon";
+import { DOMAIN_CSS_OPEN } from "../domain-css/domain-css.shared";
 import { useTabsStore } from "../tabs/tabs.store";
 import type { WindowChromeCommands } from "./window-chrome.shared";
 import {
@@ -111,12 +112,31 @@ export function UrlPill() {
   if (!url) return null;
 
   let displayUrl = url;
-  try {
-    const parsed = new URL(url);
-    displayUrl = parsed.hostname + (parsed.pathname !== "/" ? parsed.pathname : "");
-  } catch {
-    // keep raw url
+  let hostname = "";
+  let isWebUrl = false;
+  if (url.startsWith("app:domain-css")) {
+    const qIdx = url.indexOf("?");
+    if (qIdx !== -1) {
+      const params = new URLSearchParams(url.slice(qIdx + 1));
+      const domain = params.get("domain");
+      if (domain) displayUrl = `Customization: ${domain}`;
+    }
+  } else {
+    try {
+      const parsed = new URL(url);
+      hostname = parsed.hostname;
+      displayUrl = parsed.hostname + (parsed.pathname !== "/" ? parsed.pathname : "");
+      isWebUrl = parsed.protocol === "http:" || parsed.protocol === "https:";
+    } catch {
+      // keep raw url
+    }
   }
+
+  const handleDomainCss = () => {
+    if (hostname) {
+      window.chiaroscuro.sendCommand(DOMAIN_CSS_OPEN, { domain: hostname });
+    }
+  };
 
   return (
     <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
@@ -145,14 +165,38 @@ export function UrlPill() {
             fontSize: "var(--text-sm)",
             fontFamily: "var(--font-mono)",
             color: "var(--glass-text-default)",
-            padding: "0.1875rem 0.25rem 0.1875rem 0.875rem",
+            padding: "0.1875rem 0.25rem",
             borderRadius: "var(--radius-lg)",
             background: "var(--glass-subtle)",
             WebkitAppRegion: "no-drag",
           } as React.CSSProperties
         }
       >
-        <span className="truncate" style={{ maxWidth: 300 }}>
+        {isWebUrl && (
+          <button
+            type="button"
+            className="flex items-center justify-center shrink-0 cursor-pointer text-glass-text-muted hover:bg-glass-hover hover:text-glass-text-hover active:bg-glass-pressed active:text-glass-text-pressed"
+            style={{
+              width: 24,
+              height: 24,
+              borderRadius: "var(--radius-md)",
+              border: "none",
+              background: "transparent",
+              transition:
+                "background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out)",
+            }}
+            tabIndex={-1}
+            onClick={handleDomainCss}
+            aria-label="Domain customization"
+            data-tip="Domain customization"
+          >
+            <Icon name="sliders" style="solid" css={{ fontSize: "var(--icon-size-default)" }} />
+          </button>
+        )}
+        <span
+          className="truncate"
+          style={{ maxWidth: 300, paddingLeft: isWebUrl ? 0 : "0.625rem" }}
+        >
           {displayUrl}
         </span>
         <button

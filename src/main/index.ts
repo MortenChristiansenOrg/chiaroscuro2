@@ -29,6 +29,11 @@ import type {
 import { register as registerDevTools } from "../features/dev-tools/dev-tools.main";
 import type { DevToolsCommands, DevToolsEvents } from "../features/dev-tools/dev-tools.shared";
 import {
+  register as registerDomainCss,
+  start as startDomainCss,
+} from "../features/domain-css/domain-css.main";
+import type { DomainCssCommands, DomainCssEvents } from "../features/domain-css/domain-css.shared";
+import {
   register as registerFolders,
   start as startFolders,
 } from "../features/folders/folders.main";
@@ -52,6 +57,7 @@ import {
 } from "../features/sidebar/sidebar.main";
 import type { SidebarCommands, SidebarEvents } from "../features/sidebar/sidebar.shared";
 import { register as registerTabs, start as startTabs } from "../features/tabs/tabs.main";
+import { getAllTabs } from "../features/tabs/tabs.main";
 import type { TabsCommands, TabsEvents } from "../features/tabs/tabs.shared";
 import { register as registerTooltip } from "../features/tooltip/tooltip.main";
 import type { TooltipCommands, TooltipEvents } from "../features/tooltip/tooltip.shared";
@@ -95,6 +101,7 @@ type AllCommands = MergeRegistries<
     FoldersCommands,
     ZoomCommands,
     DevToolsCommands,
+    DomainCssCommands,
   ]
 >;
 
@@ -113,6 +120,7 @@ type AllEvents = MergeRegistries<
     FoldersEvents,
     ZoomEvents,
     DevToolsEvents,
+    DomainCssEvents,
   ]
 >;
 
@@ -213,6 +221,11 @@ app.whenReady().then(async () => {
   registerFolders(deps);
   registerZoom(deps);
   registerDevTools(deps);
+  registerDomainCss({
+    ...deps,
+    dataDir,
+    getTabsSnapshot: getAllTabs,
+  });
 
   // Load persisted layout state before creating the window
   const getDisplayBounds = () => screen.getAllDisplays().map((d) => d.workArea);
@@ -249,6 +262,11 @@ app.whenReady().then(async () => {
     await startFolders(deps);
     await startCommandPalette(deps);
     await startSettings(deps);
+    await startDomainCss({
+      ...deps,
+      dataDir,
+      getTabsSnapshot: getAllTabs,
+    });
   });
 
   app.on("activate", () => {

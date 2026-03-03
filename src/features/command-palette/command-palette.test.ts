@@ -196,7 +196,7 @@ describe("start()", () => {
   it("loads provider settings from dataStore", async () => {
     const { deps, dataStore } = setup();
     await dataStore.setSetting("search-providers", [
-      { bang: "!c", name: "Custom", urlTemplate: "https://custom.com/?q={query}" },
+      { id: "custom-1", bang: "!c", name: "Custom", urlTemplate: "https://custom.com/?q={query}" },
     ]);
     await dataStore.setSetting("default-search-provider", "!c");
 

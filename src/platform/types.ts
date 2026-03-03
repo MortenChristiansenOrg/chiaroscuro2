@@ -66,8 +66,13 @@ export interface Platform {
   }): Promise<number>;
   hideContextMenu(): void;
 
+  // CSS injection
+  insertCSS(tabId: TabId, css: string): Promise<string>;
+  removeInsertedCSS(tabId: TabId, key: string): Promise<void>;
+
   // Shell / clipboard
   openExternal(url: string): Promise<void>;
+  openPath(filePath: string): Promise<void>;
   readClipboard(): string;
   writeClipboard(text: string): void;
 }
