@@ -1,0 +1,139 @@
+---
+title: Downloads
+---
+
+import { LivePreview } from "../../components/LivePreview"
+import { DownloadsSection } from "@features/downloads/downloads.renderer"
+import { DownloadItem } from "@features/downloads/downloads.renderer"
+import { DEMO_DOWNLOADS, makeDemoDownloadMap } from "../../lib/demo-data"
+
+# Downloads
+
+Section in the sidebar that shows active and recently completed file downloads with progress, pause/resume, and cancel controls.
+
+---
+
+## Anatomy
+
+- **Section container** — bordered top, vertical stack
+- **Section header** — uppercase label with arrow-down icon
+- **Download item** — horizontal flex row: status icon, filename + progress bar, action buttons
+- **Progress bar** — thin accent-colored bar inside a glass-border track
+- **Action buttons** — pause/resume toggle + cancel (icon-only, `--click-target-min` sized)
+
+---
+
+## Active Downloads
+
+<LivePreview label="Progressing + paused downloads" stores={{ downloads: { downloads: makeDemoDownloadMap(DEMO_DOWNLOADS.filter(d => d.state !== "completed")) } }}>
+  <div style={{ width: 230 }}>
+    <DownloadsSection />
+  </div>
+</LivePreview>
+
+## Completed Download
+
+<LivePreview label="Completed download (faded)" stores={{ downloads: { downloads: makeDemoDownloadMap(DEMO_DOWNLOADS.filter(d => d.state === "completed")) } }}>
+  <div style={{ width: 230 }}>
+    <DownloadsSection />
+  </div>
+</LivePreview>
+
+## Mixed State
+
+<LivePreview label="All states together" stores={{ downloads: { downloads: makeDemoDownloadMap() } }}>
+  <div style={{ width: 230 }}>
+    <DownloadsSection />
+  </div>
+</LivePreview>
+
+---
+
+## Specs
+
+| Property | Token/Value |
+|----------|-------------|
+| Section border-top | `1px solid var(--glass-border)` |
+| Section padding | `0.375rem 0` |
+| Header font size | `--text-xs` |
+| Header font weight | 600 |
+| Header letter spacing | `0.04em` |
+| Item padding | `0.25rem 0.5rem` |
+| Item gap | `0.375rem` |
+| Item border radius | `--radius-sm` |
+| Progress track height | `0.125rem` |
+| Progress track bg | `var(--glass-border)` |
+| Progress fill bg | `oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250))` |
+| Button size | `--click-target-min` (24px) |
+| Completed opacity | `0.5` |
+
+---
+
+## States
+
+| State | Icon | Controls | Opacity |
+|-------|------|----------|---------|
+| Progressing | `arrow-down` | Pause + Cancel | 1 |
+| Paused | `arrow-down` | Resume + Cancel | 1 |
+| Completed | `circle-check` | None | 0.5 |
+| Cancelled | `circle-check` | None | 0.5 |
+
+### Button States
+
+| State | Background | Text |
+|-------|-----------|------|
+| Default | transparent | `var(--glass-text-hint)` |
+| Hover | `var(--glass-hover)` | `var(--glass-text-hover)` |
+| Pressed | `var(--glass-pressed)` | `var(--glass-text-pressed)` |
+
+---
+
+## Behavior
+
+- **Progress updates** — receivedBytes updates arrive throttled (500ms) from the main process; the bar width transitions smoothly via `--duration-fast`.
+- **Pause/Resume toggle** — single button swaps between `pause` and `play` icons based on download state.
+- **Cancel** — removes the download from the active set on the main side; UI receives a completed event with `"cancelled"` state.
+- **Auto-remove** — completed/cancelled downloads disappear after 3 seconds.
+- **Empty state** — the entire section is hidden when no downloads exist.
+- **Save path** — files are saved to the user's desktop by default.
+
+---
+
+## Animation & Motion
+
+- Progress bar width: `transition: width var(--duration-fast) var(--ease-out)`
+- Completed opacity: `transition: opacity var(--duration-normal) var(--ease-in-out)`
+- Button color/bg: `transition: color var(--duration-fast), background var(--duration-fast)`
+
+---
+
+## Keyboard & Focus
+
+- Pause/Resume and Cancel buttons are native `<button>` elements, focusable via Tab.
+- `tabIndex={-1}` — buttons are excluded from main tab order (sidebar scroll is primary focus).
+- Standard `:focus-visible` ring when focused via keyboard.
+
+---
+
+## Accessibility
+
+- Pause/Resume button has `aria-label` ("Pause download" / "Resume download") and `data-tip`.
+- Cancel button has `aria-label="Cancel download"` and `data-tip="Cancel"`.
+- Status icon changes from `arrow-down` (active) to `circle-check` (done) for visual distinction.
+- Completed items at 0.5 opacity maintain text contrast above 3:1.
+
+---
+
+## Layout & Composition
+
+- Rendered inside the [Sidebar](/components/sidebar), between the scrollable tabs area and the [Workspace Switcher](/components/workspace-switcher).
+- Only visible when `downloads.size > 0`.
+- Separated from tabs by a `var(--glass-border)` top border.
+
+---
+
+## Related
+
+- [Sidebar](/components/sidebar) — parent container
+- [Workspace Switcher](/components/workspace-switcher) — sits below downloads
+- [Tabs](/components/tabs) — sits above downloads in the sidebar scroll area

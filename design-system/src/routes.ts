@@ -127,6 +127,12 @@ export const routes: Route[] = [
     component: lazy(() => import("./pages/components/command-palette.mdx")),
   },
   {
+    path: "/components/downloads",
+    title: "Downloads",
+    group: "Components",
+    component: lazy(() => import("./pages/components/downloads.mdx")),
+  },
+  {
     path: "/components/pinned-tabs",
     title: "Pinned Tabs",
     group: "Components",

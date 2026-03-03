@@ -32,6 +32,11 @@ import {
 } from "../features/domain-css/domain-css.main";
 import type { DomainCssCommands, DomainCssEvents } from "../features/domain-css/domain-css.shared";
 import {
+  register as registerDownloads,
+  start as startDownloads,
+} from "../features/downloads/downloads.main";
+import type { DownloadsCommands, DownloadsEvents } from "../features/downloads/downloads.shared";
+import {
   register as registerFolders,
   start as startFolders,
 } from "../features/folders/folders.main";
@@ -101,6 +106,7 @@ type AllCommands = MergeRegistries<
     FoldersCommands,
     ZoomCommands,
     DomainCssCommands,
+    DownloadsCommands,
   ]
 >;
 
@@ -119,6 +125,7 @@ type AllEvents = MergeRegistries<
     FoldersEvents,
     ZoomEvents,
     DomainCssEvents,
+    DownloadsEvents,
   ]
 >;
 
@@ -221,6 +228,7 @@ app.whenReady().then(async () => {
     dataDir,
     getTabsSnapshot: getAllTabs,
   });
+  registerDownloads(deps);
 
   // Load persisted layout state before creating the window
   const getDisplayBounds = () => screen.getAllDisplays().map((d) => d.workArea);
@@ -262,6 +270,7 @@ app.whenReady().then(async () => {
       dataDir,
       getTabsSnapshot: getAllTabs,
     });
+    startDownloads(deps);
   });
 
   app.on("activate", () => {

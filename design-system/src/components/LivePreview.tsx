@@ -1,4 +1,6 @@
 import { useCommandPaletteStore } from "@features/command-palette/command-palette.store";
+import type { Download } from "@features/downloads/downloads.shared";
+import { useDownloadsStore } from "@features/downloads/downloads.store";
 import type { PinnedTab } from "@features/pinned-tabs/pinned-tabs.shared";
 import { usePinnedTabsStore } from "@features/pinned-tabs/pinned-tabs.store";
 import { useSidebarStore } from "@features/sidebar/sidebar.store";
@@ -18,6 +20,7 @@ interface StoreOverrides {
   commandPalette?: { open: boolean };
   windowChrome?: { maximized: boolean; loadingTabs: Set<TabId> };
   pinnedTabs?: { pinnedTabs: PinnedTab[]; activePinnedTabId: TabId | null };
+  downloads?: { downloads: Map<string, Download> };
 }
 
 export function LivePreview({
@@ -37,6 +40,7 @@ export function LivePreview({
     if (stores?.commandPalette) useCommandPaletteStore.setState(stores.commandPalette);
     if (stores?.windowChrome) useWindowChromeStore.setState(stores.windowChrome);
     if (stores?.pinnedTabs) usePinnedTabsStore.setState(stores.pinnedTabs);
+    if (stores?.downloads) useDownloadsStore.setState(stores.downloads);
 
     return () => {
       if (stores?.tabs) useTabsStore.setState({ tabs: new Map(), activeTabId: null });
@@ -48,6 +52,7 @@ export function LivePreview({
         useWindowChromeStore.setState({ maximized: false, loadingTabs: new Set() });
       if (stores?.pinnedTabs)
         usePinnedTabsStore.setState({ pinnedTabs: [], activePinnedTabId: null });
+      if (stores?.downloads) useDownloadsStore.setState({ downloads: new Map() });
     };
   }, []);
 

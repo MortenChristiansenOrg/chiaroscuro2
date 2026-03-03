@@ -1,3 +1,4 @@
+import type { Download } from "@features/downloads/downloads.shared";
 import type { PinnedTab } from "@features/pinned-tabs/pinned-tabs.shared";
 import type { Tab } from "@features/tabs/tabs.shared";
 import type { Workspace } from "@features/workspaces/workspaces.shared";
@@ -120,6 +121,43 @@ export function makeDemoPinnedTabMap(): Map<TabId, Tab> {
   const map = makeDemoTabMap();
   for (const tab of DEMO_PINNED_AS_TABS) {
     map.set(tab.id, tab);
+  }
+  return map;
+}
+
+// ── Downloads ────────────────────────────────────────────────────
+
+export const DEMO_DOWNLOADS: Download[] = [
+  {
+    id: "dl-progressing",
+    filename: "project-assets.zip",
+    url: "https://example.com/project-assets.zip",
+    receivedBytes: 450,
+    totalBytes: 1000,
+    state: "progressing",
+  },
+  {
+    id: "dl-paused",
+    filename: "design-system-v2.fig",
+    url: "https://example.com/design-system-v2.fig",
+    receivedBytes: 200,
+    totalBytes: 800,
+    state: "paused",
+  },
+  {
+    id: "dl-completed",
+    filename: "report-q4.pdf",
+    url: "https://example.com/report-q4.pdf",
+    receivedBytes: 500,
+    totalBytes: 500,
+    state: "completed",
+  },
+];
+
+export function makeDemoDownloadMap(downloads: Download[] = DEMO_DOWNLOADS): Map<string, Download> {
+  const map = new Map<string, Download>();
+  for (const dl of downloads) {
+    map.set(dl.id, dl);
   }
   return map;
 }
