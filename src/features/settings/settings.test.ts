@@ -61,7 +61,7 @@ describe("settings commands", () => {
 
       const newSettings: Settings = {
         searchProviders: [
-          { bang: "!test", name: "Test", urlTemplate: "https://test.com?q={query}" },
+          { id: "test-1", bang: "!test", name: "Test", urlTemplate: "https://test.com?q={query}" },
         ],
         defaultSearchProviderId: "!test",
       };
@@ -83,7 +83,9 @@ describe("settings commands", () => {
 
     it("persists to data store", async () => {
       const { commands, dataStore } = setup();
-      const providers = [{ bang: "!x", name: "X", urlTemplate: "https://x.com?q={query}" }];
+      const providers = [
+        { id: "x-1", bang: "!x", name: "X", urlTemplate: "https://x.com?q={query}" },
+      ];
 
       await commands.send(SETTINGS_SAVE, {
         searchProviders: providers,
@@ -151,7 +153,12 @@ describe("settings commands", () => {
     it("loads persisted settings and emits SETTINGS_CHANGED", async () => {
       const { events, deps, dataStore } = setup();
       const providers = [
-        { bang: "!saved", name: "Saved", urlTemplate: "https://saved.com?q={query}" },
+        {
+          id: "saved-1",
+          bang: "!saved",
+          name: "Saved",
+          urlTemplate: "https://saved.com?q={query}",
+        },
       ];
       await dataStore.setSetting("search-providers", providers);
       await dataStore.setSetting("default-search-provider", "!saved");

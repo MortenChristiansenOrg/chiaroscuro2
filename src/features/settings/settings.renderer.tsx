@@ -101,7 +101,7 @@ function ProviderEditor({
   );
 
   const handleAdd = useCallback(() => {
-    onChange([...providers, { bang: "", name: "", urlTemplate: "" }]);
+    onChange([...providers, { id: crypto.randomUUID(), bang: "", name: "", urlTemplate: "" }]);
   }, [providers, onChange]);
 
   return (
@@ -123,7 +123,7 @@ function ProviderEditor({
       )}
       {providers.map((provider, i) => (
         <ProviderRow
-          key={`${provider.bang}-${i}`}
+          key={provider.id}
           provider={provider}
           onUpdate={(updated) => handleUpdate(i, updated)}
           onRemove={() => handleRemove(i)}
