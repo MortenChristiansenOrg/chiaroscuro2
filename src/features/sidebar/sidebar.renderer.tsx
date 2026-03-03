@@ -1673,7 +1673,7 @@ export function SidebarPanel() {
           aria-valuenow={resize.width}
           aria-valuemin={MIN_SIDEBAR_WIDTH}
           aria-valuemax={MAX_SIDEBAR_WIDTH}
-          tabIndex={0}
+          tabIndex={-1}
         />
       </div>
     </div>

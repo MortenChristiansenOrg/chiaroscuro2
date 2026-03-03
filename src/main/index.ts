@@ -1,4 +1,5 @@
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { BrowserWindow, Menu, app, ipcMain, screen } from "electron";
 import { CommandBus } from "../bus/command-bus";
 import { EventBus } from "../bus/event-bus";
@@ -33,6 +34,12 @@ import {
   start as startDomainCss,
 } from "../features/domain-css/domain-css.main";
 import type { DomainCssCommands, DomainCssEvents } from "../features/domain-css/domain-css.shared";
+import { register as registerDragDrop } from "../features/drag-drop/drag-drop.main";
+import {
+  DRAG_DROP_OPEN_FILES,
+  type DragDropCommands,
+  type DragDropEvents,
+} from "../features/drag-drop/drag-drop.shared";
 import {
   register as registerFolders,
   start as startFolders,
@@ -102,6 +109,7 @@ type AllCommands = MergeRegistries<
     ZoomCommands,
     DevToolsCommands,
     DomainCssCommands,
+    DragDropCommands,
   ]
 >;
 
@@ -121,6 +129,7 @@ type AllEvents = MergeRegistries<
     ZoomEvents,
     DevToolsEvents,
     DomainCssEvents,
+    DragDropEvents,
   ]
 >;
 
@@ -151,6 +160,7 @@ function createWindow(windowBounds?: {
     webPreferences: {
       preload: path.join(__dirname, "../preload/index.js"),
       sandbox: false,
+      navigateOnDragDrop: true,
     },
   });
 
@@ -226,6 +236,7 @@ app.whenReady().then(async () => {
     dataDir,
     getTabsSnapshot: getAllTabs,
   });
+  registerDragDrop(deps);
 
   // Load persisted layout state before creating the window
   const getDisplayBounds = () => screen.getAllDisplays().map((d) => d.workArea);
@@ -233,6 +244,19 @@ app.whenReady().then(async () => {
 
   // Bridge bus to IPC (once, before any window creation)
   bridgeBusToIpc(commands, events, () => BrowserWindow.getAllWindows());
+
+  // Intercept file:// navigations (triggered by OS file drops) on all webContents.
+  // When a file is dropped and the page doesn't handle it, the browser tries to
+  // navigate to file:///path — we prevent that and open the file as a new tab.
+  app.on("web-contents-created", (_event, contents) => {
+    contents.on("will-navigate", (event, url) => {
+      if (url.startsWith("file:///")) {
+        event.preventDefault();
+        const filePath = fileURLToPath(url);
+        commands.send(DRAG_DROP_OPEN_FILES, { filePaths: [filePath] }).catch(console.error);
+      }
+    });
+  });
 
   createWindow(appState.windowBounds);
   if (activeWindowId && process.env.NODE_ENV !== "test") {

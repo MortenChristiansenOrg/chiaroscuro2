@@ -12,7 +12,7 @@ import type { TabId, WindowId } from "../shared/types";
 import type { Bounds } from "../shared/types";
 import type { Platform } from "./types";
 
-const ALLOWED_SCHEMES = new Set(["http:", "https:", "about:", "data:"]);
+const ALLOWED_SCHEMES = new Set(["http:", "https:", "about:", "data:", "file:"]);
 const ALLOWED_EXTERNAL_SCHEMES = new Set(["http:", "https:", "mailto:"]);
 
 function isAllowedUrl(url: string): boolean {
@@ -182,6 +182,7 @@ export class ElectronPlatform implements Platform {
         contextIsolation: true,
         nodeIntegration: false,
         webSecurity: true,
+        navigateOnDragDrop: true,
         preload: path.join(__dirname, "../preload/tab.js"),
       },
     });
