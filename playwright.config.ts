@@ -5,7 +5,7 @@ export default defineConfig({
   timeout: 5_000, // DO NOT increase — tests must be fast; fix the test instead
   globalTimeout: 300_000,
   retries: 0,
-  workers: 4,
+  workers: process.env.CI ? 2 : 4,
   use: {
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
