@@ -2,6 +2,23 @@ import type { Bounds, TabId, WindowId } from "../shared/types";
 
 export type { Bounds };
 
+/** Abstraction over a single file download in progress. */
+export interface PlatformDownload {
+  filename: string;
+  url: string;
+  totalBytes: number;
+  setSavePath(path: string): void;
+  cancel(): void;
+  pause(): void;
+  resume(): void;
+  isPaused(): boolean;
+  getReceivedBytes(): number;
+  // biome-ignore lint/suspicious/noExplicitAny: thin wrapper over Electron DownloadItem events
+  on(event: string, cb: (...args: any[]) => void): void;
+  // biome-ignore lint/suspicious/noExplicitAny: thin wrapper over Electron DownloadItem events
+  removeListener(event: string, cb: (...args: any[]) => void): void;
+}
+
 export interface Platform {
   // Window management
   createWindow(): Promise<WindowId>;
@@ -69,6 +86,10 @@ export interface Platform {
   // CSS injection
   insertCSS(tabId: TabId, css: string): Promise<string>;
   removeInsertedCSS(tabId: TabId, key: string): Promise<void>;
+
+  // Downloads
+  onDownload(callback: (download: PlatformDownload) => void): () => void;
+  getDesktopPath(): string;
 
   // Shell / clipboard
   openExternal(url: string): Promise<void>;
