@@ -38,6 +38,12 @@ import {
   start as startDownloads,
 } from "../features/downloads/downloads.main";
 import type { DownloadsCommands, DownloadsEvents } from "../features/downloads/downloads.shared";
+import { register as registerDragDrop } from "../features/drag-drop/drag-drop.main";
+import {
+  DRAG_DROP_OPEN_FILES,
+  type DragDropCommands,
+  type DragDropEvents,
+} from "../features/drag-drop/drag-drop.shared";
 import {
   register as registerFolders,
   start as startFolders,
@@ -85,6 +91,7 @@ import type {
 import { register as registerZoom } from "../features/zoom/zoom.main";
 import type { ZoomCommands, ZoomEvents } from "../features/zoom/zoom.shared";
 import { ElectronPlatform } from "../platform/electron";
+import { enableNativeFileDrop } from "../platform/native-drop-win32";
 import type { TabId, WindowId, WorkspaceId } from "../shared/types";
 
 const iconFile = process.platform === "win32" ? "icon.ico" : "icon.png";
@@ -107,6 +114,7 @@ type AllCommands = MergeRegistries<
     ZoomCommands,
     DevToolsCommands,
     DomainCssCommands,
+    DragDropCommands,
     DownloadsCommands,
   ]
 >;
@@ -127,6 +135,7 @@ type AllEvents = MergeRegistries<
     ZoomEvents,
     DevToolsEvents,
     DomainCssEvents,
+    DragDropEvents,
     DownloadsEvents,
   ]
 >;
@@ -149,7 +158,7 @@ function createWindow(windowBounds?: {
   y: number;
   width: number;
   height: number;
-}): void {
+}): BrowserWindow {
   const win = new BrowserWindow({
     ...(windowBounds ?? { width: 1200, height: 800 }),
     icon: iconPath,
@@ -192,6 +201,7 @@ function createWindow(windowBounds?: {
   } else {
     win.loadFile(path.join(__dirname, "../renderer/index.html"));
   }
+  return win;
 }
 
 const deps = {
@@ -233,6 +243,7 @@ app.whenReady().then(async () => {
     dataDir,
     getTabsSnapshot: getAllTabs,
   });
+  registerDragDrop(deps);
   registerDownloads(deps);
 
   // Load persisted layout state before creating the window
@@ -242,7 +253,16 @@ app.whenReady().then(async () => {
   // Bridge bus to IPC (once, before any window creation)
   bridgeBusToIpc(commands, events, () => BrowserWindow.getAllWindows());
 
-  createWindow(appState.windowBounds);
+  const win = createWindow(appState.windowBounds);
+
+  // Use Win32 DragAcceptFiles + WM_DROPFILES for native file drop.
+  // backgroundMaterial: "acrylic" blocks Chromium's OLE drag pipeline,
+  // so we bypass it via the older shell32 drop mechanism.
+  if (process.platform === "win32") {
+    enableNativeFileDrop(win, (filePaths) => {
+      commands.send(DRAG_DROP_OPEN_FILES, { filePaths }).catch(console.error);
+    });
+  }
   if (activeWindowId && process.env.NODE_ENV !== "test") {
     platform.initTooltipOverlay(activeWindowId);
     platform.initContextMenuOverlay(activeWindowId);

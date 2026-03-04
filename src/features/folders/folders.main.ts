@@ -131,8 +131,10 @@ export function register(deps: Deps): void {
         events.emit(TABS_UPDATED, { tab: { ...updatedTab2 } });
       }
       events.emit(TABS_LIST_CHANGED, { tabs: getTabsForWorkspace(tab.workspaceId) });
-      emitChanged();
+      // Emit rename-requested BEFORE folders-changed so renamingFolderId is set
+      // when the folder first renders (prevents race on slow CI).
       events.emit(FOLDERS_RENAME_REQUESTED, { folderId });
+      emitChanged();
     }
   });
 
@@ -292,8 +294,8 @@ export function register(deps: Deps): void {
 
     folders.set(folderId, folder);
     persistFolder(folder);
-    emitChanged();
     events.emit(FOLDERS_RENAME_REQUESTED, { folderId });
+    emitChanged();
   });
 }
 

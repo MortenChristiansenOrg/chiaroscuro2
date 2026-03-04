@@ -420,6 +420,7 @@ export function TabItem({
     <div
       ref={elRef}
       data-tab-id={tab.id}
+      data-ephemeral={isEphemeral ? "" : undefined}
       draggable={!exiting}
       className={`${isDragging ? "" : "group"} relative flex items-center cursor-pointer transition-colors duration-150 ${isDragging ? "" : "hover:bg-glass-hover hover:text-glass-text-hover active:bg-glass-pressed active:text-glass-text-pressed"}`}
       style={{
@@ -795,7 +796,10 @@ function FolderHeader({
           type="text"
           value={renameValue}
           onChange={(e) => setRenameValue(e.target.value)}
-          onBlur={commitRename}
+          onBlur={(e) => {
+            // Ignore blur from DOM detachment during React re-renders
+            if (e.currentTarget.isConnected) commitRename();
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter") commitRename();
             if (e.key === "Escape") {
@@ -1676,7 +1680,7 @@ export function SidebarPanel() {
           aria-valuenow={resize.width}
           aria-valuemin={MIN_SIDEBAR_WIDTH}
           aria-valuemax={MAX_SIDEBAR_WIDTH}
-          tabIndex={0}
+          tabIndex={-1}
         />
       </div>
     </div>

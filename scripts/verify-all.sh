@@ -29,6 +29,14 @@ else
   fail "Icon usage"
 fi
 
+# No waitForTimeout in tests
+step "No waitForTimeout in tests"
+if ./scripts/check-no-wait-for-timeout.sh 2>&1; then
+  pass "No waitForTimeout"
+else
+  fail "No waitForTimeout"
+fi
+
 # Type checking
 step "Type checking (tsc --build)"
 if bun run typecheck 2>&1; then

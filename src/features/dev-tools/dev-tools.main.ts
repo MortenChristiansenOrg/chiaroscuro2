@@ -45,7 +45,7 @@ export function register({
   });
 
   if (isDev) {
-    platform.registerShortcut("F11", () => {
+    platform.registerLocalShortcut("F11", () => {
       commands.send(DEVTOOLS_TOGGLE_CHROME, undefined).catch(console.error);
     });
   }

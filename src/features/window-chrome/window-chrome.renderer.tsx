@@ -125,7 +125,19 @@ export function UrlPill() {
     try {
       const parsed = new URL(url);
       hostname = parsed.hostname;
-      displayUrl = parsed.hostname + (parsed.pathname !== "/" ? parsed.pathname : "");
+      const path = parsed.pathname !== "/" ? parsed.pathname : "";
+      displayUrl = parsed.hostname + path;
+      if (parsed.protocol === "file:") {
+        const decodedPath = decodeURIComponent(path);
+        if (/^\/[A-Za-z]:/.test(decodedPath)) {
+          // Windows drive path like /C:/... — strip leading slash
+          displayUrl = decodedPath.slice(1);
+        } else if (parsed.hostname) {
+          displayUrl = `//${parsed.hostname}${decodedPath}`;
+        } else {
+          displayUrl = decodedPath;
+        }
+      }
       isWebUrl = parsed.protocol === "http:" || parsed.protocol === "https:";
     } catch {
       // keep raw url
@@ -301,6 +313,7 @@ const isMac = typeof window !== "undefined" && window.chiaroscuro?.getPlatformNa
 export function TitleBar() {
   return (
     <div
+      data-testid="title-bar"
       className="relative flex select-none items-center shrink-0"
       style={
         {

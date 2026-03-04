@@ -15,13 +15,15 @@ import type { TabId, WindowId } from "../shared/types";
 import type { Bounds } from "../shared/types";
 import type { Platform, PlatformDownload } from "./types";
 
-const ALLOWED_SCHEMES = new Set(["http:", "https:", "about:", "data:"]);
+const ALLOWED_SCHEMES_WEB = new Set(["http:", "https:", "about:", "data:"]);
+const ALLOWED_SCHEMES_INTERNAL = new Set(["http:", "https:", "about:", "data:", "file:"]);
 const ALLOWED_EXTERNAL_SCHEMES = new Set(["http:", "https:", "mailto:"]);
 
-function isAllowedUrl(url: string): boolean {
+function isAllowedUrl(url: string, source: "web" | "internal" = "web"): boolean {
   try {
     const parsed = new URL(url);
-    return ALLOWED_SCHEMES.has(parsed.protocol);
+    const allow = source === "internal" ? ALLOWED_SCHEMES_INTERNAL : ALLOWED_SCHEMES_WEB;
+    return allow.has(parsed.protocol);
   } catch {
     return false;
   }
@@ -236,7 +238,7 @@ export class ElectronPlatform implements Platform {
       this.zoomIpcHooked = true;
     }
 
-    if (!isAllowedUrl(url)) throw new Error(`Blocked URL scheme: ${url}`);
+    if (!isAllowedUrl(url, "internal")) throw new Error(`Blocked URL scheme: ${url}`);
     view.webContents.loadURL(url);
 
     return tabId;
@@ -258,7 +260,7 @@ export class ElectronPlatform implements Platform {
   async navigateTab(tabId: TabId, url: string): Promise<void> {
     const view = this.views.get(tabId);
     if (!view) return;
-    if (!isAllowedUrl(url)) return;
+    if (!isAllowedUrl(url, "internal")) return;
     view.webContents.loadURL(url);
   }
 
@@ -395,6 +397,13 @@ export class ElectronPlatform implements Platform {
   }
 
   registerShortcut(accelerator: string, callback: () => void): void {
+    if (process.env.NODE_ENV === "test") {
+      // In tests, use local shortcuts so sendInputEvent triggers them via
+      // before-input-event. globalShortcut doesn't fire for synthetic events
+      // and conflicts between parallel Electron instances on the same display.
+      this.registerLocalShortcut(accelerator, callback);
+      return;
+    }
     this.shortcuts.set(accelerator, callback);
     if (this.shortcutsActive) {
       globalShortcut.register(accelerator, callback);
@@ -402,6 +411,11 @@ export class ElectronPlatform implements Platform {
   }
 
   unregisterShortcut(accelerator: string): void {
+    if (process.env.NODE_ENV === "test") {
+      this.localShortcuts.delete(accelerator);
+      this.rebuildLocalShortcutMenu();
+      return;
+    }
     this.shortcuts.delete(accelerator);
     if (this.shortcutsActive) {
       globalShortcut.unregister(accelerator);
@@ -462,7 +476,7 @@ export class ElectronPlatform implements Platform {
       }
     }
     return (
-      input.key === key &&
+      input.key.toLowerCase() === key.toLowerCase() &&
       input.control === wantCtrl &&
       input.shift === wantShift &&
       input.alt === wantAlt &&

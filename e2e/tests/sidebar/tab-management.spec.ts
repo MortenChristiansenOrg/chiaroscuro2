@@ -29,12 +29,8 @@ test.describe("sidebar tab management", () => {
       expect(await sidebarPage.getTabCount()).toBeGreaterThanOrEqual(2);
     }).toPass({ timeout: 5_000 });
 
-    // Click first tab — the active tab should change
-    const titles = await sidebarPage.getTabTitles();
-    if (titles.length >= 2) {
-      const first = titles[0];
-      if (first) await sidebarPage.clickTab(first);
-    }
+    // Click first tab — use index since both example.com/org share the title "Example Domain"
+    await sidebarPage.clickTabByIndex(0);
   });
 
   test("closes tab via close button", async ({ sidebarPage, commandPalettePage }) => {

@@ -11,7 +11,7 @@
     "preview": "electron-vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "e2e": "xvfb-run --auto-servernum bunx playwright test",
+    "e2e": "bunx playwright test",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",
@@ -25,6 +25,7 @@
   "dependencies": {
     "@fortawesome/fontawesome-free": "^7.2.0",
     "electron-updater": "^6.6.2",
+    "koffi": "^2.15.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "react-error-boundary": "^6.1.1",
