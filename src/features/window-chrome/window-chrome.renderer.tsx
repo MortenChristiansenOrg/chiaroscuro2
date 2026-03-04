@@ -125,7 +125,12 @@ export function UrlPill() {
     try {
       const parsed = new URL(url);
       hostname = parsed.hostname;
-      displayUrl = parsed.hostname + (parsed.pathname !== "/" ? parsed.pathname : "");
+      const path = parsed.pathname !== "/" ? parsed.pathname : "";
+      displayUrl = parsed.hostname + path;
+      // file:// URLs on Windows have pathname like /C:/... — strip leading slash
+      if (parsed.protocol === "file:" && /^\/[A-Za-z]:/.test(path)) {
+        displayUrl = decodeURIComponent(path.slice(1));
+      }
       isWebUrl = parsed.protocol === "http:" || parsed.protocol === "https:";
     } catch {
       // keep raw url

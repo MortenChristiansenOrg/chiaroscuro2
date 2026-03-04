@@ -78,6 +78,19 @@ describe("UrlPill", () => {
     expect(screen.getByText("example.com")).toBeDefined();
   });
 
+  it("displays decoded Windows file path without leading slash", () => {
+    const tab = makeTab({
+      id: "t1" as TabId,
+      url: "file:///C:/Users/morten/Desktop/Hermann%20-%20Character%20Sheet.pdf",
+    });
+    useTabsStore.setState({
+      tabs: new Map([["t1" as TabId, tab]]),
+      activeTabId: "t1" as TabId,
+    });
+    render(<UrlPill />);
+    expect(screen.getByText("C:/Users/morten/Desktop/Hermann - Character Sheet.pdf")).toBeDefined();
+  });
+
   it("copy button sends copy-address command", () => {
     const tab = makeTab({ id: "t1" as TabId, url: "https://example.com" });
     useTabsStore.setState({
