@@ -9,7 +9,6 @@ import "../../features/folders/folders.feature";
 import "../../features/command-palette/command-palette.feature";
 import "../../features/settings/settings.feature";
 import "../../features/domain-css/domain-css.feature";
-import "../../features/drag-drop/drag-drop.feature";
 
 // All subscriptions wired — tell main process to start emitting events (phase 2)
 import { Shell, signalReady } from "./Shell";

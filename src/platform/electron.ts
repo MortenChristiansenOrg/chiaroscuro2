@@ -182,7 +182,6 @@ export class ElectronPlatform implements Platform {
         contextIsolation: true,
         nodeIntegration: false,
         webSecurity: true,
-        navigateOnDragDrop: true,
         preload: path.join(__dirname, "../preload/tab.js"),
       },
     });
