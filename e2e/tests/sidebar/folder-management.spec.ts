@@ -35,17 +35,42 @@ async function createBookmarkedTab(
   return newId;
 }
 
-/** Create a folder from the active (bookmarked) tab and rename it. */
+/** Create a folder from the active (bookmarked) tab and rename it via command.
+ *  Uses IPC rename (not the inline input) for reliability on slow CI.
+ *  The inline rename input is tested separately in the "folder rename" tests. */
 async function createNamedFolder(sidebarPage: SidebarPage, name: string) {
-  const before = await sidebarPage.getFolderCount();
+  const beforeIds = new Set(await getFolderIds(sidebarPage));
   await sidebarPage.createFolder();
+
+  let newFolderId = "";
   await expect(async () => {
-    expect(await sidebarPage.getFolderCount()).toBe(before + 1);
+    const ids = await getFolderIds(sidebarPage);
+    const added = ids.filter((id) => !beforeIds.has(id));
+    expect(added.length).toBe(1);
+    // biome-ignore lint/style/noNonNullAssertion: length checked above
+    newFolderId = added[0]!;
   }).toPass({ timeout: 3_000 });
-  await sidebarPage.submitFolderRename(name);
+
+  // Rename via command + dismiss inline input
+  await sidebarPage.page.evaluate(
+    (args) => window.chiaroscuro.sendCommand("folders:rename", args),
+    { folderId: newFolderId, name },
+  );
+  await sidebarPage.page.keyboard.press("Escape");
+
   await expect(async () => {
     expect(await sidebarPage.getFolderNames()).toContain(name);
   }).toPass({ timeout: 2_000 });
+}
+
+async function getFolderIds(sidebarPage: SidebarPage): Promise<string[]> {
+  const count = await sidebarPage.folderList.count();
+  const ids: string[] = [];
+  for (let i = 0; i < count; i++) {
+    const id = await sidebarPage.folderList.nth(i).getAttribute("data-folder-id");
+    if (id) ids.push(id);
+  }
+  return ids;
 }
 
 // ── Folder creation ──────────────────────────────────────────────
