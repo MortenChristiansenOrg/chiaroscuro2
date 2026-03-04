@@ -350,11 +350,13 @@ export function TabItem({
         onSelect: () => sendCommand(TABS_CLOSE, { tabId: tab.id }),
       });
     }
-    items.push({
-      label: "Customize tab",
-      icon: "sliders",
-      onSelect: () => sendCommand(TAB_CUSTOMIZATION_OPEN, { tabId: tab.id }),
-    });
+    if (!isEphemeral) {
+      items.push({
+        label: "Customize tab",
+        icon: "sliders",
+        onSelect: () => sendCommand(TAB_CUSTOMIZATION_OPEN, { tabId: tab.id }),
+      });
+    }
     onContextMenu(items, e);
   };
 

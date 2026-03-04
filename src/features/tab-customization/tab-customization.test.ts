@@ -46,8 +46,9 @@ function setup() {
   const events = new EventBus<AllEvents>();
   const dataStore = new MemoryDataStore();
   const tabs = new Map<TabId, Tab>();
-  tabs.set("tab-1" as TabId, makeTab("tab-1"));
-  tabs.set("tab-2" as TabId, makeTab("tab-2"));
+  tabs.set("tab-1" as TabId, makeTab("tab-1", { bookmarked: true }));
+  tabs.set("tab-2" as TabId, makeTab("tab-2", { bookmarked: true }));
+  tabs.set("ephemeral-1" as TabId, makeTab("ephemeral-1"));
   tabs.set("builtin-1" as TabId, makeTab("builtin-1", { builtIn: true, url: "app:settings" }));
 
   const deps: TabCustomizationDeps = {
@@ -85,6 +86,13 @@ describe("tab-customization commands", () => {
       await expect(
         commands.send(TAB_CUSTOMIZATION_OPEN, { tabId: "builtin-1" as TabId }),
       ).rejects.toThrow("Cannot customize built-in tabs");
+    });
+
+    it("throws for ephemeral tabs", async () => {
+      const { commands } = setup();
+      await expect(
+        commands.send(TAB_CUSTOMIZATION_OPEN, { tabId: "ephemeral-1" as TabId }),
+      ).rejects.toThrow("Cannot customize ephemeral tabs");
     });
   });
 

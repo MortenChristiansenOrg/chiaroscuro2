@@ -69,6 +69,7 @@ export function register(deps: TabCustomizationDeps): void {
     const tab = getTab(tabId);
     if (!tab) throw new Error(`Tab not found: ${tabId}`);
     if (tab.builtIn) throw new Error("Cannot customize built-in tabs");
+    if (!tab.bookmarked) throw new Error("Cannot customize ephemeral tabs");
     events.emit(TAB_CUSTOMIZATION_OPENED, { tabId });
   });
 

@@ -21,10 +21,10 @@ See also:
 - Customizations must be persisted and restored across app runs.
 - Changing a tab's custom title must immediately update the tab list / pinned tab strip.
 - Customizations for a tab must be removed when the tab is closed.
-- When ephemeral tabs expire (8-hour TTL), their customizations must also be removed.
+- Ephemeral tabs cannot be customized (only bookmarked and pinned tabs support customization).
 - Opening the customization page must replace the tab's current content (navigate the tab to the built-in page).
 - Closing the customization page must navigate the tab back to its original URL.
-- The customization page must not be available for built-in tabs (settings, domain-css, etc.).
+- The customization page must not be available for built-in tabs (settings, domain-css, etc.) or ephemeral tabs.
 
 ## Workflows
 
