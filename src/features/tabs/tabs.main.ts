@@ -5,6 +5,7 @@ import type { Bounds, Platform } from "../../platform/types";
 import type { FolderId, TabId, WindowId, WorkspaceId } from "../../shared/types";
 import { getFoldersForLevel, setFolderOrder } from "../folders/folders.main";
 import { isPinned } from "../pinned-tabs/pinned-tabs.main";
+import { getCustomization } from "../tab-customization/tab-customization.main";
 import type {
   TAB_LOADING_CHANGED,
   TabLoadingChangedPayload,
@@ -57,6 +58,9 @@ function resolveBuiltInTitle(url: string): string {
       const domain = params.get("domain");
       return domain ? `Customization: ${domain}` : "Customization";
     }
+    if (base === "app:tab-customization") {
+      return "Tab Customization";
+    }
   }
   return url;
 }
@@ -65,6 +69,11 @@ function resolveBuiltInTitle(url: string): string {
 let _tabs: Map<TabId, Tab> | undefined;
 let _attachTabListeners: ((tabId: TabId) => void) | undefined;
 let _persistTab: ((tab: Tab) => void) | undefined;
+
+// Tracks the "fixed" URL for bookmarked tabs (URL at time of bookmarking).
+// Used to restore bookmarked tabs to their original address unless
+// fixedAddressDisabled is set.
+const fixedUrls = new Map<TabId, string>();
 
 export function register(deps: Deps): void {
   const {
@@ -94,6 +103,11 @@ export function register(deps: Deps): void {
   function persistTab(tab: Tab): void {
     if (tab.builtIn) return;
     const { loading, builtIn, ...persisted } = tab;
+    // Bookmarked tabs with fixed address: persist the original URL
+    const fixedUrl = fixedUrls.get(tab.id);
+    if (tab.bookmarked && fixedUrl && !getCustomization(tab.id)?.fixedAddressDisabled) {
+      (persisted as PersistedTab).url = fixedUrl;
+    }
     tabsCollection.upsert(persisted as PersistedTab).catch(console.error);
   }
 
@@ -277,6 +291,7 @@ export function register(deps: Deps): void {
       removePersistedTab(tabId);
     }
     tabs.delete(tabId);
+    fixedUrls.delete(tabId);
 
     let activatedTabId: TabId | null = null;
     if (wasActive) {
@@ -348,8 +363,10 @@ export function register(deps: Deps): void {
     if (isPinned(tabId)) return;
 
     tab.bookmarked = !tab.bookmarked;
-    // Clear folder when unbookmarking
-    if (!tab.bookmarked) {
+    if (tab.bookmarked) {
+      fixedUrls.set(tabId, tab.url);
+    } else {
+      fixedUrls.delete(tabId);
       tab.folderId = null;
     }
     // Place at end of new section
@@ -533,6 +550,7 @@ export async function start(
       _attachTabListeners(tabId);
       idMap.set(pt.id as TabId, tabId);
       urlMap.set(pt.url, tabId);
+      if (pt.bookmarked) fixedUrls.set(tabId, pt.url);
 
       // Update persisted doc with new tabId (platform assigns new IDs)
       const { loading, ...newPersisted } = tab;
