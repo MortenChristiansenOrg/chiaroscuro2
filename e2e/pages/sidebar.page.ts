@@ -88,16 +88,11 @@ export class SidebarPage {
   }
 
   async switchWorkspace(name: string) {
-    await this.sidebar.locator(`button[aria-label="${name}"]`).click();
+    await this.sidebar.locator(`[data-workspace-id][aria-label="${name}"]`).click();
   }
 
   async getWorkspaceNames(): Promise<string[]> {
-    const bubbles = this.sidebar
-      .locator("..")
-      .locator("button[aria-label]")
-      .filter({ hasNot: this.page.locator("[aria-label='Close tab']") })
-      .filter({ hasNot: this.page.locator("[aria-label='Add workspace']") })
-      .filter({ hasNot: this.page.locator("[aria-label='Edit workspace']") });
+    const bubbles = this.sidebar.locator("[data-workspace-id]");
     const count = await bubbles.count();
     const names: string[] = [];
     for (let i = 0; i < count; i++) {

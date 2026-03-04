@@ -13,8 +13,12 @@ export const test = base.extend<ElectronFixtures>({
   // biome-ignore lint/correctness/noEmptyPattern: Playwright fixture signature requires destructured first arg
   electronApp: async ({}, use) => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "chiaroscuro-test-"));
+    const args = [
+      ...(process.platform === "linux" ? ["--ozone-platform=headless"] : []),
+      "./out/main/index.js",
+    ];
     const app = await electron.launch({
-      args: ["./out/main/index.js"],
+      args,
       env: {
         ...process.env,
         NODE_ENV: "test",

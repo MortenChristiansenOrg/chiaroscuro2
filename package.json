@@ -11,7 +11,7 @@
     "preview": "electron-vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
-    "e2e": "xvfb-run --auto-servernum bunx playwright test",
+    "e2e": "bunx playwright test",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write .",

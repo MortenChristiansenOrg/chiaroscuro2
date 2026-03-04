@@ -67,6 +67,7 @@ export function WorkspaceBubble({
       className="flex items-center justify-center cursor-pointer"
       aria-label={workspace.name}
       aria-current={isActive ? "true" : undefined}
+      data-workspace-id={workspace.id}
       tabIndex={-1}
       style={{
         width: 32,

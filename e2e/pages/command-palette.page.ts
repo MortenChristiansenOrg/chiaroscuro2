@@ -22,7 +22,7 @@ export class CommandPalettePage {
   /** Open via native Ctrl+T shortcut. Requires electronApp because CDP
    *  keyboard events don't trigger Electron's before-input-event handler.
    *  Retries the input event since sendInputEvent can be unreliable under
-   *  parallel xvfb load. */
+   *  parallel load. */
   async openViaKeyboard(electronApp: ElectronApplication) {
     const sendCtrlT = () =>
       electronApp.evaluate(({ BrowserWindow }) => {

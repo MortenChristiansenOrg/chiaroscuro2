@@ -80,8 +80,10 @@ test.describe("workspace management", () => {
     await sidebarPage.switchWorkspace("ToDelete");
     await sidebarPage.openWorkspaceEditor();
 
-    // Handle the confirm dialog
-    shellPage.on("dialog", (dialog) => dialog.accept());
+    // Mock confirm() — native GTK dialogs crash in headless ozone mode
+    await shellPage.evaluate(() => {
+      window.confirm = () => true;
+    });
     await sidebarPage.deleteWorkspaceInEditor();
 
     await expect(async () => {

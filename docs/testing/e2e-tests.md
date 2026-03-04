@@ -336,8 +336,5 @@ export default defineConfig({
 });
 ```
 
-Linux CI requires `xvfb-run`:
-
-```yaml
-- run: xvfb-run --auto-servernum -- npx playwright test
-```
+On Linux, Electron runs with `--ozone-platform=headless` (set automatically in the
+test fixture), so no display server or `xvfb-run` wrapper is needed.
