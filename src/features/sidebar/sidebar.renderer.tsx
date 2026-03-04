@@ -24,6 +24,12 @@ import type { PinnedTabsCommands } from "../pinned-tabs/pinned-tabs.shared";
 import { PINNED_TABS_ACTIVATE, PINNED_TABS_TOGGLE_PIN } from "../pinned-tabs/pinned-tabs.shared";
 // shell-composite: read-only cross-feature store access
 import { usePinnedTabsStore } from "../pinned-tabs/pinned-tabs.store";
+import {
+  TAB_CUSTOMIZATION_OPEN,
+  type TabCustomizationCommands,
+} from "../tab-customization/tab-customization.shared";
+// shell-composite: read-only cross-feature store access
+import { useTabCustomizationStore } from "../tab-customization/tab-customization.store";
 import type { Tab, TabsCommands } from "../tabs/tabs.shared";
 import {
   TABS_ACTIVATE,
@@ -46,7 +52,8 @@ type SidebarUsedCommands = Pick<
   TabsCommands,
   typeof TABS_ACTIVATE | typeof TABS_CLOSE | typeof TABS_CLEAR_EPHEMERAL | typeof TABS_REORDER
 > &
-  Pick<PinnedTabsCommands, typeof PINNED_TABS_ACTIVATE>;
+  Pick<PinnedTabsCommands, typeof PINNED_TABS_ACTIVATE> &
+  Pick<TabCustomizationCommands, typeof TAB_CUSTOMIZATION_OPEN>;
 
 function sendCommand<K extends keyof SidebarUsedCommands>(
   name: K,
@@ -288,6 +295,7 @@ export function TabItem({
   disableEntryAnimation?: boolean;
   onContextMenu?: (items: ContextMenuItem[], e: React.MouseEvent) => void;
 }) {
+  const customTitle = useTabCustomizationStore((s) => s.customizations.get(tab.id)?.title);
   const mountedRef = useRef(false);
   const elRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -342,6 +350,11 @@ export function TabItem({
         onSelect: () => sendCommand(TABS_CLOSE, { tabId: tab.id }),
       });
     }
+    items.push({
+      label: "Customize tab",
+      icon: "sliders",
+      onSelect: () => sendCommand(TAB_CUSTOMIZATION_OPEN, { tabId: tab.id }),
+    });
     onContextMenu(items, e);
   };
 
@@ -460,7 +473,7 @@ export function TabItem({
           transition: "margin var(--duration-fast) var(--ease-in-out)",
         }}
       >
-        {tab.title || tab.url}
+        {customTitle || tab.title || tab.url}
       </span>
       <button
         type="button"
@@ -1089,6 +1102,11 @@ export function PinnedTabsStrip({
                     label: "Close tab",
                     icon: "xmark",
                     onSelect: () => sendCommand(TABS_CLOSE, { tabId: pt.id }),
+                  },
+                  {
+                    label: "Customize tab",
+                    icon: "sliders",
+                    onSelect: () => sendCommand(TAB_CUSTOMIZATION_OPEN, { tabId: pt.id }),
                   },
                 ],
                 e,

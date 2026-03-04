@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
+// shell-composite: read-only cross-feature store access
+import { useTabCustomizationStore } from "../../../features/tab-customization/tab-customization.store";
 import { useTabsStore } from "../../../features/tabs/tabs.store";
 import { BuiltInPage } from "./BuiltInPage";
 
@@ -8,6 +10,8 @@ export function ContentArea() {
   const activeTabId = useTabsStore((s) => s.activeTabId);
   const activeTab = useTabsStore((s) => (s.activeTabId ? s.tabs.get(s.activeTabId) : undefined));
   const isBuiltIn = activeTab?.builtIn === true;
+  const editingTabId = useTabCustomizationStore((s) => s.editingTabId);
+  const isCustomizing = editingTabId !== null && editingTabId === activeTabId;
 
   const reportBounds = useCallback(() => {
     if (rafId.current !== null) return;
@@ -39,7 +43,7 @@ export function ContentArea() {
     const el = ref.current;
     if (!el) return;
 
-    if (isBuiltIn) {
+    if (isBuiltIn || isCustomizing) {
       if (rafId.current !== null) {
         cancelAnimationFrame(rafId.current);
         rafId.current = null;
@@ -61,7 +65,7 @@ export function ContentArea() {
       observer.disconnect();
       window.removeEventListener("resize", reportBounds);
     };
-  }, [reportBounds, reportZeroBounds, isBuiltIn]);
+  }, [reportBounds, reportZeroBounds, isBuiltIn, isCustomizing]);
 
   return (
     <main
@@ -74,6 +78,7 @@ export function ContentArea() {
       }}
     >
       {isBuiltIn && activeTab && <BuiltInPage url={activeTab.url} />}
+      {isCustomizing && <BuiltInPage url={`app:tab-customization?tabId=${editingTabId}`} />}
       {!activeTabId && (
         <div
           className="absolute inset-0 flex items-center justify-center select-none"
