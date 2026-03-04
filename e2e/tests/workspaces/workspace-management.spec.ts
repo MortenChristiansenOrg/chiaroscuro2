@@ -30,12 +30,12 @@ test.describe("workspace management", () => {
     // Switch back — tabs should reappear
     const wsNames = await sidebarPage.getWorkspaceNames();
     const defaultWs = wsNames.find((n) => n !== "Test WS");
-    if (defaultWs) {
-      await sidebarPage.switchWorkspace(defaultWs);
-      await expect(async () => {
-        expect(await sidebarPage.getTabCount()).toBe(ws1Tabs);
-      }).toPass({ timeout: 3_000 });
-    }
+    expect(defaultWs).toBeTruthy();
+    // biome-ignore lint/style/noNonNullAssertion: asserted above
+    await sidebarPage.switchWorkspace(defaultWs!);
+    await expect(async () => {
+      expect(await sidebarPage.getTabCount()).toBe(ws1Tabs);
+    }).toPass({ timeout: 3_000 });
   });
 
   test("creates workspace via add button", async ({ sidebarPage }) => {
@@ -123,16 +123,16 @@ test.describe("workspace management", () => {
     // Switch back
     const wsNames = await sidebarPage.getWorkspaceNames();
     const defaultWs = wsNames.find((n) => n !== "Other WS");
-    if (defaultWs) {
-      await sidebarPage.switchWorkspace(defaultWs);
+    expect(defaultWs).toBeTruthy();
+    // biome-ignore lint/style/noNonNullAssertion: asserted above
+    await sidebarPage.switchWorkspace(defaultWs!);
 
-      // Original tab should still be there
-      await expect(async () => {
-        const tabsNow = await sidebarPage.getTabIds();
-        for (const id of originalTabs) {
-          expect(tabsNow).toContain(id);
-        }
-      }).toPass({ timeout: 3_000 });
-    }
+    // Original tab should still be there
+    await expect(async () => {
+      const tabsNow = await sidebarPage.getTabIds();
+      for (const id of originalTabs) {
+        expect(tabsNow).toContain(id);
+      }
+    }).toPass({ timeout: 3_000 });
   });
 });

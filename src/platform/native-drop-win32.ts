@@ -50,18 +50,19 @@ function readPointer(buf: Buffer): bigint {
 function getDroppedFiles(hDrop: bigint): string[] {
   const { DragQueryFileW, DragFinish } = bindings();
   const hDropNum = Number(hDrop);
-  const count = DragQueryFileW(hDropNum, 0xffffffff, null, 0) as number;
-
-  const paths: string[] = [];
-  for (let i = 0; i < count; i++) {
-    const len = DragQueryFileW(hDropNum, i, null, 0) as number;
-    const buf = Buffer.alloc((len + 1) * 2);
-    DragQueryFileW(hDropNum, i, buf, len + 1);
-    paths.push(buf.toString("utf16le").replace(/\0+$/, ""));
+  try {
+    const count = DragQueryFileW(hDropNum, 0xffffffff, null, 0) as number;
+    const paths: string[] = [];
+    for (let i = 0; i < count; i++) {
+      const len = DragQueryFileW(hDropNum, i, null, 0) as number;
+      const buf = Buffer.alloc((len + 1) * 2);
+      DragQueryFileW(hDropNum, i, buf, len + 1);
+      paths.push(buf.toString("utf16le").replace(/\0+$/, ""));
+    }
+    return paths;
+  } finally {
+    DragFinish(hDropNum);
   }
-
-  DragFinish(hDropNum);
-  return paths;
 }
 
 /**

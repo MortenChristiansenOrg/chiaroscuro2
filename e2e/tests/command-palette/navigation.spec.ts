@@ -63,7 +63,9 @@ test.describe("command palette navigation", () => {
 
     // Verify palette closes (navigation happened) then check tab count
     await expect(commandPalettePage.overlay).toBeHidden({ timeout: 3_000 });
-    expect(await sidebarPage.getTabCount()).toBe(countBefore);
+    await expect(async () => {
+      expect(await sidebarPage.getTabCount()).toBe(countBefore);
+    }).toPass({ timeout: 2_000 });
   });
 
   test("bang syntax resolves provider", async ({ commandPalettePage }) => {

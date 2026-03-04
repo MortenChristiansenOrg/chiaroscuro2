@@ -127,9 +127,16 @@ export function UrlPill() {
       hostname = parsed.hostname;
       const path = parsed.pathname !== "/" ? parsed.pathname : "";
       displayUrl = parsed.hostname + path;
-      // file:// URLs on Windows have pathname like /C:/... — strip leading slash
-      if (parsed.protocol === "file:" && /^\/[A-Za-z]:/.test(path)) {
-        displayUrl = decodeURIComponent(path.slice(1));
+      if (parsed.protocol === "file:") {
+        const decodedPath = decodeURIComponent(path);
+        if (/^\/[A-Za-z]:/.test(decodedPath)) {
+          // Windows drive path like /C:/... — strip leading slash
+          displayUrl = decodedPath.slice(1);
+        } else if (parsed.hostname) {
+          displayUrl = `//${parsed.hostname}${decodedPath}`;
+        } else {
+          displayUrl = decodedPath;
+        }
       }
       isWebUrl = parsed.protocol === "http:" || parsed.protocol === "https:";
     } catch {
