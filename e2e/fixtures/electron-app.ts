@@ -33,6 +33,7 @@ export const test = base.extend<ElectronFixtures>({
       state: "attached",
       timeout: 15_000,
     });
+    await page.emulateMedia({ reducedMotion: "reduce" });
     await use(page);
   },
 });

@@ -1,4 +1,4 @@
-import type { Locator, Page } from "@playwright/test";
+import { type Locator, type Page, expect } from "@playwright/test";
 
 export class SidebarPage {
   readonly page: Page;
@@ -51,6 +51,14 @@ export class SidebarPage {
     );
   }
 
+  /** Wait until a tab has active (glass-active) styling. */
+  async waitForActiveTab(tabId: string) {
+    await expect(async () => {
+      const style = await this.sidebar.locator(`[data-tab-id="${tabId}"]`).getAttribute("style");
+      expect(style).toContain("glass-active");
+    }).toPass({ timeout: 2_000 });
+  }
+
   /** Get data-tab-id values for all visible tabs. */
   async getTabIds(): Promise<string[]> {
     const count = await this.tabList.count();
@@ -99,6 +107,73 @@ export class SidebarPage {
     return names;
   }
 
+  // ── Pinned tab methods ─────────────────────────────────────────
+
+  /** Get all pinned tab elements. */
+  get pinnedTabs(): Locator {
+    return this.sidebar.locator("[data-pinned-tab]");
+  }
+
+  async getPinnedTabCount(): Promise<number> {
+    return this.pinnedTabs.count();
+  }
+
+  async getPinnedTabIds(): Promise<string[]> {
+    const count = await this.pinnedTabs.count();
+    const ids: string[] = [];
+    for (let i = 0; i < count; i++) {
+      const id = await this.pinnedTabs.nth(i).getAttribute("data-pinned-tab");
+      if (id) ids.push(id);
+    }
+    return ids;
+  }
+
+  async clickPinnedTab(id: string) {
+    await this.sidebar.locator(`[data-pinned-tab="${id}"]`).click();
+  }
+
+  /** Pin the active tab via command. */
+  async pinActiveTab() {
+    await this.page.evaluate(() => window.chiaroscuro.sendCommand("pinned-tabs:toggle-pin", {}));
+  }
+
+  // ── Bookmark methods ───────────────────────────────────────────
+
+  /** Bookmark the active tab via command. */
+  async bookmarkActiveTab() {
+    await this.page.evaluate(() => window.chiaroscuro.sendCommand("tabs:toggle-bookmark", {}));
+  }
+
+  /** Check if a tab is ephemeral via data-ephemeral attribute. */
+  async isTabEphemeral(tabId: string): Promise<boolean> {
+    const tab = this.sidebar.locator(`[data-tab-id="${tabId}"]`);
+    return (await tab.getAttribute("data-ephemeral")) !== null;
+  }
+
+  // ── Workspace editor methods ───────────────────────────────────
+
+  async openWorkspaceEditor() {
+    await this.sidebar.locator("..").locator("button[aria-label='Edit workspace']").click();
+  }
+
+  async openAddWorkspace() {
+    await this.sidebar.locator("..").locator("button[aria-label='Add workspace']").click();
+  }
+
+  /** Fill workspace editor name field and submit. */
+  async submitWorkspaceForm(name: string) {
+    const form = this.page.locator("form");
+    const nameInput = form.locator("input[placeholder='Workspace name']");
+    await nameInput.fill(name);
+    await form.locator("button[type='submit']").click();
+  }
+
+  /** Click Delete in the workspace editor. */
+  async deleteWorkspaceInEditor() {
+    const form = this.page.locator("form");
+    await form.locator("button", { hasText: "Delete" }).click();
+  }
+
   // ── Folder methods ──────────────────────────────────────────────
 
   folder(name: string): Locator {
@@ -117,11 +192,6 @@ export class SidebarPage {
       if (text) names.push(text.trim());
     }
     return names;
-  }
-
-  /** Bookmark the active tab via command. */
-  async bookmarkActiveTab() {
-    await this.page.evaluate(() => window.chiaroscuro.sendCommand("tabs:toggle-bookmark", {}));
   }
 
   /** Toggle folder membership for the active tab via command. */

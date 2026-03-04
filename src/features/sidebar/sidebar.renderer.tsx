@@ -420,6 +420,7 @@ export function TabItem({
     <div
       ref={elRef}
       data-tab-id={tab.id}
+      data-ephemeral={isEphemeral ? "" : undefined}
       draggable={!exiting}
       className={`${isDragging ? "" : "group"} relative flex items-center cursor-pointer transition-colors duration-150 ${isDragging ? "" : "hover:bg-glass-hover hover:text-glass-text-hover active:bg-glass-pressed active:text-glass-text-pressed"}`}
       style={{

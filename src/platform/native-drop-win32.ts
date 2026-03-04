@@ -5,24 +5,42 @@
  * Chromium's OLE IDropTarget. We bypass this by registering the window
  * for the older WM_DROPFILES mechanism (DragAcceptFiles / shell32),
  * which routes through the standard Win32 message queue.
+ *
+ * All koffi / shell32 bindings are lazily initialized so this module
+ * can be imported on non-Windows platforms without side-effects.
  */
 import type { BrowserWindow } from "electron";
-import koffi from "koffi";
 
 const WM_DROPFILES = 0x0233;
 
-const shell32 = koffi.load("shell32.dll");
+// biome-ignore lint/suspicious/noExplicitAny: koffi types are opaque FFI handles
+let _bindings: { DragAcceptFiles: any; DragQueryFileW: any; DragFinish: any } | undefined;
 
-const HWND = koffi.pointer("HWND", koffi.opaque());
-const HDROP = koffi.pointer("HDROP", koffi.opaque());
+function bindings() {
+  if (_bindings) return _bindings;
 
-const DragAcceptFiles = shell32.func("void DragAcceptFiles(HWND hWnd, bool fAccept)");
+  // Dynamic require so the module-level evaluation doesn't crash on Linux
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const koffi = require("koffi") as typeof import("koffi");
 
-const DragQueryFileW = shell32.func(
-  "uint32_t DragQueryFileW(HDROP hDrop, uint32_t iFile, uint16_t* lpszFile, uint32_t cch)",
-);
+  const shell32 = koffi.load("shell32.dll");
+  const HWND = koffi.pointer("HWND", koffi.opaque());
+  const HDROP = koffi.pointer("HDROP", koffi.opaque());
 
-const DragFinish = shell32.func("void DragFinish(HDROP hDrop)");
+  _bindings = {
+    DragAcceptFiles: shell32.func("void DragAcceptFiles(HWND hWnd, bool fAccept)"),
+    DragQueryFileW: shell32.func(
+      "uint32_t DragQueryFileW(HDROP hDrop, uint32_t iFile, uint16_t* lpszFile, uint32_t cch)",
+    ),
+    DragFinish: shell32.func("void DragFinish(HDROP hDrop)"),
+  };
+
+  // Suppress unused-variable warnings for type-registration side-effects
+  void HWND;
+  void HDROP;
+
+  return _bindings;
+}
 
 function readPointer(buf: Buffer): bigint {
   if (buf.length === 4) return BigInt(buf.readUInt32LE(0));
@@ -30,6 +48,7 @@ function readPointer(buf: Buffer): bigint {
 }
 
 function getDroppedFiles(hDrop: bigint): string[] {
+  const { DragQueryFileW, DragFinish } = bindings();
   const hDropNum = Number(hDrop);
   const count = DragQueryFileW(hDropNum, 0xffffffff, null, 0) as number;
 
@@ -53,6 +72,7 @@ export function enableNativeFileDrop(
   win: BrowserWindow,
   onDrop: (filePaths: string[]) => void,
 ): void {
+  const { DragAcceptFiles } = bindings();
   const hwnd = Number(readPointer(win.getNativeWindowHandle()));
   DragAcceptFiles(hwnd, true);
 

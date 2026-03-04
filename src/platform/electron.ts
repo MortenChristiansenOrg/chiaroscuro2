@@ -395,6 +395,13 @@ export class ElectronPlatform implements Platform {
   }
 
   registerShortcut(accelerator: string, callback: () => void): void {
+    if (process.env.NODE_ENV === "test") {
+      // In tests, use local shortcuts so sendInputEvent triggers them via
+      // before-input-event. globalShortcut doesn't fire for synthetic events
+      // and conflicts between parallel Electron instances on the same display.
+      this.registerLocalShortcut(accelerator, callback);
+      return;
+    }
     this.shortcuts.set(accelerator, callback);
     if (this.shortcutsActive) {
       globalShortcut.register(accelerator, callback);
@@ -402,6 +409,11 @@ export class ElectronPlatform implements Platform {
   }
 
   unregisterShortcut(accelerator: string): void {
+    if (process.env.NODE_ENV === "test") {
+      this.localShortcuts.delete(accelerator);
+      this.rebuildLocalShortcutMenu();
+      return;
+    }
     this.shortcuts.delete(accelerator);
     if (this.shortcutsActive) {
       globalShortcut.unregister(accelerator);
@@ -462,7 +474,7 @@ export class ElectronPlatform implements Platform {
       }
     }
     return (
-      input.key === key &&
+      input.key.toLowerCase() === key.toLowerCase() &&
       input.control === wantCtrl &&
       input.shift === wantShift &&
       input.alt === wantAlt &&

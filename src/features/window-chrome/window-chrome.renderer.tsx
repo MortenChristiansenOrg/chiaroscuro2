@@ -306,6 +306,7 @@ const isMac = typeof window !== "undefined" && window.chiaroscuro?.getPlatformNa
 export function TitleBar() {
   return (
     <div
+      data-testid="title-bar"
       className="relative flex select-none items-center shrink-0"
       style={
         {

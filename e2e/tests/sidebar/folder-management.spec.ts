@@ -25,11 +25,13 @@ async function createBookmarkedTab(
     newId = added[0]!;
   }).toPass({ timeout: 5_000 });
 
-  // Bookmark the newly created (ephemeral) tab
+  // Bookmark the newly created (ephemeral) tab — sendCommand is IPC round-trip
+  // so activate completes before bookmark runs; no UI wait needed here
   await sidebarPage.activateTabById(newId);
-  await sidebarPage.page.waitForTimeout(200);
   await sidebarPage.bookmarkActiveTab();
-  await sidebarPage.page.waitForTimeout(300);
+  await expect(async () => {
+    expect(await sidebarPage.isTabEphemeral(newId)).toBe(false);
+  }).toPass({ timeout: 2_000 });
   return newId;
 }
 
@@ -41,7 +43,9 @@ async function createNamedFolder(sidebarPage: SidebarPage, name: string) {
     expect(await sidebarPage.getFolderCount()).toBe(before + 1);
   }).toPass({ timeout: 3_000 });
   await sidebarPage.submitFolderRename(name);
-  await sidebarPage.page.waitForTimeout(200);
+  await expect(async () => {
+    expect(await sidebarPage.getFolderNames()).toContain(name);
+  }).toPass({ timeout: 2_000 });
 }
 
 // ── Folder creation ──────────────────────────────────────────────
@@ -75,12 +79,13 @@ test.describe("folder creation", () => {
   });
 
   test("toggle removes tab from folder", async ({ sidebarPage, commandPalettePage }) => {
+    test.setTimeout(10_000);
     const tabA = await createBookmarkedTab(sidebarPage, commandPalettePage, "https://example.com");
     const tabB = await createBookmarkedTab(sidebarPage, commandPalettePage, "https://example.org");
 
     // Create folder with tab A
     await sidebarPage.activateTabById(tabA);
-    await sidebarPage.page.waitForTimeout(200);
+    await sidebarPage.waitForActiveTab(tabA);
     await createNamedFolder(sidebarPage, "Test Folder");
 
     // Add tab B to folder via command (drag-to-folder tested separately)
@@ -100,7 +105,7 @@ test.describe("folder creation", () => {
 
     // Toggle removes active tab (tab A) from folder
     await sidebarPage.activateTabById(tabA);
-    await sidebarPage.page.waitForTimeout(200);
+    await sidebarPage.waitForActiveTab(tabA);
     await sidebarPage.createFolder(); // toggles off
 
     await expect(async () => {
@@ -232,13 +237,14 @@ test.describe("folder deletion", () => {
 // ── Drag and drop ────────────────────────────────────────────────
 
 test.describe("folder drag-and-drop", () => {
+  test.setTimeout(10_000);
   test("can drag tab into a folder", async ({ sidebarPage, commandPalettePage }) => {
     const tabA = await createBookmarkedTab(sidebarPage, commandPalettePage, "https://example.com");
     await createBookmarkedTab(sidebarPage, commandPalettePage, "https://example.org");
 
     // Create folder from tab A
     await sidebarPage.activateTabById(tabA);
-    await sidebarPage.page.waitForTimeout(200);
+    await sidebarPage.waitForActiveTab(tabA);
     await createNamedFolder(sidebarPage, "DropTarget");
 
     // Drag tab B (now the unfolderd tab) into folder
@@ -266,7 +272,7 @@ test.describe("folder drag-and-drop", () => {
 
     // Put tab A in a folder
     await sidebarPage.activateTabById(tabA);
-    await sidebarPage.page.waitForTimeout(200);
+    await sidebarPage.waitForActiveTab(tabA);
     await createNamedFolder(sidebarPage, "OnlyFolder");
 
     // Drag tab B into the folder too
@@ -280,7 +286,7 @@ test.describe("folder drag-and-drop", () => {
 
     // Now all bookmarked tabs are in the folder. Use toggle to move one out.
     await sidebarPage.activateTabById(tabA);
-    await sidebarPage.page.waitForTimeout(200);
+    await sidebarPage.waitForActiveTab(tabA);
     await sidebarPage.createFolder(); // toggles off → moves to root
 
     await expect(async () => {
@@ -295,16 +301,17 @@ test.describe("folder drag-and-drop", () => {
 // ── Multiple folders ─────────────────────────────────────────────
 
 test.describe("multiple folders", () => {
+  test.setTimeout(10_000);
   test("can create multiple independent folders", async ({ sidebarPage, commandPalettePage }) => {
     const tabA = await createBookmarkedTab(sidebarPage, commandPalettePage, "https://example.com");
     const tabB = await createBookmarkedTab(sidebarPage, commandPalettePage, "https://example.org");
 
     await sidebarPage.activateTabById(tabA);
-    await sidebarPage.page.waitForTimeout(200);
+    await sidebarPage.waitForActiveTab(tabA);
     await createNamedFolder(sidebarPage, "Folder A");
 
     await sidebarPage.activateTabById(tabB);
-    await sidebarPage.page.waitForTimeout(200);
+    await sidebarPage.waitForActiveTab(tabB);
     await createNamedFolder(sidebarPage, "Folder B");
 
     const names = await sidebarPage.getFolderNames();
@@ -320,11 +327,11 @@ test.describe("multiple folders", () => {
     const tabB = await createBookmarkedTab(sidebarPage, commandPalettePage, "https://example.org");
 
     await sidebarPage.activateTabById(tabA);
-    await sidebarPage.page.waitForTimeout(200);
+    await sidebarPage.waitForActiveTab(tabA);
     await createNamedFolder(sidebarPage, "Keep");
 
     await sidebarPage.activateTabById(tabB);
-    await sidebarPage.page.waitForTimeout(200);
+    await sidebarPage.waitForActiveTab(tabB);
     await createNamedFolder(sidebarPage, "Remove");
 
     await sidebarPage.removeFolder("Remove");
@@ -342,12 +349,12 @@ test.describe("multiple folders", () => {
 
     // Create Source folder with tab A
     await sidebarPage.activateTabById(tabA);
-    await sidebarPage.page.waitForTimeout(200);
+    await sidebarPage.waitForActiveTab(tabA);
     await createNamedFolder(sidebarPage, "Source");
 
     // Create Destination folder with tab B
     await sidebarPage.activateTabById(tabB);
-    await sidebarPage.page.waitForTimeout(200);
+    await sidebarPage.waitForActiveTab(tabB);
     await createNamedFolder(sidebarPage, "Destination");
 
     // Drag the remaining outside tab into Source
