@@ -1,5 +1,4 @@
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 import { BrowserWindow, Menu, app, ipcMain, screen } from "electron";
 import { CommandBus } from "../bus/command-bus";
 import { EventBus } from "../bus/event-bus";
@@ -87,6 +86,7 @@ import type {
 import { register as registerZoom } from "../features/zoom/zoom.main";
 import type { ZoomCommands, ZoomEvents } from "../features/zoom/zoom.shared";
 import { ElectronPlatform } from "../platform/electron";
+import { enableNativeFileDrop } from "../platform/native-drop-win32";
 import type { TabId, WindowId, WorkspaceId } from "../shared/types";
 
 const iconFile = process.platform === "win32" ? "icon.ico" : "icon.png";
@@ -151,7 +151,7 @@ function createWindow(windowBounds?: {
   y: number;
   width: number;
   height: number;
-}): void {
+}): BrowserWindow {
   const win = new BrowserWindow({
     ...(windowBounds ?? { width: 1200, height: 800 }),
     icon: iconPath,
@@ -160,7 +160,6 @@ function createWindow(windowBounds?: {
     webPreferences: {
       preload: path.join(__dirname, "../preload/index.js"),
       sandbox: false,
-      navigateOnDragDrop: true,
     },
   });
 
@@ -195,6 +194,7 @@ function createWindow(windowBounds?: {
   } else {
     win.loadFile(path.join(__dirname, "../renderer/index.html"));
   }
+  return win;
 }
 
 const deps = {
@@ -245,20 +245,16 @@ app.whenReady().then(async () => {
   // Bridge bus to IPC (once, before any window creation)
   bridgeBusToIpc(commands, events, () => BrowserWindow.getAllWindows());
 
-  // Intercept file:// navigations (triggered by OS file drops) on all webContents.
-  // When a file is dropped and the page doesn't handle it, the browser tries to
-  // navigate to file:///path — we prevent that and open the file as a new tab.
-  app.on("web-contents-created", (_event, contents) => {
-    contents.on("will-navigate", (event, url) => {
-      if (url.startsWith("file:///")) {
-        event.preventDefault();
-        const filePath = fileURLToPath(url);
-        commands.send(DRAG_DROP_OPEN_FILES, { filePaths: [filePath] }).catch(console.error);
-      }
-    });
-  });
+  const win = createWindow(appState.windowBounds);
 
-  createWindow(appState.windowBounds);
+  // Use Win32 DragAcceptFiles + WM_DROPFILES for native file drop.
+  // backgroundMaterial: "acrylic" blocks Chromium's OLE drag pipeline,
+  // so we bypass it via the older shell32 drop mechanism.
+  if (process.platform === "win32") {
+    enableNativeFileDrop(win, (filePaths) => {
+      commands.send(DRAG_DROP_OPEN_FILES, { filePaths }).catch(console.error);
+    });
+  }
   if (activeWindowId && process.env.NODE_ENV !== "test") {
     platform.initTooltipOverlay(activeWindowId);
     platform.initContextMenuOverlay(activeWindowId);

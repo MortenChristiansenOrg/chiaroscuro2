@@ -76,14 +76,14 @@ describe("keyboard shortcuts", () => {
     expect(platform.registerLocalShortcut).toHaveBeenCalledWith("F12", expect.any(Function));
   });
 
-  it("registers F11 in dev mode", () => {
+  it("registers F11 as a local shortcut in dev mode", () => {
     const { platform } = setup({ isDev: true });
-    expect(platform.registerShortcut).toHaveBeenCalledWith("F11", expect.any(Function));
+    expect(platform.registerLocalShortcut).toHaveBeenCalledWith("F11", expect.any(Function));
   });
 
   it("does not register F11 in production mode", () => {
     const { platform } = setup({ isDev: false });
-    const calls = vi.mocked(platform.registerShortcut).mock.calls;
+    const calls = vi.mocked(platform.registerLocalShortcut).mock.calls;
     expect(calls.some(([key]) => key === "F11")).toBe(false);
   });
 });
