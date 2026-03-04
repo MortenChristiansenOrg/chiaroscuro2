@@ -9,17 +9,19 @@ import { DEMO_DOWNLOADS, makeDemoDownloadMap } from "../../lib/demo-data"
 
 # Downloads
 
-Section in the sidebar that shows active and recently completed file downloads with progress, pause/resume, and cancel controls.
+Transient section in the sidebar showing active and recently completed file downloads. Each download is a micro-card whose accent-colored background fill visualizes progress — the card itself is the progress bar.
 
 ---
 
 ## Anatomy
 
-- **Section container** — bordered top, vertical stack
-- **Section header** — uppercase label with arrow-down icon
-- **Download item** — horizontal flex row: status icon, filename + progress bar, action buttons
-- **Progress bar** — thin accent-colored bar inside a glass-border track
-- **Action buttons** — pause/resume toggle + cancel (icon-only, `--click-target-min` sized)
+- **Section divider** — label on left ("Downloads" with arrow-down icon), glass-border line extending right
+- **Download card** — rounded container (`--radius-md`) with overflow hidden
+- **Progress fill** — positioned absolutely, accent-colored at low opacity, width tracks progress %
+- **Status icon** — `arrow-down` (active) or `circle-check` (completed)
+- **File info** — filename (truncated, `--text-sm`) + byte progress in monospace (`--text-xs`)
+- **Percentage badge** — right-aligned, fades on hover to reveal controls
+- **Action buttons** — pause/resume + cancel, hidden by default, appear on hover
 
 ---
 
@@ -33,7 +35,7 @@ Section in the sidebar that shows active and recently completed file downloads w
 
 ## Completed Download
 
-<LivePreview label="Completed download (faded)" stores={{ downloads: { downloads: makeDemoDownloadMap(DEMO_DOWNLOADS.filter(d => d.state === "completed")) } }}>
+<LivePreview label="Completed download (faded, fill at 100%)" stores={{ downloads: { downloads: makeDemoDownloadMap(DEMO_DOWNLOADS.filter(d => d.state === "completed")) } }}>
   <div style={{ width: 230 }}>
     <DownloadsSection />
   </div>
@@ -53,64 +55,72 @@ Section in the sidebar that shows active and recently completed file downloads w
 
 | Property | Token/Value |
 |----------|-------------|
-| Section border-top | `1px solid var(--glass-border)` |
-| Section padding | `0.375rem 0` |
-| Header font size | `--text-xs` |
-| Header font weight | 600 |
-| Header letter spacing | `0.04em` |
-| Item padding | `0.25rem 0.5rem` |
-| Item gap | `0.375rem` |
-| Item border radius | `--radius-sm` |
-| Progress track height | `0.125rem` |
-| Progress track bg | `var(--glass-border)` |
-| Progress fill bg | `oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250))` |
+| Card padding | `0.25rem 0.5rem 0.25rem 0.75rem` |
+| Card margin | `0.125rem 0.375rem` |
+| Card border radius | `--radius-md` |
+| Content gap | `0.375rem` |
+| Filename font size | `--text-sm` |
+| Byte info font | `--font-mono`, `--text-xs` |
+| Percentage font | `--font-mono`, `--text-xs` |
+| Progress fill (active) | `oklch(accent / 0.07)` |
+| Progress fill (paused) | `oklch(accent / 0.04)` + `dl-pulse` animation |
+| Progress fill (completed) | `oklch(accent / 0.03)` at 100% width |
 | Button size | `--click-target-min` (24px) |
-| Completed opacity | `0.5` |
+| Completed opacity | `0.4` |
+| Section header font | `--text-xs`, weight 500, tracking `0.04em`, uppercase |
+| Divider line | `1px var(--glass-border)` |
 
 ---
 
 ## States
 
-| State | Icon | Controls | Opacity |
-|-------|------|----------|---------|
-| Progressing | `arrow-down` | Pause + Cancel | 1 |
-| Paused | `arrow-down` | Resume + Cancel | 1 |
-| Completed | `circle-check` | None | 0.5 |
-| Cancelled | `circle-check` | None | 0.5 |
+| State | Icon | Fill Opacity | Controls | Item Opacity |
+|-------|------|-------------|----------|--------------|
+| Progressing | `arrow-down` | 0.07 | Pause + Cancel (hover) | 1 |
+| Paused | `arrow-down` | 0.04 (breathing) | Resume + Cancel (hover) | 1 |
+| Completed | `circle-check` | 0.03 (100% width) | None | 0.4 |
+| Cancelled | `circle-check` | 0.03 (100% width) | None | 0.4 |
 
 ### Button States
 
 | State | Background | Text |
 |-------|-----------|------|
 | Default | transparent | `var(--glass-text-hint)` |
-| Hover | `var(--glass-hover)` | `var(--glass-text-hover)` |
+| Hover (pause/resume) | `var(--glass-hover)` | `var(--glass-text-hover)` |
+| Hover (cancel) | `var(--glass-hover)` | `var(--destructive)` |
 | Pressed | `var(--glass-pressed)` | `var(--glass-text-pressed)` |
 
 ---
 
 ## Behavior
 
-- **Progress updates** — receivedBytes updates arrive throttled (500ms) from the main process; the bar width transitions smoothly via `--duration-fast`.
-- **Pause/Resume toggle** — single button swaps between `pause` and `play` icons based on download state.
-- **Cancel** — removes the download from the active set on the main side; UI receives a completed event with `"cancelled"` state.
-- **Auto-remove** — completed/cancelled downloads disappear after 3 seconds.
-- **Empty state** — the entire section is hidden when no downloads exist.
-- **Save path** — files are saved to the user's desktop by default.
+- **Progress fill** — accent-colored background fills from left based on `receivedBytes / totalBytes`; transitions via `--duration-fast`.
+- **Hover reveal** — percentage badge fades out, pause/resume + cancel buttons fade in.
+- **Pause breathing** — paused downloads' fill pulses via `dl-pulse` keyframe (2.5s ease-in-out infinite).
+- **Completion** — fill transitions to 100% width at reduced opacity; item fades to 0.4 opacity.
+- **Auto-remove** — completed/cancelled downloads removed after 3 seconds.
+- **Empty state** — entire section hidden when no downloads exist.
+- **File sizes** — displayed as human-readable bytes (e.g. "45 MB / 100 MB").
 
 ---
 
 ## Animation & Motion
 
-- Progress bar width: `transition: width var(--duration-fast) var(--ease-out)`
-- Completed opacity: `transition: opacity var(--duration-normal) var(--ease-in-out)`
-- Button color/bg: `transition: color var(--duration-fast), background var(--duration-fast)`
+| Element | Animation |
+|---------|-----------|
+| Card entrance | `dl-in var(--duration-enter) ease-enter both` — translateX(-6px) + opacity |
+| Progress width | `transition: width var(--duration-fast) var(--ease-out)` |
+| Paused breathing | `dl-pulse 2.5s ease-in-out infinite` — opacity 1 → 0.4 → 1 |
+| Completed fade | `transition: opacity var(--duration-normal) var(--ease-in-out)` |
+| Control reveal | `transition: opacity var(--duration-fast)` |
+| Button hover | `transition: color var(--duration-fast), background-color var(--duration-fast)` |
 
 ---
 
 ## Keyboard & Focus
 
-- Pause/Resume and Cancel buttons are native `<button>` elements, focusable via Tab.
-- `tabIndex={-1}` — buttons are excluded from main tab order (sidebar scroll is primary focus).
+- Pause/Resume and Cancel buttons are native `<button>` elements.
+- `tabIndex={-1}` — excluded from main tab order (sidebar scroll is primary focus).
 - Standard `:focus-visible` ring when focused via keyboard.
 
 ---
@@ -119,8 +129,10 @@ Section in the sidebar that shows active and recently completed file downloads w
 
 - Pause/Resume button has `aria-label` ("Pause download" / "Resume download") and `data-tip`.
 - Cancel button has `aria-label="Cancel download"` and `data-tip="Cancel"`.
+- Progress fill has `aria-hidden` to prevent screen reader noise.
 - Status icon changes from `arrow-down` (active) to `circle-check` (done) for visual distinction.
-- Completed items at 0.5 opacity maintain text contrast above 3:1.
+- Completed items at 0.4 opacity maintain text contrast above 3:1.
+- File size info provides progress context for non-visual users.
 
 ---
 
@@ -128,7 +140,8 @@ Section in the sidebar that shows active and recently completed file downloads w
 
 - Rendered inside the [Sidebar](/components/sidebar), between the scrollable tabs area and the [Workspace Switcher](/components/workspace-switcher).
 - Only visible when `downloads.size > 0`.
-- Separated from tabs by a `var(--glass-border)` top border.
+- Separated from tabs by a divider line matching the ephemeral divider pattern.
+- Section header follows the label + extending line pattern.
 
 ---
 

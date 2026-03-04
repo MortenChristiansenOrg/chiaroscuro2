@@ -8,6 +8,7 @@ import {
   ipcMain,
   session,
   shell,
+  webContents,
 } from "electron";
 import type { TabId, WindowId } from "../shared/types";
 import type { Bounds } from "../shared/types";
@@ -204,7 +205,14 @@ export class ElectronPlatform implements Platform {
       this.permissionHandlerSet = true;
     }
 
-    view.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+    view.webContents.setWindowOpenHandler(({ url }) => {
+      // Don't open new windows — navigate the current tab instead.
+      // This handles target="_blank" links, including download URLs.
+      if (isAllowedUrl(url)) {
+        view.webContents.loadURL(url);
+      }
+      return { action: "deny" };
+    });
 
     view.webContents.on("will-navigate", (event, navUrl) => {
       if (!isAllowedUrl(navUrl)) {
@@ -591,8 +599,29 @@ export class ElectronPlatform implements Platform {
       };
       callback(wrapped);
     };
-    session.defaultSession.on("will-download", handler);
-    return () => session.defaultSession.removeListener("will-download", handler);
+
+    // Register on all sessions (default + any already-created by tabs) and
+    // future sessions so downloads from WebContentsView tabs are always caught.
+    const registered = new Set<Electron.Session>();
+    const addSession = (ses: Electron.Session) => {
+      if (registered.has(ses)) return;
+      registered.add(ses);
+      ses.on("will-download", handler);
+    };
+    addSession(session.defaultSession);
+    for (const wc of webContents.getAllWebContents()) {
+      addSession(wc.session);
+    }
+    const onWcCreated = (_event: Electron.Event, wc: Electron.WebContents) =>
+      addSession(wc.session);
+    app.on("web-contents-created", onWcCreated);
+
+    return () => {
+      app.removeListener("web-contents-created", onWcCreated);
+      for (const ses of registered) {
+        ses.removeListener("will-download", handler);
+      }
+    };
   }
 
   getDesktopPath(): string {
