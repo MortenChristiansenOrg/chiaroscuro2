@@ -796,7 +796,10 @@ function FolderHeader({
           type="text"
           value={renameValue}
           onChange={(e) => setRenameValue(e.target.value)}
-          onBlur={commitRename}
+          onBlur={(e) => {
+            // Ignore blur from DOM detachment during React re-renders
+            if (e.currentTarget.isConnected) commitRename();
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter") commitRename();
             if (e.key === "Escape") {
