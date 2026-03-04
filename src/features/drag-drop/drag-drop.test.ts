@@ -151,6 +151,30 @@ describe("drag-drop:open-files", () => {
     expect(getTabCount()).toBe(1);
   });
 
+  it("continues opening files when one fails", async () => {
+    const cmds = new CommandBus<AllCommands>();
+    const evts = new EventBus<DragDropEvents>();
+    const dropped = vi.fn();
+    evts.on(DRAG_DROP_FILES_DROPPED, dropped);
+
+    let callCount = 0;
+    cmds.handle(TABS_CREATE, async () => {
+      callCount++;
+      if (callCount === 2) throw new Error("simulated failure");
+      return `tab-${callCount}` as TabId;
+    });
+    register({ commands: cmds, events: evts });
+
+    await cmds.send(DRAG_DROP_OPEN_FILES, {
+      filePaths: ["/home/user/a.html", "/home/user/b.html", "/home/user/c.html"],
+    });
+
+    expect(callCount).toBe(3);
+    expect(dropped).toHaveBeenCalledWith({
+      filePaths: ["/home/user/a.html", "/home/user/c.html"],
+    });
+  });
+
   it("handles empty file list", async () => {
     const { commands, events, getTabCount } = setup();
     const dropped = vi.fn();

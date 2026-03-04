@@ -22,13 +22,21 @@ export function register({ commands, events }: Deps): void {
     const supported = filePaths.filter(isSupportedFile);
     if (supported.length === 0) return;
 
+    const opened: string[] = [];
     let first = true;
     for (const filePath of supported) {
-      const url = pathToFileURL(filePath).href;
-      await commands.send(TABS_CREATE, { url, activate: first });
-      first = false;
+      try {
+        const url = pathToFileURL(filePath).href;
+        await commands.send(TABS_CREATE, { url, activate: first });
+        opened.push(filePath);
+        first = false;
+      } catch {
+        // Continue opening remaining files
+      }
     }
 
-    events.emit(DRAG_DROP_FILES_DROPPED, { filePaths: supported });
+    if (opened.length > 0) {
+      events.emit(DRAG_DROP_FILES_DROPPED, { filePaths: opened });
+    }
   });
 }

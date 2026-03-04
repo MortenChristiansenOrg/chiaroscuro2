@@ -14,7 +14,7 @@ export interface DragDropFilesDroppedEvent {
 }
 
 // ── Supported extensions ─────────────────────────────────────────
-/** Extensions the browser can natively render. */
+/** Curated allowlist of file extensions opened as browser tabs on drop. */
 export const SUPPORTED_EXTENSIONS = new Set([
   "html",
   "htm",

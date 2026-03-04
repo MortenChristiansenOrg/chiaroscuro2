@@ -18,7 +18,7 @@ Each valid dropped file is opened in its own tab.
 - When multiple files are dropped, the first opened tab should become the active tab.
 - The dropped-file action should not prevent other files in the same drop from opening.
 - Drag & drop is handled by intercepting drag events on the browser chrome's webContents and using `file://` URLs to open dropped files.
-- If files are dragged unto a website accepting file drops, this should take precedence and not open browser tabs.
+- If files are dragged onto a website accepting file drops, this should take precedence and not open browser tabs.
 
 ## Workflows
 

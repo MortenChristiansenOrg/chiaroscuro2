@@ -13,15 +13,19 @@ const WM_DROPFILES = 0x0233;
 
 const shell32 = koffi.load("shell32.dll");
 
-const DragAcceptFiles = shell32.func("void DragAcceptFiles(uintptr_t hWnd, bool fAccept)");
+const HWND = koffi.pointer("HWND", koffi.opaque());
+const HDROP = koffi.pointer("HDROP", koffi.opaque());
+
+const DragAcceptFiles = shell32.func("void DragAcceptFiles(HWND hWnd, bool fAccept)");
 
 const DragQueryFileW = shell32.func(
-  "uint32_t DragQueryFileW(uintptr_t hDrop, uint32_t iFile, uint16_t* lpszFile, uint32_t cch)",
+  "uint32_t DragQueryFileW(HDROP hDrop, uint32_t iFile, uint16_t* lpszFile, uint32_t cch)",
 );
 
-const DragFinish = shell32.func("void DragFinish(uintptr_t hDrop)");
+const DragFinish = shell32.func("void DragFinish(HDROP hDrop)");
 
 function readPointer(buf: Buffer): bigint {
+  if (buf.length === 4) return BigInt(buf.readUInt32LE(0));
   return buf.readBigUInt64LE(0);
 }
 
@@ -56,5 +60,9 @@ export function enableNativeFileDrop(
     const hDrop = readPointer(wParam);
     const paths = getDroppedFiles(hDrop);
     if (paths.length > 0) onDrop(paths);
+  });
+
+  win.on("closed", () => {
+    win.unhookWindowMessage(WM_DROPFILES);
   });
 }
