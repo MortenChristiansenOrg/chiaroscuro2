@@ -35,6 +35,7 @@ import {
   TABS_ACTIVATE,
   TABS_CLEAR_EPHEMERAL,
   TABS_CLOSE,
+  TABS_NAVIGATE,
   TABS_REORDER,
   TABS_TOGGLE_BOOKMARK,
 } from "../tabs/tabs.shared";
@@ -50,7 +51,11 @@ import { useSidebarStore } from "./sidebar.store";
 
 type SidebarUsedCommands = Pick<
   TabsCommands,
-  typeof TABS_ACTIVATE | typeof TABS_CLOSE | typeof TABS_CLEAR_EPHEMERAL | typeof TABS_REORDER
+  | typeof TABS_ACTIVATE
+  | typeof TABS_CLOSE
+  | typeof TABS_NAVIGATE
+  | typeof TABS_CLEAR_EPHEMERAL
+  | typeof TABS_REORDER
 > &
   Pick<PinnedTabsCommands, typeof PINNED_TABS_ACTIVATE> &
   Pick<TabCustomizationCommands, typeof TAB_CUSTOMIZATION_OPEN>;
@@ -295,7 +300,8 @@ export function TabItem({
   disableEntryAnimation?: boolean;
   onContextMenu?: (items: ContextMenuItem[], e: React.MouseEvent) => void;
 }) {
-  const customTitle = useTabCustomizationStore((s) => s.customizations.get(tab.id)?.title);
+  const customization = useTabCustomizationStore((s) => s.customizations.get(tab.id));
+  const customTitle = customization?.title;
   const mountedRef = useRef(false);
   const elRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -355,6 +361,14 @@ export function TabItem({
         label: "Customize tab",
         icon: "sliders",
         onSelect: () => sendCommand(TAB_CUSTOMIZATION_OPEN, { tabId: tab.id }),
+      });
+    }
+    const fixedUrl = tab.fixedUrl;
+    if (fixedUrl && tab.url !== fixedUrl) {
+      items.push({
+        label: "Restore original URL",
+        icon: "arrow-rotate-left",
+        onSelect: () => sendCommand(TABS_NAVIGATE, { tabId: tab.id, url: fixedUrl }),
       });
     }
     onContextMenu(items, e);
@@ -466,7 +480,9 @@ export function TabItem({
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
-      <Favicon tab={tab} />
+      <div className="shrink-0">
+        <Favicon tab={tab} />
+      </div>
       <span
         className={`flex-1 min-w-0 truncate group-hover:text-glass-text-hover group-hover:mr-5 group-active:text-glass-text-pressed ${isActive ? "text-glass-text-primary" : isEphemeral ? "text-glass-text-muted" : "text-glass-text-default"}`}
         style={{
@@ -1055,6 +1071,70 @@ function BookmarkedTree({
   );
 }
 
+function PinnedTabButton({
+  pt,
+  tab,
+  isActive,
+  onContextMenu,
+}: {
+  pt: { id: TabId; url: string; title: string; favicon: string };
+  tab: Tab | undefined;
+  isActive: boolean;
+  onContextMenu?: (items: ContextMenuItem[], e: React.MouseEvent) => void;
+}) {
+  const handleContextMenu = (e: React.MouseEvent) => {
+    if (!onContextMenu) return;
+    const items: ContextMenuItem[] = [];
+    items.push(
+      {
+        label: "Unpin tab",
+        icon: "thumbtack-slash",
+        onSelect: () => sendFolderCommand(PINNED_TABS_TOGGLE_PIN, { tabId: pt.id }),
+      },
+      {
+        label: "Close tab",
+        icon: "xmark",
+        onSelect: () => sendCommand(TABS_CLOSE, { tabId: pt.id }),
+      },
+      {
+        label: "Customize tab",
+        icon: "sliders",
+        onSelect: () => sendCommand(TAB_CUSTOMIZATION_OPEN, { tabId: pt.id }),
+      },
+    );
+    if (tab?.url && tab.url !== pt.url) {
+      items.push({
+        label: "Restore original URL",
+        icon: "arrow-rotate-left",
+        onSelect: () => sendCommand(TABS_NAVIGATE, { tabId: pt.id, url: pt.url }),
+      });
+    }
+    onContextMenu(items, e);
+  };
+
+  return (
+    <button
+      type="button"
+      className={`flex flex-1 items-center justify-center cursor-pointer transition-colors duration-150 ${isActive ? "bg-glass-active" : "bg-glass-subtle hover:bg-glass-hover active:bg-glass-pressed"}`}
+      style={{
+        height: 32,
+        minWidth: 0,
+        borderRadius: "var(--radius-md)",
+        border: "none",
+        boxShadow: isActive ? "var(--shadow-subtle)" : undefined,
+      }}
+      tabIndex={-1}
+      onClick={() => sendCommand(PINNED_TABS_ACTIVATE, { tabId: pt.id })}
+      onContextMenu={handleContextMenu}
+      data-pinned-tab={pt.id}
+      data-tip={pt.title || pt.url}
+      aria-label={pt.title || pt.url}
+    >
+      <Favicon tab={tab ?? pt} />
+    </button>
+  );
+}
+
 export function PinnedTabsStrip({
   pinnedTabs,
   tabs,
@@ -1074,54 +1154,15 @@ export function PinnedTabsStrip({
         padding: "0 0.375rem 0.25rem",
       }}
     >
-      {pinnedTabs.map((pt) => {
-        const tab = tabs.get(pt.id);
-        const isActive = pt.id === activeTabId;
-        return (
-          <button
-            key={pt.id}
-            type="button"
-            className={`flex flex-1 items-center justify-center cursor-pointer transition-colors duration-150 ${isActive ? "bg-glass-active" : "bg-glass-subtle hover:bg-glass-hover active:bg-glass-pressed"}`}
-            style={{
-              height: 32,
-              minWidth: 0,
-              borderRadius: "var(--radius-md)",
-              border: "none",
-              boxShadow: isActive ? "var(--shadow-subtle)" : undefined,
-            }}
-            tabIndex={-1}
-            onClick={() => sendCommand(PINNED_TABS_ACTIVATE, { tabId: pt.id })}
-            onContextMenu={(e) => {
-              if (!onContextMenu) return;
-              onContextMenu(
-                [
-                  {
-                    label: "Unpin tab",
-                    icon: "thumbtack-slash",
-                    onSelect: () => sendFolderCommand(PINNED_TABS_TOGGLE_PIN, { tabId: pt.id }),
-                  },
-                  {
-                    label: "Close tab",
-                    icon: "xmark",
-                    onSelect: () => sendCommand(TABS_CLOSE, { tabId: pt.id }),
-                  },
-                  {
-                    label: "Customize tab",
-                    icon: "sliders",
-                    onSelect: () => sendCommand(TAB_CUSTOMIZATION_OPEN, { tabId: pt.id }),
-                  },
-                ],
-                e,
-              );
-            }}
-            data-pinned-tab={pt.id}
-            data-tip={pt.title || pt.url}
-            aria-label={pt.title || pt.url}
-          >
-            <Favicon tab={tab ?? pt} />
-          </button>
-        );
-      })}
+      {pinnedTabs.map((pt) => (
+        <PinnedTabButton
+          key={pt.id}
+          pt={pt}
+          tab={tabs.get(pt.id)}
+          isActive={pt.id === activeTabId}
+          onContextMenu={onContextMenu}
+        />
+      ))}
     </div>
   );
 }

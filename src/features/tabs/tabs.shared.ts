@@ -31,6 +31,8 @@ export interface Tab {
   createdAt: number;
   order: number;
   folderId: FolderId | null;
+  /** The URL saved when the tab was bookmarked. Transient — not persisted. */
+  fixedUrl?: string;
 }
 
 /** Shape persisted to DataStore (no transient fields like loading). */

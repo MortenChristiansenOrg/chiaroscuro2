@@ -102,7 +102,7 @@ export function register(deps: Deps): void {
 
   function persistTab(tab: Tab): void {
     if (tab.builtIn) return;
-    const { loading, builtIn, ...persisted } = tab;
+    const { loading, builtIn, fixedUrl: _fixedUrl, ...persisted } = tab;
     // Bookmarked tabs with fixed address: persist the original URL
     const fixedUrl = fixedUrls.get(tab.id);
     if (tab.bookmarked && fixedUrl && !getCustomization(tab.id)?.fixedAddressDisabled) {
@@ -115,6 +115,12 @@ export function register(deps: Deps): void {
     tabsCollection.remove(tabId).catch(() => {});
   }
 
+  /** Spread a tab with its fixedUrl for event emission. */
+  function tabSnapshot(tab: Tab): Tab {
+    const fixedUrl = fixedUrls.get(tab.id);
+    return { ...tab, ...(fixedUrl ? { fixedUrl } : {}) };
+  }
+
   // ── Debounced list-changed emission ─────────────────────────────
   let listDirty = false;
   let listTimer: ReturnType<typeof setTimeout> | undefined;
@@ -125,7 +131,7 @@ export function register(deps: Deps): void {
     listTimer = setTimeout(() => {
       listDirty = false;
       listTimer = undefined;
-      events.emit(TABS_LIST_CHANGED, { tabs: [...tabs.values()] });
+      events.emit(TABS_LIST_CHANGED, { tabs: [...tabs.values()].map(tabSnapshot) });
     }, 0);
   }
 
@@ -134,7 +140,7 @@ export function register(deps: Deps): void {
     if (listTimer !== undefined) clearTimeout(listTimer);
     listDirty = false;
     listTimer = undefined;
-    events.emit(TABS_LIST_CHANGED, { tabs: [...tabs.values()] });
+    events.emit(TABS_LIST_CHANGED, { tabs: [...tabs.values()].map(tabSnapshot) });
   }
 
   // ── Helpers ─────────────────────────────────────────────────────
@@ -159,7 +165,7 @@ export function register(deps: Deps): void {
         const tab = tabs.get(tabId);
         if (!tab) return;
         tab.title = title as string;
-        events.emit(TABS_UPDATED, { tab: { ...tab } });
+        events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
         persistTab(tab);
       }),
     );
@@ -169,7 +175,7 @@ export function register(deps: Deps): void {
         const tab = tabs.get(tabId);
         if (!tab) return;
         tab.url = url as string;
-        events.emit(TABS_UPDATED, { tab: { ...tab } });
+        events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
         persistTab(tab);
       }),
     );
@@ -179,7 +185,7 @@ export function register(deps: Deps): void {
         const tab = tabs.get(tabId);
         if (!tab) return;
         tab.url = url as string;
-        events.emit(TABS_UPDATED, { tab: { ...tab } });
+        events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
         persistTab(tab);
       }),
     );
@@ -189,7 +195,7 @@ export function register(deps: Deps): void {
         const tab = tabs.get(tabId);
         if (!tab) return;
         tab.loading = true;
-        events.emit(TABS_UPDATED, { tab: { ...tab } });
+        events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
         events.emit("tab:loading-changed", { tabId, loading: true });
       }),
     );
@@ -203,7 +209,7 @@ export function register(deps: Deps): void {
         if (currentUrl) tab.url = currentUrl;
         const currentTitle = platform.getTabTitle(tabId);
         if (currentTitle) tab.title = currentTitle;
-        events.emit(TABS_UPDATED, { tab: { ...tab } });
+        events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
         events.emit("tab:loading-changed", { tabId, loading: false });
         persistTab(tab);
       }),
@@ -216,7 +222,7 @@ export function register(deps: Deps): void {
         const urls = favicons as string[];
         if (urls.length > 0 && urls[0]) {
           tab.favicon = urls[0];
-          events.emit(TABS_UPDATED, { tab: { ...tab } });
+          events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
           persistTab(tab);
         }
       }),
@@ -334,7 +340,7 @@ export function register(deps: Deps): void {
     }
 
     events.emit(TABS_ACTIVATED, { tabId, previousTabId });
-    events.emit(TABS_UPDATED, { tab: { ...tab } });
+    events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
     persistTab(tab);
   });
 
@@ -348,7 +354,7 @@ export function register(deps: Deps): void {
     tab.loading = true;
     await platform.navigateTab(tabId, payload.url);
 
-    events.emit(TABS_UPDATED, { tab: { ...tab } });
+    events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
     events.emit("tab:loading-changed", { tabId, loading: true });
     persistTab(tab);
   });
@@ -375,7 +381,7 @@ export function register(deps: Deps): void {
     );
     const maxOrder = siblingsInNewSection.reduce((m, t) => Math.max(m, t.order), -1);
     tab.order = maxOrder + 1;
-    events.emit(TABS_UPDATED, { tab: { ...tab } });
+    events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
     scheduleListChanged();
     persistTab(tab);
   });
@@ -405,8 +411,10 @@ export function register(deps: Deps): void {
     // Auto-bookmark/unbookmark when moving between sections
     if (targetBookmarked && !tab.bookmarked) {
       tab.bookmarked = true;
+      fixedUrls.set(tabId, tab.url);
     } else if (!targetBookmarked && tab.bookmarked) {
       tab.bookmarked = false;
+      fixedUrls.delete(tabId);
     }
 
     // Update folder membership if specified
@@ -467,7 +475,7 @@ export function register(deps: Deps): void {
       }
     }
 
-    events.emit(TABS_UPDATED, { tab: { ...tab } });
+    events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
     scheduleListChanged();
   });
 
@@ -574,8 +582,13 @@ export async function start(
     await deps.commands.send(TABS_ACTIVATE, { tabId: firstTabInActiveWs });
   }
 
-  // Emit full list
-  deps.events.emit(TABS_LIST_CHANGED, { tabs: [..._tabs.values()] });
+  // Emit full list (enrich with fixedUrl for renderer)
+  deps.events.emit(TABS_LIST_CHANGED, {
+    tabs: [..._tabs.values()].map((t) => {
+      const fixedUrl = fixedUrls.get(t.id);
+      return fixedUrl ? { ...t, fixedUrl } : t;
+    }),
+  });
 
   return { idMap, urlMap };
 }
