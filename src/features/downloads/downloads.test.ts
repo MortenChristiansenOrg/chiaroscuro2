@@ -3,7 +3,7 @@ import { CommandBus } from "../../bus/command-bus";
 import { EventBus } from "../../bus/event-bus";
 import type { PlatformDownload } from "../../platform/types";
 import { createMockPlatform } from "../../test-utils";
-import { register, start } from "./downloads.main";
+import { register, start, stop } from "./downloads.main";
 import {
   DOWNLOADS_CANCEL,
   DOWNLOADS_COMPLETED,
@@ -107,6 +107,7 @@ describe("downloads feature", () => {
   });
 
   afterEach(() => {
+    stop();
     vi.useRealTimers();
   });
 

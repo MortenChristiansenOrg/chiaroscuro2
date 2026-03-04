@@ -8,7 +8,7 @@ import {
 import { useDownloadsStore } from "./downloads.store";
 
 function sendCommand(name: string, payload: unknown) {
-  window.chiaroscuro.sendCommand(name, payload);
+  void window.chiaroscuro.sendCommand(name, payload);
 }
 
 /** Format bytes as human-readable string (e.g. "1.5 MB"). */
@@ -25,8 +25,10 @@ export function DownloadItem({ download }: { download: Download }) {
   const isActive = download.state === "progressing" || download.state === "paused";
   const isPaused = download.state === "paused";
   const isDone = !isActive;
-  const progress =
-    download.totalBytes > 0 ? Math.round((download.receivedBytes / download.totalBytes) * 100) : 0;
+  const progress = Math.min(
+    100,
+    download.totalBytes > 0 ? Math.round((download.receivedBytes / download.totalBytes) * 100) : 0,
+  );
   const hasSize = download.totalBytes > 0;
 
   return (

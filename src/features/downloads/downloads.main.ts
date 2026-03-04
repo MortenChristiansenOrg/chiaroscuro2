@@ -31,6 +31,7 @@ interface ActiveDownload {
 
 const active = new Map<string, ActiveDownload>();
 const PROGRESS_THROTTLE_MS = 500;
+let stopListener: (() => void) | undefined;
 
 export function register(deps: Deps): void {
   const { commands, events } = deps;
@@ -59,11 +60,13 @@ export function register(deps: Deps): void {
 
 export function start(deps: Deps): void {
   const { events, platform } = deps;
+  if (stopListener) return;
   const desktopPath = platform.getDesktopPath();
 
-  platform.onDownload((handle) => {
+  stopListener = platform.onDownload((handle) => {
     const id = crypto.randomUUID();
-    handle.setSavePath(path.join(desktopPath, handle.filename));
+    const safeFilename = path.basename(handle.filename).replace(/[\\/]/g, "_").trim() || "download";
+    handle.setSavePath(path.join(desktopPath, safeFilename));
 
     const entry: ActiveDownload = { handle, id };
     active.set(id, entry);
@@ -115,4 +118,12 @@ export function start(deps: Deps): void {
     handle.on("updated", onUpdated);
     handle.on("done", onDone);
   });
+}
+
+export function stop(): void {
+  if (stopListener) {
+    stopListener();
+    stopListener = undefined;
+  }
+  active.clear();
 }

@@ -76,6 +76,9 @@ export function subscribeToEvents(
       });
 
       // Auto-remove after delay
+      const existingTimer = timers.get(downloadId);
+      if (existingTimer) clearTimeout(existingTimer);
+
       const timer = setTimeout(() => {
         timers.delete(downloadId);
         useDownloadsStore.setState((s) => {
