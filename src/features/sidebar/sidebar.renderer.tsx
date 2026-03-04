@@ -9,6 +9,7 @@ import {
 } from "../app-state/app-state.shared";
 // shell-composite: read-only cross-feature store access
 import { useAppStateStore } from "../app-state/app-state.store";
+import { DownloadsSection } from "../downloads/downloads.renderer";
 import type { Folder } from "../folders/folders.shared";
 import {
   FOLDERS_CREATE,
@@ -1639,6 +1640,8 @@ export function SidebarPanel() {
               </div>
             </div>
           </div>
+
+          <DownloadsSection />
 
           <WorkspaceSwitcher
             workspaces={workspaces}

@@ -33,6 +33,11 @@ import {
   start as startDomainCss,
 } from "../features/domain-css/domain-css.main";
 import type { DomainCssCommands, DomainCssEvents } from "../features/domain-css/domain-css.shared";
+import {
+  register as registerDownloads,
+  start as startDownloads,
+} from "../features/downloads/downloads.main";
+import type { DownloadsCommands, DownloadsEvents } from "../features/downloads/downloads.shared";
 import { register as registerDragDrop } from "../features/drag-drop/drag-drop.main";
 import {
   DRAG_DROP_OPEN_FILES,
@@ -110,6 +115,7 @@ type AllCommands = MergeRegistries<
     DevToolsCommands,
     DomainCssCommands,
     DragDropCommands,
+    DownloadsCommands,
   ]
 >;
 
@@ -130,6 +136,7 @@ type AllEvents = MergeRegistries<
     DevToolsEvents,
     DomainCssEvents,
     DragDropEvents,
+    DownloadsEvents,
   ]
 >;
 
@@ -237,6 +244,7 @@ app.whenReady().then(async () => {
     getTabsSnapshot: getAllTabs,
   });
   registerDragDrop(deps);
+  registerDownloads(deps);
 
   // Load persisted layout state before creating the window
   const getDisplayBounds = () => screen.getAllDisplays().map((d) => d.workArea);
@@ -287,6 +295,7 @@ app.whenReady().then(async () => {
       dataDir,
       getTabsSnapshot: getAllTabs,
     });
+    startDownloads(deps);
   });
 
   app.on("activate", () => {

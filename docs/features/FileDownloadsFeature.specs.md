@@ -19,7 +19,7 @@ Downloads are intercepted in the Electron main process via `session.on('will-dow
 - It must be possible to pause and resume a download (via `downloadItem.pause()` / `downloadItem.resume()`).
 - Completed and cancelled downloads should stop counting as active.
 - Completed/cancelled downloads may remain visible briefly before disappearing.
-- The user must be able to choose a custom download folder per-download or use a default.
+- Files are saved to the desktop.
 
 ## Workflows
 
@@ -72,8 +72,3 @@ In the downloads UI (Sidebar):
 - `downloads:started` — A new download started. Payload: `{ download: Download }`.
 - `downloads:progress` — Download progress updated. Payload: `{ downloadId: string, receivedBytes: number, totalBytes: number }`.
 - `downloads:completed` — A download finished. Payload: `{ downloadId: string, state: 'completed' | 'cancelled' | 'interrupted' }`.
-
-## Unresolved Issues
-
-- **Download folder selection**: Should the app use Electron's default save dialog for each download, or use a configured default download directory with an option to "save as"? SPEC.md mentions "custom download folder selection per-download or default".
-- **Download history**: Should completed downloads be logged to the SQLite database for a download history view, or are they ephemeral UI-only items?

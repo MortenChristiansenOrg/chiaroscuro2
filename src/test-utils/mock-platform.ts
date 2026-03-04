@@ -45,6 +45,8 @@ export function createMockPlatform(overrides: Partial<Platform> = {}): Platform 
     hideContextMenu: vi.fn(),
     insertCSS: vi.fn(async () => "css-key"),
     removeInsertedCSS: vi.fn(),
+    onDownload: vi.fn(() => () => {}),
+    getDesktopPath: vi.fn(() => "/mock/desktop"),
     openExternal: vi.fn(),
     openPath: vi.fn(),
     readClipboard: vi.fn(() => ""),

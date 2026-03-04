@@ -3,14 +3,17 @@ import {
   BrowserWindow,
   Menu,
   WebContentsView,
+  app,
   clipboard,
   globalShortcut,
   ipcMain,
+  session,
   shell,
+  webContents,
 } from "electron";
 import type { TabId, WindowId } from "../shared/types";
 import type { Bounds } from "../shared/types";
-import type { Platform } from "./types";
+import type { Platform, PlatformDownload } from "./types";
 
 const ALLOWED_SCHEMES = new Set(["http:", "https:", "about:", "data:", "file:"]);
 const ALLOWED_EXTERNAL_SCHEMES = new Set(["http:", "https:", "mailto:"]);
@@ -204,7 +207,14 @@ export class ElectronPlatform implements Platform {
       this.permissionHandlerSet = true;
     }
 
-    view.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+    view.webContents.setWindowOpenHandler(({ url }) => {
+      // Don't open new windows — navigate the current tab instead.
+      // This handles target="_blank" links, including download URLs.
+      if (isAllowedUrl(url)) {
+        view.webContents.loadURL(url);
+      }
+      return { action: "deny" };
+    });
 
     view.webContents.on("will-navigate", (event, navUrl) => {
       if (!isAllowedUrl(navUrl)) {
@@ -638,6 +648,71 @@ export class ElectronPlatform implements Platform {
   private refocusParent(): void {
     const win = this.getWin();
     if (win) win.webContents.focus();
+  }
+
+  // ── Downloads ──────────────────────────────────────────────────
+
+  onDownload(callback: (download: PlatformDownload) => void): () => void {
+    const handler = (_event: Electron.Event, item: Electron.DownloadItem) => {
+      // Map original callbacks to wrapped versions that strip the Electron Event arg
+      // biome-ignore lint/suspicious/noExplicitAny: Electron event callback types
+      const cbMap = new Map<(...args: any[]) => void, (...args: any[]) => void>();
+
+      const wrapped: PlatformDownload = {
+        filename: item.getFilename(),
+        url: item.getURL(),
+        totalBytes: item.getTotalBytes(),
+        setSavePath: (p) => item.setSavePath(p),
+        cancel: () => item.cancel(),
+        pause: () => item.pause(),
+        resume: () => item.resume(),
+        isPaused: () => item.isPaused(),
+        getReceivedBytes: () => item.getReceivedBytes(),
+        // biome-ignore lint/suspicious/noExplicitAny: Electron event overloads
+        on: (event: string, cb: (...args: any[]) => void) => {
+          // biome-ignore lint/suspicious/noExplicitAny: Electron event overloads
+          const inner = (_e: any, ...rest: any[]) => cb(...rest);
+          cbMap.set(cb, inner);
+          // biome-ignore lint/suspicious/noExplicitAny: Electron event overloads
+          item.on(event as any, inner as any);
+        },
+        // biome-ignore lint/suspicious/noExplicitAny: Electron event overloads
+        removeListener: (event: string, cb: (...args: any[]) => void) => {
+          const inner = cbMap.get(cb) ?? cb;
+          cbMap.delete(cb);
+          // biome-ignore lint/suspicious/noExplicitAny: Electron event overloads
+          item.removeListener(event as any, inner as any);
+        },
+      };
+      callback(wrapped);
+    };
+
+    // Register on all sessions (default + any already-created by tabs) and
+    // future sessions so downloads from WebContentsView tabs are always caught.
+    const registered = new Set<Electron.Session>();
+    const addSession = (ses: Electron.Session) => {
+      if (registered.has(ses)) return;
+      registered.add(ses);
+      ses.on("will-download", handler);
+    };
+    addSession(session.defaultSession);
+    for (const wc of webContents.getAllWebContents()) {
+      addSession(wc.session);
+    }
+    const onWcCreated = (_event: Electron.Event, wc: Electron.WebContents) =>
+      addSession(wc.session);
+    app.on("web-contents-created", onWcCreated);
+
+    return () => {
+      app.removeListener("web-contents-created", onWcCreated);
+      for (const ses of registered) {
+        ses.removeListener("will-download", handler);
+      }
+    };
+  }
+
+  getDesktopPath(): string {
+    return app.getPath("desktop");
   }
 
   // ── CSS injection ───────────────────────────────────────────────
