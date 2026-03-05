@@ -208,6 +208,34 @@ describe("keyboard shortcuts", () => {
 });
 
 describe("tab lifecycle", () => {
+  it("stops find when another tab is activated", async () => {
+    const { commands, events, platform } = setup();
+    const stopped = vi.fn();
+    events.on(FIND_STOPPED, stopped);
+
+    await commands.send(FIND_START, undefined);
+    events.emit(TABS_ACTIVATED, { tabId: "tab-2" as TabId, previousTabId: TAB_ID });
+
+    // Allow async command to resolve
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(platform.stopFindInPage).toHaveBeenCalledWith(TAB_ID);
+    expect(stopped).toHaveBeenCalled();
+  });
+
+  it("does not stop find on tab activation if find not active", async () => {
+    const { events, platform } = setup();
+    const stopped = vi.fn();
+    events.on(FIND_STOPPED, stopped);
+
+    events.emit(TABS_ACTIVATED, { tabId: "tab-2" as TabId, previousTabId: TAB_ID });
+
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(platform.stopFindInPage).not.toHaveBeenCalled();
+    expect(stopped).not.toHaveBeenCalled();
+  });
+
   it("stops find when tab is closed", async () => {
     const { commands, events } = setup();
     const stopped = vi.fn();

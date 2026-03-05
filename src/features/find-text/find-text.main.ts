@@ -108,8 +108,8 @@ export function register({
   });
 
   // Stop find when tab changes or closes
-  events.on(TABS_ACTIVATED, ({ tabId }) => {
-    if (findActive && tabId !== getActiveTabId()) {
+  events.on(TABS_ACTIVATED, () => {
+    if (findActive) {
       commands.send(FIND_STOP, undefined).catch(console.error);
     }
   });
