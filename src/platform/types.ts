@@ -77,7 +77,7 @@ export interface Platform {
   // Context menu overlay
   initContextMenuOverlay(windowId: WindowId): void;
   showContextMenu(opts: {
-    items: { label: string; disabled?: boolean }[];
+    items: { label: string; icon?: string; disabled?: boolean }[];
     x: number;
     y: number;
   }): Promise<number>;

@@ -59,7 +59,19 @@ Extensions are **opt-in/experimental**. Don't rely on them for critical function
 - uBlock Origin (MV2 and Lite/MV3): does not work
 - 1Password, Bitwarden: do not work
 
-## 7. Tab Lifecycle Management
+## 7. Fixed URL & Tab Customization
+
+Bookmarked tabs record a **fixed URL** — the URL at the time of bookmarking. This is stored in a transient `Map<TabId, string>` (`fixedUrls`) in the main process (not persisted to disk).
+
+**Lifecycle:**
+- **Created** when a tab is bookmarked — captures the current URL as `fixedUrl`.
+- **Emitted** via `tabSnapshot()`, which spreads `fixedUrl` onto the `Tab` object for IPC events (`TABS_LIST`, `TAB_UPDATED`, etc.).
+- **Used at restore** — when a bookmarked tab is restored/navigated, it loads `fixedUrl` instead of the last-visited URL, unless `fixedAddressDisabled` is set in the tab's customization.
+- **Cleared** when the tab is closed or the feature re-registers (e.g. hot reload).
+
+The `fixedAddressDisabled` flag is persisted in the tab customization store, allowing users to opt out of fixed-address behavior per tab.
+
+## 8. Tab Lifecycle Management
 
 Three-tier lifecycle: **active → suspended → evicted**. Thresholds are user-configurable via the Settings feature.
 
@@ -95,7 +107,7 @@ Three-tier lifecycle: **active → suspended → evicted**. Thresholds are user-
 
 **Monitoring:** Poll `app.getAppMetrics()` + `process.getSystemMemoryInfo()` every 30s. Map tabs to PIDs via `webContents.getOSProcessId()`.
 
-## 8. Multi-Window Architecture
+## 9. Multi-Window Architecture
 
 Main process is authoritative. Each renderer window gets projected Zustand stores synced via IPC.
 
@@ -109,7 +121,7 @@ Main process is authoritative. Each renderer window gets projected Zustand store
 
 **Window state persistence:** `electron-window-state` package. Per-window state stored in RxDB `window-state` collection keyed by `windowId` (x, y, width, height, maximized, activeWorkspaceId). Migrate to native Electron window state API when RFC #16 ships.
 
-## 9. Optimistic UI Updates
+## 10. Optimistic UI Updates
 
 IPC round-trip is ~0.08ms — most actions don't need optimistic updates. Use selectively:
 
@@ -122,7 +134,7 @@ IPC round-trip is ~0.08ms — most actions don't need optimistic updates. Use se
 
 **Reconciliation:** Track optimistic state in a separate `_optimistic` layer in Zustand stores. Events always overwrite confirmed state and clear corresponding optimistic overrides. No explicit rollback logic — if main rejects, the event carries the corrected value. Commands use `send` (fire-and-forget), responses come as events.
 
-## 10. Sidebar Composition
+## 11. Sidebar Composition
 
 **Direct imports** (Option A). Sidebar imports child components from other features directly. This matches the existing cross-feature store import pattern — no reason to add a separate slot registration system for a single-team app. Sidebar owns layout via flex/gap; child components don't manage their own spacing. Migrate to slot registration only if/when a plugin system is added.
 
@@ -140,7 +152,7 @@ export function Sidebar() {
 }
 ```
 
-## 11. Performance Optimizations
+## 12. Performance Optimizations
 
 - Lazy load tabs (don't render until focused)
 - Limit concurrent WebContentsViews
@@ -148,7 +160,7 @@ export function Sidebar() {
 - Minimize IPC traffic (batch updates)
 - Background tab throttling
 
-## 12. Storage (Data Abstraction)
+## 13. Storage (Data Abstraction)
 
 All persistence goes through the `DataStore` interface. Each feature owns its RxDB collection schema and provides migrations. Features never touch RxDB or the filesystem directly.
 

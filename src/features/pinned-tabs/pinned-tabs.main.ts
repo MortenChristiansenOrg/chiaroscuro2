@@ -3,6 +3,7 @@ import type { EventBus } from "../../bus/event-bus";
 import type { Collection, DataStore } from "../../data/types";
 import type { Platform } from "../../platform/types";
 import type { TabId, WindowId, WorkspaceId } from "../../shared/types";
+import { getCustomization } from "../tab-customization/tab-customization.main";
 import type { TabsCommands, TabsEvents } from "../tabs/tabs.shared";
 import {
   TABS_ACTIVATE,
@@ -71,7 +72,10 @@ export function register(deps: Deps): void {
     const { tab } = payload;
     const pt = _pinnedTabs.get(tab.id);
     if (!pt) return;
-    pt.url = tab.url;
+    const canUpdateUrl = getCustomization(tab.id)?.fixedAddressDisabled ?? false;
+    if (canUpdateUrl) {
+      pt.url = tab.url;
+    }
     pt.title = tab.title;
     pt.favicon = tab.favicon;
     persistPinnedTab(pt);
