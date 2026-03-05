@@ -287,7 +287,7 @@ app.whenReady().then(async () => {
       getTabsSnapshot: getAllTabs,
     });
     startDownloads(deps);
-    await startTabCustomization({ ...deps, getTab });
+    await startTabCustomization({ ...deps, getTab }, restoredTabs);
   });
 
   app.on("activate", () => {

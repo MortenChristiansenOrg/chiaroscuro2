@@ -1082,6 +1082,8 @@ function PinnedTabButton({
   isActive: boolean;
   onContextMenu?: (items: ContextMenuItem[], e: React.MouseEvent) => void;
 }) {
+  const customTitle = useTabCustomizationStore((s) => s.customizations.get(pt.id))?.title;
+  const displayTitle = customTitle || pt.title || pt.url;
   const handleContextMenu = (e: React.MouseEvent) => {
     if (!onContextMenu) return;
     const items: ContextMenuItem[] = [];
@@ -1127,8 +1129,8 @@ function PinnedTabButton({
       onClick={() => sendCommand(PINNED_TABS_ACTIVATE, { tabId: pt.id })}
       onContextMenu={handleContextMenu}
       data-pinned-tab={pt.id}
-      data-tip={pt.title || pt.url}
-      aria-label={pt.title || pt.url}
+      data-tip={displayTitle}
+      aria-label={displayTitle}
     >
       <Favicon tab={tab ?? pt} />
     </button>

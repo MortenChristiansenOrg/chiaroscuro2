@@ -1,9 +1,16 @@
 import { describe, expect, it, vi } from "vitest";
+
+const mockIsPinned = vi.fn((_id: unknown) => false);
+vi.mock("../pinned-tabs/pinned-tabs.main", () => ({
+  isPinned: (...args: unknown[]) => mockIsPinned(...args),
+}));
+
 import { CommandBus } from "../../bus/command-bus";
 import { EventBus } from "../../bus/event-bus";
 import { MemoryDataStore } from "../../data/memory-store";
 import type { TabId, WorkspaceId } from "../../shared/types";
-import type { Tab, TabsEvents } from "../tabs/tabs.shared";
+import type { Tab, TabsCommands, TabsEvents } from "../tabs/tabs.shared";
+import { TABS_ACTIVATE } from "../tabs/tabs.shared";
 import type { TabCustomizationDeps } from "./tab-customization.main";
 import { register, start } from "./tab-customization.main";
 import {
@@ -21,7 +28,7 @@ import {
   type TabCustomizationEvents,
 } from "./tab-customization.shared";
 
-type AllCommands = TabCustomizationCommands;
+type AllCommands = TabCustomizationCommands & Pick<TabsCommands, typeof TABS_ACTIVATE>;
 type AllEvents = TabCustomizationEvents & Pick<TabsEvents, "tabs:closed">;
 
 function makeTab(id: string, overrides?: Partial<Tab>): Tab {
@@ -58,6 +65,7 @@ function setup() {
     getTab: (id) => tabs.get(id),
   };
 
+  commands.handle(TABS_ACTIVATE, async () => {});
   register(deps);
   return { commands, events, dataStore, deps, tabs };
 }
@@ -93,6 +101,18 @@ describe("tab-customization commands", () => {
       await expect(
         commands.send(TAB_CUSTOMIZATION_OPEN, { tabId: "ephemeral-1" as TabId }),
       ).rejects.toThrow("Cannot customize ephemeral tabs");
+    });
+
+    it("allows pinned but unbookmarked tabs", async () => {
+      const { commands, events } = setup();
+      mockIsPinned.mockImplementation((id) => id === "ephemeral-1");
+      const listener = vi.fn();
+      events.on(TAB_CUSTOMIZATION_OPENED, listener);
+
+      await commands.send(TAB_CUSTOMIZATION_OPEN, { tabId: "ephemeral-1" as TabId });
+
+      expect(listener).toHaveBeenCalledWith({ tabId: "ephemeral-1" });
+      mockIsPinned.mockImplementation(() => false);
     });
   });
 
@@ -355,6 +375,71 @@ describe("tab-customization commands", () => {
         tabId: "tab-2" as TabId,
       });
       expect(state).toEqual({ title: null, fixedAddressDisabled: true });
+    });
+
+    it("remaps IDs when restoredTabs is provided", async () => {
+      const { commands, deps, dataStore, events } = setup();
+
+      const collection = dataStore.collection("tab-customizations");
+      await collection.upsert({
+        id: "old-id",
+        title: "Remapped",
+        fixedAddressDisabled: true,
+      });
+
+      const listener = vi.fn();
+      events.on(TAB_CUSTOMIZATION_CHANGED, listener);
+
+      const idMap = new Map<TabId, TabId>([["old-id" as TabId, "new-id" as TabId]]);
+      await start(deps, { idMap, urlMap: new Map() });
+
+      // Emitted with new ID
+      expect(listener).toHaveBeenCalledWith({
+        tabId: "new-id",
+        customization: { title: "Remapped", fixedAddressDisabled: true },
+      });
+
+      // Accessible via new ID
+      const state = await commands.send(TAB_CUSTOMIZATION_GET_STATE, {
+        tabId: "new-id" as TabId,
+      });
+      expect(state).toEqual({ title: "Remapped", fixedAddressDisabled: true });
+
+      // Old ID no longer works
+      const oldState = await commands.send(TAB_CUSTOMIZATION_GET_STATE, {
+        tabId: "old-id" as TabId,
+      });
+      expect(oldState).toEqual({ title: null, fixedAddressDisabled: false });
+
+      // Persisted under new ID
+      const doc = await collection.findOne("new-id");
+      expect(doc).toBeDefined();
+      const oldDoc = await collection.findOne("old-id");
+      expect(oldDoc).toBeUndefined();
+    });
+
+    it("skips stale entries with no matching restored tab", async () => {
+      const { deps, dataStore, events } = setup();
+
+      const collection = dataStore.collection("tab-customizations");
+      await collection.upsert({
+        id: "stale-id",
+        title: "Gone",
+        fixedAddressDisabled: false,
+      });
+
+      const listener = vi.fn();
+      events.on(TAB_CUSTOMIZATION_CHANGED, listener);
+
+      const idMap = new Map<TabId, TabId>(); // stale-id not in map
+      await start(deps, { idMap, urlMap: new Map() });
+
+      expect(listener).not.toHaveBeenCalled();
+
+      // Wait for async remove
+      await new Promise((r) => setTimeout(r, 10));
+      const doc = await collection.findOne("stale-id");
+      expect(doc).toBeUndefined();
     });
   });
 

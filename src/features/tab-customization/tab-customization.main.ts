@@ -2,8 +2,9 @@ import type { CommandBus } from "../../bus/command-bus";
 import type { EventBus } from "../../bus/event-bus";
 import type { Collection, DataStore } from "../../data/types";
 import type { TabId } from "../../shared/types";
-import type { Tab, TabsEvents } from "../tabs/tabs.shared";
-import { TABS_CLOSED } from "../tabs/tabs.shared";
+import { isPinned } from "../pinned-tabs/pinned-tabs.main";
+import type { Tab, TabsCommands, TabsEvents } from "../tabs/tabs.shared";
+import { TABS_ACTIVATE, TABS_CLOSED } from "../tabs/tabs.shared";
 import {
   TAB_CUSTOMIZATION_CHANGED,
   TAB_CUSTOMIZATION_CLOSE,
@@ -25,7 +26,7 @@ interface PersistedCustomization {
   fixedAddressDisabled: boolean;
 }
 
-type AllCommands = TabCustomizationCommands;
+type AllCommands = TabCustomizationCommands & Pick<TabsCommands, typeof TABS_ACTIVATE>;
 type AllEvents = TabCustomizationEvents & Pick<TabsEvents, typeof TABS_CLOSED>;
 
 export interface TabCustomizationDeps {
@@ -69,7 +70,8 @@ export function register(deps: TabCustomizationDeps): void {
     const tab = getTab(tabId);
     if (!tab) throw new Error(`Tab not found: ${tabId}`);
     if (tab.builtIn) throw new Error("Cannot customize built-in tabs");
-    if (!tab.bookmarked) throw new Error("Cannot customize ephemeral tabs");
+    if (!tab.bookmarked && !isPinned(tabId)) throw new Error("Cannot customize ephemeral tabs");
+    await commands.send(TABS_ACTIVATE, { tabId });
     events.emit(TAB_CUSTOMIZATION_OPENED, { tabId });
   });
 
@@ -126,15 +128,35 @@ export function register(deps: TabCustomizationDeps): void {
   });
 }
 
-export async function start(deps: TabCustomizationDeps): Promise<void> {
+export async function start(
+  deps: TabCustomizationDeps,
+  restoredTabs?: { idMap: Map<TabId, TabId>; urlMap: Map<string, TabId> },
+): Promise<void> {
   const persisted = await collection.findMany({});
   for (const doc of persisted) {
-    const tabId = doc.id as TabId;
+    const oldId = doc.id as TabId;
+    const tabId = restoredTabs?.idMap.get(oldId) ?? oldId;
+
+    // Skip stale entries whose tab no longer exists after restore
+    if (restoredTabs && tabId === oldId && !restoredTabs.idMap.has(oldId)) {
+      collection.remove(oldId).catch(() => {});
+      continue;
+    }
+
     const customization: TabCustomization = {
       title: doc.title,
       fixedAddressDisabled: doc.fixedAddressDisabled,
     };
     customizations.set(tabId, customization);
+
+    // Update persisted record if ID changed
+    if (tabId !== oldId) {
+      collection.remove(oldId).catch(() => {});
+      collection
+        .upsert({ id: tabId, title: doc.title, fixedAddressDisabled: doc.fixedAddressDisabled })
+        .catch(console.error);
+    }
+
     deps.events.emit(TAB_CUSTOMIZATION_CHANGED, { tabId, customization });
   }
 }
