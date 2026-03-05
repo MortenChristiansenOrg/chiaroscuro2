@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import {
   BrowserWindow,
@@ -48,65 +49,83 @@ letter-spacing:.01em;white-space:nowrap}
 </style></head><body><span id="t"></span></body></html>`;
 
 // HTML for the context menu overlay — interactive, styled to match the app
-const CONTEXT_MENU_HTML = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+// Generated at init time to inject the resolved FA webfont path
+function buildContextMenuHtml(faFontPath: string): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+@font-face{font-family:"FA";font-style:normal;font-weight:900;font-display:block;src:url("file://${faFontPath}")}
 *{margin:0;padding:0;box-sizing:border-box}
-html,body{background:transparent;overflow:hidden;font-family:system-ui,-apple-system,sans-serif}
-#m{display:inline-block;min-width:160px;padding:4px 0;border-radius:8px;
-background:rgb(28,28,28,.92);backdrop-filter:blur(20px);
-box-shadow:0 8px 32px rgba(0,0,0,.5),0 2px 8px rgba(0,0,0,.3),inset 0 0 0 1px rgba(255,255,255,.08);
-animation:ci .12s ease both}
-.i{display:flex;align-items:center;padding:6px 12px;margin:0 4px;border-radius:6px;
-color:rgb(224,224,224);font-size:13px;font-weight:500;letter-spacing:.01em;
-cursor:pointer;user-select:none;transition:background 60ms}
-.i:hover,.i.focused{background:rgba(255,255,255,.1)}
-.i:active{background:rgba(255,255,255,.15)}
-.i[data-disabled]{color:rgba(210,210,210,.35);pointer-events:none}
-@keyframes ci{from{opacity:0;transform:scale(.96)}to{opacity:1;transform:scale(1)}}
+html,body{background:transparent;overflow:hidden;font-family:"Plus Jakarta Sans",-apple-system,system-ui,sans-serif}
+body{padding:24px}
+#m{display:inline-flex;flex-direction:column;gap:4px;min-width:180px;padding:5px;border-radius:10px;
+background:rgba(22,22,26,.96);backdrop-filter:blur(24px) saturate(1.4);
+-webkit-backdrop-filter:blur(24px) saturate(1.4);
+box-shadow:0 8px 32px rgba(0,0,0,.4),0 2px 8px rgba(0,0,0,.2),
+inset 0 0.5px 0 rgba(255,255,255,.1),inset 0 0 0 0.5px rgba(255,255,255,.06);
+transform-origin:top left;visibility:hidden}
+.i{display:flex;align-items:center;gap:9px;padding:7px 12px 7px 10px;border-radius:7px;
+color:rgba(235,235,245,.85);font-size:12px;font-weight:500;letter-spacing:.01em;
+cursor:pointer;user-select:none;
+transition:background 80ms ease-out,color 80ms ease-out}
+.i:hover{background:rgba(255,255,255,.1);color:rgba(255,255,255,.95)}
+.i:active{background:rgba(255,255,255,.16);color:#fff;transform:scale(.98);transition:transform 60ms}
+.i[data-disabled]{color:rgba(235,235,245,.25);pointer-events:none}
+.i[data-disabled] .ic{opacity:.3}
+.ic{display:inline-flex;align-items:center;justify-content:center;width:16px;height:16px;
+font-family:"FA";font-weight:900;font-style:normal;font-size:11px;
+color:rgba(235,235,245,.5);transition:color 80ms ease-out;
+-webkit-font-smoothing:antialiased;text-rendering:auto}
+.i:hover .ic{color:rgba(235,235,245,.8)}
+.lb{flex:1;white-space:nowrap}
+/* Entry animation */
+#m{animation:menu-in 160ms cubic-bezier(0,0,.2,1) both}
+.i{opacity:0;animation:item-in 120ms cubic-bezier(0,0,.2,1) both}
+@keyframes menu-in{from{opacity:0;transform:scale(.92) translateY(-4px)}to{opacity:1;transform:scale(1) translateY(0)}}
+@keyframes item-in{from{opacity:0;transform:translateX(-4px)}to{opacity:1;transform:translateX(0)}}
 </style></head><body><div id="m"></div>
 <script>
-let _resolve=null,_focus=-1,_items=[];
-function _setFocus(idx){
-  const els=document.querySelectorAll('.i');
-  if(_focus>=0&&_focus<els.length)els[_focus].classList.remove('focused');
-  _focus=idx;
-  if(_focus>=0&&_focus<els.length)els[_focus].classList.add('focused');
-}
-function _moveFocus(dir){
-  if(!_items.length)return;
-  let next=_focus;
-  for(let t=0;t<_items.length;t++){
-    next=(next+dir+_items.length)%_items.length;
-    if(!_items[next].disabled){_setFocus(next);return}
-  }
-}
+const ICONS={
+'bookmark':'\\uf02e','thumbtack':'\\uf08d','thumbtack-slash':'\\ue68f',
+'xmark':'\\uf00d','sliders':'\\uf1de','arrow-rotate-left':'\\uf0e2','folder-plus':'\\uf65e'
+};
+let _resolve=null;
 function _dismiss(){if(_resolve){_resolve(-1);_resolve=null}}
-function _select(){if(_focus>=0&&!_items[_focus].disabled&&_resolve){_resolve(_focus);_resolve=null}}
 document.addEventListener('keydown',e=>{
   if(!_resolve)return;
   if(e.key==='Escape'){e.preventDefault();_dismiss()}
-  else if(e.key==='ArrowDown'){e.preventDefault();_moveFocus(1)}
-  else if(e.key==='ArrowUp'){e.preventDefault();_moveFocus(-1)}
-  else if(e.key==='Enter'){e.preventDefault();_select()}
 });
 function renderMenu(items){
-  _items=items;_focus=-1;
   const m=document.getElementById('m');
   m.innerHTML='';
   items.forEach((it,i)=>{
     const d=document.createElement('div');
     d.className='i';
-    d.textContent=it.label;
+    d.style.animationDelay=(i*30)+'ms';
+    if(it.icon&&ICONS[it.icon]){
+      const ic=document.createElement('span');
+      ic.className='ic';
+      ic.textContent=ICONS[it.icon];
+      d.appendChild(ic);
+    }
+    const lb=document.createElement('span');
+    lb.className='lb';
+    lb.textContent=it.label;
+    d.appendChild(lb);
     if(it.disabled)d.dataset.disabled='1';
     else d.addEventListener('click',()=>{if(_resolve){_resolve(i);_resolve=null}});
     m.appendChild(d);
   });
+}
+function revealMenu(){
+  const m=document.getElementById('m');
+  m.style.visibility='visible';
   m.style.animation='none';void m.offsetWidth;m.style.animation='';
-  _moveFocus(1);
+  m.querySelectorAll('.i').forEach(el=>{el.style.animation='none';void el.offsetWidth;el.style.animation=''});
 }
 function awaitSelection(){
   return new Promise(r=>{_resolve=r});
 }
 </script></body></html>`;
+}
 
 export class ElectronPlatform implements Platform {
   private shortcuts = new Map<string, () => void>();
@@ -557,7 +576,20 @@ export class ElectronPlatform implements Platform {
       hasShadow: false,
       webPreferences: { sandbox: true },
     });
-    this.ctxWin.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(CONTEXT_MENU_HTML)}`);
+
+    // Resolve FA webfont path and write HTML to temp file so file:// font refs work
+    const rawPath = path
+      .join(
+        __dirname,
+        "../../node_modules/@fortawesome/fontawesome-free/webfonts/fa-solid-900.woff2",
+      )
+      .replace(/\\/g, "/");
+    // file:// URLs need three slashes before drive letter on Windows (file:///C:/...)
+    const faFontPath = rawPath.startsWith("/") ? rawPath : `/${rawPath}`;
+    const html = buildContextMenuHtml(faFontPath);
+    const tmpPath = path.join(app.getPath("temp"), "chiaroscuro-ctx-menu.html");
+    fs.writeFileSync(tmpPath, html, "utf-8");
+    this.ctxWin.loadFile(tmpPath);
 
     // Dismiss on blur (click outside)
     this.ctxWin.on("blur", () => this.hideContextMenu());
@@ -571,7 +603,7 @@ export class ElectronPlatform implements Platform {
   }
 
   async showContextMenu(opts: {
-    items: { label: string; disabled?: boolean }[];
+    items: { label: string; icon?: string; disabled?: boolean }[];
     x: number;
     y: number;
   }): Promise<number> {
@@ -583,22 +615,28 @@ export class ElectronPlatform implements Platform {
 
     const cb = win.getContentBounds();
 
-    // Render items and measure
+    // Render items and measure (body padding provides space for box-shadow)
     const itemsJson = JSON.stringify(opts.items);
     let size: [number, number];
     try {
       await this.ctxWin.webContents.executeJavaScript(`renderMenu(${itemsJson})`);
       size = await this.ctxWin.webContents.executeJavaScript(
-        `[document.getElementById('m').offsetWidth, document.getElementById('m').offsetHeight]`,
+        "(()=>{const m=document.getElementById('m');const s=getComputedStyle(document.body);" +
+          "return[m.offsetWidth+parseInt(s.paddingLeft)+parseInt(s.paddingRight)," +
+          "m.offsetHeight+parseInt(s.paddingTop)+parseInt(s.paddingBottom)]})()",
       );
     } catch {
       this.dismissCtxMenu();
       return -1;
     }
 
+    // Body padding offsets the menu element from the window edge (for shadow space)
+    const padLeft = 24;
+    const padTop = 24;
+
     // Edge detection — keep menu within parent window bounds
-    let x = cb.x + opts.x;
-    let y = cb.y + opts.y;
+    let x = cb.x + opts.x - padLeft;
+    let y = cb.y + opts.y - padTop;
     const parentBounds = win.getBounds();
     const margin = 6;
     if (x + size[0] > parentBounds.x + parentBounds.width - margin) {
@@ -617,6 +655,13 @@ export class ElectronPlatform implements Platform {
       height: Math.round(size[1]),
     });
     this.ctxWin.show();
+
+    // Reveal menu content after window is shown to avoid animation flash
+    try {
+      await this.ctxWin.webContents.executeJavaScript("revealMenu()");
+    } catch {
+      // ignore — menu may have been dismissed
+    }
 
     // Also hide tooltip so it doesn't overlap
     this.hideTooltip();

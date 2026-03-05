@@ -2,6 +2,7 @@ export const CONTEXT_MENU_SHOW = "context-menu:show" as const;
 
 export interface ContextMenuItemData {
   label: string;
+  icon?: string;
   disabled?: boolean;
 }
 

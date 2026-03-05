@@ -67,8 +67,16 @@ import {
   start as startSidebar,
 } from "../features/sidebar/sidebar.main";
 import type { SidebarCommands, SidebarEvents } from "../features/sidebar/sidebar.shared";
+import {
+  register as registerTabCustomization,
+  start as startTabCustomization,
+} from "../features/tab-customization/tab-customization.main";
+import type {
+  TabCustomizationCommands,
+  TabCustomizationEvents,
+} from "../features/tab-customization/tab-customization.shared";
 import { register as registerTabs, start as startTabs } from "../features/tabs/tabs.main";
-import { getAllTabs } from "../features/tabs/tabs.main";
+import { getAllTabs, getTab } from "../features/tabs/tabs.main";
 import type { TabsCommands, TabsEvents } from "../features/tabs/tabs.shared";
 import { register as registerTooltip } from "../features/tooltip/tooltip.main";
 import type { TooltipCommands, TooltipEvents } from "../features/tooltip/tooltip.shared";
@@ -116,6 +124,7 @@ type AllCommands = MergeRegistries<
     DomainCssCommands,
     DragDropCommands,
     DownloadsCommands,
+    TabCustomizationCommands,
   ]
 >;
 
@@ -137,6 +146,7 @@ type AllEvents = MergeRegistries<
     DomainCssEvents,
     DragDropEvents,
     DownloadsEvents,
+    TabCustomizationEvents,
   ]
 >;
 
@@ -245,6 +255,7 @@ app.whenReady().then(async () => {
   });
   registerDragDrop(deps);
   registerDownloads(deps);
+  registerTabCustomization({ ...deps, getTab });
 
   // Load persisted layout state before creating the window
   const getDisplayBounds = () => screen.getAllDisplays().map((d) => d.workArea);
@@ -296,6 +307,7 @@ app.whenReady().then(async () => {
       getTabsSnapshot: getAllTabs,
     });
     startDownloads(deps);
+    await startTabCustomization({ ...deps, getTab }, restoredTabs);
   });
 
   app.on("activate", () => {

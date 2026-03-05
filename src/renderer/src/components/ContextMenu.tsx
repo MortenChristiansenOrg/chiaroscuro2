@@ -31,7 +31,7 @@ export function useContextMenu(): {
 
     window.chiaroscuro
       .sendCommand(CONTEXT_MENU_SHOW, {
-        items: items.map((it) => ({ label: it.label, disabled: it.disabled })),
+        items: items.map((it) => ({ label: it.label, icon: it.icon, disabled: it.disabled })),
         x: e.clientX,
         y: e.clientY,
       })

@@ -156,4 +156,10 @@ export const routes: Route[] = [
     group: "Components",
     component: lazy(() => import("./pages/components/settings-page.mdx")),
   },
+  {
+    path: "/components/tab-customization",
+    title: "Tab Customization",
+    group: "Components",
+    component: lazy(() => import("./pages/components/tab-customization.mdx")),
+  },
 ];
