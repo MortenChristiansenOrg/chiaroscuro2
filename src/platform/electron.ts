@@ -382,7 +382,8 @@ export class ElectronPlatform implements Platform {
   activateShortcuts(): void {
     if (this.shortcutsActive) return;
     for (const [accelerator, callback] of this.shortcuts) {
-      globalShortcut.register(accelerator, callback);
+      const ok = globalShortcut.register(accelerator, callback);
+      if (!ok) console.warn(`[shortcuts] Failed to register global shortcut: ${accelerator}`);
     }
     this.shortcutsActive = true;
   }
@@ -727,6 +728,27 @@ export class ElectronPlatform implements Platform {
 
   getDesktopPath(): string {
     return app.getPath("desktop");
+  }
+
+  // ── Find in page ───────────────────────────────────────────────
+
+  findInPage(
+    tabId: TabId,
+    text: string,
+    options?: { forward?: boolean; findNext?: boolean },
+  ): void {
+    const view = this.views.get(tabId);
+    if (!view || view.webContents.isDestroyed()) return;
+    view.webContents.findInPage(text, {
+      forward: options?.forward ?? true,
+      findNext: options?.findNext ?? false,
+    });
+  }
+
+  stopFindInPage(tabId: TabId): void {
+    const view = this.views.get(tabId);
+    if (!view || view.webContents.isDestroyed()) return;
+    view.webContents.stopFindInPage("clearSelection");
   }
 
   // ── CSS injection ───────────────────────────────────────────────

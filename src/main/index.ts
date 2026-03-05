@@ -44,6 +44,8 @@ import {
   type DragDropCommands,
   type DragDropEvents,
 } from "../features/drag-drop/drag-drop.shared";
+import { register as registerFindText } from "../features/find-text/find-text.main";
+import type { FindTextCommands, FindTextEvents } from "../features/find-text/find-text.shared";
 import {
   register as registerFolders,
   start as startFolders,
@@ -94,6 +96,14 @@ import { ElectronPlatform } from "../platform/electron";
 import { enableNativeFileDrop } from "../platform/native-drop-win32";
 import type { TabId, WindowId, WorkspaceId } from "../shared/types";
 
+// Log uncaught exceptions to stderr for debugging
+process.on("uncaughtException", (err) => {
+  console.error("[uncaughtException]", err);
+});
+process.on("unhandledRejection", (reason) => {
+  console.error("[unhandledRejection]", reason);
+});
+
 const iconFile = process.platform === "win32" ? "icon.ico" : "icon.png";
 const iconPath = path.join(__dirname, "../../resources", iconFile);
 
@@ -116,6 +126,7 @@ type AllCommands = MergeRegistries<
     DomainCssCommands,
     DragDropCommands,
     DownloadsCommands,
+    FindTextCommands,
   ]
 >;
 
@@ -137,6 +148,7 @@ type AllEvents = MergeRegistries<
     DomainCssEvents,
     DragDropEvents,
     DownloadsEvents,
+    FindTextEvents,
   ]
 >;
 
@@ -245,6 +257,7 @@ app.whenReady().then(async () => {
   });
   registerDragDrop(deps);
   registerDownloads(deps);
+  registerFindText(deps);
 
   // Load persisted layout state before creating the window
   const getDisplayBounds = () => screen.getAllDisplays().map((d) => d.workArea);
@@ -271,6 +284,7 @@ app.whenReady().then(async () => {
   // Activate keyboard shortcuts immediately (window is focused on creation)
   // and toggle on focus/blur so they don't intercept keys from other apps.
   platform.activateShortcuts();
+
   app.on("browser-window-focus", () => platform.activateShortcuts());
   app.on("browser-window-blur", () => {
     // Small delay: focus may transfer between app windows (e.g. context menu)

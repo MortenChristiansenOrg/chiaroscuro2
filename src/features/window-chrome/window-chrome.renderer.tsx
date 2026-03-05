@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "../../renderer/src/components/Icon";
 import { DOMAIN_CSS_OPEN } from "../domain-css/domain-css.shared";
+import { FindBar } from "../find-text/find-text.renderer";
+import { useFindTextStore } from "../find-text/find-text.store";
 import { useTabsStore } from "../tabs/tabs.store";
 import type { WindowChromeCommands } from "./window-chrome.shared";
 import {
@@ -333,8 +335,8 @@ export function TitleBar() {
         <NavButtons />
       </div>
 
-      {/* URL pill (centered — no-drag is on UrlPill's inner container) */}
-      <UrlPill />
+      {/* URL pill or Find bar (centered — no-drag is on inner container) */}
+      {useFindTextStore((s) => s.active) ? <FindBar /> : <UrlPill />}
 
       {/* Flexible spacer */}
       <div className="flex-1 min-w-0" />
