@@ -43,6 +43,7 @@ function AppearanceSettings({ tabId }: { tabId: TabId }) {
       .catch(console.error);
     return () => {
       cancelled = true;
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
   }, [tabId]);
 
@@ -68,12 +69,6 @@ function AppearanceSettings({ tabId }: { tabId: TabId }) {
     },
     [tabId],
   );
-
-  useEffect(() => {
-    return () => {
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-    };
-  }, []);
 
   const handleFixedAddressToggle = useCallback(() => {
     sendCommand(TAB_CUSTOMIZATION_SET_FIXED_ADDRESS_DISABLED, {
@@ -137,7 +132,7 @@ export default function TabCustomizationPage({ params }: BuiltInPageProps) {
   // Close on Escape
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
+      if (e.key === "Escape" && tabId) {
         e.preventDefault();
         sendCommand(TAB_CUSTOMIZATION_CLOSE, { tabId });
       }

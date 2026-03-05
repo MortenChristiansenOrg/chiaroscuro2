@@ -85,6 +85,7 @@ function tabSnapshot(tab: Tab): Tab {
 }
 
 export function register(deps: Deps): void {
+  fixedUrls.clear();
   const {
     commands,
     events,
