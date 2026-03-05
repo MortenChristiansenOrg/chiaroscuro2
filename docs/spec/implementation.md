@@ -61,7 +61,7 @@ Extensions are **opt-in/experimental**. Don't rely on them for critical function
 
 ## 7. Fixed URL & Tab Customization
 
-Bookmarked/pinned tabs record a **fixed URL** — the URL at the time of bookmarking. This is stored in a transient `Map<TabId, string>` (`fixedUrls`) in the main process (not persisted to disk).
+Bookmarked tabs record a **fixed URL** — the URL at the time of bookmarking. This is stored in a transient `Map<TabId, string>` (`fixedUrls`) in the main process (not persisted to disk).
 
 **Lifecycle:**
 - **Created** when a tab is bookmarked — captures the current URL as `fixedUrl`.

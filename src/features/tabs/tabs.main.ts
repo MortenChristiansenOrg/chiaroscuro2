@@ -419,6 +419,7 @@ export function register(deps: Deps): void {
     } else if (!targetBookmarked && tab.bookmarked) {
       tab.bookmarked = false;
       fixedUrls.delete(tabId);
+      tab.folderId = null;
     }
 
     // Update folder membership if specified
