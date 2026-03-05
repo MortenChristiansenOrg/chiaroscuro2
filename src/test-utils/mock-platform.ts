@@ -43,6 +43,8 @@ export function createMockPlatform(overrides: Partial<Platform> = {}): Platform 
     initContextMenuOverlay: vi.fn(),
     showContextMenu: vi.fn(async () => -1),
     hideContextMenu: vi.fn(),
+    findInPage: vi.fn(),
+    stopFindInPage: vi.fn(),
     insertCSS: vi.fn(async () => "css-key"),
     removeInsertedCSS: vi.fn(),
     onDownload: vi.fn(() => () => {}),

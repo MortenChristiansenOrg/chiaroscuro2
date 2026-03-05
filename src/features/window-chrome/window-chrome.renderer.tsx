@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "../../renderer/src/components/Icon";
 import { DOMAIN_CSS_OPEN } from "../domain-css/domain-css.shared";
+import { FindBar } from "../find-text/find-text.renderer";
+import { useFindTextStore } from "../find-text/find-text.store";
 import { useTabsStore } from "../tabs/tabs.store";
 import type { WindowChromeCommands } from "./window-chrome.shared";
 import {
@@ -83,7 +85,7 @@ export function NavButtons() {
   );
 }
 
-export function UrlPill() {
+export function UrlPill({ hidden }: { hidden?: boolean }) {
   const url = useTabsStore((s) => {
     const tab = s.activeTabId ? s.tabs.get(s.activeTabId) : undefined;
     return tab?.url ?? "";
@@ -151,7 +153,16 @@ export function UrlPill() {
   };
 
   return (
-    <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+    <div
+      className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+      style={{
+        transition:
+          "opacity var(--duration-normal) var(--ease-out), scale var(--duration-normal) var(--ease-out)",
+        opacity: hidden ? 0 : 1,
+        scale: hidden ? "0.96" : "1",
+        pointerEvents: hidden ? "none" : "auto",
+      }}
+    >
       {/* Loading spinner ring — conic-gradient masked to border edge */}
       {isLoading && (
         <div
@@ -333,8 +344,9 @@ export function TitleBar() {
         <NavButtons />
       </div>
 
-      {/* URL pill (centered — no-drag is on UrlPill's inner container) */}
-      <UrlPill />
+      {/* URL pill / Find bar crossfade (centered — no-drag is on inner container) */}
+      <UrlPill hidden={useFindTextStore((s) => s.active)} />
+      <FindBar />
 
       {/* Flexible spacer */}
       <div className="flex-1 min-w-0" />

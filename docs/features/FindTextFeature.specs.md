@@ -4,23 +4,21 @@
 
 The Find Text feature provides "Find in Page" for the current tab.
 
-It renders as a small floating widget overlaying the top-right of the current page content (similar to Chrome/Firefox find bars), using Electron's `webContents.findInPage()` API.
-
-This feature is independent of the tab palette.
+When activated, the address bar is replaced with a search box that lets you search for text in the current page using Electron's `webContents.findInPage()` API.
 
 ## Terminology
 
 - **Find term**: the text currently being searched for in the page.
 - **Find mode**: the state where a find term is active and next/previous navigation is enabled.
-- **Find bar**: the floating overlay widget showing the search input and match navigation.
+- **Find bar**: the widget showing the search input and match navigation.
 
 ## Requirements
 
 - Find must operate on the currently active tab's `WebContentsView`.
-- Starting Find must show the find bar overlay and focus its input.
-- The find bar is rendered as a React component positioned over the active tab's content area.
+- Starting Find must fade out the current content of the address bar and fade in the search component and then focus its input.
 - While Find mode is active, the user must be able to navigate between matches and exit Find mode.
-- Find mode must stop when the find bar is dismissed or the current tab is deactivated.
+- The current number of matches is shown in the search component.
+- Find mode must stop when the find is dismissed via the keyboard or the current tab is deactivated.
 - Stopping Find must call `webContents.stopFindInPage('clearSelection')` to clear highlights.
 
 ## Workflows
@@ -28,7 +26,7 @@ This feature is independent of the tab palette.
 ### Start Find in Page
 
 - Press the Find shortcut.
-- The find bar appears overlaying the page content.
+- The find bar appears in the address bar.
 - The find input receives focus.
 - Enter a term to start searching within the page.
 
@@ -41,7 +39,7 @@ This feature is independent of the tab palette.
 ### Stop finding
 
 - While Find mode is active, press Escape.
-- Find highlights are cleared, find bar closes, and Find mode ends.
+- Find highlights are cleared, the find component fades out, and the address bar is restored.
 
 ## Interactions
 
@@ -73,7 +71,3 @@ This feature uses the following shortcuts:
 ### Events
 
 - `find:result` — Emitted when find results update. Payload: `{ activeMatchOrdinal: number, matches: number }`.
-
-## Unresolved Issues
-
-- **Match count display**: Should the find bar show the current match number and total count (e.g. "3 of 17")? (Most modern browsers do this — likely yes.)

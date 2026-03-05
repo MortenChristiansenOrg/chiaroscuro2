@@ -83,6 +83,10 @@ export interface Platform {
   }): Promise<number>;
   hideContextMenu(): void;
 
+  // Find in page
+  findInPage(tabId: TabId, text: string, options?: { forward?: boolean; findNext?: boolean }): void;
+  stopFindInPage(tabId: TabId): void;
+
   // CSS injection
   insertCSS(tabId: TabId, css: string): Promise<string>;
   removeInsertedCSS(tabId: TabId, key: string): Promise<void>;
