@@ -6,6 +6,7 @@ import {
   WebContentsView,
   app,
   clipboard,
+  dialog,
   globalShortcut,
   ipcMain,
   session,
@@ -786,6 +787,19 @@ export class ElectronPlatform implements Platform {
     const view = this.views.get(tabId);
     if (!view) return;
     await view.webContents.removeInsertedCSS(key);
+  }
+
+  // ── Dialogs ───────────────────────────────────────────────────
+  async showOpenDialog(options: { title?: string; properties?: string[] }): Promise<string[]> {
+    const win = this.getWin();
+    if (!win) return [];
+    const result = await dialog.showOpenDialog(win, {
+      title: options.title,
+      properties: (options.properties ?? [
+        "openDirectory",
+      ]) as Electron.OpenDialogOptions["properties"],
+    });
+    return result.canceled ? [] : result.filePaths;
   }
 
   // ── Shell / clipboard ───────────────────────────────────────────

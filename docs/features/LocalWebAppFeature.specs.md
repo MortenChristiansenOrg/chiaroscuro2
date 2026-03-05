@@ -15,19 +15,18 @@ Allows users to configure a local development server for a tab. When the tab is 
 - User must be able to specify a project directory path in the tab palette.
 - User must be able to specify a start command in the tab palette (e.g., `npm start`).
 - User must be able to browse for a directory using a folder picker dialog (Electron's `dialog.showOpenDialog` with `openDirectory` property).
-- Configuration must persist across application restarts (stored in SQLite).
+- Configuration must persist across application restarts.
 - Process must start automatically when tab with saved config is activated.
 - Process must stop when its tab or the browser application is closed.
 - Process is spawned via `child_process.spawn` with `shell: true` for cross-platform compatibility.
 - Tab must reload automatically after process starts (with a short delay to allow the server to start).
 - Process output must stream to Terminal overlay, distinguished as normal or error output.
-- Process status (running/stopped/error) must be visible in Tab Palette.
 
 ## Workflows
 
 ### Configuring a tab to run a Local Web App
 
-1. User opens Tab Palette for a pinned/bookmarked tab.
+1. User opens Tab Customization page for a pinned/bookmarked tab.
 2. User enters project directory path (or clicks folder icon to browse).
 3. User enters start command.
 4. User clicks save button.
@@ -35,7 +34,7 @@ Allows users to configure a local development server for a tab. When the tab is 
 
 ### Changing the command/path for a Local Web App
 
-1. User opens Tab Palette for a pinned/bookmarked tab.
+1. User opens Tab Customization page for a pinned/bookmarked tab.
 2. User changes the start command or app path.
 3. User clicks save button.
 4. The original process is terminated and a new one starts immediately.
@@ -55,7 +54,7 @@ Allows users to configure a local development server for a tab. When the tab is 
 
 ## Interactions
 
-### Tab Palette UI
+### Tab Customization UI
 
 - Directory input: text field for path, browse button opens folder dialog.
 - Command input: text field for shell command.
@@ -87,10 +86,3 @@ None.
 
 - `local-web-app:status-changed` — Process status changed. Payload: `{ tabId: string, status: 'running' | 'stopped' | 'error' }`.
 - `local-web-app:output` — Process produced output. Payload: `{ tabId: string, data: string, type: 'stdout' | 'stderr' }`.
-
-## Unresolved Issues
-
-- **Process tree killing**: On Linux/macOS, killing a shell-spawned process may not kill its children. Need to use process group killing (e.g., `process.kill(-pid)`) or a library like `tree-kill`.
-- **Server ready detection**: The current spec uses a delay before reloading the tab, but this is unreliable. Consider polling the URL or watching stdout for a "ready" message.
-- **Security**: Running arbitrary shell commands specified by the user is inherently trusted, but the configuration should be stored securely and not be injectable by web content.
-- **Port conflicts**: If two tabs use the same port, the second process will fail. Should the feature detect and report port conflicts?

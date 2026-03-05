@@ -50,6 +50,15 @@ import {
 } from "../features/folders/folders.main";
 import type { FoldersCommands, FoldersEvents } from "../features/folders/folders.shared";
 import {
+  register as registerLocalWebApp,
+  start as startLocalWebApp,
+  stopAll as stopAllLocalWebApps,
+} from "../features/local-web-app/local-web-app.main";
+import type {
+  LocalWebAppCommands,
+  LocalWebAppEvents,
+} from "../features/local-web-app/local-web-app.shared";
+import {
   register as registerPinnedTabs,
   start as startPinnedTabs,
 } from "../features/pinned-tabs/pinned-tabs.main";
@@ -78,6 +87,11 @@ import type {
 import { register as registerTabs, start as startTabs } from "../features/tabs/tabs.main";
 import { getAllTabs, getTab } from "../features/tabs/tabs.main";
 import type { TabsCommands, TabsEvents } from "../features/tabs/tabs.shared";
+import {
+  register as registerTerminal,
+  start as startTerminal,
+} from "../features/terminal/terminal.main";
+import type { TerminalCommands, TerminalEvents } from "../features/terminal/terminal.shared";
 import { register as registerTooltip } from "../features/tooltip/tooltip.main";
 import type { TooltipCommands, TooltipEvents } from "../features/tooltip/tooltip.shared";
 import {
@@ -125,6 +139,8 @@ type AllCommands = MergeRegistries<
     DragDropCommands,
     DownloadsCommands,
     TabCustomizationCommands,
+    TerminalCommands,
+    LocalWebAppCommands,
   ]
 >;
 
@@ -147,6 +163,8 @@ type AllEvents = MergeRegistries<
     DragDropEvents,
     DownloadsEvents,
     TabCustomizationEvents,
+    TerminalEvents,
+    LocalWebAppEvents,
   ]
 >;
 
@@ -256,6 +274,8 @@ app.whenReady().then(async () => {
   registerDragDrop(deps);
   registerDownloads(deps);
   registerTabCustomization({ ...deps, getTab });
+  registerTerminal(deps);
+  registerLocalWebApp(deps);
 
   // Load persisted layout state before creating the window
   const getDisplayBounds = () => screen.getAllDisplays().map((d) => d.workArea);
@@ -308,6 +328,8 @@ app.whenReady().then(async () => {
     });
     startDownloads(deps);
     await startTabCustomization({ ...deps, getTab }, restoredTabs);
+    startTerminal(deps);
+    await startLocalWebApp(deps);
   });
 
   app.on("activate", () => {
@@ -319,6 +341,7 @@ app.whenReady().then(async () => {
 
 app.on("before-quit", () => {
   platform.deactivateShortcuts();
+  stopAllLocalWebApps();
   // Flush app-state immediately before data store teardown
   commands.send("app-state:save", undefined).catch(console.error);
   dataStore.destroy().catch(console.error);

@@ -91,6 +91,9 @@ export interface Platform {
   onDownload(callback: (download: PlatformDownload) => void): () => void;
   getDesktopPath(): string;
 
+  // Dialogs
+  showOpenDialog(options: { title?: string; properties?: string[] }): Promise<string[]>;
+
   // Shell / clipboard
   openExternal(url: string): Promise<void>;
   openPath(filePath: string): Promise<void>;
