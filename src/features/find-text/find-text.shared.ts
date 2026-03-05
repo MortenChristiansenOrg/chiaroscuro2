@@ -1,5 +1,3 @@
-import type { TabId } from "../../shared/types";
-
 // ── Command names ────────────────────────────────────────────────
 export const FIND_START = "find:start" as const;
 export const FIND_STOP = "find:stop" as const;

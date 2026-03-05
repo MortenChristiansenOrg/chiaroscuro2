@@ -42,6 +42,7 @@ export function register({
   getActiveWindowId,
 }: Deps): void {
   let findActive = false;
+  let searchedTabId: TabId | undefined;
   const tabCleanups = new Map<TabId, () => void>();
 
   function listenForResults(tabId: TabId): void {
@@ -77,6 +78,7 @@ export function register({
   commands.handle(FIND_STOP, async () => {
     if (!findActive) return;
     findActive = false;
+    searchedTabId = undefined;
     const tabId = getActiveTabId();
     if (tabId) {
       platform.stopFindInPage(tabId);
@@ -92,6 +94,7 @@ export function register({
       findActive = true;
       events.emit(FIND_STARTED, undefined);
     }
+    searchedTabId = tabId;
     listenForResults(tabId);
     platform.findInPage(tabId, text, { forward: true, findNext: true });
   });
@@ -103,6 +106,7 @@ export function register({
       findActive = true;
       events.emit(FIND_STARTED, undefined);
     }
+    searchedTabId = tabId;
     listenForResults(tabId);
     platform.findInPage(tabId, text, { forward: false, findNext: true });
   });
@@ -116,7 +120,7 @@ export function register({
 
   events.on(TABS_CLOSED, ({ tabId }) => {
     cleanupTab(tabId);
-    if (findActive && tabId === getActiveTabId()) {
+    if (findActive && tabId === searchedTabId) {
       findActive = false;
       events.emit(FIND_STOPPED, undefined);
     }

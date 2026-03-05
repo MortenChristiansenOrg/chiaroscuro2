@@ -4,7 +4,7 @@
 
 The Find Text feature provides "Find in Page" for the current tab.
 
-Whan activated, the address bar is replaced with a search box, that allows you to search for text in the current page, using Electron's `webContents.findInPage()` API.
+When activated, the address bar is replaced with a search box that lets you search for text in the current page using Electron's `webContents.findInPage()` API.
 
 ## Terminology
 
@@ -39,7 +39,7 @@ Whan activated, the address bar is replaced with a search box, that allows you t
 ### Stop finding
 
 - While Find mode is active, press Escape.
-- Find highlights are cleared, find component fades out, being replaced with the address bar.
+- Find highlights are cleared, the find component fades out, and the address bar is restored.
 
 ## Interactions
 

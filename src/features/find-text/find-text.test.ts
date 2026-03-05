@@ -241,7 +241,7 @@ describe("tab lifecycle", () => {
     const stopped = vi.fn();
     events.on(FIND_STOPPED, stopped);
 
-    await commands.send(FIND_START, undefined);
+    await commands.send(FIND_NEXT, { text: "test" });
     events.emit(TABS_CLOSED, { tabId: TAB_ID, activatedTabId: null });
 
     expect(stopped).toHaveBeenCalled();

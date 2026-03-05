@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "../../renderer/src/components/Icon";
 import { FIND_NEXT, FIND_PREVIOUS, FIND_STOP } from "./find-text.shared";
 import { useFindTextStore } from "./find-text.store";
@@ -12,30 +12,28 @@ export function FindBar() {
   const activeMatchOrdinal = useFindTextStore((s) => s.activeMatchOrdinal);
   const matches = useFindTextStore((s) => s.matches);
   const inputRef = useRef<HTMLInputElement>(null);
-  const textRef = useRef("");
+  const [text, setText] = useState("");
 
   useEffect(() => {
     if (active) {
-      textRef.current = "";
-      if (inputRef.current) inputRef.current.value = "";
-      // Small delay to allow the transition to start
+      setText("");
       requestAnimationFrame(() => inputRef.current?.focus());
     }
   }, [active]);
 
-  const handleInput = (text: string) => {
-    textRef.current = text;
-    if (text) {
-      sendCommand(FIND_NEXT, { text });
+  const handleInput = (value: string) => {
+    setText(value);
+    if (value) {
+      sendCommand(FIND_NEXT, { text: value });
     }
   };
 
   const handleNext = () => {
-    if (textRef.current) sendCommand(FIND_NEXT, { text: textRef.current });
+    if (text) sendCommand(FIND_NEXT, { text });
   };
 
   const handlePrevious = () => {
-    if (textRef.current) sendCommand(FIND_PREVIOUS, { text: textRef.current });
+    if (text) sendCommand(FIND_PREVIOUS, { text });
   };
 
   const handleClose = () => {
@@ -61,7 +59,7 @@ export function FindBar() {
     }
   };
 
-  const hasText = textRef.current.length > 0;
+  const hasText = text.length > 0;
   const matchLabel = hasText ? `${activeMatchOrdinal} / ${matches}` : "";
 
   const navBtnStyle: React.CSSProperties = {
@@ -129,6 +127,7 @@ export function FindBar() {
             border: "none",
             padding: 0,
           }}
+          value={text}
           onChange={(e) => handleInput(e.target.value)}
           onKeyDown={handleKeyDown}
         />
