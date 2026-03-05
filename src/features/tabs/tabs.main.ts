@@ -78,6 +78,12 @@ let _persistTab: ((tab: Tab) => void) | undefined;
 // fixedAddressDisabled is set.
 const fixedUrls = new Map<TabId, string>();
 
+/** Spread a tab with its fixedUrl for event emission. */
+function tabSnapshot(tab: Tab): Tab {
+  const fixedUrl = fixedUrls.get(tab.id);
+  return { ...tab, ...(fixedUrl ? { fixedUrl } : {}) };
+}
+
 export function register(deps: Deps): void {
   const {
     commands,
@@ -116,12 +122,6 @@ export function register(deps: Deps): void {
 
   function removePersistedTab(tabId: TabId): void {
     tabsCollection.remove(tabId).catch(() => {});
-  }
-
-  /** Spread a tab with its fixedUrl for event emission. */
-  function tabSnapshot(tab: Tab): Tab {
-    const fixedUrl = fixedUrls.get(tab.id);
-    return { ...tab, ...(fixedUrl ? { fixedUrl } : {}) };
   }
 
   // ── Debounced list-changed emission ─────────────────────────────
@@ -587,10 +587,7 @@ export async function start(
 
   // Emit full list (enrich with fixedUrl for renderer)
   deps.events.emit(TABS_LIST_CHANGED, {
-    tabs: [..._tabs.values()].map((t) => {
-      const fixedUrl = fixedUrls.get(t.id);
-      return fixedUrl ? { ...t, fixedUrl } : t;
-    }),
+    tabs: [..._tabs.values()].map(tabSnapshot),
   });
 
   return { idMap, urlMap };

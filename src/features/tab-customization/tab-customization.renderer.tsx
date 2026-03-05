@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { BuiltInPageProps } from "../../renderer/src/components/BuiltInPage";
 import { Icon } from "../../renderer/src/components/Icon";
 import {
@@ -46,21 +46,34 @@ function AppearanceSettings({ tabId }: { tabId: TabId }) {
     };
   }, [tabId]);
 
-  // Sync local title from store (e.g. after save round-trip)
+  // Sync local title from store only when not actively editing (debounce idle)
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   useEffect(() => {
-    setLocalTitle(customization?.title ?? "");
+    if (!saveTimeoutRef.current) {
+      setLocalTitle(customization?.title ?? "");
+    }
   }, [customization?.title]);
 
   const handleTitleChange = useCallback(
     (value: string) => {
       setLocalTitle(value);
-      sendCommand(TAB_CUSTOMIZATION_SET_TITLE, {
-        tabId,
-        title: value.trim() || null,
-      });
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = setTimeout(() => {
+        saveTimeoutRef.current = null;
+        sendCommand(TAB_CUSTOMIZATION_SET_TITLE, {
+          tabId,
+          title: value.trim() || null,
+        });
+      }, 300);
     },
     [tabId],
   );
+
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    };
+  }, []);
 
   const handleFixedAddressToggle = useCallback(() => {
     sendCommand(TAB_CUSTOMIZATION_SET_FIXED_ADDRESS_DISABLED, {
