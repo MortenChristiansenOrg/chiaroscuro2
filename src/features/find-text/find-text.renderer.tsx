@@ -16,14 +16,12 @@ export function FindBar() {
 
   useEffect(() => {
     if (active) {
-      // Small delay to allow the fade-in transition to start
-      requestAnimationFrame(() => inputRef.current?.focus());
-    } else {
       textRef.current = "";
+      if (inputRef.current) inputRef.current.value = "";
+      // Small delay to allow the transition to start
+      requestAnimationFrame(() => inputRef.current?.focus());
     }
   }, [active]);
-
-  if (!active) return null;
 
   const handleInput = (text: string) => {
     textRef.current = text;
@@ -84,7 +82,11 @@ export function FindBar() {
     <div
       className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
       style={{
-        animation: "find-bar-in var(--duration-normal) var(--ease-out) both",
+        transition:
+          "opacity var(--duration-normal) var(--ease-out), scale var(--duration-normal) var(--ease-out)",
+        opacity: active ? 1 : 0,
+        scale: active ? "1" : "0.96",
+        pointerEvents: active ? "auto" : "none",
       }}
     >
       <div

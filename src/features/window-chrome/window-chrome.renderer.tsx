@@ -85,7 +85,7 @@ export function NavButtons() {
   );
 }
 
-export function UrlPill() {
+export function UrlPill({ hidden }: { hidden?: boolean }) {
   const url = useTabsStore((s) => {
     const tab = s.activeTabId ? s.tabs.get(s.activeTabId) : undefined;
     return tab?.url ?? "";
@@ -153,7 +153,16 @@ export function UrlPill() {
   };
 
   return (
-    <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+    <div
+      className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+      style={{
+        transition:
+          "opacity var(--duration-normal) var(--ease-out), scale var(--duration-normal) var(--ease-out)",
+        opacity: hidden ? 0 : 1,
+        scale: hidden ? "0.96" : "1",
+        pointerEvents: hidden ? "none" : "auto",
+      }}
+    >
       {/* Loading spinner ring — conic-gradient masked to border edge */}
       {isLoading && (
         <div
@@ -335,8 +344,9 @@ export function TitleBar() {
         <NavButtons />
       </div>
 
-      {/* URL pill or Find bar (centered — no-drag is on inner container) */}
-      {useFindTextStore((s) => s.active) ? <FindBar /> : <UrlPill />}
+      {/* URL pill / Find bar crossfade (centered — no-drag is on inner container) */}
+      <UrlPill hidden={useFindTextStore((s) => s.active)} />
+      <FindBar />
 
       {/* Flexible spacer */}
       <div className="flex-1 min-w-0" />
