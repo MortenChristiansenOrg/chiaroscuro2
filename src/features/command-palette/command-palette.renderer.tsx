@@ -28,6 +28,9 @@ export function CommandPaletteOverlay() {
   const [selectedSuggestion, setSelectedSuggestion] = useState(-1);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
+  // Clean up debounce timer on unmount
+  useEffect(() => () => clearTimeout(debounceRef.current), []);
+
   useEffect(() => {
     if (open) {
       triggerRef.current = document.activeElement;

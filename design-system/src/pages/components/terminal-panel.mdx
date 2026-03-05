@@ -1,0 +1,107 @@
+---
+title: Terminal Panel
+---
+
+# Terminal Panel
+
+A slide-out panel at the bottom of the content area that displays process output for the active tab. Each tab has its own isolated scrollback buffer. Primarily serves as the output display for the [Local Web App](/components/local-web-app) feature.
+
+---
+
+## Anatomy
+
+- **Header bar** -- terminal icon, "TERMINAL" label (uppercase), flex spacer, clear button (trash-can), close button (xmark)
+- **Output area** -- scrollable, monospace text display with per-line coloring (stdout vs stderr)
+- **Command input** -- chevron-right prompt icon + text input for commands (`/clear`)
+
+---
+
+## Specs
+
+| Property | Token/Value |
+|----------|-------------|
+| Panel height | `14rem` (fixed) |
+| Min height | `6rem` |
+| Background | `var(--content-bg)` (dark context) |
+| Top border | `1px solid var(--border)` |
+| Bottom radius | `0 0 var(--radius) var(--radius)` |
+| Header padding | `0.25rem 0.75rem` |
+| Header gap | `0.375rem` |
+| Header label font | `--text-xs`, weight 600, tracking `0.04em`, uppercase |
+| Header label color | `var(--content-text-muted)` |
+| Output padding | `0.5rem 0.75rem` |
+| Output font | `--font-mono`, `--text-sm`, line-height 1.6 |
+| Stdout color | `var(--content-text-secondary)` |
+| Stderr color | `var(--destructive-foreground)` |
+| Input padding | `0.25rem 0.75rem` |
+| Input font | `--font-mono`, `--text-sm` |
+| Input prompt color | `var(--content-text-muted)` |
+| Button size | `--click-target-min` (24px) |
+| Button icon size | `--icon-size-default` |
+
+---
+
+## States
+
+### Panel States
+
+| State | Visible | Content area behavior |
+|-------|---------|----------------------|
+| Hidden (default) | Not rendered | Full content area height |
+| Visible | Rendered below content | Content area shrinks, WCV bounds adjust |
+
+### Header Button States
+
+| State | Color |
+|-------|-------|
+| Default | `var(--content-text-muted)` |
+| Hover | `var(--foreground)` |
+
+---
+
+## Behavior
+
+- **Toggle** -- `½` key (Nordic layout, key left of 1) toggles visibility via `terminal:toggle` command.
+- **Per-tab buffers** -- switching tabs switches to that tab's terminal output. Max 1000 lines per buffer.
+- **Auto-scroll** -- output area auto-scrolls to bottom on new lines unless user has scrolled up.
+- **Clear** -- typing `/clear` in command input clears the active tab's buffer.
+- **Content area integration** -- when visible, the content area is split into two flex rows: web content (flex-1) above, terminal (fixed height) below. The WCV bounds naturally shrink.
+- **Hidden for built-in pages** -- terminal panel is not shown when viewing built-in pages (settings, tab customization) or when no tab is active.
+
+---
+
+## Keyboard & Focus
+
+| Key | Action |
+|-----|--------|
+| `½` | Toggle terminal visibility (registered as local shortcut) |
+| Enter | Submit command in input field |
+
+- Command input is a standard `<input>` in the tab order.
+- Clear and close buttons have `aria-label` and `data-tip`.
+
+---
+
+## Accessibility
+
+- Terminal icon, clear button, and close button all have `aria-label` attributes.
+- `data-tip` on icon-only buttons for tooltip display.
+- Output uses `pre-wrap` white-space for preserving formatting.
+- Stderr lines are visually distinct (red) from stdout (muted).
+- Buttons meet `--click-target-min` (24px) minimum size.
+
+---
+
+## Layout & Composition
+
+- Rendered inside the `<main>` content area, below the web content `<div>` and above the bottom edge.
+- Uses `dark` class wrapper for dark theme context tokens.
+- Z-index: sits at content level (`--z-base`), not overlaid -- content shrinks to accommodate.
+- Parent: [Web Content Host](/components/web-content-host) (ContentArea component).
+
+---
+
+## Related
+
+- [Web Content Host](/components/web-content-host) -- parent container that manages the split layout
+- [Tab Customization](/components/tab-customization) -- Local Web App config triggers terminal output

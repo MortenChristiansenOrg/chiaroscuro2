@@ -162,4 +162,10 @@ export const routes: Route[] = [
     group: "Components",
     component: lazy(() => import("./pages/components/tab-customization.mdx")),
   },
+  {
+    path: "/components/terminal-panel",
+    title: "Terminal Panel",
+    group: "Components",
+    component: lazy(() => import("./pages/components/terminal-panel.mdx")),
+  },
 ];
