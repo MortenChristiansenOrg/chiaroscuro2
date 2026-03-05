@@ -1,7 +1,7 @@
 import type { CommandBus } from "../../bus/command-bus";
 import type { EventBus } from "../../bus/event-bus";
 import type { Platform } from "../../platform/types";
-import type { TabId } from "../../shared/types";
+import type { TabId, WindowId } from "../../shared/types";
 import {
   TABS_ACTIVATED,
   TABS_CLOSED,
@@ -31,9 +31,16 @@ interface Deps {
   events: EventBus<AllEvents>;
   platform: Platform;
   getActiveTabId: () => TabId | undefined;
+  getActiveWindowId: () => WindowId | undefined;
 }
 
-export function register({ commands, events, platform, getActiveTabId }: Deps): void {
+export function register({
+  commands,
+  events,
+  platform,
+  getActiveTabId,
+  getActiveWindowId,
+}: Deps): void {
   let findActive = false;
   const tabCleanups = new Map<TabId, () => void>();
 
@@ -62,6 +69,8 @@ export function register({ commands, events, platform, getActiveTabId }: Deps): 
 
   commands.handle(FIND_START, async () => {
     findActive = true;
+    const windowId = getActiveWindowId();
+    if (windowId) platform.focusShell(windowId);
     events.emit(FIND_STARTED, undefined);
   });
 

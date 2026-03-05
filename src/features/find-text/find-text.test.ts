@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { CommandBus } from "../../bus/command-bus";
 import { EventBus } from "../../bus/event-bus";
-import type { TabId } from "../../shared/types";
+import type { TabId, WindowId } from "../../shared/types";
 import { createMockPlatform } from "../../test-utils";
 // biome-ignore lint/style/useImportType: TABS_ACTIVATED used in typeof for mapped type
 import {
@@ -24,6 +24,7 @@ import {
 } from "./find-text.shared";
 
 const TAB_ID = "tab-1" as TabId;
+const WIN_ID = "win-1" as WindowId;
 
 type AllEvents = FindTextEvents & {
   [K in typeof TABS_ACTIVATED]: TabsActivatedEvent;
@@ -42,6 +43,7 @@ function setup(opts: { tabId?: TabId | null } = {}) {
     events,
     platform,
     getActiveTabId: () => activeTabId,
+    getActiveWindowId: () => WIN_ID,
   });
 
   return { commands, events, platform };
@@ -56,6 +58,14 @@ describe("find:start", () => {
     await commands.send(FIND_START, undefined);
 
     expect(started).toHaveBeenCalled();
+  });
+
+  it("focuses shell so the find input can receive focus", async () => {
+    const { commands, platform } = setup();
+
+    await commands.send(FIND_START, undefined);
+
+    expect(platform.focusShell).toHaveBeenCalledWith(WIN_ID);
   });
 });
 
