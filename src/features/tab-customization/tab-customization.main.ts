@@ -58,7 +58,7 @@ export function register(deps: TabCustomizationDeps): void {
     const { tabId } = payload;
     if (customizations.has(tabId)) {
       customizations.delete(tabId);
-      collection.remove(tabId).catch(() => {});
+      collection.remove(tabId).catch(console.error);
       events.emit(TAB_CUSTOMIZATION_REMOVED, { tabId });
     }
   });
@@ -86,7 +86,7 @@ export function register(deps: TabCustomizationDeps): void {
 
     if (isDefault(current)) {
       customizations.delete(tabId);
-      collection.remove(tabId).catch(() => {});
+      collection.remove(tabId).catch(console.error);
     } else {
       customizations.set(tabId, current);
       collection
@@ -108,7 +108,7 @@ export function register(deps: TabCustomizationDeps): void {
 
     if (isDefault(current)) {
       customizations.delete(tabId);
-      collection.remove(tabId).catch(() => {});
+      collection.remove(tabId).catch(console.error);
     } else {
       customizations.set(tabId, current);
       collection
@@ -139,7 +139,7 @@ export async function start(
 
     // Skip stale entries whose tab no longer exists after restore
     if (restoredTabs && tabId === oldId && !restoredTabs.idMap.has(oldId)) {
-      collection.remove(oldId).catch(() => {});
+      collection.remove(oldId).catch(console.error);
       continue;
     }
 
@@ -151,7 +151,7 @@ export async function start(
 
     // Update persisted record if ID changed
     if (tabId !== oldId) {
-      collection.remove(oldId).catch(() => {});
+      collection.remove(oldId).catch(console.error);
       collection
         .upsert({ id: tabId, title: doc.title, fixedAddressDisabled: doc.fixedAddressDisabled })
         .catch(console.error);

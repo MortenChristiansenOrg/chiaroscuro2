@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { BuiltInPageProps } from "../../renderer/src/components/BuiltInPage";
 import { Icon } from "../../renderer/src/components/Icon";
 import {
@@ -29,27 +29,26 @@ function AppearanceSettings({ tabId }: { tabId: TabId }) {
   const customization = useTabCustomizationStore((s) => s.customizations.get(tabId));
   const tab = useTabsStore((s) => s.tabs.get(tabId));
   const [localTitle, setLocalTitle] = useState(customization?.title ?? "");
-  const initializedRef = useRef(false);
 
-  // Fetch current state on mount
+  // Fetch current state on mount (or when tabId changes)
   useEffect(() => {
+    let cancelled = false;
     window.chiaroscuro
       .sendCommand(TAB_CUSTOMIZATION_GET_STATE, { tabId })
       .then((result: unknown) => {
+        if (cancelled) return;
         const state = result as TabCustomization;
-        if (!initializedRef.current) {
-          initializedRef.current = true;
-          setLocalTitle(state.title ?? "");
-        }
+        setLocalTitle(state.title ?? "");
       })
       .catch(console.error);
+    return () => {
+      cancelled = true;
+    };
   }, [tabId]);
 
   // Sync local title from store (e.g. after save round-trip)
   useEffect(() => {
-    if (initializedRef.current) {
-      setLocalTitle(customization?.title ?? "");
-    }
+    setLocalTitle(customization?.title ?? "");
   }, [customization?.title]);
 
   const handleTitleChange = useCallback(

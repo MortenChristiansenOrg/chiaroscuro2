@@ -47,7 +47,10 @@ interface Deps {
 }
 
 function resolveBuiltInTitle(url: string): string {
-  const titles: Record<string, string> = { "app:settings": "Settings" };
+  const titles: Record<string, string> = {
+    "app:settings": "Settings",
+    "app:tab-customization": "Tab Customization",
+  };
   if (titles[url]) return titles[url];
   // Handle parameterized URLs like app:domain-css?domain=github.com
   const qIndex = url.indexOf("?");
