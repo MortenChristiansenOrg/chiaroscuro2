@@ -1709,8 +1709,8 @@ export function SidebarPanel() {
             </div>
           </div>
 
-          <UpdateNotification />
           <DownloadsSection />
+          <UpdateNotification />
 
           <WorkspaceSwitcher
             workspaces={workspaces}

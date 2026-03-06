@@ -55,7 +55,7 @@ protocols:
 # Auto-update via GitHub Releases
 publish:
   provider: github
-  owner: morten
+  owner: MortenChristiansenOrg
   repo: chiaroscuro2
 
 # electron-updater reads this to find the release
