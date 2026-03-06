@@ -234,6 +234,22 @@ export class ElectronPlatform implements Platform {
       // This handles target="_blank" links, including download URLs.
       if (isAllowedUrl(url)) {
         view.webContents.loadURL(url);
+      } else if (this.protocolRequestCallback) {
+        try {
+          const parsed = new URL(url);
+          if (
+            parsed.protocol &&
+            parsed.protocol !== "about:" &&
+            parsed.protocol !== "data:" &&
+            parsed.protocol !== "file:"
+          ) {
+            const currentUrl = view.webContents.getURL();
+            const origin = currentUrl ? new URL(currentUrl).origin : "";
+            this.protocolRequestCallback(url, origin);
+          }
+        } catch {
+          // Invalid URL — ignore
+        }
       }
       return { action: "deny" };
     });
@@ -245,8 +261,14 @@ export class ElectronPlatform implements Platform {
         if (this.protocolRequestCallback) {
           try {
             const parsed = new URL(navUrl);
-            const origin = view.webContents.getURL();
-            if (parsed.protocol && parsed.protocol !== "about:" && parsed.protocol !== "data:") {
+            const currentUrl = view.webContents.getURL();
+            const origin = currentUrl ? new URL(currentUrl).origin : "";
+            if (
+              parsed.protocol &&
+              parsed.protocol !== "about:" &&
+              parsed.protocol !== "data:" &&
+              parsed.protocol !== "file:"
+            ) {
               this.protocolRequestCallback(navUrl, origin);
             }
           } catch {

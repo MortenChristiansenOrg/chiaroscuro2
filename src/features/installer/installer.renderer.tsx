@@ -50,6 +50,7 @@ export function UpdateNotification() {
           minHeight: "var(--click-target-min)",
           transition: "color var(--duration-fast), background-color var(--duration-fast)",
         }}
+        tabIndex={-1}
         onClick={() => sendCommand(INSTALLER_APPLY_UPDATE, undefined)}
         aria-label="Restart to apply update"
         data-tip="Restart to apply update"
@@ -66,6 +67,7 @@ export function UpdateNotification() {
           border: "none",
           transition: "color var(--duration-fast), background-color var(--duration-fast)",
         }}
+        tabIndex={-1}
         onClick={() => sendCommand(INSTALLER_DISMISS_UPDATE, undefined)}
         aria-label="Dismiss update notification"
         data-tip="Dismiss"

@@ -317,6 +317,7 @@ app.whenReady().then(async () => {
     startAppState(deps);
     await startWorkspaces(deps);
     startWindowChrome(deps);
+    await startInstaller(deps);
     const restoredTabs = await startTabs(deps);
     await startPinnedTabs(deps, restoredTabs);
     startSidebar(deps);
@@ -330,7 +331,6 @@ app.whenReady().then(async () => {
     });
     startDownloads(deps);
     await startTabCustomization({ ...deps, getTab }, restoredTabs);
-    await startInstaller(deps);
   });
 
   app.on("activate", () => {

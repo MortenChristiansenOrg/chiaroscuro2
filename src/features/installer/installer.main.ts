@@ -41,6 +41,7 @@ interface AllowedProtocolEntry {
 
 let allowedProtocols: AllowedProtocolEntry[] = [];
 let checkTimer: ReturnType<typeof setInterval> | undefined;
+let initialCheckTimer: ReturnType<typeof setTimeout> | undefined;
 let stopProtocolListener: (() => void) | undefined;
 
 /** Make a key for protocol+origin lookups. */
@@ -75,7 +76,7 @@ export function register({ commands, events, platform, dataStore }: Deps): void 
       const exists = allowedProtocols.some((e) => e.protocol === protocol && e.origin === origin);
       if (!exists) {
         allowedProtocols.push({ protocol, origin });
-        await dataStore.setSetting(ALLOWED_PROTOCOLS_KEY, allowedProtocols);
+        void dataStore.setSetting(ALLOWED_PROTOCOLS_KEY, allowedProtocols).catch(console.error);
       }
     }
     events.emit(INSTALLER_PROTOCOL_ALLOWED, { protocol, origin, always });
@@ -152,7 +153,8 @@ export async function start({ events, platform, dataStore, isDev }: Deps): Promi
     });
 
     // Initial check after delay
-    setTimeout(() => {
+    initialCheckTimer = setTimeout(() => {
+      initialCheckTimer = undefined;
       autoUpdater.checkForUpdates().catch(console.error);
     }, INITIAL_CHECK_DELAY_MS);
 
@@ -169,6 +171,10 @@ export function stop(): void {
   if (checkTimer) {
     clearInterval(checkTimer);
     checkTimer = undefined;
+  }
+  if (initialCheckTimer) {
+    clearTimeout(initialCheckTimer);
+    initialCheckTimer = undefined;
   }
   if (stopProtocolListener) {
     stopProtocolListener();
