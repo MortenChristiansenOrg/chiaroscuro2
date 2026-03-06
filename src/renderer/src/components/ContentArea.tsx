@@ -83,12 +83,20 @@ export function ContentArea() {
       style={{
         margin: "0 var(--content-inset) var(--content-inset) var(--content-inset)",
         boxShadow: "var(--shadow-medium)",
-        background: activeTabId ? "var(--content-bg)" : "var(--glass-subtle)",
+        background: !activeTabId
+          ? "var(--glass-subtle)"
+          : showTerminal
+            ? "transparent"
+            : "var(--content-bg)",
         borderRadius: "var(--radius)",
       }}
     >
       {/* Content portion — bounds reported for WCV positioning */}
-      <div ref={contentRef} className="relative flex-1 overflow-hidden">
+      <div
+        ref={contentRef}
+        className="relative flex-1 overflow-hidden"
+        style={showTerminal ? { background: "var(--content-bg)" } : undefined}
+      >
         {isBuiltIn && activeTab && <BuiltInPage url={activeTab.url} />}
         {isCustomizing && <BuiltInPage url={`app:tab-customization?tabId=${editingTabId}`} />}
         {!activeTabId && (
@@ -117,7 +125,7 @@ export function ContentArea() {
       </div>
 
       {/* Terminal panel — below content, shrinks WCV bounds */}
-      {showTerminal && <TerminalPanel />}
+      {!isBuiltIn && !isCustomizing && activeTabId && <TerminalPanel />}
     </main>
   );
 }

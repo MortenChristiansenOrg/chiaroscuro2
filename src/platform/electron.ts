@@ -303,6 +303,12 @@ export class ElectronPlatform implements Platform {
     });
   }
 
+  setTabBorderRadius(tabId: TabId, radius: number): void {
+    const view = this.views.get(tabId);
+    if (!view) return;
+    view.setBorderRadius(Math.round(radius));
+  }
+
   hideTab(tabId: TabId): void {
     const view = this.views.get(tabId);
     if (!view) return;
@@ -537,7 +543,7 @@ export class ElectronPlatform implements Platform {
     height: number;
   }): void {
     const win = this.getWin();
-    if (!win || !this.tooltipWin) return;
+    if (!win || win.isDestroyed() || !this.tooltipWin || this.tooltipWin.isDestroyed()) return;
 
     const cb = win.getContentBounds();
 
@@ -554,7 +560,7 @@ export class ElectronPlatform implements Platform {
   }
 
   hideTooltip(): void {
-    if (this.tooltipWin?.isVisible()) {
+    if (this.tooltipWin && !this.tooltipWin.isDestroyed() && this.tooltipWin.isVisible()) {
       this.tooltipWin.hide();
     }
   }
@@ -609,7 +615,7 @@ export class ElectronPlatform implements Platform {
     y: number;
   }): Promise<number> {
     const win = this.getWin();
-    if (!win || !this.ctxWin) return -1;
+    if (!win || win.isDestroyed() || !this.ctxWin || this.ctxWin.isDestroyed()) return -1;
 
     // Dismiss any pending menu
     this.dismissCtxMenu();
@@ -699,7 +705,7 @@ export class ElectronPlatform implements Platform {
       this.ctxResolve(-1);
       this.ctxResolve = null;
     }
-    if (this.ctxWin?.isVisible()) {
+    if (this.ctxWin && !this.ctxWin.isDestroyed() && this.ctxWin.isVisible()) {
       this.ctxWin.hide();
       this.refocusParent();
     }
@@ -707,7 +713,7 @@ export class ElectronPlatform implements Platform {
 
   private refocusParent(): void {
     const win = this.getWin();
-    if (win) win.webContents.focus();
+    if (win && !win.isDestroyed()) win.webContents.focus();
   }
 
   // ── Downloads ──────────────────────────────────────────────────

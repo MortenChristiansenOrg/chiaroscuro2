@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Icon } from "../../renderer/src/components/Icon";
 import { useTabsStore } from "../tabs/tabs.store";
 import { TERMINAL_CLEAR, TERMINAL_TOGGLE, type TerminalLine } from "./terminal.shared";
@@ -92,7 +92,7 @@ function TerminalInput() {
         type="text"
         value={value}
         onChange={(e) => setValue(e.target.value)}
-        placeholder="/clear"
+        placeholder="Type a command…"
         aria-label="Terminal command"
         className="flex-1"
         style={{
@@ -118,24 +118,47 @@ const headerButtonStyle: React.CSSProperties = {
   transition: "color var(--duration-fast), background var(--duration-fast)",
 };
 
+const PANEL_HEIGHT = "14rem";
+const TRANSITION_MS = 200;
+
 export function TerminalPanel() {
   const visible = useTerminalStore((s) => s.visible);
   const activeTabId = useTabsStore((s) => s.activeTabId);
   const buffers = useTerminalStore((s) => s.buffers);
   const lines = (activeTabId ? buffers.get(activeTabId) : undefined) ?? EMPTY_LINES;
 
-  if (!visible) return null;
+  // Track mounted state for animation (stay mounted while closing)
+  const [mounted, setMounted] = useState(false);
+  const [animating, setAnimating] = useState(false);
+
+  // biome-ignore lint/correctness/useExhaustiveDependencies: mounted used only in else branch to avoid unmount flicker
+  useLayoutEffect(() => {
+    if (visible) {
+      setMounted(true);
+      // Force layout then animate open
+      requestAnimationFrame(() => setAnimating(true));
+    } else if (mounted) {
+      // Animate close, then unmount
+      setAnimating(false);
+      const timer = setTimeout(() => setMounted(false), TRANSITION_MS);
+      return () => clearTimeout(timer);
+    }
+    return undefined;
+  }, [visible]);
+
+  if (!mounted) return null;
 
   return (
     <div
       className="dark flex flex-col"
       style={{
-        height: "14rem",
-        minHeight: "6rem",
+        height: animating ? PANEL_HEIGHT : "0",
+        minHeight: animating ? "6rem" : "0",
         background: "var(--content-bg)",
-        borderTop: "1px solid var(--border)",
-        borderRadius: "0 0 var(--radius) var(--radius)",
+        borderTop: animating ? "1px solid var(--border)" : "none",
+        borderRadius: 0,
         overflow: "hidden",
+        transition: `height ${TRANSITION_MS}ms ease, min-height ${TRANSITION_MS}ms ease`,
       }}
     >
       {/* Header */}

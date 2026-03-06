@@ -205,10 +205,10 @@ function createWindow(windowBounds?: {
 
   // Sync maximize state from native events
   win.on("maximize", () => {
-    events.emit("window:maximized-changed", { maximized: true });
+    if (!win.isDestroyed()) events.emit("window:maximized-changed", { maximized: true });
   });
   win.on("unmaximize", () => {
-    events.emit("window:maximized-changed", { maximized: false });
+    if (!win.isDestroyed()) events.emit("window:maximized-changed", { maximized: false });
   });
 
   // Track window bounds for app-state persistence
@@ -216,6 +216,7 @@ function createWindow(windowBounds?: {
   const trackBounds = () => {
     if (boundsTimer) clearTimeout(boundsTimer);
     boundsTimer = setTimeout(() => {
+      if (win.isDestroyed()) return;
       if (!win.isMaximized() && !win.isMinimized()) {
         onWindowBoundsChanged(win.getBounds(), dataStore);
       }

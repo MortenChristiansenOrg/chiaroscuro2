@@ -18,6 +18,7 @@ export function createMockPlatform(overrides: Partial<Platform> = {}): Platform 
     getTabUrl: vi.fn(() => undefined),
     getTabTitle: vi.fn(() => undefined),
     setTabBounds: vi.fn(),
+    setTabBorderRadius: vi.fn(),
     hideTab: vi.fn(),
     hideAllTabs: vi.fn(),
     onTabEvent: vi.fn(() => () => {}),

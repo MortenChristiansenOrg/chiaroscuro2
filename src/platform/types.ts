@@ -38,6 +38,7 @@ export interface Platform {
   getTabUrl(tabId: TabId): string | undefined;
   getTabTitle(tabId: TabId): string | undefined;
   setTabBounds(tabId: TabId, bounds: Bounds): void;
+  setTabBorderRadius(tabId: TabId, radius: number): void;
   hideTab(tabId: TabId): void;
   hideAllTabs(): void;
   onTabEvent(tabId: TabId, event: string, callback: (...args: unknown[]) => void): () => void;

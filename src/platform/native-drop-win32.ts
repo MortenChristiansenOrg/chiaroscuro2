@@ -83,7 +83,7 @@ export function enableNativeFileDrop(
     if (paths.length > 0) onDrop(paths);
   });
 
-  win.on("closed", () => {
-    win.unhookWindowMessage(WM_DROPFILES);
-  });
+  // No cleanup needed — hookWindowMessage is automatically released when
+  // the BrowserWindow is destroyed. Calling unhookWindowMessage in `closed`
+  // would throw "Object has been destroyed".
 }

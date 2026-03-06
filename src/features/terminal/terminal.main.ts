@@ -3,7 +3,7 @@ import type { EventBus } from "../../bus/event-bus";
 import type { Platform } from "../../platform/types";
 import type { TabId } from "../../shared/types";
 import type { TabsEvents } from "../tabs/tabs.shared";
-import { TABS_CLOSED } from "../tabs/tabs.shared";
+import { TABS_ACTIVATED, TABS_CLOSED } from "../tabs/tabs.shared";
 import {
   TERMINAL_CLEAR,
   TERMINAL_CLEARED,
@@ -19,7 +19,7 @@ import {
 const MAX_LINES = 1000;
 
 type AllCommands = TerminalCommands;
-type AllEvents = TerminalEvents & Pick<TabsEvents, typeof TABS_CLOSED>;
+type AllEvents = TerminalEvents & Pick<TabsEvents, typeof TABS_CLOSED | typeof TABS_ACTIVATED>;
 
 interface Deps {
   commands: CommandBus<AllCommands>;
@@ -36,6 +36,11 @@ export function register(deps: Deps): void {
 
   commands.handle(TERMINAL_TOGGLE, async () => {
     visible = !visible;
+    // When terminal is open, remove bottom border radius from WCV
+    const tabId = getActiveTabId();
+    if (tabId) {
+      platform.setTabBorderRadius(tabId, visible ? 0 : 8);
+    }
     events.emit(TERMINAL_VISIBILITY_CHANGED, { visible });
   });
 
@@ -65,6 +70,13 @@ export function register(deps: Deps): void {
     // Trim to max
     if (buffer.length > MAX_LINES) {
       buffer.splice(0, buffer.length - MAX_LINES);
+    }
+  });
+
+  // Set border radius when tab activates (0 if terminal visible, 8 otherwise)
+  events.on(TABS_ACTIVATED, ({ tabId }) => {
+    if (tabId) {
+      platform.setTabBorderRadius(tabId, visible ? 0 : 8);
     }
   });
 
