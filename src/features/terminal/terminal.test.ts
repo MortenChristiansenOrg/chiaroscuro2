@@ -73,6 +73,23 @@ describe("terminal feature", () => {
       } satisfies TerminalOutputEvent);
     });
 
+    it("strips ANSI escape codes from output", async () => {
+      const { commands, events } = setup();
+      const handler = vi.fn();
+      events.on(TERMINAL_OUTPUT, handler);
+
+      await commands.send(TERMINAL_WRITE, {
+        tabId: "tab-1" as TabId,
+        data: "\u001b[32m\u001b[1mVITE\u001b[22m v7.3.1\u001b[39m  ready",
+        type: "stdout",
+      });
+
+      expect(handler).toHaveBeenCalledWith({
+        tabId: "tab-1",
+        line: { text: "VITE v7.3.1  ready", type: "stdout" },
+      });
+    });
+
     it("emits stderr output", async () => {
       const { commands, events } = setup();
       const handler = vi.fn();

@@ -1,4 +1,4 @@
-import { type ChildProcess, spawn } from "node:child_process";
+import { type ChildProcess, execSync, spawn } from "node:child_process";
 import type { CommandBus } from "../../bus/command-bus";
 import type { EventBus } from "../../bus/event-bus";
 import type { Collection, DataStore } from "../../data/types";
@@ -57,12 +57,16 @@ function killProcess(tabId: TabId): void {
   const running = processes.get(tabId);
   if (!running) return;
 
-  // Kill process tree on all platforms
   const pid = running.proc.pid;
   if (pid) {
     try {
-      // Kill the process group (negative pid kills the group on unix)
-      process.kill(-pid, "SIGTERM");
+      if (process.platform === "win32") {
+        // taskkill /T kills the entire process tree on Windows
+        execSync(`taskkill /T /F /PID ${pid}`, { stdio: "ignore" });
+      } else {
+        // Kill the process group (negative pid) on unix
+        process.kill(-pid, "SIGTERM");
+      }
     } catch {
       try {
         running.proc.kill("SIGTERM");
@@ -193,10 +197,27 @@ export function register(deps: LocalWebAppDeps): void {
   });
 }
 
-export async function start(deps: LocalWebAppDeps): Promise<void> {
+export async function start(
+  deps: LocalWebAppDeps,
+  restoredTabs?: { idMap: Map<TabId, TabId> },
+): Promise<void> {
   const persisted = await collection.findMany({});
   for (const doc of persisted) {
-    const tabId = doc.id as TabId;
+    const oldId = doc.id as TabId;
+    const tabId = restoredTabs?.idMap.get(oldId) ?? oldId;
+
+    // Skip stale entries whose tab no longer exists after restore
+    if (restoredTabs && tabId === oldId && !restoredTabs.idMap.has(oldId)) {
+      collection.remove(oldId).catch(console.error);
+      continue;
+    }
+
+    // Update persisted doc if ID changed
+    if (tabId !== oldId) {
+      await collection.upsert({ id: tabId, directory: doc.directory, command: doc.command });
+      collection.remove(oldId).catch(console.error);
+    }
+
     configs.set(tabId, { directory: doc.directory, command: doc.command });
     statuses.set(tabId, "stopped");
     deps.events.emit(LOCAL_WEB_APP_CONFIG_CHANGED, {
@@ -204,6 +225,12 @@ export async function start(deps: LocalWebAppDeps): Promise<void> {
       config: { directory: doc.directory, command: doc.command },
     });
     deps.events.emit(LOCAL_WEB_APP_STATUS_CHANGED, { tabId, status: "stopped" });
+  }
+
+  // Auto-start the active tab (TABS_ACTIVATED fired before configs were loaded)
+  const activeTabId = deps.getActiveTabId();
+  if (activeTabId && configs.has(activeTabId) && !processes.has(activeTabId)) {
+    startProcess(deps, activeTabId);
   }
 }
 

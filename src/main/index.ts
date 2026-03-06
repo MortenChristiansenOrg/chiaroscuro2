@@ -330,7 +330,7 @@ app.whenReady().then(async () => {
     startDownloads(deps);
     await startTabCustomization({ ...deps, getTab }, restoredTabs);
     startTerminal(deps);
-    await startLocalWebApp(deps);
+    await startLocalWebApp(deps, restoredTabs);
   });
 
   app.on("activate", () => {

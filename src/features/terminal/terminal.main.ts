@@ -18,6 +18,11 @@ import {
 
 const MAX_LINES = 1000;
 
+// Strip ANSI escape sequences (colors, cursor movement, etc.)
+// biome-ignore lint/suspicious/noControlCharactersInRegex: intentional ANSI escape matching
+const ANSI_RE = /[\u001b\u009b][[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-ORZcf-nq-uy=><~]/g;
+const stripAnsi = (s: string) => s.replace(ANSI_RE, "");
+
 type AllCommands = TerminalCommands;
 type AllEvents = TerminalEvents & Pick<TabsEvents, typeof TABS_CLOSED | typeof TABS_ACTIVATED>;
 
@@ -62,7 +67,7 @@ export function register(deps: Deps): void {
     const lines = data.split("\n");
     for (const text of lines) {
       if (text.length === 0 && lines.length > 1) continue; // skip empty splits
-      const line: TerminalLine = { text, type };
+      const line: TerminalLine = { text: stripAnsi(text), type };
       buffer.push(line);
       events.emit(TERMINAL_OUTPUT, { tabId, line });
     }
