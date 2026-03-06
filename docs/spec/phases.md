@@ -51,11 +51,11 @@
 
 ## Phase 6: Distribution & Updates
 
-1. electron-builder config for Windows/macOS/Linux
-2. Default browser registration (Windows registry, protocol handlers)
-3. External application protocol handler support (OAuth callbacks, deep links from other apps)
-4. GitHub Actions release workflow (build on tag push)
-5. electron-updater integration (check for updates, auto-install)
+1. ~~electron-builder config for Windows (NSIS installer)~~
+2. ~~Default browser registration (Windows registry, protocol handlers)~~
+3. ~~External application protocol handler with security prompt~~
+4. ~~GitHub Actions release workflow (build on tag push)~~
+5. ~~electron-updater integration (check for updates, auto-install)~~
 
 ## Phase 7: Polish
 

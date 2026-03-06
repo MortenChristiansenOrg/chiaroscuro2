@@ -95,8 +95,13 @@ export interface Platform {
   onDownload(callback: (download: PlatformDownload) => void): () => void;
   getDesktopPath(): string;
 
+  // Protocol navigation
+  onProtocolRequest(callback: (url: string, origin: string) => void): () => void;
+
   // Shell / clipboard
   openExternal(url: string): Promise<void>;
+  /** Open URL without scheme filtering. Only for user-approved protocol launches. */
+  openExternalApproved(url: string): Promise<void>;
   openPath(filePath: string): Promise<void>;
   readClipboard(): string;
   writeClipboard(text: string): void;

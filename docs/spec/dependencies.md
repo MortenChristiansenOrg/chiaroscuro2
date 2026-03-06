@@ -28,7 +28,7 @@
 ## Build & Distribution
 
 - `electron-builder` for packaging
-- Target: Linux, macOS, Windows
+- Target: Windows only (NSIS installer)
 
 ### Default Browser (Windows)
 
@@ -55,7 +55,7 @@ Git tag (v1.0.0) → GitHub Actions → Build artifacts → GitHub Releases
 
 1. Push git tag (`git tag v1.0.0 && git push --tags`)
 2. GitHub Actions workflow triggers on tag push
-3. Builds for Windows/macOS/Linux via `electron-builder`
+3. Builds for Windows via `electron-builder`
 4. Uploads artifacts to GitHub Releases
 5. `electron-updater` in browser checks releases periodically
 6. Downloads + installs update, prompts user to restart
@@ -64,4 +64,4 @@ Git tag (v1.0.0) → GitHub Actions → Build artifacts → GitHub Releases
 
 - GitHub Actions workflow (`.github/workflows/release.yml`)
 - `electron-updater` config in `electron-builder.yml`
-- Code signing (recommended for Windows/macOS, can skip for personal use)
+- Code signing (skipped for personal use)

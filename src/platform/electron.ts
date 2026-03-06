@@ -137,6 +137,7 @@ export class ElectronPlatform implements Platform {
   private ctxParentListenersSet = false;
   private permissionHandlerSet = false;
   private zoomIpcHooked = false;
+  private protocolRequestCallback: ((url: string, origin: string) => void) | undefined;
 
   constructor(private getActiveWindowId: () => WindowId | undefined) {}
 
@@ -240,6 +241,18 @@ export class ElectronPlatform implements Platform {
     view.webContents.on("will-navigate", (event, navUrl) => {
       if (!isAllowedUrl(navUrl)) {
         event.preventDefault();
+        // Notify listeners about non-standard protocol navigation
+        if (this.protocolRequestCallback) {
+          try {
+            const parsed = new URL(navUrl);
+            const origin = view.webContents.getURL();
+            if (parsed.protocol && parsed.protocol !== "about:" && parsed.protocol !== "data:") {
+              this.protocolRequestCallback(navUrl, origin);
+            }
+          } catch {
+            // Invalid URL — ignore
+          }
+        }
       }
     });
 
@@ -810,10 +823,23 @@ export class ElectronPlatform implements Platform {
     await view.webContents.removeInsertedCSS(key);
   }
 
+  // ── Protocol navigation ─────────────────────────────────────────
+
+  onProtocolRequest(callback: (url: string, origin: string) => void): () => void {
+    this.protocolRequestCallback = callback;
+    return () => {
+      this.protocolRequestCallback = undefined;
+    };
+  }
+
   // ── Shell / clipboard ───────────────────────────────────────────
 
   async openExternal(url: string): Promise<void> {
     if (!isAllowedExternalUrl(url)) return;
+    await shell.openExternal(url);
+  }
+
+  async openExternalApproved(url: string): Promise<void> {
     await shell.openExternal(url);
   }
 

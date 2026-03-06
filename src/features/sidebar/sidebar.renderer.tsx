@@ -20,6 +20,7 @@ import {
 } from "../folders/folders.shared";
 // shell-composite: read-only cross-feature store access
 import { useFoldersStore } from "../folders/folders.store";
+import { UpdateNotification } from "../installer/installer.renderer";
 import type { PinnedTabsCommands } from "../pinned-tabs/pinned-tabs.shared";
 import { PINNED_TABS_ACTIVATE, PINNED_TABS_TOGGLE_PIN } from "../pinned-tabs/pinned-tabs.shared";
 // shell-composite: read-only cross-feature store access
@@ -1708,6 +1709,7 @@ export function SidebarPanel() {
             </div>
           </div>
 
+          <UpdateNotification />
           <DownloadsSection />
 
           <WorkspaceSwitcher
