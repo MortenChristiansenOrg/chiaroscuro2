@@ -118,6 +118,7 @@ describe("installer feature", () => {
 
       expect(onRequested).toHaveBeenCalledOnce();
       const payload = onRequested.mock.calls[0][0] as ProtocolLaunchRequestedEvent;
+      expect(payload.requestId).toBeDefined();
       expect(payload.protocol).toBe("slack");
       expect(payload.origin).toBe("https://example.com");
       expect(payload.url).toBe("slack://open/channel");
@@ -153,16 +154,17 @@ describe("installer feature", () => {
       expect(onRequested).toHaveBeenCalledOnce();
     });
 
-    it("allow-protocol command opens external and persists if always=true", async () => {
-      const { commands, deps, dataStore, platform } = setup();
+    it("allow-protocol command opens external using stored pending request", async () => {
+      const { commands, deps, events, dataStore, platform } = setup();
       await start(deps);
 
-      await commands.send(INSTALLER_ALLOW_PROTOCOL, {
-        protocol: "slack",
-        origin: "https://example.com",
-        url: "slack://open",
-        always: true,
-      });
+      // Trigger a protocol request to create a pending entry
+      const onRequested = vi.fn();
+      events.on(INSTALLER_PROTOCOL_LAUNCH_REQUESTED, onRequested);
+      protocolCallback?.("slack://open", "https://example.com");
+      const { requestId } = onRequested.mock.calls[0][0] as ProtocolLaunchRequestedEvent;
+
+      await commands.send(INSTALLER_ALLOW_PROTOCOL, { requestId, always: true });
 
       expect(platform.openExternalApproved).toHaveBeenCalledWith("slack://open");
       expect(dataStore.setSetting).toHaveBeenCalledWith(
@@ -172,30 +174,42 @@ describe("installer feature", () => {
     });
 
     it("allow-protocol command opens external without persisting if always=false", async () => {
-      const { commands, deps, dataStore, platform } = setup();
+      const { commands, deps, events, dataStore, platform } = setup();
       await start(deps);
 
-      await commands.send(INSTALLER_ALLOW_PROTOCOL, {
-        protocol: "slack",
-        origin: "https://example.com",
-        url: "slack://open",
-        always: false,
-      });
+      const onRequested = vi.fn();
+      events.on(INSTALLER_PROTOCOL_LAUNCH_REQUESTED, onRequested);
+      protocolCallback?.("slack://open", "https://example.com");
+      const { requestId } = onRequested.mock.calls[0][0] as ProtocolLaunchRequestedEvent;
+
+      await commands.send(INSTALLER_ALLOW_PROTOCOL, { requestId, always: false });
 
       expect(platform.openExternalApproved).toHaveBeenCalledWith("slack://open");
       expect(dataStore.setSetting).not.toHaveBeenCalled();
     });
 
-    it("deny-protocol command is a no-op", async () => {
+    it("allow-protocol ignores unknown requestId", async () => {
       const { commands, deps, platform } = setup();
       await start(deps);
 
-      await commands.send(INSTALLER_DENY_PROTOCOL, {
-        protocol: "slack",
-        origin: "https://example.com",
-        url: "slack://open",
-      });
+      await commands.send(INSTALLER_ALLOW_PROTOCOL, { requestId: "bogus", always: false });
 
+      expect(platform.openExternalApproved).not.toHaveBeenCalled();
+    });
+
+    it("deny-protocol clears pending request", async () => {
+      const { commands, deps, events, platform } = setup();
+      await start(deps);
+
+      const onRequested = vi.fn();
+      events.on(INSTALLER_PROTOCOL_LAUNCH_REQUESTED, onRequested);
+      protocolCallback?.("slack://open", "https://example.com");
+      const { requestId } = onRequested.mock.calls[0][0] as ProtocolLaunchRequestedEvent;
+
+      await commands.send(INSTALLER_DENY_PROTOCOL, { requestId });
+
+      // After deny, approving the same requestId should be a no-op
+      await commands.send(INSTALLER_ALLOW_PROTOCOL, { requestId, always: false });
       expect(platform.openExternalApproved).not.toHaveBeenCalled();
     });
   });

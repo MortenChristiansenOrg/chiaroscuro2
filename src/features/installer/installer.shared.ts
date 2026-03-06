@@ -16,16 +16,12 @@ export const INSTALLER_PROTOCOL_ALLOWED = "installer:protocol-allowed" as const;
 
 // ── Command payloads ─────────────────────────────────────────────
 export interface AllowProtocolPayload {
-  protocol: string;
-  origin: string;
-  url: string;
+  requestId: string;
   always: boolean;
 }
 
 export interface DenyProtocolPayload {
-  protocol: string;
-  origin: string;
-  url: string;
+  requestId: string;
 }
 
 // ── Event payloads ───────────────────────────────────────────────
@@ -42,6 +38,7 @@ export interface UpdateErrorEvent {
 }
 
 export interface ProtocolLaunchRequestedEvent {
+  requestId: string;
   protocol: string;
   origin: string;
   url: string;

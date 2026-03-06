@@ -850,7 +850,9 @@ export class ElectronPlatform implements Platform {
   onProtocolRequest(callback: (url: string, origin: string) => void): () => void {
     this.protocolRequestCallback = callback;
     return () => {
-      this.protocolRequestCallback = undefined;
+      if (this.protocolRequestCallback === callback) {
+        this.protocolRequestCallback = undefined;
+      }
     };
   }
 

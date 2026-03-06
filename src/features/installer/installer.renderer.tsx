@@ -89,9 +89,7 @@ export function ProtocolDialog() {
 
   const handleAllow = (always: boolean) => {
     sendCommand(INSTALLER_ALLOW_PROTOCOL, {
-      protocol: request.protocol,
-      origin: request.origin,
-      url: request.url,
+      requestId: request.requestId,
       always,
     });
     dismiss();
@@ -99,9 +97,7 @@ export function ProtocolDialog() {
 
   const handleDeny = () => {
     sendCommand(INSTALLER_DENY_PROTOCOL, {
-      protocol: request.protocol,
-      origin: request.origin,
-      url: request.url,
+      requestId: request.requestId,
     });
     dismiss();
   };

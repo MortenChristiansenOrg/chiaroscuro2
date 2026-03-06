@@ -39,10 +39,19 @@ interface AllowedProtocolEntry {
   origin: string;
 }
 
+interface PendingRequest {
+  protocol: string;
+  origin: string;
+  url: string;
+}
+
 let allowedProtocols: AllowedProtocolEntry[] = [];
+const pendingRequests = new Map<string, PendingRequest>();
+let nextRequestId = 0;
 let checkTimer: ReturnType<typeof setInterval> | undefined;
 let initialCheckTimer: ReturnType<typeof setTimeout> | undefined;
 let stopProtocolListener: (() => void) | undefined;
+let stopProtocolAllowedListener: (() => void) | undefined;
 
 /** Make a key for protocol+origin lookups. */
 function protocolKey(protocol: string, origin: string): string {
@@ -71,7 +80,12 @@ export function register({ commands, events, platform, dataStore }: Deps): void 
     events.emit(INSTALLER_UPDATE_DISMISSED, undefined);
   });
 
-  commands.handle(INSTALLER_ALLOW_PROTOCOL, async ({ protocol, origin, url, always }) => {
+  commands.handle(INSTALLER_ALLOW_PROTOCOL, async ({ requestId, always }) => {
+    const pending = pendingRequests.get(requestId);
+    if (!pending) return; // No matching pending request — ignore
+    pendingRequests.delete(requestId);
+
+    const { protocol, origin, url } = pending;
     if (always) {
       const exists = allowedProtocols.some((e) => e.protocol === protocol && e.origin === origin);
       if (!exists) {
@@ -83,8 +97,8 @@ export function register({ commands, events, platform, dataStore }: Deps): void 
     await platform.openExternalApproved(url);
   });
 
-  commands.handle(INSTALLER_DENY_PROTOCOL, async () => {
-    // No-op — just dismiss the dialog
+  commands.handle(INSTALLER_DENY_PROTOCOL, async ({ requestId }) => {
+    pendingRequests.delete(requestId);
   });
 }
 
@@ -107,7 +121,10 @@ export async function start({ events, platform, dataStore, isDev }: Deps): Promi
         // Auto-allow previously approved protocol+origin
         platform.openExternalApproved(url).catch(console.error);
       } else {
+        const requestId = String(++nextRequestId);
+        pendingRequests.set(requestId, { protocol: proto, origin, url });
         events.emit(INSTALLER_PROTOCOL_LAUNCH_REQUESTED, {
+          requestId,
           protocol: proto,
           origin,
           url,
@@ -119,7 +136,7 @@ export async function start({ events, platform, dataStore, isDev }: Deps): Promi
   });
 
   // Keep allowedSet in sync when protocols are allowed
-  events.on(INSTALLER_PROTOCOL_ALLOWED, () => {
+  stopProtocolAllowedListener = events.on(INSTALLER_PROTOCOL_ALLOWED, () => {
     allowedSet.clear();
     for (const e of allowedProtocols) {
       allowedSet.add(protocolKey(e.protocol, e.origin));
@@ -180,5 +197,10 @@ export function stop(): void {
     stopProtocolListener();
     stopProtocolListener = undefined;
   }
+  if (stopProtocolAllowedListener) {
+    stopProtocolAllowedListener();
+    stopProtocolAllowedListener = undefined;
+  }
   allowedProtocols = [];
+  pendingRequests.clear();
 }
