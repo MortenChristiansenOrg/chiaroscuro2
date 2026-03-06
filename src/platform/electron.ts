@@ -1,6 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
 import {
+  net,
   BrowserWindow,
   Menu,
   WebContentsView,
@@ -806,6 +807,20 @@ export class ElectronPlatform implements Platform {
       ]) as Electron.OpenDialogOptions["properties"],
     });
     return result.canceled ? [] : result.filePaths;
+  }
+
+  // ── Network ─────────────────────────────────────────────────────
+
+  async fetchAsDataUrl(url: string): Promise<string | undefined> {
+    try {
+      const res = await net.fetch(url);
+      if (!res.ok) return undefined;
+      const buf = Buffer.from(await res.arrayBuffer());
+      const contentType = res.headers.get("content-type") || "image/x-icon";
+      return `data:${contentType};base64,${buf.toString("base64")}`;
+    } catch {
+      return undefined;
+    }
   }
 
   // ── Shell / clipboard ───────────────────────────────────────────

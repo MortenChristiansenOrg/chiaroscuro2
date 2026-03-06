@@ -233,6 +233,31 @@ function LetterAvatar({ label, hue }: { label: string; hue: number }) {
 
 export function Favicon({ tab }: { tab: Pick<Tab, "favicon" | "title" | "url"> }) {
   const [imgFailed, setImgFailed] = useState(false);
+  const [retries, setRetries] = useState(0);
+  const [lastFavicon, setLastFavicon] = useState(tab.favicon);
+
+  // Reset failure state when favicon URL changes
+  if (tab.favicon !== lastFavicon) {
+    setLastFavicon(tab.favicon);
+    setImgFailed(false);
+    setRetries(0);
+  }
+
+  // Retry localhost favicons (dev servers may not be ready yet on restore)
+  useEffect(() => {
+    if (!imgFailed || retries >= 3 || !tab.favicon) return;
+    try {
+      const u = new URL(tab.favicon);
+      if (u.hostname !== "localhost" && u.hostname !== "127.0.0.1") return;
+    } catch {
+      return;
+    }
+    const timer = setTimeout(() => {
+      setImgFailed(false);
+      setRetries((r) => r + 1);
+    }, 2000);
+    return () => clearTimeout(timer);
+  }, [imgFailed, retries, tab.favicon]);
 
   const letter = tab.title?.[0]?.toUpperCase() || tab.url?.[0]?.toUpperCase() || "?";
   const hue = hashToHue(tab.url || tab.title);

@@ -95,6 +95,9 @@ export interface Platform {
   // Dialogs
   showOpenDialog(options: { title?: string; properties?: string[] }): Promise<string[]>;
 
+  // Network
+  fetchAsDataUrl(url: string): Promise<string | undefined>;
+
   // Shell / clipboard
   openExternal(url: string): Promise<void>;
   openPath(filePath: string): Promise<void>;
