@@ -33,6 +33,7 @@ interface Deps {
 const ALLOWED_PROTOCOLS_KEY = "installer:allowed-protocols";
 const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
 const INITIAL_CHECK_DELAY_MS = 30_000; // 30 seconds
+const MAX_PENDING_REQUESTS = 64;
 
 interface AllowedProtocolEntry {
   protocol: string;
@@ -104,9 +105,12 @@ export function register({ commands, events, platform, dataStore }: Deps): void 
 
 export async function start({ events, platform, dataStore, isDev }: Deps): Promise<void> {
   // Load persisted allowed protocols
-  const saved = await dataStore.getSetting<AllowedProtocolEntry[]>(ALLOWED_PROTOCOLS_KEY);
-  if (saved) {
-    allowedProtocols = saved;
+  try {
+    const saved = await dataStore.getSetting<AllowedProtocolEntry[]>(ALLOWED_PROTOCOLS_KEY);
+    allowedProtocols = Array.isArray(saved) ? saved : [];
+  } catch (err) {
+    allowedProtocols = [];
+    console.error("[installer] Failed to load allowed protocols:", err);
   }
 
   // Listen for protocol navigations from web content
@@ -121,6 +125,7 @@ export async function start({ events, platform, dataStore, isDev }: Deps): Promi
         // Auto-allow previously approved protocol+origin
         platform.openExternalApproved(url).catch(console.error);
       } else {
+        if (pendingRequests.size >= MAX_PENDING_REQUESTS) return;
         const requestId = String(++nextRequestId);
         pendingRequests.set(requestId, { protocol: proto, origin, url });
         events.emit(INSTALLER_PROTOCOL_LAUNCH_REQUESTED, {

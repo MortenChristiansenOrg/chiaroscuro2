@@ -8,7 +8,7 @@ import {
 import { useInstallerStore } from "./installer.store";
 
 function sendCommand(name: string, payload: unknown) {
-  void window.chiaroscuro.sendCommand(name, payload);
+  return window.chiaroscuro.sendCommand(name, payload);
 }
 
 export function UpdateNotification() {
@@ -88,26 +88,23 @@ export function ProtocolDialog() {
   };
 
   const handleAllow = (always: boolean) => {
-    sendCommand(INSTALLER_ALLOW_PROTOCOL, {
+    void sendCommand(INSTALLER_ALLOW_PROTOCOL, {
       requestId: request.requestId,
       always,
-    });
-    dismiss();
+    })
+      .then(() => dismiss())
+      .catch(console.error);
   };
 
   const handleDeny = () => {
-    sendCommand(INSTALLER_DENY_PROTOCOL, {
+    void sendCommand(INSTALLER_DENY_PROTOCOL, {
       requestId: request.requestId,
-    });
-    dismiss();
+    })
+      .then(() => dismiss())
+      .catch(console.error);
   };
 
-  let displayOrigin: string;
-  try {
-    displayOrigin = new URL(request.origin).hostname || request.origin;
-  } catch {
-    displayOrigin = request.origin;
-  }
+  const displayOrigin = request.origin && request.origin !== "null" ? request.origin : "this page";
 
   return (
     <div
@@ -152,15 +149,17 @@ export function ProtocolDialog() {
         >
           <strong style={{ color: "var(--foreground)" }}>{displayOrigin}</strong> wants to open{" "}
           <code
+            title={request.url}
             style={{
               fontFamily: "var(--font-mono)",
               fontSize: "var(--text-xs)",
               padding: "0.125rem 0.25rem",
               borderRadius: "var(--radius-sm)",
               background: "var(--muted)",
+              overflowWrap: "anywhere",
             }}
           >
-            {request.protocol}://
+            {request.url}
           </code>
         </p>
 
