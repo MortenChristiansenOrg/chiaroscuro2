@@ -38,6 +38,12 @@ jobs:
           ref: ${{ inputs.tag || github.ref }}
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
+      - name: Stamp version from tag
+        shell: bash
+        run: |
+          TAG="${{ inputs.tag || github.ref_name }}"
+          VERSION="${TAG#v}"
+          bun -e "const p=require('./package.json'); p.version='${VERSION}'; require('fs').writeFileSync('package.json', JSON.stringify(p, null, 2)+'\n')"
       - run: bun run build
       - name: Build installer
         run: bunx electron-builder --win --config electron-builder.yml --publish never
