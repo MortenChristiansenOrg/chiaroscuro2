@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import { describe, expect, it, vi } from "vitest";
 import { CommandBus } from "../../bus/command-bus";
 import { EventBus } from "../../bus/event-bus";
@@ -36,6 +37,7 @@ vi.mock("node:child_process", () => {
       proc.kill = vi.fn();
       return proc;
     }),
+    execSync: vi.fn(),
   };
 });
 
@@ -189,6 +191,55 @@ describe("local-web-app feature", () => {
 
       const lastCall = handler.mock.calls[handler.mock.calls.length - 1][0];
       expect(lastCall).toEqual({ tabId: "tab-1", status: "stopped" });
+    });
+  });
+
+  describe("WSL path support", () => {
+    it("spawns via wsl.exe for WSL UNC paths on win32", async () => {
+      const originalPlatform = process.platform;
+      Object.defineProperty(process, "platform", { value: "win32" });
+
+      try {
+        const { commands } = await setup();
+        (spawn as ReturnType<typeof vi.fn>).mockClear();
+
+        await commands.send(LOCAL_WEB_APP_SAVE_CONFIG, {
+          tabId: "tab-1" as TabId,
+          directory: "\\\\wsl.localhost\\Ubuntu-24.04\\home\\user\\project",
+          command: "bun dev",
+        });
+
+        expect(spawn).toHaveBeenCalledWith(
+          "wsl.exe",
+          ["-d", "Ubuntu-24.04", "--", "sh", "-c", expect.stringContaining("bun dev")],
+          expect.objectContaining({ shell: false }),
+        );
+      } finally {
+        Object.defineProperty(process, "platform", { value: originalPlatform });
+      }
+    });
+
+    it("uses cwd normally for non-WSL paths on win32", async () => {
+      const originalPlatform = process.platform;
+      Object.defineProperty(process, "platform", { value: "win32" });
+
+      try {
+        const { commands } = await setup();
+        (spawn as ReturnType<typeof vi.fn>).mockClear();
+
+        await commands.send(LOCAL_WEB_APP_SAVE_CONFIG, {
+          tabId: "tab-1" as TabId,
+          directory: "C:\\projects\\myapp",
+          command: "npm start",
+        });
+
+        expect(spawn).toHaveBeenCalledWith(
+          "npm start",
+          expect.objectContaining({ cwd: "C:\\projects\\myapp", shell: true }),
+        );
+      } finally {
+        Object.defineProperty(process, "platform", { value: originalPlatform });
+      }
     });
   });
 

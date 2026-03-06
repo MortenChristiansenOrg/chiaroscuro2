@@ -87,12 +87,35 @@ function startProcess(deps: LocalWebAppDeps, tabId: TabId): void {
 
   const { commands, events, platform } = deps;
 
-  const proc = spawn(config.command, {
-    cwd: config.directory,
-    shell: true,
-    stdio: ["ignore", "pipe", "pipe"],
-    detached: process.platform !== "win32", // process group for tree-kill on unix
-  });
+  // WSL UNC paths (\\wsl.localhost\Distro\path) must run inside WSL via wsl.exe,
+  // because mapped network drives break fs.watch (EISDIR errors in Vite etc.).
+  const wslMatch =
+    process.platform === "win32"
+      ? config.directory.match(/^\\\\wsl\.localhost\\([^\\]+)\\(.+)$/)
+      : null;
+
+  let proc: ChildProcess;
+  if (wslMatch) {
+    const distro = wslMatch[1] as string;
+    const linuxPath = `/${(wslMatch[2] as string).replace(/\\/g, "/")}`;
+    // wsl.exe inherits Windows PATH where Windows-installed tools (e.g. npm's bun)
+    // shadow WSL-native ones, breaking shim resolution. Fix: look up the user's
+    // default shell and run it interactively so rc files set PATH correctly.
+    // Explicit cd handles rc files that override the working directory.
+    const escaped = config.command.replace(/'/g, "'\\''");
+    const shellCmd = `exec $(getent passwd $(id -un) | cut -d: -f7) -ic 'cd "${linuxPath}" && ${escaped}'`;
+    proc = spawn("wsl.exe", ["-d", distro, "--", "sh", "-c", shellCmd], {
+      shell: false,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+  } else {
+    proc = spawn(config.command, {
+      cwd: config.directory,
+      shell: true,
+      stdio: ["ignore", "pipe", "pipe"],
+      detached: process.platform !== "win32", // process group for tree-kill on unix
+    });
+  }
 
   processes.set(tabId, { proc, tabId });
   statuses.set(tabId, "running");
