@@ -51,7 +51,7 @@ Packages Chiaroscuro as a Windows NSIS installer, registers it as a default brow
 - Builds on Windows runner (`blacksmith-2vcpu-windows-2025`).
 - Runs typecheck + lint + test before building.
 - Builds NSIS installer via electron-builder.
-- Uploads installer artifacts to GitHub Releases (draft).
+- Uploads installer artifacts to GitHub Releases.
 
 ## Workflows
 
@@ -83,9 +83,8 @@ Packages Chiaroscuro as a Windows NSIS installer, registers it as a default brow
 
 1. Developer tags commit: `git tag v1.2.3 && git push --tags`.
 2. GitHub Actions builds Windows installer.
-3. Artifacts uploaded to GitHub Releases as draft.
-4. Developer reviews and publishes release.
-5. Running instances pick up update on next check cycle.
+3. Artifacts uploaded to GitHub Releases.
+4. Running instances pick up update on next check cycle.
 
 ## Interactions
 
