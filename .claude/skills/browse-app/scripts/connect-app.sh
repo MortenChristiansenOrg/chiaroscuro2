@@ -40,10 +40,10 @@ if [ -z "$INSTALLED_VERSION" ]; then
 fi
 echo "playwright-cli version: $INSTALLED_VERSION"
 
-LATEST_VERSION=$(npm view @anthropic-ai/playwright-cli version 2>/dev/null) || true
+LATEST_VERSION=$(npm view @playwright/cli version 2>/dev/null) || true
 if [ -n "$LATEST_VERSION" ] && [ "$INSTALLED_VERSION" != "$LATEST_VERSION" ]; then
   echo "Warning: installed $INSTALLED_VERSION, latest is $LATEST_VERSION"
-  echo "  Update with: npm install -g @anthropic-ai/playwright-cli@latest"
+  echo "  Update with: npm install -g @playwright/cli@latest"
 fi
 
 # --- Verify CDP endpoint ---
