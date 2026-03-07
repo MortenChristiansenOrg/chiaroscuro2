@@ -53,8 +53,9 @@ const reloadTimeouts = new Map<TabId, ReturnType<typeof setTimeout>>();
 let collection: Collection<PersistedConfig>;
 
 const RELOAD_DELAY_MS = 2000;
+const KILL_TIMEOUT_MS = 5000;
 
-function killProcess(tabId: TabId): void {
+async function killProcess(tabId: TabId): Promise<void> {
   const pendingReload = reloadTimeouts.get(tabId);
   if (pendingReload) {
     clearTimeout(pendingReload);
@@ -66,6 +67,19 @@ function killProcess(tabId: TabId): void {
 
   const pid = running.proc.pid;
   if (pid) {
+    // Build a promise that resolves when the process closes (Unix only,
+    // where SIGTERM is async). Includes a timeout so we never hang forever.
+    const closed =
+      process.platform !== "win32"
+        ? new Promise<void>((resolve) => {
+            const timer = setTimeout(resolve, KILL_TIMEOUT_MS);
+            running.proc.on("close", () => {
+              clearTimeout(timer);
+              resolve();
+            });
+          })
+        : undefined;
+
     try {
       if (process.platform === "win32") {
         // taskkill /T kills the entire process tree on Windows
@@ -81,16 +95,18 @@ function killProcess(tabId: TabId): void {
         // already dead
       }
     }
+
+    if (closed) await closed;
   }
   processes.delete(tabId);
 }
 
-function startProcess(deps: LocalWebAppDeps, tabId: TabId): void {
+async function startProcess(deps: LocalWebAppDeps, tabId: TabId): Promise<void> {
   const config = configs.get(tabId);
   if (!config) return;
 
-  // Kill existing if running
-  killProcess(tabId);
+  // Kill existing if running — await ensures the old process releases the port
+  await killProcess(tabId);
 
   const { commands, events, platform } = deps;
 

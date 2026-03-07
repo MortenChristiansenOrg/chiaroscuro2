@@ -34,7 +34,10 @@ vi.mock("node:child_process", () => {
       proc.pid = 12345;
       proc.stdout = new EventEmitter();
       proc.stderr = new EventEmitter();
-      proc.kill = vi.fn();
+      proc.kill = vi.fn(() => {
+        // Simulate async close so killProcess resolves promptly
+        queueMicrotask(() => proc.emit("close", 0));
+      });
       return proc;
     }),
     execSync: vi.fn(),
