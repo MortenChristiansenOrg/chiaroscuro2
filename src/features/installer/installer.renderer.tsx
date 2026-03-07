@@ -13,6 +13,7 @@ function sendCommand(name: string, payload: unknown) {
 
 export function UpdateNotification() {
   const version = useInstallerStore((s) => s.pendingUpdateVersion);
+  const downloaded = useInstallerStore((s) => s.updateDownloaded);
   const dismissed = useInstallerStore((s) => s.updateDismissed);
 
   if (!version || dismissed) return null;
@@ -31,32 +32,36 @@ export function UpdateNotification() {
       }}
     >
       <Icon
-        name="arrow-up-from-bracket"
+        name={downloaded ? "arrow-up-from-bracket" : "download"}
         className="text-glass-text-default shrink-0"
         css={{ fontSize: "var(--icon-size-default)" }}
       />
-      <span className="text-glass-text-default flex-1 min-w-0 truncate">v{version} ready</span>
-      <button
-        type="button"
-        className="cursor-pointer text-glass-text-default hover:text-glass-text-hover hover:bg-glass-hover active:bg-glass-pressed active:text-glass-text-pressed"
-        style={{
-          fontSize: "var(--text-xs)",
-          fontFamily: "inherit",
-          fontWeight: 500,
-          padding: "0.125rem 0.5rem",
-          borderRadius: "var(--radius-sm)",
-          border: "1px solid var(--glass-border)",
-          background: "var(--glass-subtle)",
-          minHeight: "var(--click-target-min)",
-          transition: "color var(--duration-fast), background-color var(--duration-fast)",
-        }}
-        tabIndex={-1}
-        onClick={() => sendCommand(INSTALLER_APPLY_UPDATE, undefined)}
-        aria-label="Restart to apply update"
-        data-tip="Restart to apply update"
-      >
-        Restart
-      </button>
+      <span className="text-glass-text-default flex-1 min-w-0 truncate">
+        {downloaded ? `v${version} ready` : `Downloading v${version}…`}
+      </span>
+      {downloaded && (
+        <button
+          type="button"
+          className="cursor-pointer text-glass-text-default hover:text-glass-text-hover hover:bg-glass-hover active:bg-glass-pressed active:text-glass-text-pressed"
+          style={{
+            fontSize: "var(--text-xs)",
+            fontFamily: "inherit",
+            fontWeight: 500,
+            padding: "0.125rem 0.5rem",
+            borderRadius: "var(--radius-sm)",
+            border: "1px solid var(--glass-border)",
+            background: "var(--glass-subtle)",
+            minHeight: "var(--click-target-min)",
+            transition: "color var(--duration-fast), background-color var(--duration-fast)",
+          }}
+          tabIndex={-1}
+          onClick={() => sendCommand(INSTALLER_APPLY_UPDATE, undefined)}
+          aria-label="Restart to apply update"
+          data-tip="Restart to apply update"
+        >
+          Restart
+        </button>
+      )}
       <button
         type="button"
         className="flex items-center justify-center bg-transparent text-glass-text-hint hover:text-glass-text-hover hover:bg-glass-hover active:bg-glass-pressed cursor-pointer"

@@ -17,14 +17,20 @@ Compact inline notification in the sidebar indicating a new version is downloade
 
 ### Anatomy
 
-- **Update icon** — `arrow-up-from-bracket`, default text color
-- **Version label** — "v\{version\} ready", truncated, `--text-sm`
-- **Restart button** — bordered ghost button, triggers `installer:apply-update`
+- **Update icon** — `download` while downloading, `arrow-up-from-bracket` when ready; default text color
+- **Version label** — "Downloading v\{version\}…" or "v\{version\} ready", truncated, `--text-sm`
+- **Restart button** — bordered ghost button, only shown when downloaded, triggers `installer:apply-update`
 - **Dismiss button** — icon-only `xmark`, triggers `installer:dismiss-update`
 
 ### Preview
 
-<LivePreview label="Update ready (v2.1.0)" stores={{ installer: { pendingUpdateVersion: "2.1.0", updateDismissed: false, protocolRequest: null } }}>
+<LivePreview label="Downloading (v2.1.0)" stores={{ installer: { pendingUpdateVersion: "2.1.0", updateDownloaded: false, updateDismissed: false, protocolRequest: null } }}>
+  <div style={{ width: 230 }}>
+    <UpdateNotification />
+  </div>
+</LivePreview>
+
+<LivePreview label="Update ready (v2.1.0)" stores={{ installer: { pendingUpdateVersion: "2.1.0", updateDownloaded: true, updateDismissed: false, protocolRequest: null } }}>
   <div style={{ width: 230 }}>
     <UpdateNotification />
   </div>
@@ -54,7 +60,8 @@ When dismissed (`updateDismissed: true`) or no pending update, the component ret
 | State | Visible | Content |
 |-------|---------|---------|
 | No update | No | Returns null |
-| Update ready | Yes | Version + Restart + Dismiss |
+| Downloading | Yes | Download icon + "Downloading v…" + Dismiss |
+| Update ready | Yes | Upload icon + "v… ready" + Restart + Dismiss |
 | Dismissed | No | Returns null (until next update) |
 
 #### Button States
@@ -133,7 +140,7 @@ Modal overlay shown when a web page requests to open an external protocol (e.g.,
 
 ## Behavior
 
-- **Update notification** — appears when `installer:update-downloaded` event fires; re-appears on each new update even if previously dismissed.
+- **Update notification** — appears when `installer:update-available` event fires (showing download progress); transitions to "ready" when `installer:update-downloaded` fires. Re-appears on each new update even if previously dismissed.
 - **Protocol dialog** — blocks interaction with the app until user responds; dismisses on any action (deny/allow).
 - **"Always allow"** — persists the protocol+origin pair so future requests from the same origin are auto-allowed.
 
