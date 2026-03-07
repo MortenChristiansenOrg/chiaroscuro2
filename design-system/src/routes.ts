@@ -163,6 +163,18 @@ export const routes: Route[] = [
     component: lazy(() => import("./pages/components/tab-customization.mdx")),
   },
   {
+    path: "/components/local-web-app",
+    title: "Local Web App",
+    group: "Components",
+    component: lazy(() => import("./pages/components/local-web-app.mdx")),
+  },
+  {
+    path: "/components/terminal-panel",
+    title: "Terminal Panel",
+    group: "Components",
+    component: lazy(() => import("./pages/components/terminal-panel.mdx")),
+  },
+  {
     path: "/components/app-update",
     title: "App Update",
     group: "Components",

@@ -1,11 +1,13 @@
 import fs from "node:fs";
 import path from "node:path";
 import {
+  net,
   BrowserWindow,
   Menu,
   WebContentsView,
   app,
   clipboard,
+  dialog,
   globalShortcut,
   ipcMain,
   session,
@@ -337,6 +339,12 @@ export class ElectronPlatform implements Platform {
     });
   }
 
+  setTabBorderRadius(tabId: TabId, radius: number): void {
+    const view = this.views.get(tabId);
+    if (!view) return;
+    view.setBorderRadius(Math.round(radius));
+  }
+
   hideTab(tabId: TabId): void {
     const view = this.views.get(tabId);
     if (!view) return;
@@ -572,7 +580,7 @@ export class ElectronPlatform implements Platform {
     height: number;
   }): void {
     const win = this.getWin();
-    if (!win || !this.tooltipWin) return;
+    if (!win || win.isDestroyed() || !this.tooltipWin || this.tooltipWin.isDestroyed()) return;
 
     const cb = win.getContentBounds();
 
@@ -589,7 +597,7 @@ export class ElectronPlatform implements Platform {
   }
 
   hideTooltip(): void {
-    if (this.tooltipWin?.isVisible()) {
+    if (this.tooltipWin && !this.tooltipWin.isDestroyed() && this.tooltipWin.isVisible()) {
       this.tooltipWin.hide();
     }
   }
@@ -644,7 +652,7 @@ export class ElectronPlatform implements Platform {
     y: number;
   }): Promise<number> {
     const win = this.getWin();
-    if (!win || !this.ctxWin) return -1;
+    if (!win || win.isDestroyed() || !this.ctxWin || this.ctxWin.isDestroyed()) return -1;
 
     // Dismiss any pending menu
     this.dismissCtxMenu();
@@ -734,7 +742,7 @@ export class ElectronPlatform implements Platform {
       this.ctxResolve(-1);
       this.ctxResolve = null;
     }
-    if (this.ctxWin?.isVisible()) {
+    if (this.ctxWin && !this.ctxWin.isDestroyed() && this.ctxWin.isVisible()) {
       this.ctxWin.hide();
       this.refocusParent();
     }
@@ -742,7 +750,7 @@ export class ElectronPlatform implements Platform {
 
   private refocusParent(): void {
     const win = this.getWin();
-    if (win) win.webContents.focus();
+    if (win && !win.isDestroyed()) win.webContents.focus();
   }
 
   // ── Downloads ──────────────────────────────────────────────────
@@ -843,6 +851,33 @@ export class ElectronPlatform implements Platform {
     const view = this.views.get(tabId);
     if (!view) return;
     await view.webContents.removeInsertedCSS(key);
+  }
+
+  // ── Dialogs ───────────────────────────────────────────────────
+  async showOpenDialog(options: { title?: string; properties?: string[] }): Promise<string[]> {
+    const win = this.getWin();
+    if (!win) return [];
+    const result = await dialog.showOpenDialog(win, {
+      title: options.title,
+      properties: (options.properties ?? [
+        "openDirectory",
+      ]) as Electron.OpenDialogOptions["properties"],
+    });
+    return result.canceled ? [] : result.filePaths;
+  }
+
+  // ── Network ─────────────────────────────────────────────────────
+
+  async fetchAsDataUrl(url: string): Promise<string | undefined> {
+    try {
+      const res = await net.fetch(url);
+      if (!res.ok) return undefined;
+      const buf = Buffer.from(await res.arrayBuffer());
+      const contentType = res.headers.get("content-type") || "image/x-icon";
+      return `data:${contentType};base64,${buf.toString("base64")}`;
+    } catch {
+      return undefined;
+    }
   }
 
   // ── Protocol navigation ─────────────────────────────────────────

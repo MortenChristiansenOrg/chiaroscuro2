@@ -28,6 +28,17 @@ export function CommandPaletteOverlay() {
   const [selectedSuggestion, setSelectedSuggestion] = useState(-1);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
+  // Cancel debounce when palette closes (component stays mounted)
+  useEffect(() => {
+    if (!open) {
+      clearTimeout(debounceRef.current);
+      debounceRef.current = undefined;
+    }
+  }, [open]);
+
+  // Clean up debounce timer on unmount
+  useEffect(() => () => clearTimeout(debounceRef.current), []);
+
   useEffect(() => {
     if (open) {
       triggerRef.current = document.activeElement;

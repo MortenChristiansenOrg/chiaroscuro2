@@ -9,6 +9,7 @@ import {
   useScrollSpy,
 } from "../../renderer/src/components/SettingsLayout";
 import type { TabId } from "../../shared/types";
+import { LocalWebAppSettings } from "../local-web-app/local-web-app.renderer";
 import { useTabsStore } from "../tabs/tabs.store";
 import {
   TAB_CUSTOMIZATION_CLOSE,
@@ -23,7 +24,10 @@ function sendCommand(name: string, payload: unknown) {
   void window.chiaroscuro.sendCommand(name, payload).catch(console.error);
 }
 
-const categories = [{ id: "appearance", label: "Appearance" }];
+const categories = [
+  { id: "appearance", label: "Appearance" },
+  { id: "local-web-app", label: "Local Web App" },
+];
 
 function AppearanceSettings({ tabId }: { tabId: TabId }) {
   const customization = useTabCustomizationStore((s) => s.customizations.get(tabId));
@@ -167,6 +171,7 @@ export default function TabCustomizationPage({ params }: BuiltInPageProps) {
       activeCategory={activeCategory}
     >
       <AppearanceSettings tabId={tabId} />
+      <LocalWebAppSettings tabId={tabId} />
 
       <div style={{ paddingTop: "1rem" }}>
         <button

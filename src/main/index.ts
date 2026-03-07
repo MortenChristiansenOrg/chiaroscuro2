@@ -57,6 +57,15 @@ import {
 } from "../features/installer/installer.main";
 import type { InstallerCommands, InstallerEvents } from "../features/installer/installer.shared";
 import {
+  register as registerLocalWebApp,
+  start as startLocalWebApp,
+  stopAll as stopAllLocalWebApps,
+} from "../features/local-web-app/local-web-app.main";
+import type {
+  LocalWebAppCommands,
+  LocalWebAppEvents,
+} from "../features/local-web-app/local-web-app.shared";
+import {
   register as registerPinnedTabs,
   start as startPinnedTabs,
 } from "../features/pinned-tabs/pinned-tabs.main";
@@ -85,6 +94,11 @@ import type {
 import { register as registerTabs, start as startTabs } from "../features/tabs/tabs.main";
 import { getAllTabs, getTab } from "../features/tabs/tabs.main";
 import type { TabsCommands, TabsEvents } from "../features/tabs/tabs.shared";
+import {
+  register as registerTerminal,
+  start as startTerminal,
+} from "../features/terminal/terminal.main";
+import type { TerminalCommands, TerminalEvents } from "../features/terminal/terminal.shared";
 import { register as registerTooltip } from "../features/tooltip/tooltip.main";
 import type { TooltipCommands, TooltipEvents } from "../features/tooltip/tooltip.shared";
 import {
@@ -141,6 +155,8 @@ type AllCommands = MergeRegistries<
     DownloadsCommands,
     FindTextCommands,
     TabCustomizationCommands,
+    TerminalCommands,
+    LocalWebAppCommands,
     InstallerCommands,
   ]
 >;
@@ -165,6 +181,8 @@ type AllEvents = MergeRegistries<
     DownloadsEvents,
     FindTextEvents,
     TabCustomizationEvents,
+    TerminalEvents,
+    LocalWebAppEvents,
     InstallerEvents,
   ]
 >;
@@ -206,10 +224,10 @@ function createWindow(windowBounds?: {
 
   // Sync maximize state from native events
   win.on("maximize", () => {
-    events.emit("window:maximized-changed", { maximized: true });
+    if (!win.isDestroyed()) events.emit("window:maximized-changed", { maximized: true });
   });
   win.on("unmaximize", () => {
-    events.emit("window:maximized-changed", { maximized: false });
+    if (!win.isDestroyed()) events.emit("window:maximized-changed", { maximized: false });
   });
 
   // Track window bounds for app-state persistence
@@ -217,6 +235,7 @@ function createWindow(windowBounds?: {
   const trackBounds = () => {
     if (boundsTimer) clearTimeout(boundsTimer);
     boundsTimer = setTimeout(() => {
+      if (win.isDestroyed()) return;
       if (!win.isMaximized() && !win.isMinimized()) {
         onWindowBoundsChanged(win.getBounds(), dataStore);
       }
@@ -276,6 +295,8 @@ app.whenReady().then(async () => {
   registerDownloads(deps);
   registerFindText(deps);
   registerTabCustomization({ ...deps, getTab });
+  registerTerminal(deps);
+  registerLocalWebApp(deps);
   registerInstaller(deps);
 
   // Load persisted layout state before creating the window
@@ -331,6 +352,8 @@ app.whenReady().then(async () => {
     });
     startDownloads(deps);
     await startTabCustomization({ ...deps, getTab }, restoredTabs);
+    startTerminal(deps);
+    await startLocalWebApp(deps, restoredTabs);
   });
 
   app.on("activate", () => {
@@ -342,6 +365,7 @@ app.whenReady().then(async () => {
 
 app.on("before-quit", () => {
   platform.deactivateShortcuts();
+  stopAllLocalWebApps();
   // Flush app-state immediately before data store teardown
   commands.send("app-state:save", undefined).catch(console.error);
   dataStore.destroy().catch(console.error);

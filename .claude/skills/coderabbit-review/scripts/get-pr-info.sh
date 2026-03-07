@@ -16,9 +16,17 @@ REPO=$(echo "$REPO_INFO" | cut -d' ' -f2)
 if [[ $# -ge 1 ]]; then
   PR_NUMBER="$1"
 else
-  PR_NUMBER=$(gh pr view --json number -q '.number' 2>/dev/null || echo "")
+  BRANCH=$(git branch --show-current 2>/dev/null || echo "")
+  if [[ -n "$BRANCH" ]]; then
+    # Try explicit branch name first (works reliably in worktrees)
+    PR_NUMBER=$(gh pr view "$BRANCH" --json number -q '.number' 2>/dev/null || echo "")
+    # Fallback: list PRs by head branch
+    if [[ -z "$PR_NUMBER" ]]; then
+      PR_NUMBER=$(gh pr list --head "$BRANCH" --json number -q '.[0].number' 2>/dev/null || echo "")
+    fi
+  fi
   if [[ -z "$PR_NUMBER" ]]; then
-    echo "Error: No PR found for current branch and no PR number provided" >&2
+    echo "Error: No PR found for current branch ($BRANCH) and no PR number provided" >&2
     exit 1
   fi
 fi

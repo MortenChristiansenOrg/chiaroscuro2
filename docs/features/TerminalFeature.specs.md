@@ -16,10 +16,10 @@ Provides a slide-out terminal overlay that allows you to view output from proces
 - Terminal must support displaying standard and error output.
 - Terminal must display output sent by other features through the terminal output event/command.
 - Error output must be displayed in red.
-- Terminal buffers must persist while tab exists (scrollback: 5000 lines).
+- Terminal buffers must persist while tab exists (scrollback: 1000 lines).
 - Terminal must auto-fit to available space when resized.
 - User must be able to clear the terminal buffer.
-- Terminal is rendered as a React component in the browser chrome renderer.
+- Terminal is rendered in a separate window, in order to render on top of the web content. It overlaps the bottom of the web content.
 
 ## Workflows
 
@@ -40,12 +40,12 @@ Provides a slide-out terminal overlay that allows you to view output from proces
 ### Terminal UI
 
 - Terminal display: read-only scrollable area with monospace font.
-- Command input: text field at bottom for commands (currently only `/clear`).
+- Command input: text field at bottom for commands (currently only `/clear` but more commands can be added in the future).
 - Output styling: normal text in muted color, errors in red.
 
 ### Keyboard shortcuts
 
-- **Backtick (`` ` ``)**: Toggle terminal visibility.
+- **½**: Toggle terminal visibility.
 
 ### Mouse interactions
 
@@ -63,10 +63,3 @@ Provides a slide-out terminal overlay that allows you to view output from proces
 ### Events
 
 - `terminal:visibility-changed` — Terminal visibility changed. Payload: `{ visible: boolean }`.
-
-## Unresolved Issues
-
-- **Toggle shortcut**: The old spec used `½` (section sign key on Scandinavian keyboards). Changed to backtick (`` ` ``) which is more universally accessible, similar to game console toggles and VS Code terminal. Confirm this is acceptable.
-- **Terminal emulator library**: Should this use a terminal emulator library like xterm.js for proper ANSI escape code rendering, or is a simple scrollable div with text sufficient?
-- **Interactive commands**: The spec only supports `/clear` as a command. Should the terminal support running arbitrary shell commands in the future, or is it strictly an output viewer?
-- **Terminal per tab vs global**: Each tab has its own buffer, but should there also be a global terminal for app-level output?

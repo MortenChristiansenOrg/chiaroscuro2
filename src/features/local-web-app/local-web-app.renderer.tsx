@@ -1,0 +1,251 @@
+import { useCallback, useEffect, useState } from "react";
+import { Icon } from "../../renderer/src/components/Icon";
+import {
+  SettingItem,
+  settingsCategoryHeadingStyle,
+  settingsInputStyle,
+} from "../../renderer/src/components/SettingsLayout";
+import type { TabId } from "../../shared/types";
+import {
+  LOCAL_WEB_APP_BROWSE_DIRECTORY,
+  LOCAL_WEB_APP_DELETE_CONFIG,
+  LOCAL_WEB_APP_GET_CONFIG,
+  LOCAL_WEB_APP_SAVE_CONFIG,
+  LOCAL_WEB_APP_START,
+  LOCAL_WEB_APP_STOP,
+  type LocalWebAppConfig,
+  type LocalWebAppStatus,
+} from "./local-web-app.shared";
+import { useLocalWebAppStore } from "./local-web-app.store";
+
+function sendCommand<T = unknown>(name: string, payload: unknown): Promise<T> {
+  return window.chiaroscuro.sendCommand(name, payload) as Promise<T>;
+}
+
+function StatusBadge({ status }: { status: LocalWebAppStatus }) {
+  const color =
+    status === "running"
+      ? "var(--success-foreground, oklch(0.72 0.18 142))"
+      : status === "error"
+        ? "var(--destructive-foreground)"
+        : "var(--content-text-muted)";
+
+  const label = status === "running" ? "Running" : status === "error" ? "Error" : "Stopped";
+
+  return (
+    <span
+      className="inline-flex items-center"
+      style={{
+        gap: "0.25rem",
+        fontSize: "var(--text-xs)",
+        color,
+        fontWeight: 500,
+      }}
+    >
+      <span
+        style={{
+          width: "0.375rem",
+          height: "0.375rem",
+          borderRadius: "var(--radius-full)",
+          background: color,
+          flexShrink: 0,
+        }}
+      />
+      {label}
+    </span>
+  );
+}
+
+export function LocalWebAppSettings({ tabId }: { tabId: TabId }) {
+  const config = useLocalWebAppStore((s) => s.configs.get(tabId));
+  const status = useLocalWebAppStore((s) => s.statuses.get(tabId)) ?? "stopped";
+
+  const [localDir, setLocalDir] = useState("");
+  const [localCmd, setLocalCmd] = useState("");
+  const hasConfig = config !== undefined;
+
+  // Sync local state from store
+  useEffect(() => {
+    if (config) {
+      setLocalDir(config.directory);
+      setLocalCmd(config.command);
+    } else {
+      setLocalDir("");
+      setLocalCmd("");
+    }
+  }, [config]);
+
+  // Fetch current state on mount
+  useEffect(() => {
+    let cancelled = false;
+    sendCommand<(LocalWebAppConfig & { status: LocalWebAppStatus }) | undefined>(
+      LOCAL_WEB_APP_GET_CONFIG,
+      { tabId },
+    )
+      .then((result) => {
+        if (cancelled || !result) return;
+        setLocalDir(result.directory);
+        setLocalCmd(result.command);
+      })
+      .catch(console.error);
+    return () => {
+      cancelled = true;
+    };
+  }, [tabId]);
+
+  const handleBrowse = useCallback(async () => {
+    const dir = await sendCommand<string | undefined>(LOCAL_WEB_APP_BROWSE_DIRECTORY, undefined);
+    if (dir) setLocalDir(dir);
+  }, []);
+
+  const handleSave = useCallback(() => {
+    if (!localDir.trim() || !localCmd.trim()) return;
+    sendCommand(LOCAL_WEB_APP_SAVE_CONFIG, {
+      tabId,
+      directory: localDir.trim(),
+      command: localCmd.trim(),
+    });
+  }, [tabId, localDir, localCmd]);
+
+  const handleDelete = useCallback(() => {
+    sendCommand(LOCAL_WEB_APP_DELETE_CONFIG, { tabId });
+    setLocalDir("");
+    setLocalCmd("");
+  }, [tabId]);
+
+  const handleToggleProcess = useCallback(() => {
+    if (status === "running") {
+      sendCommand(LOCAL_WEB_APP_STOP, { tabId });
+    } else {
+      sendCommand(LOCAL_WEB_APP_START, { tabId });
+    }
+  }, [tabId, status]);
+
+  const isDirty =
+    localDir.trim() !== (config?.directory ?? "") || localCmd.trim() !== (config?.command ?? "");
+
+  return (
+    <section id="tab-customization-local-web-app">
+      <h2 style={settingsCategoryHeadingStyle}>
+        <span className="inline-flex items-center" style={{ gap: "0.375rem" }}>
+          Local Web App
+          {hasConfig && <StatusBadge status={status} />}
+        </span>
+      </h2>
+
+      <SettingItem
+        label="Project Directory"
+        description="Path to the project folder containing your dev server."
+      >
+        <div className="flex items-center" style={{ gap: "0.375rem", maxWidth: "24rem" }}>
+          <input
+            type="text"
+            value={localDir}
+            onChange={(e) => setLocalDir(e.target.value)}
+            placeholder="/path/to/project"
+            aria-label="Project directory"
+            style={{ ...settingsInputStyle, fontFamily: "var(--font-mono)" }}
+          />
+          <button
+            type="button"
+            onClick={handleBrowse}
+            className="flex items-center justify-center shrink-0 cursor-pointer hover:brightness-110 active:brightness-90"
+            style={{
+              width: "var(--click-target-min)",
+              height: "var(--click-target-min)",
+              border: "1px solid var(--input)",
+              borderRadius: "var(--radius-sm, 0.25rem)",
+              background: "var(--background)",
+              color: "var(--muted-foreground)",
+              transition: "color var(--duration-fast)",
+              padding: 0,
+            }}
+            aria-label="Browse for directory"
+            data-tip="Browse"
+          >
+            <Icon name="folder-open" css={{ fontSize: "var(--icon-size-default)" }} />
+          </button>
+        </div>
+      </SettingItem>
+
+      <SettingItem
+        label="Start Command"
+        description="Shell command to run the dev server (e.g. npm start, bun dev)."
+      >
+        <input
+          type="text"
+          value={localCmd}
+          onChange={(e) => setLocalCmd(e.target.value)}
+          placeholder="npm start"
+          aria-label="Start command"
+          style={{ ...settingsInputStyle, maxWidth: "24rem", fontFamily: "var(--font-mono)" }}
+        />
+      </SettingItem>
+
+      {/* Action buttons */}
+      <div className="flex items-center flex-wrap" style={{ gap: "0.5rem", paddingTop: "0.25rem" }}>
+        <button
+          type="button"
+          onClick={handleSave}
+          disabled={!localDir.trim() || !localCmd.trim()}
+          className="inline-flex items-center cursor-pointer font-[inherit] transition-all hover:brightness-110 active:brightness-90 disabled:opacity-40 disabled:cursor-default"
+          style={{
+            gap: "0.375rem",
+            padding: "0.375rem 0.75rem",
+            fontSize: "var(--text-sm)",
+            color: "var(--foreground)",
+            background: "oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250) / 0.12)",
+            border: "1px solid oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250) / 0.3)",
+            borderRadius: "var(--radius-sm, 0.25rem)",
+          }}
+        >
+          <Icon name="floppy-disk" css={{ fontSize: "var(--icon-size-default)" }} />
+          {isDirty ? "Save & Restart" : "Save"}
+        </button>
+
+        {hasConfig && (
+          <>
+            <button
+              type="button"
+              onClick={handleToggleProcess}
+              className="inline-flex items-center cursor-pointer font-[inherit] transition-all hover:brightness-110 active:brightness-90"
+              style={{
+                gap: "0.375rem",
+                padding: "0.375rem 0.75rem",
+                fontSize: "var(--text-sm)",
+                color: "var(--foreground)",
+                background: "var(--background)",
+                border: "1px solid var(--input)",
+                borderRadius: "var(--radius-sm, 0.25rem)",
+              }}
+            >
+              <Icon
+                name={status === "running" ? "stop" : "play"}
+                css={{ fontSize: "var(--icon-size-default)" }}
+              />
+              {status === "running" ? "Stop" : "Start"}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleDelete}
+              className="inline-flex items-center cursor-pointer font-[inherit] transition-all hover:brightness-110 active:brightness-90"
+              style={{
+                gap: "0.375rem",
+                padding: "0.375rem 0.75rem",
+                fontSize: "var(--text-sm)",
+                color: "var(--destructive-foreground)",
+                background: "transparent",
+                border: "1px solid var(--input)",
+                borderRadius: "var(--radius-sm, 0.25rem)",
+              }}
+            >
+              <Icon name="trash-can" css={{ fontSize: "var(--icon-size-default)" }} />
+              Remove
+            </button>
+          </>
+        )}
+      </div>
+    </section>
+  );
+}

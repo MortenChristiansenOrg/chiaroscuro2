@@ -35,6 +35,21 @@ type AllEvents = TabsEvents & { [K in typeof TAB_LOADING_CHANGED]: TabLoadingCha
 
 const EPHEMERAL_TTL_MS = 8 * 60 * 60 * 1000; // 8 hours
 
+function isLocalhostUrl(url: string): boolean {
+  try {
+    const u = new URL(url);
+    return (
+      u.hostname === "localhost" ||
+      u.hostname === "127.0.0.1" ||
+      u.hostname === "::1" ||
+      u.hostname.startsWith("127.") ||
+      u.hostname.endsWith(".localhost")
+    );
+  } catch {
+    return false;
+  }
+}
+
 interface Deps {
   commands: CommandBus<AllCommands>;
   events: EventBus<AllEvents>;
@@ -225,9 +240,22 @@ export function register(deps: Deps): void {
         if (!tab) return;
         const urls = favicons as string[];
         if (urls.length > 0 && urls[0]) {
-          tab.favicon = urls[0];
+          const faviconUrl = urls[0];
+          tab.favicon = faviconUrl;
           events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
           persistTab(tab);
+          // Convert localhost favicons to data URLs so they survive across sessions
+          // (dev servers aren't running until the tab is activated)
+          if (isLocalhostUrl(faviconUrl)) {
+            platform.fetchAsDataUrl(faviconUrl).then((dataUrl) => {
+              if (!dataUrl) return;
+              const current = tabs.get(tabId);
+              if (!current || current.favicon !== faviconUrl) return;
+              current.favicon = dataUrl;
+              events.emit(TABS_UPDATED, { tab: tabSnapshot(current) });
+              persistTab(current);
+            });
+          }
         }
       }),
     );

@@ -38,6 +38,7 @@ export interface Platform {
   getTabUrl(tabId: TabId): string | undefined;
   getTabTitle(tabId: TabId): string | undefined;
   setTabBounds(tabId: TabId, bounds: Bounds): void;
+  setTabBorderRadius(tabId: TabId, radius: number): void;
   hideTab(tabId: TabId): void;
   hideAllTabs(): void;
   onTabEvent(tabId: TabId, event: string, callback: (...args: unknown[]) => void): () => void;
@@ -94,6 +95,12 @@ export interface Platform {
   // Downloads
   onDownload(callback: (download: PlatformDownload) => void): () => void;
   getDesktopPath(): string;
+
+  // Dialogs
+  showOpenDialog(options: { title?: string; properties?: string[] }): Promise<string[]>;
+
+  // Network
+  fetchAsDataUrl(url: string): Promise<string | undefined>;
 
   // Protocol navigation
   onProtocolRequest(callback: (url: string, origin: string) => void): () => void;
