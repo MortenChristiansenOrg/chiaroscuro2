@@ -3,7 +3,7 @@ import { CommandBus } from "../../bus/command-bus";
 import { EventBus } from "../../bus/event-bus";
 import type { TabId } from "../../shared/types";
 import { TABS_CREATE, type TabsCommands } from "../tabs/tabs.shared";
-import { register } from "./drag-drop.main";
+import feature from "./drag-drop.main";
 import {
   DRAG_DROP_FILES_DROPPED,
   DRAG_DROP_OPEN_FILES,
@@ -26,7 +26,7 @@ function setup() {
     return `tab-${tabCounter}` as TabId;
   });
 
-  register({ commands, events });
+  feature.register({ commands, events });
 
   return { commands, events, getTabCount: () => tabCounter };
 }
@@ -76,7 +76,7 @@ describe("drag-drop:open-files", () => {
       createCalls.push(payload);
       return "tab-1" as TabId;
     });
-    register({ commands: cmds, events: evts });
+    feature.register({ commands: cmds, events: evts });
 
     await cmds.send(DRAG_DROP_OPEN_FILES, {
       filePaths: ["/home/user/a.html", "/home/user/b.html", "/home/user/c.html"],
@@ -95,7 +95,7 @@ describe("drag-drop:open-files", () => {
       urls.push(payload.url);
       return "tab-1" as TabId;
     });
-    register({ commands: cmds, events: evts });
+    feature.register({ commands: cmds, events: evts });
 
     await cmds.send(DRAG_DROP_OPEN_FILES, {
       filePaths: ["/home/user/page.html"],
@@ -163,7 +163,7 @@ describe("drag-drop:open-files", () => {
       if (callCount === 2) throw new Error("simulated failure");
       return `tab-${callCount}` as TabId;
     });
-    register({ commands: cmds, events: evts });
+    feature.register({ commands: cmds, events: evts });
 
     await cmds.send(DRAG_DROP_OPEN_FILES, {
       filePaths: ["/home/user/a.html", "/home/user/b.html", "/home/user/c.html"],

@@ -9,7 +9,7 @@ import type { TabId } from "../../shared/types";
 import { createMockPlatform } from "../../test-utils";
 import type { Tab, TabsCommands, TabsEvents } from "../tabs/tabs.shared";
 import type { DomainCssDeps } from "./domain-css.main";
-import { register, start } from "./domain-css.main";
+import feature from "./domain-css.main";
 import {
   DOMAIN_CSS_CHANGED,
   DOMAIN_CSS_EDIT,
@@ -50,7 +50,7 @@ function setup() {
   });
   commands.handle("tabs:activate", async () => {});
 
-  register(deps);
+  feature.register(deps);
   return { commands, events, dataStore, platform, deps, tabs };
 }
 
@@ -284,7 +284,7 @@ describe("domain-css commands", () => {
         "persisted.com": { enabled: true },
       });
 
-      await start(deps);
+      await feature.start?.(deps);
 
       // Get state should reflect persisted data
       const state = await deps.commands.send(DOMAIN_CSS_GET_STATE, { domain: "persisted.com" });

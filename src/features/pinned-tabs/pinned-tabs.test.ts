@@ -11,7 +11,8 @@ import {
   TABS_CREATE,
   TABS_UPDATED,
 } from "../tabs/tabs.shared";
-import { register, start } from "./pinned-tabs.main";
+import feature from "./pinned-tabs.main";
+import { start } from "./pinned-tabs.main";
 import {
   PINNED_TABS_ACTIVATE,
   PINNED_TABS_ACTIVE_CHANGED,
@@ -53,7 +54,7 @@ function setup(overrides: { activeTabId?: TabId | null } = {}) {
     setActiveTabId: () => {},
     getActiveWorkspaceId: () => "ws-1" as WorkspaceId | undefined,
   };
-  register(deps);
+  feature.register(deps);
   return { commands, events, platform, dataStore, deps };
 }
 
@@ -197,7 +198,7 @@ describe("start()", () => {
       setActiveTabId: () => {},
       getActiveWorkspaceId: () => "ws-1" as WorkspaceId | undefined,
     };
-    register(deps);
+    feature.register(deps);
 
     const changed = vi.fn();
     events.on(PINNED_TABS_CHANGED, changed);
@@ -241,7 +242,7 @@ describe("start()", () => {
       setActiveTabId: () => {},
       getActiveWorkspaceId: () => "ws-1" as WorkspaceId | undefined,
     };
-    register(deps);
+    feature.register(deps);
 
     const changed = vi.fn();
     events.on(PINNED_TABS_CHANGED, changed);

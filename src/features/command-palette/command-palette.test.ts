@@ -5,7 +5,7 @@ import { MemoryDataStore } from "../../data/memory-store";
 import type { TabId, WindowId } from "../../shared/types";
 import { createMockPlatform } from "../../test-utils";
 import { TABS_UPDATED } from "../tabs/tabs.shared";
-import { register, start } from "./command-palette.main";
+import feature from "./command-palette.main";
 import {
   COMMAND_PALETTE_EXECUTE,
   COMMAND_PALETTE_HIDDEN,
@@ -47,7 +47,7 @@ function setup(overrides: { activeTabId?: TabId | undefined } = {}) {
     getActiveWindowId: () => WIN_ID as WindowId | undefined,
     getActiveTabId: () => activeTabId as TabId | undefined,
   };
-  register(deps);
+  feature.register(deps);
   return { commands, events, platform, dataStore, deps };
 }
 
@@ -189,19 +189,5 @@ describe("command-palette commands", () => {
       expect(results).toHaveLength(1);
       expect(results[0]).toMatchObject({ url: "https://github.com" });
     });
-  });
-});
-
-describe("start()", () => {
-  it("loads provider settings from dataStore", async () => {
-    const { deps, dataStore } = setup();
-    await dataStore.setSetting("search-providers", [
-      { id: "custom-1", bang: "!c", name: "Custom", urlTemplate: "https://custom.com/?q={query}" },
-    ]);
-    await dataStore.setSetting("default-search-provider", "!c");
-
-    await start(deps);
-    // No error = settings loaded. Actual effect is on resolve-input module state,
-    // tested in resolve-input.test.ts
   });
 });

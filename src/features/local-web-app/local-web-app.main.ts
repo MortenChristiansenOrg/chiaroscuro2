@@ -3,6 +3,7 @@ import type { CommandBus } from "../../bus/command-bus";
 import type { EventBus } from "../../bus/event-bus";
 import type { Collection, DataStore } from "../../data/types";
 import type { Platform } from "../../platform/types";
+import { defineFeature } from "../../shared/define-feature";
 import type { TabId } from "../../shared/types";
 import type { TabsEvents } from "../tabs/tabs.shared";
 import { TABS_ACTIVATED, TABS_CLOSED } from "../tabs/tabs.shared";
@@ -193,72 +194,80 @@ async function startProcess(deps: LocalWebAppDeps, tabId: TabId): Promise<void> 
   reloadTimeouts.set(tabId, timeoutId);
 }
 
-export function register(deps: LocalWebAppDeps): void {
-  const { commands, events, platform, dataStore } = deps;
-  collection = dataStore.collection<PersistedConfig>("local-web-app-configs");
+export default defineFeature<LocalWebAppDeps>({
+  register(deps) {
+    const { commands, events, platform, dataStore } = deps;
+    collection = dataStore.collection<PersistedConfig>("local-web-app-configs");
 
-  commands.handle(LOCAL_WEB_APP_SAVE_CONFIG, async ({ tabId, directory, command }) => {
-    const config: LocalWebAppConfig = { directory, command };
-    configs.set(tabId, config);
-    collection.upsert({ id: tabId, directory, command }).catch(console.error);
-    events.emit(LOCAL_WEB_APP_CONFIG_CHANGED, { tabId, config });
+    commands.handle(LOCAL_WEB_APP_SAVE_CONFIG, async ({ tabId, directory, command }) => {
+      const config: LocalWebAppConfig = { directory, command };
+      configs.set(tabId, config);
+      collection.upsert({ id: tabId, directory, command }).catch(console.error);
+      events.emit(LOCAL_WEB_APP_CONFIG_CHANGED, { tabId, config });
 
-    // Only restart if this is the active tab
-    if (deps.getActiveTabId() === tabId) {
-      startProcess(deps, tabId);
-    }
-  });
-
-  commands.handle(LOCAL_WEB_APP_DELETE_CONFIG, async ({ tabId }) => {
-    killProcess(tabId);
-    configs.delete(tabId);
-    statuses.delete(tabId);
-    collection.remove(tabId).catch(console.error);
-    events.emit(LOCAL_WEB_APP_CONFIG_REMOVED, { tabId });
-    events.emit(LOCAL_WEB_APP_STATUS_CHANGED, { tabId, status: "stopped" });
-  });
-
-  commands.handle(LOCAL_WEB_APP_START, async ({ tabId }) => {
-    startProcess(deps, tabId);
-  });
-
-  commands.handle(LOCAL_WEB_APP_STOP, async ({ tabId }) => {
-    killProcess(tabId);
-    statuses.set(tabId, "stopped");
-    events.emit(LOCAL_WEB_APP_STATUS_CHANGED, { tabId, status: "stopped" });
-  });
-
-  commands.handle(LOCAL_WEB_APP_BROWSE_DIRECTORY, async () => {
-    const paths = await platform.showOpenDialog({
-      title: "Select project directory",
-      properties: ["openDirectory"],
+      // Only restart if this is the active tab
+      if (deps.getActiveTabId() === tabId) {
+        startProcess(deps, tabId);
+      }
     });
-    return paths[0];
-  });
 
-  commands.handle(LOCAL_WEB_APP_GET_CONFIG, async ({ tabId }) => {
-    const config = configs.get(tabId);
-    if (!config) return undefined;
-    return { ...config, status: statuses.get(tabId) ?? "stopped" };
-  });
+    commands.handle(LOCAL_WEB_APP_DELETE_CONFIG, async ({ tabId }) => {
+      killProcess(tabId);
+      configs.delete(tabId);
+      statuses.delete(tabId);
+      collection.remove(tabId).catch(console.error);
+      events.emit(LOCAL_WEB_APP_CONFIG_REMOVED, { tabId });
+      events.emit(LOCAL_WEB_APP_STATUS_CHANGED, { tabId, status: "stopped" });
+    });
 
-  // Auto-start on tab activation
-  events.on(TABS_ACTIVATED, ({ tabId }) => {
-    if (!tabId) return;
-    const config = configs.get(tabId);
-    if (config && !processes.has(tabId)) {
+    commands.handle(LOCAL_WEB_APP_START, async ({ tabId }) => {
       startProcess(deps, tabId);
-    }
-  });
+    });
 
-  // Clean up on tab close
-  events.on(TABS_CLOSED, ({ tabId }) => {
-    killProcess(tabId);
-    configs.delete(tabId);
-    statuses.delete(tabId);
-    collection.remove(tabId).catch(console.error);
-  });
-}
+    commands.handle(LOCAL_WEB_APP_STOP, async ({ tabId }) => {
+      killProcess(tabId);
+      statuses.set(tabId, "stopped");
+      events.emit(LOCAL_WEB_APP_STATUS_CHANGED, { tabId, status: "stopped" });
+    });
+
+    commands.handle(LOCAL_WEB_APP_BROWSE_DIRECTORY, async () => {
+      const paths = await platform.showOpenDialog({
+        title: "Select project directory",
+        properties: ["openDirectory"],
+      });
+      return paths[0];
+    });
+
+    commands.handle(LOCAL_WEB_APP_GET_CONFIG, async ({ tabId }) => {
+      const config = configs.get(tabId);
+      if (!config) return undefined;
+      return { ...config, status: statuses.get(tabId) ?? "stopped" };
+    });
+
+    // Auto-start on tab activation
+    events.on(TABS_ACTIVATED, ({ tabId }) => {
+      if (!tabId) return;
+      const config = configs.get(tabId);
+      if (config && !processes.has(tabId)) {
+        startProcess(deps, tabId);
+      }
+    });
+
+    // Clean up on tab close
+    events.on(TABS_CLOSED, ({ tabId }) => {
+      killProcess(tabId);
+      configs.delete(tabId);
+      statuses.delete(tabId);
+      collection.remove(tabId).catch(console.error);
+    });
+  },
+
+  teardown() {
+    for (const tabId of processes.keys()) {
+      killProcess(tabId);
+    }
+  },
+});
 
 export async function start(
   deps: LocalWebAppDeps,
@@ -299,16 +308,11 @@ export async function start(
   }
 }
 
-/** Stop all running processes (called on app quit). */
-export function stopAll(): void {
+/** Reset module state (for tests). */
+export function _reset(): void {
   for (const tabId of processes.keys()) {
     killProcess(tabId);
   }
-}
-
-/** Reset module state (for tests). */
-export function _reset(): void {
-  stopAll();
   configs.clear();
   statuses.clear();
 }

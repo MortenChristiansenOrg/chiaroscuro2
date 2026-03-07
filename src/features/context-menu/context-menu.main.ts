@@ -1,5 +1,6 @@
 import type { CommandBus } from "../../bus/command-bus";
 import type { Platform } from "../../platform/types";
+import { defineFeature } from "../../shared/define-feature";
 import { CONTEXT_MENU_SHOW, type ContextMenuCommands } from "./context-menu.shared";
 
 interface Deps {
@@ -7,8 +8,10 @@ interface Deps {
   platform: Platform;
 }
 
-export function register({ commands, platform }: Deps): void {
-  commands.handle(CONTEXT_MENU_SHOW, async (payload) => {
-    return platform.showContextMenu(payload);
-  });
-}
+export default defineFeature<Deps>({
+  register({ commands, platform }) {
+    commands.handle(CONTEXT_MENU_SHOW, async (payload) => {
+      return platform.showContextMenu(payload);
+    });
+  },
+});

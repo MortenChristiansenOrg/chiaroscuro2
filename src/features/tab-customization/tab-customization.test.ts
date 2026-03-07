@@ -12,7 +12,8 @@ import type { TabId, WorkspaceId } from "../../shared/types";
 import type { Tab, TabsCommands, TabsEvents } from "../tabs/tabs.shared";
 import { TABS_ACTIVATE } from "../tabs/tabs.shared";
 import type { TabCustomizationDeps } from "./tab-customization.main";
-import { register, start } from "./tab-customization.main";
+import feature from "./tab-customization.main";
+import { start } from "./tab-customization.main";
 import {
   TAB_CUSTOMIZATION_CHANGED,
   TAB_CUSTOMIZATION_CLOSE,
@@ -66,7 +67,7 @@ function setup() {
   };
 
   commands.handle(TABS_ACTIVATE, async () => {});
-  register(deps);
+  feature.register(deps);
   return { commands, events, dataStore, deps, tabs };
 }
 

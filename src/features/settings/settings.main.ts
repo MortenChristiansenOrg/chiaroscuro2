@@ -1,6 +1,8 @@
 import type { CommandBus } from "../../bus/command-bus";
 import type { EventBus } from "../../bus/event-bus";
 import type { DataStore } from "../../data/types";
+import { defineFeature } from "../../shared/define-feature";
+import { SingletonTab } from "../../shared/singleton-tab";
 import type { TabId } from "../../shared/types";
 import { DEFAULT_PROVIDERS, type SearchProvider } from "../command-palette/resolve-input";
 import {
@@ -29,7 +31,6 @@ interface Deps {
   getActiveTabId: () => TabId | undefined;
 }
 
-let settingsTabId: TabId | undefined;
 let currentSettings: Settings;
 
 function getDefaultSettings(): Settings {
@@ -39,56 +40,49 @@ function getDefaultSettings(): Settings {
   };
 }
 
-export function register({ commands, events, dataStore }: Deps): void {
-  settingsTabId = undefined;
-  currentSettings = getDefaultSettings();
+export default defineFeature<Deps>({
+  register({ commands, events, dataStore }) {
+    currentSettings = getDefaultSettings();
 
-  // Clear singleton tracking when settings tab is closed
-  events.on(TABS_CLOSED, (payload) => {
-    const { tabId } = payload as TabsClosedEvent;
-    if (settingsTabId === tabId) settingsTabId = undefined;
-  });
+    const settingsTab = new SingletonTab({
+      activate: (tabId) => commands.send("tabs:activate", { tabId }),
+      create: (url) => commands.send("tabs:create", { url }),
+    });
 
-  commands.handle(SETTINGS_OPEN, async () => {
-    // Singleton: reactivate if already open
-    if (settingsTabId) {
-      try {
-        await commands.send("tabs:activate", { tabId: settingsTabId });
-        return;
-      } catch {
-        // Tab was closed externally — fall through to create
-        settingsTabId = undefined;
-      }
+    events.on(TABS_CLOSED, (payload) => {
+      const { tabId } = payload as TabsClosedEvent;
+      settingsTab.onClose(tabId);
+    });
+
+    commands.handle(SETTINGS_OPEN, async () => {
+      await settingsTab.openOrActivate("app:settings");
+    });
+
+    commands.handle(SETTINGS_GET, async () => {
+      return { ...currentSettings };
+    });
+
+    commands.handle(SETTINGS_SAVE, async (payload) => {
+      currentSettings = { ...payload };
+      events.emit(SETTINGS_CHANGED, { settings: { ...currentSettings } });
+      dataStore.setSetting("search-providers", payload.searchProviders).catch(console.error);
+      dataStore
+        .setSetting("default-search-provider", payload.defaultSearchProviderId)
+        .catch(console.error);
+    });
+  },
+
+  async start({ events, dataStore }) {
+    const providers = await dataStore.getSetting<SearchProvider[]>("search-providers");
+    if (providers) {
+      currentSettings.searchProviders = providers.map((p) =>
+        p.id ? p : { ...p, id: crypto.randomUUID() },
+      );
     }
-    settingsTabId = await commands.send("tabs:create", { url: "app:settings" });
-  });
 
-  commands.handle(SETTINGS_GET, async () => {
-    return { ...currentSettings };
-  });
+    const defaultBang = await dataStore.getSetting<string>("default-search-provider");
+    if (defaultBang) currentSettings.defaultSearchProviderId = defaultBang;
 
-  commands.handle(SETTINGS_SAVE, async (payload) => {
-    currentSettings = { ...payload };
     events.emit(SETTINGS_CHANGED, { settings: { ...currentSettings } });
-    dataStore.setSetting("search-providers", payload.searchProviders).catch(console.error);
-    dataStore
-      .setSetting("default-search-provider", payload.defaultSearchProviderId)
-      .catch(console.error);
-  });
-}
-
-export async function start({ events, dataStore }: Deps): Promise<void> {
-  // Load persisted settings
-  const providers = await dataStore.getSetting<SearchProvider[]>("search-providers");
-  if (providers) {
-    // Migrate providers missing id (pre-id data)
-    currentSettings.searchProviders = providers.map((p) =>
-      p.id ? p : { ...p, id: crypto.randomUUID() },
-    );
-  }
-
-  const defaultBang = await dataStore.getSetting<string>("default-search-provider");
-  if (defaultBang) currentSettings.defaultSearchProviderId = defaultBang;
-
-  events.emit(SETTINGS_CHANGED, { settings: { ...currentSettings } });
-}
+  },
+});

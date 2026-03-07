@@ -4,7 +4,8 @@ import { EventBus } from "../../bus/event-bus";
 import type { Platform } from "../../platform/types";
 import type { TabId, WindowId } from "../../shared/types";
 import { createMockPlatform } from "../../test-utils";
-import { register, start, stripTrackingParams } from "./window-chrome.main";
+import feature from "./window-chrome.main";
+import { stripTrackingParams } from "./window-chrome.main";
 import {
   WINDOW_CLOSE,
   WINDOW_COPY_ADDRESS,
@@ -32,7 +33,7 @@ function setup(platformOverrides: Partial<Platform> = {}) {
     getActiveWindowId: () => WIN_ID as WindowId | undefined,
     getActiveTabId: () => TAB_ID as TabId | undefined,
   };
-  register(deps);
+  feature.register(deps);
   return { commands, events, platform, deps };
 }
 
@@ -95,7 +96,7 @@ describe("window-chrome commands", () => {
     const commands = new CommandBus<WindowChromeCommands>();
     const events = new EventBus<WindowChromeEvents>();
     const platform = createMockPlatform();
-    register({
+    feature.register({
       commands,
       events,
       platform,
@@ -110,7 +111,7 @@ describe("window-chrome commands", () => {
     const commands = new CommandBus<WindowChromeCommands>();
     const events = new EventBus<WindowChromeEvents>();
     const platform = createMockPlatform();
-    register({
+    feature.register({
       commands,
       events,
       platform,
@@ -144,7 +145,7 @@ describe("window-chrome commands", () => {
   });
 });
 
-describe("start()", () => {
+describe("feature.start()", () => {
   it("emits initial maximized state", () => {
     const { events, deps } = setup({
       isWindowMaximized: vi.fn(() => true),
@@ -152,7 +153,7 @@ describe("start()", () => {
     const listener = vi.fn();
     events.on(WINDOW_MAXIMIZED_CHANGED, listener);
 
-    start(deps);
+    feature.start(deps);
 
     expect(listener).toHaveBeenCalledWith({ maximized: true });
   });

@@ -3,8 +3,6 @@
 # Renderer changes hot-reload instantly. Main/preload changes need Ctrl-C + rerun.
 set -e
 
-RENDERER_PORT=5199
-
 WIN_USER=$(powershell.exe -NoProfile -Command '[System.Environment]::UserName' | tr -d '\r')
 WIN_DIR="/mnt/c/Users/${WIN_USER}/.chiaroscuro-dev"
 WIN_PATH="C:\\Users\\${WIN_USER}\\.chiaroscuro-dev"
@@ -61,8 +59,18 @@ cleanup() {
 trap cleanup EXIT
 
 # Start Vite renderer dev server (stays running for HMR)
+RENDERER_PORT=5199
+
+# Kill any stale dev server on the same port
+STALE_PID=$(lsof -ti:$RENDERER_PORT 2>/dev/null || true)
+if [ -n "$STALE_PID" ]; then
+  echo "Killing stale process on port $RENDERER_PORT (pid $STALE_PID)..."
+  kill $STALE_PID 2>/dev/null
+  sleep 1
+fi
+
 echo "Starting renderer dev server on port $RENDERER_PORT..."
-bun run scripts/dev-renderer-server.ts &
+ELECTRON_VITE_DEV_SERVER_PORT=$RENDERER_PORT bun run scripts/dev-renderer-server.ts &
 VITE_PID=$!
 
 # Wait for Vite to be ready

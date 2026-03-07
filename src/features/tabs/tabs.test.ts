@@ -16,7 +16,8 @@ vi.mock("../folders/folders.main", () => ({
 
 import { isPinned } from "../pinned-tabs/pinned-tabs.main";
 import type { TabLoadingChangedPayload } from "../window-chrome/window-chrome.shared";
-import { register, start } from "./tabs.main";
+import feature from "./tabs.main";
+import { start } from "./tabs.main";
 import {
   TABS_ACTIVATE,
   TABS_ACTIVATED,
@@ -66,7 +67,7 @@ function setup(platformOverrides = {}) {
     },
     getActiveWorkspaceId: () => WS_ID as WorkspaceId | undefined,
   };
-  register(deps);
+  feature.register(deps);
   return { commands, events, platform, dataStore, deps, getActiveTabId: () => activeTabId };
 }
 
@@ -385,7 +386,7 @@ describe("start()", () => {
       },
       getActiveWorkspaceId: () => WS_ID as WorkspaceId | undefined,
     };
-    register(deps);
+    feature.register(deps);
     const { idMap, urlMap } = await start(deps);
 
     // Only 1 tab restored (bookmarked one)
@@ -417,7 +418,7 @@ describe("start()", () => {
       },
       getActiveWorkspaceId: () => WS_ID as WorkspaceId | undefined,
     };
-    register(deps);
+    feature.register(deps);
     const { idMap, urlMap } = await start(deps);
 
     expect(idMap.size).toBe(0);

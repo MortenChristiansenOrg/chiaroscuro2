@@ -12,7 +12,8 @@ vi.mock("../tabs/tabs.main", () => ({
 
 import { getTabsForWorkspace } from "../tabs/tabs.main";
 import { TABS_ACTIVATE, TABS_ACTIVATED, TABS_NAVIGATE, TABS_UPDATED } from "../tabs/tabs.shared";
-import { register, start } from "./workspaces.main";
+import feature from "./workspaces.main";
+import { start } from "./workspaces.main";
 import {
   WORKSPACES_CREATE,
   WORKSPACES_CREATED,
@@ -61,7 +62,7 @@ function setup() {
       activeWsId = id;
     },
   };
-  register(deps);
+  feature.register(deps);
   return {
     commands,
     events,
@@ -303,7 +304,7 @@ describe("start()", () => {
         activeWsId = id;
       },
     };
-    register(deps);
+    feature.register(deps);
 
     const listChanged = vi.fn();
     events.on(WORKSPACES_LIST_CHANGED, listChanged);
@@ -343,7 +344,7 @@ describe("start()", () => {
         activeWsId = id;
       },
     };
-    register(deps);
+    feature.register(deps);
 
     const created = vi.fn();
     events.on(WORKSPACES_CREATED, created);

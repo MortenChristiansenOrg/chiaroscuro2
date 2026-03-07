@@ -444,8 +444,12 @@ export class ElectronPlatform implements Platform {
   activateShortcuts(): void {
     if (this.shortcutsActive) return;
     for (const [accelerator, callback] of this.shortcuts) {
-      const ok = globalShortcut.register(accelerator, callback);
-      if (!ok) console.warn(`[shortcuts] Failed to register global shortcut: ${accelerator}`);
+      try {
+        const ok = globalShortcut.register(accelerator, callback);
+        if (!ok) console.warn(`[shortcuts] Failed to register global shortcut: ${accelerator}`);
+      } catch (err) {
+        console.warn(`[shortcuts] Invalid accelerator: ${accelerator}`, err);
+      }
     }
     this.shortcutsActive = true;
   }
@@ -494,11 +498,15 @@ export class ElectronPlatform implements Platform {
    *  (needed for keys like F12 that can't be globalShortcut and whose
    *  before-input-event doesn't fire on devtools webContents). */
   private rebuildLocalShortcutMenu(): void {
-    const template = Array.from(this.localShortcuts.entries()).map(([accelerator, click]) => ({
-      label: accelerator,
-      accelerator,
-      click,
-    }));
+    const template = Array.from(this.localShortcuts.entries())
+      // Menu accelerators only support ASCII; non-ASCII keys (e.g. ½) still
+      // work via before-input-event but can't be represented in the menu.
+      .filter(([accelerator]) => /^[\x20-\x7e]+$/.test(accelerator))
+      .map(([accelerator, click]) => ({
+        label: accelerator,
+        accelerator,
+        click,
+      }));
     Menu.setApplicationMenu(Menu.buildFromTemplate(template));
   }
 
