@@ -24,6 +24,7 @@ nsis:
   deleteAppDataOnUninstall: false
   createDesktopShortcut: true
   createStartMenuShortcut: true
+  artifactName: "${productName}-Setup-${version}.${ext}"
 
 # File associations
 fileAssociations:
@@ -57,6 +58,9 @@ publish:
   provider: github
   owner: MortenChristiansenOrg
   repo: chiaroscuro2
+
+# Use NSIS web installer only when explicitly needed
+disableWebInstaller: true
 
 # electron-updater reads this to find the release
 electronUpdaterCompatibility: ">= 2.16"

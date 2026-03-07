@@ -56,13 +56,14 @@ jobs:
       - name: Verify installer assets
         shell: bash
         run: |
-          ls dist/*.exe dist/*.yml || { echo "::error::Missing installer or updater manifest"; exit 1; }
+          ls dist/*.exe dist/*.yml dist/*.blockmap || { echo "::error::Missing installer, updater manifest, or blockmap"; exit 1; }
       - uses: actions/upload-artifact@v4
         with:
           name: windows-installer
           path: |
             dist/*.exe
             dist/*.yml
+            dist/*.blockmap
           retention-days: 30
 
   release:
@@ -85,3 +86,4 @@ jobs:
           files: |
             dist/*.exe
             dist/*.yml
+            dist/*.blockmap

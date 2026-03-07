@@ -29,6 +29,7 @@ vi.mock("electron-updater", () => {
       autoDownload: false,
       autoInstallOnAppQuit: false,
       checkForUpdates: vi.fn(async () => undefined),
+      downloadUpdate: vi.fn(async () => undefined),
       quitAndInstall: vi.fn(),
       on: vi.fn((event: string, cb: (...args: unknown[]) => void) => {
         const list = listeners.get(event) ?? [];
@@ -241,6 +242,17 @@ describe("installer feature", () => {
       expect(autoUpdater.on).not.toHaveBeenCalled();
     });
 
+    it("triggers download when update is available", async () => {
+      const { deps } = setup({ isDev: false });
+      await start(deps);
+
+      const { autoUpdater } = await import("electron-updater");
+      // biome-ignore lint/suspicious/noExplicitAny: test mock helper
+      (autoUpdater as any)._emit("update-available", { version: "1.0.0" });
+
+      expect(autoUpdater.downloadUpdate).toHaveBeenCalledOnce();
+    });
+
     it("schedules initial check after delay", async () => {
       const { deps } = setup({ isDev: false });
       await start(deps);
@@ -264,14 +276,26 @@ describe("installer feature", () => {
       expect(autoUpdater.checkForUpdates).toHaveBeenCalled();
     });
 
-    it("check-for-updates emits error event on failure", async () => {
-      const { commands, deps, events } = setup({ isDev: false });
+    it("check-for-updates emits error event on failure via error listener", async () => {
+      const { deps, events } = setup({ isDev: false });
       await start(deps);
 
       const { autoUpdater } = await import("electron-updater");
-      (autoUpdater.checkForUpdates as ReturnType<typeof vi.fn>).mockRejectedValueOnce(
-        new Error("Network error"),
-      );
+
+      const onError = vi.fn();
+      events.on(INSTALLER_UPDATE_ERROR, onError);
+
+      // electron-updater emits "error" for download/check failures
+      // biome-ignore lint/suspicious/noExplicitAny: test mock helper
+      (autoUpdater as any)._emit("error", new Error("Network error"));
+
+      expect(onError).toHaveBeenCalledOnce();
+      expect((onError.mock.calls[0][0] as UpdateErrorEvent).message).toBe("Network error");
+    });
+
+    it("check-for-updates emits error if auto-updater not initialized", async () => {
+      const { commands, deps, events } = setup({ isDev: true });
+      await start(deps); // isDev=true skips auto-updater init
 
       const onError = vi.fn();
       events.on(INSTALLER_UPDATE_ERROR, onError);
@@ -279,7 +303,9 @@ describe("installer feature", () => {
       await commands.send(INSTALLER_CHECK_FOR_UPDATES, undefined);
 
       expect(onError).toHaveBeenCalledOnce();
-      expect((onError.mock.calls[0][0] as UpdateErrorEvent).message).toBe("Network error");
+      expect((onError.mock.calls[0][0] as UpdateErrorEvent).message).toBe(
+        "Auto-updater not initialized",
+      );
     });
 
     it("apply-update command calls autoUpdater.quitAndInstall", async () => {

@@ -65,14 +65,12 @@ function protocolKey(protocol: string, origin: string): string {
 
 export function register({ commands, events, platform, dataStore }: Deps): void {
   commands.handle(INSTALLER_CHECK_FOR_UPDATES, async () => {
-    try {
-      if (!cachedAutoUpdater) throw new Error("Auto-updater not initialized");
-      await cachedAutoUpdater.checkForUpdates();
-    } catch (err) {
-      events.emit(INSTALLER_UPDATE_ERROR, {
-        message: err instanceof Error ? err.message : String(err),
-      });
+    if (!cachedAutoUpdater) {
+      events.emit(INSTALLER_UPDATE_ERROR, { message: "Auto-updater not initialized" });
+      return;
     }
+    // Swallow rejection — the "error" event handler already emits INSTALLER_UPDATE_ERROR
+    await cachedAutoUpdater.checkForUpdates().catch(() => {});
   });
 
   commands.handle(INSTALLER_APPLY_UPDATE, async () => {
@@ -161,11 +159,15 @@ export async function start({ events, platform, dataStore, isDev }: Deps): Promi
     if (!autoUpdater) throw new Error("electron-updater: autoUpdater not found");
     cachedAutoUpdater = autoUpdater;
     autoUpdater.autoInstallOnAppQuit = true;
-    autoUpdater.autoDownload = true;
+    // Manual download so we own the promise chain and avoid unhandled rejections
+    autoUpdater.autoDownload = false;
 
     autoUpdater.on("update-available", (info) => {
       console.log("[installer] Update available:", info.version);
       events.emit(INSTALLER_UPDATE_AVAILABLE, { version: info.version });
+      autoUpdater.downloadUpdate().catch(() => {
+        // Swallow — the "error" event handler already emits INSTALLER_UPDATE_ERROR
+      });
     });
 
     autoUpdater.on("update-downloaded", (info) => {
@@ -179,6 +181,8 @@ export async function start({ events, platform, dataStore, isDev }: Deps): Promi
     });
 
     autoUpdater.on("error", (err) => {
+      // electron-updater emits "error" AND rejects the checkForUpdates() promise
+      // for the same failure. We handle it here; callers swallow the rejection.
       console.error("[installer] Update error:", err);
       events.emit(INSTALLER_UPDATE_ERROR, {
         message: err instanceof Error ? err.message : String(err),
