@@ -36,7 +36,9 @@ WIN_ELECTRON="$WIN_PATH\\node_modules\\electron\\dist\\electron.exe"
 cleanup() {
   echo ""
   echo "Shutting down..."
-  [ -n "$VITE_PID" ] && kill "$VITE_PID" 2>/dev/null
+  if [ -n "$VITE_PID" ]; then
+    kill "$VITE_PID" 2>/dev/null || true
+  fi
   if [ -n "$ELECTRON_WIN_PID" ]; then
     powershell.exe -NoProfile -Command "
       Stop-Process -Id $ELECTRON_WIN_PID -Force -ErrorAction SilentlyContinue
@@ -66,6 +68,11 @@ for i in $(seq 1 30); do
   echo -n "."
   sleep 1
 done
+
+if ! curl -s "http://localhost:$RENDERER_PORT/" >/dev/null 2>&1; then
+  echo " failed (timed out waiting for dev server)."
+  exit 1
+fi
 
 # Launch Electron on Windows, capture its PID for cleanup
 # Env vars set in the same PS session are inherited by Start-Process
