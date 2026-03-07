@@ -24,12 +24,6 @@ if [ ! -d "$WIN_DIR/node_modules/electron" ]; then
   powershell.exe -NoProfile -Command "cd '$WIN_PATH'; npm install --save-dev electron"
 fi
 
-# Native deps needed at runtime on Windows
-if [ ! -d "$WIN_DIR/node_modules/koffi" ]; then
-  echo "Installing native deps on Windows..."
-  powershell.exe -NoProfile -Command "cd '$WIN_PATH'; npm install koffi@^2.15.1"
-fi
-
 # Resolve electron.exe path
 ELECTRON_EXE="$WIN_DIR/node_modules/electron/dist/electron.exe"
 if [ ! -f "$ELECTRON_EXE" ]; then

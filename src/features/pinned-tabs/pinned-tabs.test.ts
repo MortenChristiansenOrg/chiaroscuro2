@@ -23,10 +23,12 @@ import {
 const WIN_ID = "win-1" as WindowId;
 const TAB_ID = "tab-1" as TabId;
 
-type AllCommands = Parameters<typeof register>[0] extends { commands: CommandBus<infer C> }
+type AllCommands = Parameters<typeof feature.register>[0] extends { commands: CommandBus<infer C> }
   ? C
   : never;
-type AllEvents = Parameters<typeof register>[0] extends { events: EventBus<infer E> } ? E : never;
+type AllEvents = Parameters<typeof feature.register>[0] extends { events: EventBus<infer E> }
+  ? E
+  : never;
 
 function setup(overrides: { activeTabId?: TabId | null } = {}) {
   const commands = new CommandBus<AllCommands>();

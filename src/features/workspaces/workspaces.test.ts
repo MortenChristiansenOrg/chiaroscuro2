@@ -30,10 +30,12 @@ import {
 
 const WIN_ID = "win-1" as WindowId;
 
-type AllCommands = Parameters<typeof register>[0] extends { commands: CommandBus<infer C> }
+type AllCommands = Parameters<typeof feature.register>[0] extends { commands: CommandBus<infer C> }
   ? C
   : never;
-type AllEvents = Parameters<typeof register>[0] extends { events: EventBus<infer E> } ? E : never;
+type AllEvents = Parameters<typeof feature.register>[0] extends { events: EventBus<infer E> }
+  ? E
+  : never;
 
 function setup() {
   const commands = new CommandBus<AllCommands>();
