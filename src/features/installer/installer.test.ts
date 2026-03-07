@@ -95,8 +95,11 @@ describe("installer feature", () => {
     vi.useFakeTimers();
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     stop();
+    const { autoUpdater } = await import("electron-updater");
+    // biome-ignore lint/suspicious/noExplicitAny: test mock helper
+    (autoUpdater as any)._reset?.();
     vi.useRealTimers();
   });
 

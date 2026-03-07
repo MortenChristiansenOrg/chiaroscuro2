@@ -114,10 +114,20 @@ export function ProtocolDialog() {
   return (
     <div
       className="fixed inset-0 flex items-center justify-center"
+      // biome-ignore lint/a11y/useSemanticElements: <dialog> has built-in close/show behaviors that conflict with our overlay
+      role="dialog"
+      aria-modal="true"
+      // biome-ignore lint/a11y/noAutofocus: dialog must capture focus for keyboard accessibility
+      autoFocus
+      tabIndex={-1}
+      onKeyDown={(e) => {
+        if (e.key === "Escape") handleDeny();
+      }}
       style={{
         zIndex: "var(--z-overlay)",
         background: "oklch(0 0 0 / 0.4)",
         animation: "dl-in var(--duration-enter) cubic-bezier(0, 0, 0.2, 1) both",
+        outline: "none",
       }}
     >
       <div
