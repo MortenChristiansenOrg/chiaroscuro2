@@ -219,9 +219,94 @@ function SearchSettings({
   );
 }
 
+// ── DeveloperSettings ────────────────────────────────────────────
+
+function DeveloperSettings({
+  settings,
+  onSettingsChange,
+}: {
+  settings: Settings;
+  onSettingsChange: (settings: Settings) => void;
+}) {
+  const searchQuery = useSettingsStore((s) => s.searchQuery);
+  const lowerQuery = searchQuery.toLowerCase();
+
+  const showDeveloper =
+    !searchQuery ||
+    "developer".includes(lowerQuery) ||
+    "debug server".includes(lowerQuery) ||
+    "port".includes(lowerQuery);
+
+  if (searchQuery && !showDeveloper) return null;
+
+  // In dev mode, debug server is always on
+  const isDev = window.location.protocol !== "file:";
+
+  return (
+    <section id="settings-developer">
+      <h2 style={settingsCategoryHeadingStyle}>Developer</h2>
+
+      <SettingItem
+        label="Debug Server"
+        description="HTTP endpoint for inspecting app state, command/event history, and logs."
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.375rem",
+              fontSize: "var(--text-sm)",
+              color: "var(--foreground)",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={isDev || settings.debugServer.enabled}
+              disabled={isDev}
+              onChange={(e) =>
+                onSettingsChange({
+                  ...settings,
+                  debugServer: { ...settings.debugServer, enabled: e.target.checked },
+                })
+              }
+            />
+            {isDev ? "Always on in dev mode" : "Enabled"}
+          </label>
+        </div>
+      </SettingItem>
+
+      <SettingItem
+        label="Port"
+        description="Port for the debug HTTP server. If unavailable, the next available port is used."
+      >
+        <input
+          type="number"
+          value={settings.debugServer.port}
+          onChange={(e) => {
+            const port = Number.parseInt(e.target.value, 10);
+            if (port > 0 && port < 65536) {
+              onSettingsChange({
+                ...settings,
+                debugServer: { ...settings.debugServer, port },
+              });
+            }
+          }}
+          min={1}
+          max={65535}
+          style={{ ...settingsInputStyle, width: "8rem" }}
+        />
+      </SettingItem>
+    </section>
+  );
+}
+
 // ── SettingsPage (root) ─────────────────────────────────────────
 
-const categories = [{ id: "search", label: "Search" }];
+const categories = [
+  { id: "search", label: "Search" },
+  { id: "developer", label: "Developer" },
+];
 
 export default function SettingsPage(_props: { params: Record<string, string> }) {
   const settings = useSettingsStore((s) => s.settings);
@@ -261,6 +346,7 @@ export default function SettingsPage(_props: { params: Record<string, string> })
       activeCategory={activeCategory}
     >
       <SearchSettings settings={settings} onSettingsChange={handleSettingsChange} />
+      <DeveloperSettings settings={settings} onSettingsChange={handleSettingsChange} />
     </SettingsLayout>
   );
 }

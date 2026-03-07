@@ -37,6 +37,7 @@ function getDefaultSettings(): Settings {
   return {
     searchProviders: [...DEFAULT_PROVIDERS],
     defaultSearchProviderId: "!g",
+    debugServer: { enabled: false, port: 19400 },
   };
 }
 
@@ -69,6 +70,7 @@ export default defineFeature<Deps>({
       dataStore
         .setSetting("default-search-provider", payload.defaultSearchProviderId)
         .catch(console.error);
+      dataStore.setSetting("debug-server", payload.debugServer).catch(console.error);
     });
   },
 
@@ -82,6 +84,9 @@ export default defineFeature<Deps>({
 
     const defaultBang = await dataStore.getSetting<string>("default-search-provider");
     if (defaultBang) currentSettings.defaultSearchProviderId = defaultBang;
+
+    const debugServer = await dataStore.getSetting<Settings["debugServer"]>("debug-server");
+    if (debugServer) currentSettings.debugServer = debugServer;
 
     events.emit(SETTINGS_CHANGED, { settings: { ...currentSettings } });
   },

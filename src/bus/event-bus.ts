@@ -19,6 +19,10 @@ export class EventBus<TRegistry extends EventRegistry> {
     };
   }
 
+  getListenerNames(): string[] {
+    return [...this.listeners.keys()];
+  }
+
   emit<K extends string & keyof TRegistry>(name: K, payload: TRegistry[K]): void {
     const set = this.listeners.get(name);
     if (!set) return;

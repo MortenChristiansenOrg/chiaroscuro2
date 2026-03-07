@@ -3,7 +3,7 @@ import { BrowserWindow, Menu, app, ipcMain, screen } from "electron";
 import { CommandBus } from "../bus/command-bus";
 import { EventBus } from "../bus/event-bus";
 import { bridgeBusToIpc } from "../bus/ipc-main-bridge";
-import type { MergeRegistries } from "../bus/types";
+import type { CommandRegistry, EventRegistry, MergeRegistries } from "../bus/types";
 import { createDataStore } from "../data/store";
 import type { DataStore } from "../data/types";
 import appState from "../features/app-state/app-state.main";
@@ -19,6 +19,13 @@ import type {
   ContextMenuCommands,
   ContextMenuEvents,
 } from "../features/context-menu/context-menu.shared";
+import debugServer from "../features/debug-server/debug-server.main";
+import { getActualPort } from "../features/debug-server/debug-server.main";
+import type {
+  DebugServerCommands,
+  DebugServerEvents,
+} from "../features/debug-server/debug-server.shared";
+import { registerDebugState } from "../features/debug-server/state-providers";
 import devTools from "../features/dev-tools/dev-tools.main";
 import type { DevToolsCommands, DevToolsEvents } from "../features/dev-tools/dev-tools.shared";
 import domainCss from "../features/domain-css/domain-css.main";
@@ -111,6 +118,7 @@ type AllCommands = MergeRegistries<
     TerminalCommands,
     LocalWebAppCommands,
     InstallerCommands,
+    DebugServerCommands,
   ]
 >;
 
@@ -136,6 +144,7 @@ type AllEvents = MergeRegistries<
     TerminalEvents,
     LocalWebAppEvents,
     InstallerEvents,
+    DebugServerEvents,
   ]
 >;
 
@@ -225,6 +234,13 @@ app.whenReady().then(async () => {
   await dataStore.initialize();
 
   // Phase 1: register all command handlers
+  // Debug server first — recorder patches capture all subsequent registrations
+  debugServer.register({
+    ...deps,
+    commandBus: commands as unknown as CommandBus<CommandRegistry>,
+    eventBus: events as unknown as EventBus<EventRegistry>,
+  });
+
   appState.register(deps);
   windowChrome.register(deps);
   tabs.register(deps);
@@ -245,6 +261,28 @@ app.whenReady().then(async () => {
   terminal.register(deps);
   localWebApp.register(deps);
   installer.register(deps);
+
+  // Register debug state providers
+  registerDebugState("tabs", () => {
+    const all: Record<string, unknown> = {};
+    for (const [id, tab] of getAllTabs()) all[id] = tab;
+    return { all, activeTabId };
+  });
+  registerDebugState("workspaces", () => ({ activeWorkspaceId }));
+  registerDebugState("settings", () =>
+    commands
+      .send("settings:get" as string & keyof AllCommands, undefined as never)
+      .catch(() => null),
+  );
+  registerDebugState("window", () => {
+    const win = BrowserWindow.getAllWindows()[0];
+    return {
+      activeWindowId,
+      bounds: win && !win.isDestroyed() ? win.getBounds() : null,
+      maximized: win && !win.isDestroyed() ? win.isMaximized() : null,
+    };
+  });
+  registerDebugState("debug-server", () => ({ actualPort: getActualPort() }));
 
   // Load persisted layout state before creating the window
   const getDisplayBounds = () => screen.getAllDisplays().map((d) => d.workArea);
@@ -301,6 +339,7 @@ app.whenReady().then(async () => {
 
 app.on("before-quit", () => {
   platform.deactivateShortcuts();
+  debugServer.teardown?.();
   localWebApp.teardown?.();
   installer.teardown?.();
   // Flush app-state immediately before data store teardown
