@@ -270,12 +270,12 @@ describe("local-web-app feature", () => {
       });
     });
 
-    it("remaps IDs when restoredTabs is provided", async () => {
+    it("restores persisted configs", async () => {
       const { events, deps, dataStore } = await setup();
 
       const collection = dataStore.collection("local-web-app-configs");
       await collection.upsert({
-        id: "old-id",
+        id: "tab-2",
         directory: "/projects/myapp",
         command: "npm start",
       });
@@ -283,41 +283,21 @@ describe("local-web-app feature", () => {
       const handler = vi.fn();
       events.on(LOCAL_WEB_APP_CONFIG_CHANGED, handler);
 
-      const idMap = new Map<TabId, TabId>([["old-id" as TabId, "new-id" as TabId]]);
-      await start(deps, { idMap });
+      await start(deps);
 
       expect(handler).toHaveBeenCalledWith({
-        tabId: "new-id",
+        tabId: "tab-2",
         config: { directory: "/projects/myapp", command: "npm start" },
       });
     });
 
-    it("skips stale entries not in restoredTabs idMap", async () => {
-      const { events, deps, dataStore } = await setup();
-
-      const collection = dataStore.collection("local-web-app-configs");
-      await collection.upsert({
-        id: "stale-id",
-        directory: "/projects/myapp",
-        command: "npm start",
-      });
-
-      const handler = vi.fn();
-      events.on(LOCAL_WEB_APP_CONFIG_CHANGED, handler);
-
-      const idMap = new Map<TabId, TabId>(); // stale-id not in map
-      await start(deps, { idMap });
-
-      expect(handler).not.toHaveBeenCalled();
-    });
-
     it("auto-starts process for active tab on start", async () => {
       const { events, deps, dataStore, activeTabId } = await setup();
-      activeTabId.current = "new-id" as TabId;
+      activeTabId.current = "tab-2" as TabId;
 
       const collection = dataStore.collection("local-web-app-configs");
       await collection.upsert({
-        id: "old-id",
+        id: "tab-2",
         directory: "/projects/myapp",
         command: "npm start",
       });
@@ -325,12 +305,10 @@ describe("local-web-app feature", () => {
       const statusHandler = vi.fn();
       events.on(LOCAL_WEB_APP_STATUS_CHANGED, statusHandler);
 
-      const idMap = new Map<TabId, TabId>([["old-id" as TabId, "new-id" as TabId]]);
-      await start(deps, { idMap });
+      await start(deps);
 
-      // Should emit "running" for the active tab after ID remap
       expect(statusHandler).toHaveBeenCalledWith({
-        tabId: "new-id",
+        tabId: "tab-2",
         status: "running",
       });
     });

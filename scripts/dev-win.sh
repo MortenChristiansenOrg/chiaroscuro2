@@ -38,36 +38,21 @@ if [ ! -f "$ELECTRON_EXE" ]; then
 fi
 WIN_ELECTRON="$WIN_PATH\\node_modules\\electron\\dist\\electron.exe"
 
-# Kill any existing Electron from previous run (only ours, not other Electron apps)
-powershell.exe -NoProfile -Command "
-  Get-Process -Name electron -ErrorAction SilentlyContinue |
-    Where-Object { \$_.Path -like '*chiaroscuro-dev*' } |
-    Stop-Process -Force -ErrorAction SilentlyContinue
-" 2>/dev/null || true
-
-# Cleanup on exit
+# Cleanup on exit: kill only this instance's Vite + Electron
 cleanup() {
   echo ""
   echo "Shutting down..."
   [ -n "$VITE_PID" ] && kill "$VITE_PID" 2>/dev/null
-  powershell.exe -NoProfile -Command "
-    Get-Process -Name electron -ErrorAction SilentlyContinue |
-      Where-Object { \$_.Path -like '*chiaroscuro-dev*' } |
-      Stop-Process -Force -ErrorAction SilentlyContinue
-  " 2>/dev/null || true
+  if [ -n "$ELECTRON_WIN_PID" ]; then
+    powershell.exe -NoProfile -Command "
+      Stop-Process -Id $ELECTRON_WIN_PID -Force -ErrorAction SilentlyContinue
+    " 2>/dev/null || true
+  fi
 }
 trap cleanup EXIT
 
-# Start Vite renderer dev server (stays running for HMR)
-RENDERER_PORT=5199
-
-# Kill any stale dev server on the same port
-STALE_PID=$(lsof -ti:$RENDERER_PORT 2>/dev/null || true)
-if [ -n "$STALE_PID" ]; then
-  echo "Killing stale process on port $RENDERER_PORT (pid $STALE_PID)..."
-  kill $STALE_PID 2>/dev/null
-  sleep 1
-fi
+# Pick a free port for the Vite renderer dev server
+RENDERER_PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("",0)); print(s.getsockname()[1]); s.close()')
 
 echo "Starting renderer dev server on port $RENDERER_PORT..."
 ELECTRON_VITE_DEV_SERVER_PORT=$RENDERER_PORT bun run scripts/dev-renderer-server.ts &
@@ -88,15 +73,19 @@ for i in $(seq 1 30); do
   sleep 1
 done
 
-# Launch Electron on Windows, pointing at the WSL Vite dev server
-# Use & (call operator) not Start-Process — Start-Process doesn't inherit env vars
-echo "Launching Electron on Windows..."
-powershell.exe -NoProfile -Command "
+# Launch Electron on Windows, capture its PID for cleanup
+# Env vars set in the same PS session are inherited by Start-Process
+echo "Launching Electron on Windows (renderer at port $RENDERER_PORT)..."
+ELECTRON_WIN_PID=$(powershell.exe -NoProfile -Command "
   \$env:ELECTRON_RENDERER_URL = 'http://localhost:$RENDERER_PORT'
   \$env:NODE_ENV_ELECTRON_VITE = 'development'
   Set-Location '$WIN_PATH'
-  & '$WIN_ELECTRON' '.'
-" &
+  \$logFile = Join-Path '$WIN_PATH' 'electron.log'
+  \$errFile = Join-Path '$WIN_PATH' 'electron-err.log'
+  \$p = Start-Process -FilePath '$WIN_ELECTRON' -ArgumentList '.' -PassThru -RedirectStandardOutput \$logFile -RedirectStandardError \$errFile
+  Write-Output \$p.Id
+" | tr -d '\r')
+echo "Electron PID (Windows): $ELECTRON_WIN_PID"
 
 # Keep script alive (Vite server runs until Ctrl-C)
 echo ""

@@ -269,29 +269,10 @@ export default defineFeature<LocalWebAppDeps>({
   },
 });
 
-export async function start(
-  deps: LocalWebAppDeps,
-  restoredTabs?: { idMap: Map<TabId, TabId> },
-): Promise<void> {
+export async function start(deps: LocalWebAppDeps): Promise<void> {
   const persisted = await collection.findMany({});
   for (const doc of persisted) {
-    const oldId = doc.id as TabId;
-    const tabId = restoredTabs?.idMap.get(oldId) ?? oldId;
-
-    // Skip stale entries whose tab no longer exists after restore
-    if (restoredTabs && tabId === oldId && !restoredTabs.idMap.has(oldId)) {
-      collection.remove(oldId).catch(console.error);
-      continue;
-    }
-
-    // Update persisted doc if ID changed
-    if (tabId !== oldId) {
-      collection
-        .upsert({ id: tabId, directory: doc.directory, command: doc.command })
-        .then(() => collection.remove(oldId))
-        .catch(console.error);
-    }
-
+    const tabId = doc.id as TabId;
     configs.set(tabId, { directory: doc.directory, command: doc.command });
     statuses.set(tabId, "stopped");
     deps.events.emit(LOCAL_WEB_APP_CONFIG_CHANGED, {

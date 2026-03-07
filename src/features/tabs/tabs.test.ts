@@ -371,7 +371,10 @@ describe("start()", () => {
     const commands = new CommandBus<AllCommands>();
     const events = new EventBus<AllEvents>();
     const platform = createMockPlatform({
-      createTab: vi.fn(async () => `new-${++newTabCounter}` as TabId),
+      createTab: vi.fn(
+        async (_wId: WindowId, _url: string, tabId?: TabId) =>
+          tabId ?? (`new-${++newTabCounter}` as TabId),
+      ),
     });
     let activeTabId: TabId | undefined;
     const deps = {
@@ -387,24 +390,18 @@ describe("start()", () => {
       getActiveWorkspaceId: () => WS_ID as WorkspaceId | undefined,
     };
     feature.register(deps);
-    const { idMap, urlMap } = await start(deps);
+    await start(deps);
 
-    // Only 1 tab restored (bookmarked one)
+    // Only 1 tab restored (bookmarked one), keeps its persisted ID
     expect(platform.createTab).toHaveBeenCalledTimes(1);
-    expect(idMap.has("old-1" as TabId)).toBe(true);
-    expect(urlMap.has("https://bookmarked.com")).toBe(true);
-    // Expired tab not in maps
-    expect(idMap.has("old-2" as TabId)).toBe(false);
+    expect(platform.createTab).toHaveBeenCalledWith(WIN_ID, "https://bookmarked.com", "old-1");
   });
 
-  it("returns empty maps when no persisted tabs", async () => {
+  it("does nothing when no persisted tabs", async () => {
     const dataStore = new MemoryDataStore();
-    let newTabCounter = 0;
     const commands = new CommandBus<AllCommands>();
     const events = new EventBus<AllEvents>();
-    const platform = createMockPlatform({
-      createTab: vi.fn(async () => `new-${++newTabCounter}` as TabId),
-    });
+    const platform = createMockPlatform();
     let activeTabId: TabId | undefined;
     const deps = {
       commands,
@@ -419,9 +416,8 @@ describe("start()", () => {
       getActiveWorkspaceId: () => WS_ID as WorkspaceId | undefined,
     };
     feature.register(deps);
-    const { idMap, urlMap } = await start(deps);
+    await start(deps);
 
-    expect(idMap.size).toBe(0);
-    expect(urlMap.size).toBe(0);
+    expect(platform.createTab).not.toHaveBeenCalled();
   });
 });

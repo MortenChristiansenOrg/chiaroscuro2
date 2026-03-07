@@ -533,22 +533,15 @@ export default defineFeature<Deps>({
   },
 });
 
-/** Returns oldId→newId and url→newId maps for cross-feature ID reconciliation */
-export async function start(
-  deps: Deps,
-): Promise<{ idMap: Map<TabId, TabId>; urlMap: Map<string, TabId> }> {
+export async function start(deps: Deps): Promise<void> {
   const { dataStore, platform, getActiveWindowId, getActiveWorkspaceId } = deps;
   const tabsCollection: Collection<PersistedTab> = dataStore.collection("tabs");
 
-  const idMap = new Map<TabId, TabId>(); // old persisted ID → new platform ID
-  const urlMap = new Map<string, TabId>(); // url → new platform ID
-
-  // Restore persisted tabs
   const persisted = await tabsCollection.findMany({});
-  if (persisted.length === 0) return { idMap, urlMap };
+  if (persisted.length === 0) return;
 
   const windowId = getActiveWindowId();
-  if (!windowId) return { idMap, urlMap };
+  if (!windowId) return;
 
   const now = Date.now();
 
@@ -562,7 +555,7 @@ export async function start(
     }
   }
 
-  if (toRestore.length === 0) return { idMap, urlMap };
+  if (toRestore.length === 0) return;
 
   // Restore most recently accessed tab first so it becomes the active one
   toRestore.sort((a, b) => b.lastAccessedAt - a.lastAccessedAt);
@@ -571,13 +564,14 @@ export async function start(
     throw new Error("tabs.main: register() must be called before start()");
   }
 
-  // Recreate tabs from persisted data
+  // Recreate tabs with their original stable IDs
   const activeWsId = getActiveWorkspaceId();
   let firstTabInActiveWs: TabId | undefined;
 
   for (const pt of toRestore) {
     try {
-      const tabId = await platform.createTab(windowId, pt.url);
+      const tabId = pt.id as TabId;
+      await platform.createTab(windowId, pt.url, tabId);
       const tab: Tab = {
         id: tabId,
         workspaceId: pt.workspaceId as WorkspaceId,
@@ -594,14 +588,7 @@ export async function start(
 
       _tabs.set(tabId, tab);
       _attachTabListeners(tabId);
-      idMap.set(pt.id as TabId, tabId);
-      urlMap.set(pt.url, tabId);
       if (pt.bookmarked) fixedUrls.set(tabId, pt.url);
-
-      // Update persisted doc with new tabId (platform assigns new IDs)
-      const { loading, ...newPersisted } = tab;
-      await tabsCollection.upsert(newPersisted as PersistedTab).catch(console.error);
-      await tabsCollection.remove(pt.id).catch(() => {});
 
       // Track first tab in active workspace for activation
       if (tab.workspaceId === activeWsId && !firstTabInActiveWs) {
@@ -624,8 +611,6 @@ export async function start(
   deps.events.emit(TABS_LIST_CHANGED, {
     tabs: [..._tabs.values()].map(tabSnapshot),
   });
-
-  return { idMap, urlMap };
 }
 
 export function getTabsForWorkspace(workspaceId: WorkspaceId): Tab[] {

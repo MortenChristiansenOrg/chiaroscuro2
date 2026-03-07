@@ -378,69 +378,30 @@ describe("tab-customization commands", () => {
       expect(state).toEqual({ title: null, fixedAddressDisabled: true });
     });
 
-    it("remaps IDs when restoredTabs is provided", async () => {
+    it("restores persisted customizations with their original IDs", async () => {
       const { commands, deps, dataStore, events } = setup();
 
       const collection = dataStore.collection("tab-customizations");
       await collection.upsert({
-        id: "old-id",
-        title: "Remapped",
+        id: "tab-1",
+        title: "Persisted",
         fixedAddressDisabled: true,
       });
 
       const listener = vi.fn();
       events.on(TAB_CUSTOMIZATION_CHANGED, listener);
 
-      const idMap = new Map<TabId, TabId>([["old-id" as TabId, "new-id" as TabId]]);
-      await start(deps, { idMap, urlMap: new Map() });
+      await start(deps);
 
-      // Emitted with new ID
       expect(listener).toHaveBeenCalledWith({
-        tabId: "new-id",
-        customization: { title: "Remapped", fixedAddressDisabled: true },
+        tabId: "tab-1",
+        customization: { title: "Persisted", fixedAddressDisabled: true },
       });
 
-      // Accessible via new ID
       const state = await commands.send(TAB_CUSTOMIZATION_GET_STATE, {
-        tabId: "new-id" as TabId,
+        tabId: "tab-1" as TabId,
       });
-      expect(state).toEqual({ title: "Remapped", fixedAddressDisabled: true });
-
-      // Old ID no longer works
-      const oldState = await commands.send(TAB_CUSTOMIZATION_GET_STATE, {
-        tabId: "old-id" as TabId,
-      });
-      expect(oldState).toEqual({ title: null, fixedAddressDisabled: false });
-
-      // Persisted under new ID
-      const doc = await collection.findOne("new-id");
-      expect(doc).toBeDefined();
-      const oldDoc = await collection.findOne("old-id");
-      expect(oldDoc).toBeUndefined();
-    });
-
-    it("skips stale entries with no matching restored tab", async () => {
-      const { deps, dataStore, events } = setup();
-
-      const collection = dataStore.collection("tab-customizations");
-      await collection.upsert({
-        id: "stale-id",
-        title: "Gone",
-        fixedAddressDisabled: false,
-      });
-
-      const listener = vi.fn();
-      events.on(TAB_CUSTOMIZATION_CHANGED, listener);
-
-      const idMap = new Map<TabId, TabId>(); // stale-id not in map
-      await start(deps, { idMap, urlMap: new Map() });
-
-      expect(listener).not.toHaveBeenCalled();
-
-      // Wait for async remove
-      await new Promise((r) => setTimeout(r, 10));
-      const doc = await collection.findOne("stale-id");
-      expect(doc).toBeUndefined();
+      expect(state).toEqual({ title: "Persisted", fixedAddressDisabled: true });
     });
   });
 

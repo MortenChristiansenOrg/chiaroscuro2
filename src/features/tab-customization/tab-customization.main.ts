@@ -131,35 +131,15 @@ export default defineFeature<TabCustomizationDeps>({
   },
 });
 
-export async function start(
-  deps: TabCustomizationDeps,
-  restoredTabs?: { idMap: Map<TabId, TabId>; urlMap: Map<string, TabId> },
-): Promise<void> {
+export async function start(deps: TabCustomizationDeps): Promise<void> {
   const persisted = await collection.findMany({});
   for (const doc of persisted) {
-    const oldId = doc.id as TabId;
-    const tabId = restoredTabs?.idMap.get(oldId) ?? oldId;
-
-    // Skip stale entries whose tab no longer exists after restore
-    if (restoredTabs && tabId === oldId && !restoredTabs.idMap.has(oldId)) {
-      collection.remove(oldId).catch(console.error);
-      continue;
-    }
-
+    const tabId = doc.id as TabId;
     const customization: TabCustomization = {
       title: doc.title,
       fixedAddressDisabled: doc.fixedAddressDisabled,
     };
     customizations.set(tabId, customization);
-
-    // Update persisted record if ID changed
-    if (tabId !== oldId) {
-      collection.remove(oldId).catch(console.error);
-      collection
-        .upsert({ id: tabId, title: doc.title, fixedAddressDisabled: doc.fixedAddressDisabled })
-        .catch(console.error);
-    }
-
     deps.events.emit(TAB_CUSTOMIZATION_CHANGED, { tabId, customization });
   }
 }
