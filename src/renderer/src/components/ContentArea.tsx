@@ -125,7 +125,7 @@ export function ContentArea() {
       </div>
 
       {/* Terminal panel — below content, shrinks WCV bounds */}
-      {!isBuiltIn && !isCustomizing && activeTabId && <TerminalPanel />}
+      {showTerminal && <TerminalPanel />}
     </main>
   );
 }

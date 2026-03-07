@@ -1,0 +1,111 @@
+---
+title: Local Web App
+---
+
+# Local Web App
+
+Settings section within [Tab Customization](/components/tab-customization) that lets users configure a local development server for a tab. Displays project directory, start command, process status, and action buttons.
+
+---
+
+## Anatomy
+
+- **Section heading** -- "Local Web App" label with optional status badge
+- **Project Directory** -- text input + folder-open browse button
+- **Start Command** -- text input for the shell command
+- **Action buttons** -- Save/Save & Restart, Start/Stop, Remove
+
+---
+
+## Specs
+
+| Property | Token/Value |
+|----------|-------------|
+| Section heading | `settingsCategoryHeadingStyle` (shared with Settings) |
+| Input style | `settingsInputStyle` (shared with Settings) |
+| Input max width | `24rem` |
+| Input font | `--font-mono` |
+| Browse button size | `--click-target-min` (24px) |
+| Browse button icon | `folder-open`, `--icon-size-default` |
+| Browse button border | `1px solid var(--input)` |
+| Browse button bg | `var(--background)` |
+| Button gap | `0.5rem` |
+| Button padding | `0.375rem 0.75rem` |
+| Button font size | `--text-sm` |
+| Button radius | `--radius-sm` |
+| Primary button bg | `oklch(var(--accent-L) var(--accent-C) var(--accent-hue) / 0.12)` |
+| Primary button border | `oklch(var(--accent-L) var(--accent-C) var(--accent-hue) / 0.3)` |
+| Secondary button bg | `var(--background)` |
+| Destructive text color | `var(--destructive-foreground)` |
+| Status badge font | `--text-xs`, weight 500 |
+| Status dot size | `0.375rem` |
+
+---
+
+## States
+
+### Status Badge
+
+| Status | Color | Label |
+|--------|-------|-------|
+| Running | `var(--success-foreground)` | "Running" |
+| Error | `var(--destructive-foreground)` | "Error" |
+| Stopped | `var(--content-text-muted)` | "Stopped" |
+
+### Save Button
+
+| State | Label |
+|-------|-------|
+| Clean (no changes) | "Save" |
+| Dirty (unsaved changes) | "Save & Restart" |
+| Missing fields | Disabled (opacity 0.4) |
+
+### Process Toggle
+
+| State | Icon | Label |
+|-------|------|-------|
+| Running | `stop` | "Stop" |
+| Stopped/Error | `play` | "Start" |
+
+---
+
+## Behavior
+
+- **Save** -- persists directory + command, starts/restarts the process immediately.
+- **Browse** -- opens Electron folder picker dialog (`dialog.showOpenDialog` with `openDirectory`).
+- **Start/Stop** -- toggles the dev server process for the tab.
+- **Remove** -- deletes config, stops process, clears local state.
+- **Auto-sync** -- local form state syncs from store when config changes externally.
+- **Mount fetch** -- fetches current config from main process on mount.
+
+---
+
+## Keyboard & Focus
+
+- All inputs and buttons are in the standard tab order.
+- Browse, Start/Stop, and Remove buttons have `aria-label` attributes.
+
+---
+
+## Accessibility
+
+- Browse button has `aria-label="Browse for directory"` and `data-tip="Browse"`.
+- Inputs have explicit `aria-label` attributes.
+- Disabled save button uses `disabled` attribute + reduced opacity.
+- Status badge uses color + text label (not color alone).
+- All buttons meet `--click-target-min` minimum size.
+
+---
+
+## Layout & Composition
+
+- Rendered as a `<section>` inside the Tab Customization built-in page.
+- Uses shared `SettingItem` and `settingsInputStyle` from `SettingsLayout`.
+- Parent: [Tab Customization](/components/tab-customization)
+
+---
+
+## Related
+
+- [Tab Customization](/components/tab-customization) -- parent page containing this section
+- [Terminal Panel](/components/terminal-panel) -- displays process output from local web apps

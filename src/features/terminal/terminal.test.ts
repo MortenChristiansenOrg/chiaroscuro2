@@ -69,8 +69,8 @@ describe("terminal feature", () => {
 
       expect(handler).toHaveBeenCalledWith({
         tabId: "tab-1",
-        line: { text: "hello world", type: "stdout" },
-      } satisfies TerminalOutputEvent);
+        line: { id: expect.any(String), text: "hello world", type: "stdout" },
+      });
     });
 
     it("strips ANSI escape codes from output", async () => {
@@ -86,7 +86,7 @@ describe("terminal feature", () => {
 
       expect(handler).toHaveBeenCalledWith({
         tabId: "tab-1",
-        line: { text: "VITE v7.3.1  ready", type: "stdout" },
+        line: { id: expect.any(String), text: "VITE v7.3.1  ready", type: "stdout" },
       });
     });
 
@@ -103,7 +103,7 @@ describe("terminal feature", () => {
 
       expect(handler).toHaveBeenCalledWith({
         tabId: "tab-1",
-        line: { text: "error!", type: "stderr" },
+        line: { id: expect.any(String), text: "error!", type: "stderr" },
       });
     });
   });
@@ -182,6 +182,7 @@ describe("terminal feature", () => {
   describe("keyboard shortcut", () => {
     it("registers local shortcut for ½ key", () => {
       const { platform } = setup();
+      expect(platform.registerShortcut).toHaveBeenCalledWith("½", expect.any(Function));
       expect(platform.registerLocalShortcut).toHaveBeenCalledWith("½", expect.any(Function));
     });
   });

@@ -49,11 +49,18 @@ export interface LocalWebAppDeps {
 const configs = new Map<TabId, LocalWebAppConfig>();
 const statuses = new Map<TabId, LocalWebAppStatus>();
 const processes = new Map<TabId, RunningProcess>();
+const reloadTimeouts = new Map<TabId, ReturnType<typeof setTimeout>>();
 let collection: Collection<PersistedConfig>;
 
 const RELOAD_DELAY_MS = 2000;
 
 function killProcess(tabId: TabId): void {
+  const pendingReload = reloadTimeouts.get(tabId);
+  if (pendingReload) {
+    clearTimeout(pendingReload);
+    reloadTimeouts.delete(tabId);
+  }
+
   const running = processes.get(tabId);
   if (!running) return;
 
@@ -150,9 +157,11 @@ function startProcess(deps: LocalWebAppDeps, tabId: TabId): void {
   });
 
   // Reload tab after a short delay to let the server start
-  setTimeout(() => {
+  const timeoutId = setTimeout(() => {
+    reloadTimeouts.delete(tabId);
     platform.reload(tabId);
   }, RELOAD_DELAY_MS);
+  reloadTimeouts.set(tabId, timeoutId);
 }
 
 export function register(deps: LocalWebAppDeps): void {

@@ -12,8 +12,8 @@ Allows users to configure a local development server for a tab. When the tab is 
 
 ## Requirements
 
-- User must be able to specify a project directory path in the tab palette.
-- User must be able to specify a start command in the tab palette (e.g., `npm start`).
+- User must be able to specify a project directory path in Tab Customization.
+- User must be able to specify a start command in Tab Customization (e.g., `npm start`).
 - User must be able to browse for a directory using a folder picker dialog (Electron's `dialog.showOpenDialog` with `openDirectory` property).
 - Configuration must persist across application restarts.
 - Process must start automatically when tab with saved config is activated.

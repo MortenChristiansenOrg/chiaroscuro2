@@ -12,6 +12,7 @@ export const TERMINAL_CLEARED = "terminal:cleared" as const;
 
 // ── Data types ───────────────────────────────────────────────────
 export interface TerminalLine {
+  id: string;
   text: string;
   type: "stdout" | "stderr";
 }

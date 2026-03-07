@@ -35,9 +35,9 @@ function TerminalOutput({ lines }: { lines: TerminalLine[] }) {
       className="flex-1 overflow-y-auto overflow-x-hidden"
       style={{ padding: "0.5rem 0.75rem" }}
     >
-      {lines.map((line, i) => (
+      {lines.map((line) => (
         <div
-          key={`${i}-${line.text.slice(0, 20)}`}
+          key={line.id}
           style={{
             fontFamily: "var(--font-mono)",
             fontSize: "var(--text-sm)",

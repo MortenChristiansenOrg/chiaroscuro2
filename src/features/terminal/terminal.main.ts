@@ -65,9 +65,10 @@ export function register(deps: Deps): void {
 
     // Split data into lines, add each
     const lines = data.split("\n");
-    for (const text of lines) {
-      if (text.length === 0 && lines.length > 1) continue; // skip empty splits
-      const line: TerminalLine = { text: stripAnsi(text), type };
+    for (const [i, text] of lines.entries()) {
+      // Skip only the trailing empty string from split (e.g., "foo\n" → ["foo", ""])
+      if (text.length === 0 && i === lines.length - 1) continue;
+      const line: TerminalLine = { id: crypto.randomUUID(), text: stripAnsi(text), type };
       buffer.push(line);
       events.emit(TERMINAL_OUTPUT, { tabId, line });
     }
@@ -91,9 +92,11 @@ export function register(deps: Deps): void {
   });
 
   // Register keyboard shortcut for ½ key (the key left of 1 on Nordic keyboards)
-  platform.registerLocalShortcut("½", () => {
+  const toggleTerminal = () => {
     commands.send(TERMINAL_TOGGLE, undefined).catch(console.error);
-  });
+  };
+  platform.registerShortcut("½", toggleTerminal);
+  platform.registerLocalShortcut("½", toggleTerminal);
 }
 
 export function start(_deps: Deps): void {

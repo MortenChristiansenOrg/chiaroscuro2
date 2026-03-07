@@ -25,7 +25,7 @@ function sendCommand<T = unknown>(name: string, payload: unknown): Promise<T> {
 function StatusBadge({ status }: { status: LocalWebAppStatus }) {
   const color =
     status === "running"
-      ? "oklch(0.72 0.18 142)" // green
+      ? "var(--success-foreground, oklch(0.72 0.18 142))"
       : status === "error"
         ? "var(--destructive-foreground)"
         : "var(--content-text-muted)";
@@ -69,6 +69,9 @@ export function LocalWebAppSettings({ tabId }: { tabId: TabId }) {
     if (config) {
       setLocalDir(config.directory);
       setLocalCmd(config.command);
+    } else {
+      setLocalDir("");
+      setLocalCmd("");
     }
   }, [config]);
 
