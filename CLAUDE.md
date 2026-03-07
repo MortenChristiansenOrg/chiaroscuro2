@@ -3,7 +3,6 @@
 - Overview & tech stack: docs/spec/overview.md
 - Architecture (buses, abstractions, process boundary, components): docs/spec/architecture.md
 - Implementation details (tabs, extensions, lifecycle, multi-window, storage): docs/spec/implementation.md
-- Project phases / roadmap: docs/spec/phases.md
 - Dependencies & build/distribution: docs/spec/dependencies.md
 - Resolved decisions, performance targets, constraints: docs/spec/decisions.md
 - Feature specs: docs/features/
@@ -40,7 +39,9 @@ For each logically distinct part of the UI, separate it into a React component. 
 Register every shortcut via **both** `platform.registerShortcut` (OS-level `globalShortcut`, toggled on window focus/blur) **and** `platform.registerLocalShortcut` (`before-input-event` + menu accelerator). Using only one mechanism is unreliable on Windows with `titleBarStyle: "hidden"`. See `find-text.main.ts` for the pattern:
 
 ```ts
-const callback = () => { commands.send(MY_COMMAND, undefined).catch(console.error); };
+const callback = () => {
+  commands.send(MY_COMMAND, undefined).catch(console.error);
+};
 platform.registerShortcut("CommandOrControl+F", callback);
 platform.registerLocalShortcut("CommandOrControl+F", callback);
 ```
