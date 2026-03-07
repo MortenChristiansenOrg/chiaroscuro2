@@ -1,0 +1,63 @@
+appId: com.chiaroscuro.browser
+productName: Chiaroscuro
+directories:
+  buildResources: resources
+  output: dist
+
+files:
+  - out/**/*
+  - resources/**/*
+  - "!**/*.map"
+
+# Windows-only — no macOS or Linux targets
+win:
+  icon: resources/icon.ico
+  target:
+    - target: nsis
+      arch:
+        - x64
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  artifactName: "${productName}-Setup-${version}.${ext}"
+
+# File associations
+fileAssociations:
+  - ext: html
+    name: HTML Document
+    role: Viewer
+  - ext: htm
+    name: HTM Document
+    role: Viewer
+  - ext: mhtml
+    name: MHTML Document
+    role: Viewer
+  - ext: svg
+    name: SVG Image
+    role: Viewer
+  - ext: pdf
+    name: PDF Document
+    role: Viewer
+
+# Protocol associations — register as default browser candidate
+protocols:
+  - name: HTTP
+    schemes:
+      - http
+  - name: HTTPS
+    schemes:
+      - https
+
+# Auto-update via GitHub Releases
+publish:
+  provider: github
+  owner: MortenChristiansenOrg
+  repo: chiaroscuro2
+
+# electron-updater reads this to find the release
+electronUpdaterCompatibility: ">= 2.16"

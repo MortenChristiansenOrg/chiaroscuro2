@@ -44,11 +44,18 @@ import {
   type DragDropCommands,
   type DragDropEvents,
 } from "../features/drag-drop/drag-drop.shared";
+import { register as registerFindText } from "../features/find-text/find-text.main";
+import type { FindTextCommands, FindTextEvents } from "../features/find-text/find-text.shared";
 import {
   register as registerFolders,
   start as startFolders,
 } from "../features/folders/folders.main";
 import type { FoldersCommands, FoldersEvents } from "../features/folders/folders.shared";
+import {
+  register as registerInstaller,
+  start as startInstaller,
+} from "../features/installer/installer.main";
+import type { InstallerCommands, InstallerEvents } from "../features/installer/installer.shared";
 import {
   register as registerLocalWebApp,
   start as startLocalWebApp,
@@ -116,6 +123,14 @@ import { ElectronPlatform } from "../platform/electron";
 import { enableNativeFileDrop } from "../platform/native-drop-win32";
 import type { TabId, WindowId, WorkspaceId } from "../shared/types";
 
+// Log uncaught exceptions to stderr for debugging
+process.on("uncaughtException", (err) => {
+  console.error("[uncaughtException]", err);
+});
+process.on("unhandledRejection", (reason) => {
+  console.error("[unhandledRejection]", reason);
+});
+
 const iconFile = process.platform === "win32" ? "icon.ico" : "icon.png";
 const iconPath = path.join(__dirname, "../../resources", iconFile);
 
@@ -138,9 +153,11 @@ type AllCommands = MergeRegistries<
     DomainCssCommands,
     DragDropCommands,
     DownloadsCommands,
+    FindTextCommands,
     TabCustomizationCommands,
     TerminalCommands,
     LocalWebAppCommands,
+    InstallerCommands,
   ]
 >;
 
@@ -162,9 +179,11 @@ type AllEvents = MergeRegistries<
     DomainCssEvents,
     DragDropEvents,
     DownloadsEvents,
+    FindTextEvents,
     TabCustomizationEvents,
     TerminalEvents,
     LocalWebAppEvents,
+    InstallerEvents,
   ]
 >;
 
@@ -274,9 +293,11 @@ app.whenReady().then(async () => {
   });
   registerDragDrop(deps);
   registerDownloads(deps);
+  registerFindText(deps);
   registerTabCustomization({ ...deps, getTab });
   registerTerminal(deps);
   registerLocalWebApp(deps);
+  registerInstaller(deps);
 
   // Load persisted layout state before creating the window
   const getDisplayBounds = () => screen.getAllDisplays().map((d) => d.workArea);
@@ -303,6 +324,7 @@ app.whenReady().then(async () => {
   // Activate keyboard shortcuts immediately (window is focused on creation)
   // and toggle on focus/blur so they don't intercept keys from other apps.
   platform.activateShortcuts();
+
   app.on("browser-window-focus", () => platform.activateShortcuts());
   app.on("browser-window-blur", () => {
     // Small delay: focus may transfer between app windows (e.g. context menu)
@@ -316,6 +338,7 @@ app.whenReady().then(async () => {
     startAppState(deps);
     await startWorkspaces(deps);
     startWindowChrome(deps);
+    await startInstaller(deps);
     const restoredTabs = await startTabs(deps);
     await startPinnedTabs(deps, restoredTabs);
     startSidebar(deps);

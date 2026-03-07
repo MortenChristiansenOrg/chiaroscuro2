@@ -84,6 +84,10 @@ export interface Platform {
   }): Promise<number>;
   hideContextMenu(): void;
 
+  // Find in page
+  findInPage(tabId: TabId, text: string, options?: { forward?: boolean; findNext?: boolean }): void;
+  stopFindInPage(tabId: TabId): void;
+
   // CSS injection
   insertCSS(tabId: TabId, css: string): Promise<string>;
   removeInsertedCSS(tabId: TabId, key: string): Promise<void>;
@@ -98,8 +102,13 @@ export interface Platform {
   // Network
   fetchAsDataUrl(url: string): Promise<string | undefined>;
 
+  // Protocol navigation
+  onProtocolRequest(callback: (url: string, origin: string) => void): () => void;
+
   // Shell / clipboard
   openExternal(url: string): Promise<void>;
+  /** Open URL without scheme filtering. Only for user-approved protocol launches. */
+  openExternalApproved(url: string): Promise<void>;
   openPath(filePath: string): Promise<void>;
   readClipboard(): string;
   writeClipboard(text: string): void;

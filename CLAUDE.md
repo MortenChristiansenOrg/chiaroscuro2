@@ -35,6 +35,20 @@ The UI must adhere to the design system defined in the companion website found a
 
 For each logically distinct part of the UI, separate it into a React component. Add a page for the component in the design system and make sure the component follow all the requirements from the design system. The component pages in the design system must map to actual components, not just conceptual components.
 
+# Keyboard Shortcuts
+
+Register every shortcut via **both** `platform.registerShortcut` (OS-level `globalShortcut`, toggled on window focus/blur) **and** `platform.registerLocalShortcut` (`before-input-event` + menu accelerator). Using only one mechanism is unreliable on Windows with `titleBarStyle: "hidden"`. See `find-text.main.ts` for the pattern:
+
+```ts
+const callback = () => { commands.send(MY_COMMAND, undefined).catch(console.error); };
+platform.registerShortcut("CommandOrControl+F", callback);
+platform.registerLocalShortcut("CommandOrControl+F", callback);
+```
+
+Exception: shortcuts that conflict with OS global hotkeys (e.g. F12) should use only `registerLocalShortcut`.
+
+CDP key events (playwright-cli `press`) do NOT trigger `before-input-event` or `globalShortcut` — keyboard shortcuts cannot be tested via CDP. Test them manually in the running app.
+
 # Verification
 
 Always verify your work compiles and passes checks. Run `bun run verify` for a full check (typecheck, lint, tests). The pre-commit hook runs this automatically, so don't run it redundantly right before committing.

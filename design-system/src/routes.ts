@@ -174,4 +174,10 @@ export const routes: Route[] = [
     group: "Components",
     component: lazy(() => import("./pages/components/terminal-panel.mdx")),
   },
+  {
+    path: "/components/app-update",
+    title: "App Update",
+    group: "Components",
+    component: lazy(() => import("./pages/components/app-update.mdx")),
+  },
 ];
