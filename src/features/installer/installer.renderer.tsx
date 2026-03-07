@@ -1,3 +1,4 @@
+import { useCallback, useEffect, useRef } from "react";
 import { Icon } from "../../renderer/src/components/Icon";
 import {
   INSTALLER_ALLOW_PROTOCOL,
@@ -65,7 +66,9 @@ export function UpdateNotification() {
             transition: "color var(--duration-fast), background-color var(--duration-fast)",
           }}
           tabIndex={-1}
-          onClick={() => sendCommand(INSTALLER_CHECK_FOR_UPDATES, undefined)}
+          onClick={() =>
+            void sendCommand(INSTALLER_CHECK_FOR_UPDATES, undefined).catch(console.error)
+          }
           aria-label="Retry update"
           data-tip="Retry update"
         >
@@ -88,7 +91,7 @@ export function UpdateNotification() {
             transition: "color var(--duration-fast), background-color var(--duration-fast)",
           }}
           tabIndex={-1}
-          onClick={() => sendCommand(INSTALLER_APPLY_UPDATE, undefined)}
+          onClick={() => void sendCommand(INSTALLER_APPLY_UPDATE, undefined).catch(console.error)}
           aria-label="Restart to apply update"
           data-tip="Restart to apply update"
         >
@@ -106,7 +109,7 @@ export function UpdateNotification() {
           transition: "color var(--duration-fast), background-color var(--duration-fast)",
         }}
         tabIndex={-1}
-        onClick={() => sendCommand(INSTALLER_DISMISS_UPDATE, undefined)}
+        onClick={() => void sendCommand(INSTALLER_DISMISS_UPDATE, undefined).catch(console.error)}
         aria-label="Dismiss update notification"
         data-tip="Dismiss"
       >
@@ -118,27 +121,66 @@ export function UpdateNotification() {
 
 export function ProtocolDialog() {
   const request = useInstallerStore((s) => s.protocolRequest);
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const requestId = request?.requestId;
+
+  const dismiss = useCallback((id: string) => {
+    useInstallerStore.setState((state) =>
+      state.protocolRequest?.requestId === id ? { protocolRequest: null } : {},
+    );
+  }, []);
+
+  const handleDeny = useCallback(() => {
+    if (!requestId) return;
+    void sendCommand(INSTALLER_DENY_PROTOCOL, { requestId })
+      .then(() => dismiss(requestId))
+      .catch(console.error);
+  }, [requestId, dismiss]);
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Escape") {
+        handleDeny();
+        return;
+      }
+      if (e.key === "Tab") {
+        const el = dialogRef.current;
+        if (!el) return;
+        const focusable = el.querySelectorAll<HTMLElement>(
+          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+        );
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (!first || !last) return;
+        if (e.shiftKey && document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        } else if (!e.shiftKey && document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    },
+    [handleDeny],
+  );
+
+  useEffect(() => {
+    if (!request) return;
+    const root = document.getElementById("root");
+    if (root) root.inert = true;
+    return () => {
+      if (root) root.inert = false;
+    };
+  }, [request]);
 
   if (!request) return null;
-
-  const dismiss = () => {
-    useInstallerStore.setState({ protocolRequest: null });
-  };
 
   const handleAllow = (always: boolean) => {
     void sendCommand(INSTALLER_ALLOW_PROTOCOL, {
       requestId: request.requestId,
       always,
     })
-      .then(() => dismiss())
-      .catch(console.error);
-  };
-
-  const handleDeny = () => {
-    void sendCommand(INSTALLER_DENY_PROTOCOL, {
-      requestId: request.requestId,
-    })
-      .then(() => dismiss())
+      .then(() => dismiss(request.requestId))
       .catch(console.error);
   };
 
@@ -146,6 +188,7 @@ export function ProtocolDialog() {
 
   return (
     <div
+      ref={dialogRef}
       className="fixed inset-0 flex items-center justify-center"
       // biome-ignore lint/a11y/useSemanticElements: <dialog> has built-in close/show behaviors that conflict with our overlay
       role="dialog"
@@ -153,9 +196,7 @@ export function ProtocolDialog() {
       // biome-ignore lint/a11y/noAutofocus: dialog must capture focus for keyboard accessibility
       autoFocus
       tabIndex={-1}
-      onKeyDown={(e) => {
-        if (e.key === "Escape") handleDeny();
-      }}
+      onKeyDown={handleKeyDown}
       style={{
         zIndex: "var(--z-overlay)",
         background: "oklch(0 0 0 / 0.4)",

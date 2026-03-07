@@ -100,6 +100,7 @@ describe("installer feature", () => {
     const { autoUpdater } = await import("electron-updater");
     // biome-ignore lint/suspicious/noExplicitAny: test mock helper
     (autoUpdater as any)._reset?.();
+    vi.clearAllMocks();
     vi.useRealTimers();
   });
 
