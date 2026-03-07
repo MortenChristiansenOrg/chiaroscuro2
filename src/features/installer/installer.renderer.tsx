@@ -2,6 +2,7 @@ import { Icon } from "../../renderer/src/components/Icon";
 import {
   INSTALLER_ALLOW_PROTOCOL,
   INSTALLER_APPLY_UPDATE,
+  INSTALLER_CHECK_FOR_UPDATES,
   INSTALLER_DENY_PROTOCOL,
   INSTALLER_DISMISS_UPDATE,
 } from "./installer.shared";
@@ -15,8 +16,11 @@ export function UpdateNotification() {
   const version = useInstallerStore((s) => s.pendingUpdateVersion);
   const downloaded = useInstallerStore((s) => s.updateDownloaded);
   const dismissed = useInstallerStore((s) => s.updateDismissed);
+  const error = useInstallerStore((s) => s.updateError);
 
   if (!version || dismissed) return null;
+
+  const hasError = !downloaded && error !== null;
 
   return (
     <div
@@ -26,19 +30,48 @@ export function UpdateNotification() {
         padding: "0.375rem 0.625rem",
         margin: "0.25rem 0.375rem",
         borderRadius: "var(--radius-md)",
-        background: "oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250) / 0.08)",
+        background: hasError
+          ? "oklch(0.65 0.2 25 / 0.1)"
+          : "oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250) / 0.08)",
         fontSize: "var(--text-sm)",
         animation: "dl-in var(--duration-enter) cubic-bezier(0, 0, 0.2, 1) both",
       }}
     >
       <Icon
-        name={downloaded ? "arrow-up-from-bracket" : "download"}
+        name={hasError ? "circle-exclamation" : downloaded ? "arrow-up-from-bracket" : "download"}
         className="text-glass-text-default shrink-0"
         css={{ fontSize: "var(--icon-size-default)" }}
       />
       <span className="text-glass-text-default flex-1 min-w-0 truncate">
-        {downloaded ? `v${version} ready` : `Downloading v${version}…`}
+        {hasError
+          ? `v${version} update failed`
+          : downloaded
+            ? `v${version} ready`
+            : `Downloading v${version}…`}
       </span>
+      {hasError && (
+        <button
+          type="button"
+          className="cursor-pointer text-glass-text-default hover:text-glass-text-hover hover:bg-glass-hover active:bg-glass-pressed active:text-glass-text-pressed"
+          style={{
+            fontSize: "var(--text-xs)",
+            fontFamily: "inherit",
+            fontWeight: 500,
+            padding: "0.125rem 0.5rem",
+            borderRadius: "var(--radius-sm)",
+            border: "1px solid var(--glass-border)",
+            background: "var(--glass-subtle)",
+            minHeight: "var(--click-target-min)",
+            transition: "color var(--duration-fast), background-color var(--duration-fast)",
+          }}
+          tabIndex={-1}
+          onClick={() => sendCommand(INSTALLER_CHECK_FOR_UPDATES, undefined)}
+          aria-label="Retry update"
+          data-tip="Retry update"
+        >
+          Retry
+        </button>
+      )}
       {downloaded && (
         <button
           type="button"

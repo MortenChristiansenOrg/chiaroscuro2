@@ -4,9 +4,11 @@ import {
   INSTALLER_UPDATE_AVAILABLE,
   INSTALLER_UPDATE_DISMISSED,
   INSTALLER_UPDATE_DOWNLOADED,
+  INSTALLER_UPDATE_ERROR,
   type ProtocolLaunchRequestedEvent,
   type UpdateAvailableEvent,
   type UpdateDownloadedEvent,
+  type UpdateErrorEvent,
 } from "./installer.shared";
 
 interface InstallerState {
@@ -16,6 +18,8 @@ interface InstallerState {
   updateDownloaded: boolean;
   /** Whether user dismissed the update notification. */
   updateDismissed: boolean;
+  /** Error message if the update failed, or null. */
+  updateError: string | null;
   /** Pending protocol launch request awaiting user decision, or null. */
   protocolRequest: ProtocolLaunchRequestedEvent | null;
 }
@@ -24,6 +28,7 @@ export const useInstallerStore = create<InstallerState>()(() => ({
   pendingUpdateVersion: null,
   updateDownloaded: false,
   updateDismissed: false,
+  updateError: null,
   protocolRequest: null,
 }));
 
@@ -39,6 +44,7 @@ export function subscribeToEvents(
         pendingUpdateVersion: version,
         updateDownloaded: false,
         updateDismissed: false,
+        updateError: null,
       });
     }),
   );
@@ -51,6 +57,13 @@ export function subscribeToEvents(
         updateDownloaded: true,
         updateDismissed: false,
       });
+    }),
+  );
+
+  unsubs.push(
+    onEvent(INSTALLER_UPDATE_ERROR, (payload) => {
+      const { message } = payload as UpdateErrorEvent;
+      useInstallerStore.setState({ updateError: message });
     }),
   );
 
