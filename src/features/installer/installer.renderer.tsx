@@ -33,7 +33,7 @@ export function UpdateNotification() {
         borderRadius: "var(--radius-md)",
         background: hasError
           ? "oklch(0.65 0.2 25 / 0.1)"
-          : "oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250) / 0.08)",
+          : "oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250) / 0.3)",
         fontSize: "var(--text-sm)",
         animation: "dl-in var(--duration-enter) cubic-bezier(0, 0, 0.2, 1) both",
       }}
@@ -166,6 +166,9 @@ export function ProtocolDialog() {
 
   useEffect(() => {
     if (!request) return;
+    // Only set inert in the real Electron app — the design system also has #root
+    // and making it inert would block the entire docs page.
+    if (window.chiaroscuro.platform !== "electron") return;
     const root = document.getElementById("root");
     if (root) root.inert = true;
     return () => {

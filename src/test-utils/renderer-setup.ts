@@ -9,6 +9,7 @@ const mockSignalReady = vi.fn();
 
 Object.defineProperty(window, "chiaroscuro", {
   value: {
+    platform: "electron" as const,
     sendCommand: mockSendCommand,
     onEvent: mockOnEvent,
     getPlatformName: mockGetPlatformName,
