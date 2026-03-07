@@ -52,6 +52,11 @@ import {
 } from "../features/folders/folders.main";
 import type { FoldersCommands, FoldersEvents } from "../features/folders/folders.shared";
 import {
+  register as registerInstaller,
+  start as startInstaller,
+} from "../features/installer/installer.main";
+import type { InstallerCommands, InstallerEvents } from "../features/installer/installer.shared";
+import {
   register as registerPinnedTabs,
   start as startPinnedTabs,
 } from "../features/pinned-tabs/pinned-tabs.main";
@@ -136,6 +141,7 @@ type AllCommands = MergeRegistries<
     DownloadsCommands,
     FindTextCommands,
     TabCustomizationCommands,
+    InstallerCommands,
   ]
 >;
 
@@ -159,6 +165,7 @@ type AllEvents = MergeRegistries<
     DownloadsEvents,
     FindTextEvents,
     TabCustomizationEvents,
+    InstallerEvents,
   ]
 >;
 
@@ -269,6 +276,7 @@ app.whenReady().then(async () => {
   registerDownloads(deps);
   registerFindText(deps);
   registerTabCustomization({ ...deps, getTab });
+  registerInstaller(deps);
 
   // Load persisted layout state before creating the window
   const getDisplayBounds = () => screen.getAllDisplays().map((d) => d.workArea);
@@ -309,6 +317,7 @@ app.whenReady().then(async () => {
     startAppState(deps);
     await startWorkspaces(deps);
     startWindowChrome(deps);
+    await startInstaller(deps);
     const restoredTabs = await startTabs(deps);
     await startPinnedTabs(deps, restoredTabs);
     startSidebar(deps);

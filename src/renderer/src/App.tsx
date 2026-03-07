@@ -12,6 +12,7 @@ import "../../features/domain-css/domain-css.feature";
 import "../../features/downloads/downloads.feature";
 import "../../features/find-text/find-text.feature";
 import "../../features/tab-customization/tab-customization.feature";
+import "../../features/installer/installer.feature";
 
 // All subscriptions wired — tell main process to start emitting events (phase 2)
 import { Shell, signalReady } from "./Shell";
