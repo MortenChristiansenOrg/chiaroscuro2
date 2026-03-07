@@ -80,8 +80,12 @@ None.
 - `local-web-app:delete-config` — Delete local web app configuration. Payload: `{ tabId: string }`.
 - `local-web-app:start` — Start the process for a tab. Payload: `{ tabId: string }`.
 - `local-web-app:stop` — Stop the process for a tab. Payload: `{ tabId: string }`.
+- `local-web-app:browse-directory` — Open a folder picker for the project directory. Returns: `string | undefined`.
+- `local-web-app:get-config` — Get saved config and current status for a tab. Payload: `{ tabId: string }`.
 
 ### Events
 
+- `local-web-app:config-changed` — Configuration changed. Payload: `{ tabId: string, config: { directory: string, command: string } }`.
+- `local-web-app:config-removed` — Configuration removed. Payload: `{ tabId: string }`.
 - `local-web-app:status-changed` — Process status changed. Payload: `{ tabId: string, status: 'running' | 'stopped' | 'error' }`.
-- `local-web-app:output` — Process produced output. Payload: `{ tabId: string, data: string, type: 'stdout' | 'stderr' }`.
+- Process output is forwarded to the Terminal feature via `terminal:write` with `{ tabId, data, type }`.

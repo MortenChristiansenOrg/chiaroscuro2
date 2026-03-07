@@ -105,12 +105,13 @@ function startProcess(deps: LocalWebAppDeps, tabId: TabId): void {
   if (wslMatch) {
     const distro = wslMatch[1] as string;
     const linuxPath = `/${(wslMatch[2] as string).replace(/\\/g, "/")}`;
+    const escapedLinuxPath = linuxPath.replace(/'/g, "'\\''");
     // wsl.exe inherits Windows PATH where Windows-installed tools (e.g. npm's bun)
     // shadow WSL-native ones, breaking shim resolution. Fix: look up the user's
     // default shell and run it interactively so rc files set PATH correctly.
     // Explicit cd handles rc files that override the working directory.
     const escaped = config.command.replace(/'/g, "'\\''");
-    const shellCmd = `exec $(getent passwd $(id -un) | cut -d: -f7) -ic 'cd "${linuxPath}" && ${escaped}'`;
+    const shellCmd = `exec $(getent passwd $(id -un) | cut -d: -f7) -ic 'cd "${escapedLinuxPath}" && ${escaped}'`;
     proc = spawn("wsl.exe", ["-d", distro, "--", "sh", "-c", shellCmd], {
       shell: false,
       stdio: ["ignore", "pipe", "pipe"],
@@ -260,8 +261,10 @@ export async function start(
 
     // Update persisted doc if ID changed
     if (tabId !== oldId) {
-      await collection.upsert({ id: tabId, directory: doc.directory, command: doc.command });
-      collection.remove(oldId).catch(console.error);
+      collection
+        .upsert({ id: tabId, directory: doc.directory, command: doc.command })
+        .then(() => collection.remove(oldId))
+        .catch(console.error);
     }
 
     configs.set(tabId, { directory: doc.directory, command: doc.command });
