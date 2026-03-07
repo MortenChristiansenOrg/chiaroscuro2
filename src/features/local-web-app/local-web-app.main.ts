@@ -141,6 +141,12 @@ function startProcess(deps: LocalWebAppDeps, tabId: TabId): void {
   });
 
   proc.on("close", (code) => {
+    if (processes.get(tabId)?.proc !== proc) return;
+    const pendingReload = reloadTimeouts.get(tabId);
+    if (pendingReload) {
+      clearTimeout(pendingReload);
+      reloadTimeouts.delete(tabId);
+    }
     processes.delete(tabId);
     const status: LocalWebAppStatus = code === 0 || code === null ? "stopped" : "error";
     statuses.set(tabId, status);
@@ -148,6 +154,12 @@ function startProcess(deps: LocalWebAppDeps, tabId: TabId): void {
   });
 
   proc.on("error", (err) => {
+    if (processes.get(tabId)?.proc !== proc) return;
+    const pendingReload = reloadTimeouts.get(tabId);
+    if (pendingReload) {
+      clearTimeout(pendingReload);
+      reloadTimeouts.delete(tabId);
+    }
     processes.delete(tabId);
     statuses.set(tabId, "error");
     events.emit(LOCAL_WEB_APP_STATUS_CHANGED, { tabId, status: "error" });
@@ -171,18 +183,20 @@ export function register(deps: LocalWebAppDeps): void {
   commands.handle(LOCAL_WEB_APP_SAVE_CONFIG, async ({ tabId, directory, command }) => {
     const config: LocalWebAppConfig = { directory, command };
     configs.set(tabId, config);
-    await collection.upsert({ id: tabId, directory, command });
+    collection.upsert({ id: tabId, directory, command }).catch(console.error);
     events.emit(LOCAL_WEB_APP_CONFIG_CHANGED, { tabId, config });
 
-    // Start immediately if this is the active tab
-    startProcess(deps, tabId);
+    // Only restart if this is the active tab
+    if (deps.getActiveTabId() === tabId) {
+      startProcess(deps, tabId);
+    }
   });
 
   commands.handle(LOCAL_WEB_APP_DELETE_CONFIG, async ({ tabId }) => {
     killProcess(tabId);
     configs.delete(tabId);
     statuses.delete(tabId);
-    await collection.remove(tabId);
+    collection.remove(tabId).catch(console.error);
     events.emit(LOCAL_WEB_APP_CONFIG_REMOVED, { tabId });
     events.emit(LOCAL_WEB_APP_STATUS_CHANGED, { tabId, status: "stopped" });
   });

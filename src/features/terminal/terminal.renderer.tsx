@@ -63,10 +63,12 @@ function TerminalInput() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = value.trim();
+    if (!trimmed) return;
     if (trimmed === "/clear") {
       sendCommand(TERMINAL_CLEAR, undefined);
+      setValue("");
+      return;
     }
-    setValue("");
   };
 
   return (
@@ -130,14 +132,30 @@ export function TerminalPanel() {
   // Track mounted state for animation (stay mounted while closing)
   const [mounted, setMounted] = useState(false);
   const [animating, setAnimating] = useState(false);
+  const openRafRef = useRef<number | null>(null);
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: mounted used only in else branch to avoid unmount flicker
   useLayoutEffect(() => {
     if (visible) {
       setMounted(true);
       // Force layout then animate open
-      requestAnimationFrame(() => setAnimating(true));
-    } else if (mounted) {
+      openRafRef.current = requestAnimationFrame(() => {
+        openRafRef.current = null;
+        setAnimating(true);
+      });
+      return () => {
+        if (openRafRef.current !== null) {
+          cancelAnimationFrame(openRafRef.current);
+          openRafRef.current = null;
+        }
+      };
+    }
+    if (!visible && mounted) {
+      // Cancel any pending open frame
+      if (openRafRef.current !== null) {
+        cancelAnimationFrame(openRafRef.current);
+        openRafRef.current = null;
+      }
       // Animate close, then unmount
       setAnimating(false);
       const timer = setTimeout(() => setMounted(false), TRANSITION_MS);

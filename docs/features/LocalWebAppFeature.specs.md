@@ -60,8 +60,7 @@ Allows users to configure a local development server for a tab. When the tab is 
 - Command input: text field for shell command.
 - Save button: saves configuration, starts process if tab active.
 - Delete button: removes config and stops process.
-- Status indicator: shows "running" (green), "will start on activation" (amber), or unconfigured state.
-- Error indicator: warning icon when process has errors.
+- Status indicator: shows "Running", "Stopped", or "Error" badge for configured tabs.
 
 ### Keyboard shortcuts
 
