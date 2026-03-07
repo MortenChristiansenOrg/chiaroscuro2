@@ -253,6 +253,26 @@ app.whenReady().then(async () => {
   // Bridge bus to IPC (once, before any window creation)
   bridgeBusToIpc(commands, events, () => BrowserWindow.getAllWindows());
 
+  // Phase 2: wait for renderer subscriptions, then emit initial state.
+  // Register BEFORE createWindow — the renderer sends "renderer:ready" at
+  // module-import time, so registering after risks losing the signal.
+  ipcMain.once("renderer:ready", async () => {
+    appState.start?.(deps);
+    await startWorkspaces(deps);
+    windowChrome.start?.(deps);
+    await installer.start?.(deps);
+    await startTabs(deps);
+    await startPinnedTabs(deps);
+    sidebar.start?.(deps);
+    await startFolders(deps);
+    await settings.start?.(deps);
+    await domainCss.start?.({ ...deps, dataDir, getTabsSnapshot: getAllTabs });
+    downloads.start?.(deps);
+    await startTabCustomization({ ...deps, getTab });
+    terminal.start?.(deps);
+    await startLocalWebApp(deps);
+  });
+
   const win = createWindow(appStateData.windowBounds);
 
   if (activeWindowId && process.env.NODE_ENV !== "test") {
@@ -270,24 +290,6 @@ app.whenReady().then(async () => {
     setTimeout(() => {
       if (!BrowserWindow.getFocusedWindow()) platform.deactivateShortcuts();
     }, 100);
-  });
-
-  // Phase 2: wait for renderer subscriptions, then emit initial state
-  ipcMain.once("renderer:ready", async () => {
-    appState.start?.(deps);
-    await startWorkspaces(deps);
-    windowChrome.start?.(deps);
-    await installer.start?.(deps);
-    await startTabs(deps);
-    await startPinnedTabs(deps);
-    sidebar.start?.(deps);
-    await startFolders(deps);
-    await settings.start?.(deps);
-    await domainCss.start?.({ ...deps, dataDir, getTabsSnapshot: getAllTabs });
-    downloads.start?.(deps);
-    await startTabCustomization({ ...deps, getTab });
-    terminal.start?.(deps);
-    await startLocalWebApp(deps);
   });
 
   app.on("activate", () => {
