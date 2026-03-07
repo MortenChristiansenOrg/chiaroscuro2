@@ -198,11 +198,11 @@ export class ElectronPlatform implements Platform {
 
   // ── Tab/WebContentsView management ──────────────────────────────
 
-  async createTab(windowId: WindowId, url: string): Promise<TabId> {
+  async createTab(windowId: WindowId, url: string, existingTabId?: TabId): Promise<TabId> {
     const win = this.getWin(windowId);
     if (!win) throw new Error("No window found");
 
-    const tabId = crypto.randomUUID() as TabId;
+    const tabId = existingTabId ?? (crypto.randomUUID() as TabId);
     const view = new WebContentsView({
       webPreferences: {
         sandbox: true,
@@ -259,23 +259,22 @@ export class ElectronPlatform implements Platform {
     view.webContents.on("will-navigate", (event, navUrl) => {
       if (!isAllowedUrl(navUrl)) {
         event.preventDefault();
-        // Notify listeners about non-standard protocol navigation
-        if (this.protocolRequestCallback) {
-          try {
-            const parsed = new URL(navUrl);
+        try {
+          const parsed = new URL(navUrl);
+          // Notify listeners about non-standard protocol navigation
+          if (
+            this.protocolRequestCallback &&
+            parsed.protocol &&
+            parsed.protocol !== "about:" &&
+            parsed.protocol !== "data:" &&
+            parsed.protocol !== "file:"
+          ) {
             const currentUrl = view.webContents.getURL();
             const origin = currentUrl ? new URL(currentUrl).origin : "";
-            if (
-              parsed.protocol &&
-              parsed.protocol !== "about:" &&
-              parsed.protocol !== "data:" &&
-              parsed.protocol !== "file:"
-            ) {
-              this.protocolRequestCallback(navUrl, origin);
-            }
-          } catch {
-            // Invalid URL — ignore
+            this.protocolRequestCallback(navUrl, origin);
           }
+        } catch {
+          // Invalid URL — ignore
         }
       }
     });

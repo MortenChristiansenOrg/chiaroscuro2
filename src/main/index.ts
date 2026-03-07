@@ -25,12 +25,6 @@ import domainCss from "../features/domain-css/domain-css.main";
 import type { DomainCssCommands, DomainCssEvents } from "../features/domain-css/domain-css.shared";
 import downloads from "../features/downloads/downloads.main";
 import type { DownloadsCommands, DownloadsEvents } from "../features/downloads/downloads.shared";
-import dragDrop from "../features/drag-drop/drag-drop.main";
-import {
-  DRAG_DROP_OPEN_FILES,
-  type DragDropCommands,
-  type DragDropEvents,
-} from "../features/drag-drop/drag-drop.shared";
 import findText from "../features/find-text/find-text.main";
 import type { FindTextCommands, FindTextEvents } from "../features/find-text/find-text.shared";
 import folders from "../features/folders/folders.main";
@@ -81,7 +75,6 @@ import type {
 import zoom from "../features/zoom/zoom.main";
 import type { ZoomCommands, ZoomEvents } from "../features/zoom/zoom.shared";
 import { ElectronPlatform } from "../platform/electron";
-import { enableNativeFileDrop } from "../platform/native-drop-win32";
 import type { TabId, WindowId, WorkspaceId } from "../shared/types";
 
 // Log uncaught exceptions to stderr for debugging
@@ -112,7 +105,6 @@ type AllCommands = MergeRegistries<
     ZoomCommands,
     DevToolsCommands,
     DomainCssCommands,
-    DragDropCommands,
     DownloadsCommands,
     FindTextCommands,
     TabCustomizationCommands,
@@ -138,7 +130,6 @@ type AllEvents = MergeRegistries<
     ZoomEvents,
     DevToolsEvents,
     DomainCssEvents,
-    DragDropEvents,
     DownloadsEvents,
     FindTextEvents,
     TabCustomizationEvents,
@@ -248,7 +239,6 @@ app.whenReady().then(async () => {
   zoom.register(deps);
   devTools.register(deps);
   domainCss.register({ ...deps, dataDir, getTabsSnapshot: getAllTabs });
-  dragDrop.register(deps);
   downloads.register(deps);
   findText.register(deps);
   tabCustomization.register({ ...deps, getTab });
@@ -265,14 +255,6 @@ app.whenReady().then(async () => {
 
   const win = createWindow(appStateData.windowBounds);
 
-  // Use Win32 DragAcceptFiles + WM_DROPFILES for native file drop.
-  // backgroundMaterial: "acrylic" blocks Chromium's OLE drag pipeline,
-  // so we bypass it via the older shell32 drop mechanism.
-  if (process.platform === "win32") {
-    enableNativeFileDrop(win, (filePaths) => {
-      commands.send(DRAG_DROP_OPEN_FILES, { filePaths }).catch(console.error);
-    });
-  }
   if (activeWindowId && process.env.NODE_ENV !== "test") {
     platform.initTooltipOverlay(activeWindowId);
     platform.initContextMenuOverlay(activeWindowId);
@@ -296,16 +278,16 @@ app.whenReady().then(async () => {
     await startWorkspaces(deps);
     windowChrome.start?.(deps);
     await installer.start?.(deps);
-    const restoredTabs = await startTabs(deps);
-    await startPinnedTabs(deps, restoredTabs);
+    await startTabs(deps);
+    await startPinnedTabs(deps);
     sidebar.start?.(deps);
     await startFolders(deps);
     await settings.start?.(deps);
     await domainCss.start?.({ ...deps, dataDir, getTabsSnapshot: getAllTabs });
     downloads.start?.(deps);
-    await startTabCustomization({ ...deps, getTab }, restoredTabs);
+    await startTabCustomization({ ...deps, getTab });
     terminal.start?.(deps);
-    await startLocalWebApp(deps, restoredTabs);
+    await startLocalWebApp(deps);
   });
 
   app.on("activate", () => {
