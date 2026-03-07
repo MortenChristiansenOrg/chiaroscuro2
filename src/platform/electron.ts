@@ -198,11 +198,11 @@ export class ElectronPlatform implements Platform {
 
   // ── Tab/WebContentsView management ──────────────────────────────
 
-  async createTab(windowId: WindowId, url: string): Promise<TabId> {
+  async createTab(windowId: WindowId, url: string, existingTabId?: TabId): Promise<TabId> {
     const win = this.getWin(windowId);
     if (!win) throw new Error("No window found");
 
-    const tabId = crypto.randomUUID() as TabId;
+    const tabId = existingTabId ?? (crypto.randomUUID() as TabId);
     const view = new WebContentsView({
       webPreferences: {
         sandbox: true,
@@ -259,23 +259,22 @@ export class ElectronPlatform implements Platform {
     view.webContents.on("will-navigate", (event, navUrl) => {
       if (!isAllowedUrl(navUrl)) {
         event.preventDefault();
-        // Notify listeners about non-standard protocol navigation
-        if (this.protocolRequestCallback) {
-          try {
-            const parsed = new URL(navUrl);
+        try {
+          const parsed = new URL(navUrl);
+          // Notify listeners about non-standard protocol navigation
+          if (
+            this.protocolRequestCallback &&
+            parsed.protocol &&
+            parsed.protocol !== "about:" &&
+            parsed.protocol !== "data:" &&
+            parsed.protocol !== "file:"
+          ) {
             const currentUrl = view.webContents.getURL();
             const origin = currentUrl ? new URL(currentUrl).origin : "";
-            if (
-              parsed.protocol &&
-              parsed.protocol !== "about:" &&
-              parsed.protocol !== "data:" &&
-              parsed.protocol !== "file:"
-            ) {
-              this.protocolRequestCallback(navUrl, origin);
-            }
-          } catch {
-            // Invalid URL — ignore
+            this.protocolRequestCallback(navUrl, origin);
           }
+        } catch {
+          // Invalid URL — ignore
         }
       }
     });
@@ -444,8 +443,12 @@ export class ElectronPlatform implements Platform {
   activateShortcuts(): void {
     if (this.shortcutsActive) return;
     for (const [accelerator, callback] of this.shortcuts) {
-      const ok = globalShortcut.register(accelerator, callback);
-      if (!ok) console.warn(`[shortcuts] Failed to register global shortcut: ${accelerator}`);
+      try {
+        const ok = globalShortcut.register(accelerator, callback);
+        if (!ok) console.warn(`[shortcuts] Failed to register global shortcut: ${accelerator}`);
+      } catch (err) {
+        console.warn(`[shortcuts] Invalid accelerator: ${accelerator}`, err);
+      }
     }
     this.shortcutsActive = true;
   }
@@ -494,11 +497,15 @@ export class ElectronPlatform implements Platform {
    *  (needed for keys like F12 that can't be globalShortcut and whose
    *  before-input-event doesn't fire on devtools webContents). */
   private rebuildLocalShortcutMenu(): void {
-    const template = Array.from(this.localShortcuts.entries()).map(([accelerator, click]) => ({
-      label: accelerator,
-      accelerator,
-      click,
-    }));
+    const template = Array.from(this.localShortcuts.entries())
+      // Menu accelerators only support ASCII; non-ASCII keys (e.g. ½) still
+      // work via before-input-event but can't be represented in the menu.
+      .filter(([accelerator]) => /^[\x20-\x7e]+$/.test(accelerator))
+      .map(([accelerator, click]) => ({
+        label: accelerator,
+        accelerator,
+        click,
+      }));
     Menu.setApplicationMenu(Menu.buildFromTemplate(template));
   }
 

@@ -4,7 +4,8 @@ import { EventBus } from "../../bus/event-bus";
 import { MemoryDataStore } from "../../data/memory-store";
 import type { Bounds, WindowId } from "../../shared/types";
 import { createMockPlatform } from "../../test-utils";
-import { loadPersistedState, register, start } from "./app-state.main";
+import feature from "./app-state.main";
+import { loadPersistedState } from "./app-state.main";
 import {
   APP_STATE_RESTORED,
   APP_STATE_SAVE,
@@ -35,7 +36,7 @@ function setup() {
     getActiveWindowId: () => WINDOW_ID,
   };
 
-  register(deps);
+  feature.register(deps);
   return { commands, events, platform, dataStore, deps };
 }
 
@@ -149,13 +150,13 @@ describe("loadPersistedState", () => {
   });
 });
 
-describe("start()", () => {
+describe("feature.start()", () => {
   it("emits app-state:restored with current state", () => {
     const { events, deps } = setup();
     const listener = vi.fn();
     events.on(APP_STATE_RESTORED, listener);
 
-    start(deps);
+    feature.start(deps);
 
     expect(listener).toHaveBeenCalledWith({
       sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
@@ -175,7 +176,7 @@ describe("start()", () => {
     const listener = vi.fn();
     events.on(APP_STATE_RESTORED, listener);
 
-    start(deps);
+    feature.start(deps);
 
     expect(listener).toHaveBeenCalledWith({
       sidebarWidth: 280,

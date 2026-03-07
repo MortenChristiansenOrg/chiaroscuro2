@@ -9,7 +9,7 @@ import {
   type TabsClosedEvent,
   type TabsCreatedEvent,
 } from "../tabs/tabs.shared";
-import { register } from "./zoom.main";
+import feature from "./zoom.main";
 import {
   ZOOM_CHANGED,
   ZOOM_DEFAULT,
@@ -39,7 +39,7 @@ function setup(opts: { initialZoom?: number } = {}) {
     }),
   });
 
-  register({
+  feature.register({
     commands,
     events,
     platform,
@@ -76,7 +76,7 @@ describe("zoom:in", () => {
     const commands = new CommandBus<ZoomCommands>();
     const events = new EventBus<AllEvents>();
     const platform = createMockPlatform();
-    register({
+    feature.register({
       commands,
       events,
       platform,

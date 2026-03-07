@@ -1,6 +1,7 @@
 import type { CommandBus } from "../../bus/command-bus";
 import type { EventBus } from "../../bus/event-bus";
 import type { Platform } from "../../platform/types";
+import { defineFeature } from "../../shared/define-feature";
 import type { TabId, WindowId } from "../../shared/types";
 import {
   WINDOW_CLOSE,
@@ -79,67 +80,61 @@ interface Deps {
   getActiveTabId: () => TabId | undefined;
 }
 
-/** Phase 1: register command handlers (no side effects) */
-export function register({
-  commands,
-  events,
-  platform,
-  getActiveWindowId,
-  getActiveTabId,
-}: Deps): void {
-  commands.handle(WINDOW_MINIMIZE, async () => {
-    const windowId = getActiveWindowId();
-    if (windowId) await platform.minimizeWindow(windowId);
-  });
-
-  commands.handle(WINDOW_MAXIMIZE_RESTORE, async () => {
-    const windowId = getActiveWindowId();
-    if (!windowId) return;
-    if (platform.isWindowMaximized(windowId)) {
-      await platform.unmaximizeWindow(windowId);
-      events.emit(WINDOW_MAXIMIZED_CHANGED, { maximized: false });
-    } else {
-      await platform.maximizeWindow(windowId);
-      events.emit(WINDOW_MAXIMIZED_CHANGED, { maximized: true });
-    }
-  });
-
-  commands.handle(WINDOW_CLOSE, async () => {
-    const windowId = getActiveWindowId();
-    if (windowId) await platform.closeWindow(windowId);
-  });
-
-  commands.handle(WINDOW_COPY_ADDRESS, () => {
-    const tabId = getActiveTabId();
-    if (!tabId) return;
-    const url = platform.getTabUrl(tabId);
-    if (url) {
-      platform.writeClipboard(stripTrackingParams(url));
-    }
-  });
-
-  commands.handle(WINDOW_GO_BACK, () => {
-    const tabId = getActiveTabId();
-    if (tabId) platform.goBack(tabId);
-  });
-
-  commands.handle(WINDOW_GO_FORWARD, () => {
-    const tabId = getActiveTabId();
-    if (tabId) platform.goForward(tabId);
-  });
-
-  commands.handle(WINDOW_RELOAD, () => {
-    const tabId = getActiveTabId();
-    if (tabId) platform.reload(tabId);
-  });
-}
-
-/** Phase 2: emit initial state (after all features registered) */
-export function start({ events, platform, getActiveWindowId }: Deps): void {
-  const windowId = getActiveWindowId();
-  if (windowId) {
-    events.emit(WINDOW_MAXIMIZED_CHANGED, {
-      maximized: platform.isWindowMaximized(windowId),
+export default defineFeature<Deps>({
+  register({ commands, events, platform, getActiveWindowId, getActiveTabId }) {
+    commands.handle(WINDOW_MINIMIZE, async () => {
+      const windowId = getActiveWindowId();
+      if (windowId) await platform.minimizeWindow(windowId);
     });
-  }
-}
+
+    commands.handle(WINDOW_MAXIMIZE_RESTORE, async () => {
+      const windowId = getActiveWindowId();
+      if (!windowId) return;
+      if (platform.isWindowMaximized(windowId)) {
+        await platform.unmaximizeWindow(windowId);
+        events.emit(WINDOW_MAXIMIZED_CHANGED, { maximized: false });
+      } else {
+        await platform.maximizeWindow(windowId);
+        events.emit(WINDOW_MAXIMIZED_CHANGED, { maximized: true });
+      }
+    });
+
+    commands.handle(WINDOW_CLOSE, async () => {
+      const windowId = getActiveWindowId();
+      if (windowId) await platform.closeWindow(windowId);
+    });
+
+    commands.handle(WINDOW_COPY_ADDRESS, () => {
+      const tabId = getActiveTabId();
+      if (!tabId) return;
+      const url = platform.getTabUrl(tabId);
+      if (url) {
+        platform.writeClipboard(stripTrackingParams(url));
+      }
+    });
+
+    commands.handle(WINDOW_GO_BACK, () => {
+      const tabId = getActiveTabId();
+      if (tabId) platform.goBack(tabId);
+    });
+
+    commands.handle(WINDOW_GO_FORWARD, () => {
+      const tabId = getActiveTabId();
+      if (tabId) platform.goForward(tabId);
+    });
+
+    commands.handle(WINDOW_RELOAD, () => {
+      const tabId = getActiveTabId();
+      if (tabId) platform.reload(tabId);
+    });
+  },
+
+  start({ events, platform, getActiveWindowId }) {
+    const windowId = getActiveWindowId();
+    if (windowId) {
+      events.emit(WINDOW_MAXIMIZED_CHANGED, {
+        maximized: platform.isWindowMaximized(windowId),
+      });
+    }
+  },
+});

@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { CommandBus } from "../../bus/command-bus";
 import type { TabId, WindowId } from "../../shared/types";
 import { createMockPlatform } from "../../test-utils";
-import { register } from "./dev-tools.main";
+import feature from "./dev-tools.main";
 import { DEVTOOLS_TOGGLE, DEVTOOLS_TOGGLE_CHROME, type DevToolsCommands } from "./dev-tools.shared";
 
 const TAB_ID = "tab-1" as TabId;
@@ -12,7 +12,7 @@ function setup(opts: { isDev?: boolean; noActiveTab?: boolean } = {}) {
   const commands = new CommandBus<DevToolsCommands>();
   const platform = createMockPlatform();
 
-  register({
+  feature.register({
     commands,
     platform,
     isDev: opts.isDev ?? false,

@@ -3,8 +3,6 @@
 # Renderer changes hot-reload instantly. Main/preload changes need Ctrl-C + rerun.
 set -e
 
-RENDERER_PORT=5199
-
 WIN_USER=$(powershell.exe -NoProfile -Command '[System.Environment]::UserName' | tr -d '\r')
 WIN_DIR="/mnt/c/Users/${WIN_USER}/.chiaroscuro-dev"
 WIN_PATH="C:\\Users\\${WIN_USER}\\.chiaroscuro-dev"
@@ -26,12 +24,6 @@ if [ ! -d "$WIN_DIR/node_modules/electron" ]; then
   powershell.exe -NoProfile -Command "cd '$WIN_PATH'; npm install --save-dev electron"
 fi
 
-# Native deps needed at runtime on Windows
-if [ ! -d "$WIN_DIR/node_modules/koffi" ]; then
-  echo "Installing native deps on Windows..."
-  powershell.exe -NoProfile -Command "cd '$WIN_PATH'; npm install koffi@^2.15.1"
-fi
-
 # Resolve electron.exe path
 ELECTRON_EXE="$WIN_DIR/node_modules/electron/dist/electron.exe"
 if [ ! -f "$ELECTRON_EXE" ]; then
@@ -40,29 +32,26 @@ if [ ! -f "$ELECTRON_EXE" ]; then
 fi
 WIN_ELECTRON="$WIN_PATH\\node_modules\\electron\\dist\\electron.exe"
 
-# Kill any existing Electron from previous run (only ours, not other Electron apps)
-powershell.exe -NoProfile -Command "
-  Get-Process -Name electron -ErrorAction SilentlyContinue |
-    Where-Object { \$_.Path -like '*chiaroscuro-dev*' } |
-    Stop-Process -Force -ErrorAction SilentlyContinue
-" 2>/dev/null || true
-
-# Cleanup on exit
+# Cleanup on exit: kill only this instance's Vite + Electron
 cleanup() {
   echo ""
   echo "Shutting down..."
-  [ -n "$VITE_PID" ] && kill "$VITE_PID" 2>/dev/null
-  powershell.exe -NoProfile -Command "
-    Get-Process -Name electron -ErrorAction SilentlyContinue |
-      Where-Object { \$_.Path -like '*chiaroscuro-dev*' } |
-      Stop-Process -Force -ErrorAction SilentlyContinue
-  " 2>/dev/null || true
+  if [ -n "$VITE_PID" ]; then
+    kill "$VITE_PID" 2>/dev/null || true
+  fi
+  if [ -n "$ELECTRON_WIN_PID" ]; then
+    powershell.exe -NoProfile -Command "
+      Stop-Process -Id $ELECTRON_WIN_PID -Force -ErrorAction SilentlyContinue
+    " 2>/dev/null || true
+  fi
 }
 trap cleanup EXIT
 
-# Start Vite renderer dev server (stays running for HMR)
+# Pick a free port for the Vite renderer dev server
+RENDERER_PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("",0)); print(s.getsockname()[1]); s.close()')
+
 echo "Starting renderer dev server on port $RENDERER_PORT..."
-bun run scripts/dev-renderer-server.ts &
+ELECTRON_VITE_DEV_SERVER_PORT=$RENDERER_PORT bun run scripts/dev-renderer-server.ts &
 VITE_PID=$!
 
 # Wait for Vite to be ready
@@ -80,15 +69,24 @@ for i in $(seq 1 30); do
   sleep 1
 done
 
-# Launch Electron on Windows, pointing at the WSL Vite dev server
-# Use & (call operator) not Start-Process — Start-Process doesn't inherit env vars
-echo "Launching Electron on Windows..."
-powershell.exe -NoProfile -Command "
+if ! curl -s "http://localhost:$RENDERER_PORT/" >/dev/null 2>&1; then
+  echo " failed (timed out waiting for dev server)."
+  exit 1
+fi
+
+# Launch Electron on Windows, capture its PID for cleanup
+# Env vars set in the same PS session are inherited by Start-Process
+echo "Launching Electron on Windows (renderer at port $RENDERER_PORT)..."
+ELECTRON_WIN_PID=$(powershell.exe -NoProfile -Command "
   \$env:ELECTRON_RENDERER_URL = 'http://localhost:$RENDERER_PORT'
   \$env:NODE_ENV_ELECTRON_VITE = 'development'
   Set-Location '$WIN_PATH'
-  & '$WIN_ELECTRON' '.'
-" &
+  \$logFile = Join-Path '$WIN_PATH' 'electron.log'
+  \$errFile = Join-Path '$WIN_PATH' 'electron-err.log'
+  \$p = Start-Process -FilePath '$WIN_ELECTRON' -ArgumentList '.' -PassThru -RedirectStandardOutput \$logFile -RedirectStandardError \$errFile
+  Write-Output \$p.Id
+" | tr -d '\r')
+echo "Electron PID (Windows): $ELECTRON_WIN_PID"
 
 # Keep script alive (Vite server runs until Ctrl-C)
 echo ""

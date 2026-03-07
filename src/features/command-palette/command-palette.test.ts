@@ -5,7 +5,7 @@ import { MemoryDataStore } from "../../data/memory-store";
 import type { TabId, WindowId } from "../../shared/types";
 import { createMockPlatform } from "../../test-utils";
 import { TABS_UPDATED } from "../tabs/tabs.shared";
-import { register, start } from "./command-palette.main";
+import feature from "./command-palette.main";
 import {
   COMMAND_PALETTE_EXECUTE,
   COMMAND_PALETTE_HIDDEN,
@@ -19,10 +19,12 @@ import {
 const WIN_ID = "win-1" as WindowId;
 const TAB_ID = "tab-1" as TabId;
 
-type AllCommands = Parameters<typeof register>[0] extends { commands: CommandBus<infer C> }
+type AllCommands = Parameters<typeof feature.register>[0] extends { commands: CommandBus<infer C> }
   ? C
   : never;
-type AllEvents = Parameters<typeof register>[0] extends { events: EventBus<infer E> } ? E : never;
+type AllEvents = Parameters<typeof feature.register>[0] extends { events: EventBus<infer E> }
+  ? E
+  : never;
 
 let tabCounter = 0;
 
@@ -47,7 +49,7 @@ function setup(overrides: { activeTabId?: TabId | undefined } = {}) {
     getActiveWindowId: () => WIN_ID as WindowId | undefined,
     getActiveTabId: () => activeTabId as TabId | undefined,
   };
-  register(deps);
+  feature.register(deps);
   return { commands, events, platform, dataStore, deps };
 }
 
@@ -189,19 +191,5 @@ describe("command-palette commands", () => {
       expect(results).toHaveLength(1);
       expect(results[0]).toMatchObject({ url: "https://github.com" });
     });
-  });
-});
-
-describe("start()", () => {
-  it("loads provider settings from dataStore", async () => {
-    const { deps, dataStore } = setup();
-    await dataStore.setSetting("search-providers", [
-      { id: "custom-1", bang: "!c", name: "Custom", urlTemplate: "https://custom.com/?q={query}" },
-    ]);
-    await dataStore.setSetting("default-search-provider", "!c");
-
-    await start(deps);
-    // No error = settings loaded. Actual effect is on resolve-input module state,
-    // tested in resolve-input.test.ts
   });
 });

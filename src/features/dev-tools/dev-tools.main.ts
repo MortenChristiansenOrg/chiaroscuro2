@@ -1,5 +1,6 @@
 import type { CommandBus } from "../../bus/command-bus";
 import type { Platform } from "../../platform/types";
+import { defineFeature } from "../../shared/define-feature";
 import type { TabId, WindowId } from "../../shared/types";
 import { DEVTOOLS_TOGGLE, DEVTOOLS_TOGGLE_CHROME, type DevToolsCommands } from "./dev-tools.shared";
 
@@ -11,42 +12,34 @@ interface Deps {
   getActiveWindowId: () => WindowId | undefined;
 }
 
-export function register({
-  commands,
-  platform,
-  isDev,
-  getActiveTabId,
-  getActiveWindowId,
-}: Deps): void {
-  // ── Command handlers ───────────────────────────────────────────
+export default defineFeature<Deps>({
+  register({ commands, platform, isDev, getActiveTabId, getActiveWindowId }) {
+    commands.handle(DEVTOOLS_TOGGLE, async () => {
+      const tabId = getActiveTabId();
+      if (!tabId) return;
 
-  commands.handle(DEVTOOLS_TOGGLE, async () => {
-    const tabId = getActiveTabId();
-    if (!tabId) return;
-
-    if (platform.isTabDevToolsOpened(tabId)) {
-      platform.closeTabDevTools(tabId);
-    } else {
-      platform.openTabDevTools(tabId, "right");
-    }
-  });
-
-  commands.handle(DEVTOOLS_TOGGLE_CHROME, async () => {
-    if (!isDev) return;
-    const windowId = getActiveWindowId();
-    if (!windowId) return;
-    platform.toggleShellDevTools(windowId);
-  });
-
-  // ── Keyboard shortcuts ─────────────────────────────────────────
-
-  platform.registerLocalShortcut("F12", () => {
-    commands.send(DEVTOOLS_TOGGLE, undefined).catch(console.error);
-  });
-
-  if (isDev) {
-    platform.registerLocalShortcut("F11", () => {
-      commands.send(DEVTOOLS_TOGGLE_CHROME, undefined).catch(console.error);
+      if (platform.isTabDevToolsOpened(tabId)) {
+        platform.closeTabDevTools(tabId);
+      } else {
+        platform.openTabDevTools(tabId, "right");
+      }
     });
-  }
-}
+
+    commands.handle(DEVTOOLS_TOGGLE_CHROME, async () => {
+      if (!isDev) return;
+      const windowId = getActiveWindowId();
+      if (!windowId) return;
+      platform.toggleShellDevTools(windowId);
+    });
+
+    platform.registerLocalShortcut("F12", () => {
+      commands.send(DEVTOOLS_TOGGLE, undefined).catch(console.error);
+    });
+
+    if (isDev) {
+      platform.registerLocalShortcut("F11", () => {
+        commands.send(DEVTOOLS_TOGGLE_CHROME, undefined).catch(console.error);
+      });
+    }
+  },
+});

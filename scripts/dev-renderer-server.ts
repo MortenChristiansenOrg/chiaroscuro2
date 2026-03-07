@@ -21,6 +21,16 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  // Allow overriding the port via env var, with strictPort to fail fast if busy
+  const portOverride = process.env.ELECTRON_VITE_DEV_SERVER_PORT;
+  if (portOverride) {
+    rendererConfig.server = {
+      ...rendererConfig.server,
+      port: Number(portOverride),
+      strictPort: true,
+    };
+  }
+
   const server = await createServer(rendererConfig);
   if (!server.httpServer) {
     throw new Error("HTTP server not available");
@@ -28,10 +38,6 @@ async function main(): Promise<void> {
 
   await server.listen();
   server.printUrls();
-
-  const conf = server.config.server;
-  const port = conf.port;
-  console.log(`\nRenderer dev server ready — set ELECTRON_RENDERER_URL=http://localhost:${port}`);
 }
 
 main().catch((err) => {

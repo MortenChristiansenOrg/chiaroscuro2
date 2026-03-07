@@ -3,14 +3,13 @@ import { CommandBus } from "../../bus/command-bus";
 import { EventBus } from "../../bus/event-bus";
 import type { TabId, WindowId } from "../../shared/types";
 import { createMockPlatform } from "../../test-utils";
-// biome-ignore lint/style/useImportType: TABS_ACTIVATED used in typeof for mapped type
 import {
   TABS_ACTIVATED,
   TABS_CLOSED,
   type TabsActivatedEvent,
   type TabsClosedEvent,
 } from "../tabs/tabs.shared";
-import { register } from "./find-text.main";
+import feature from "./find-text.main";
 import {
   FIND_NEXT,
   FIND_PREVIOUS,
@@ -38,7 +37,7 @@ function setup(opts: { tabId?: TabId | null } = {}) {
   const platform = createMockPlatform();
   const activeTabId = opts.tabId === null ? undefined : (opts.tabId ?? TAB_ID);
 
-  register({
+  feature.register({
     commands,
     events,
     platform,

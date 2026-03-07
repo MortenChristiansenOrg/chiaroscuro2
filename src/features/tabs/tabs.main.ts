@@ -2,6 +2,8 @@ import type { CommandBus } from "../../bus/command-bus";
 import type { EventBus } from "../../bus/event-bus";
 import type { Collection, DataStore } from "../../data/types";
 import type { Bounds, Platform } from "../../platform/types";
+import { defineFeature } from "../../shared/define-feature";
+import { TabScope } from "../../shared/tab-scope";
 import type { FolderId, TabId, WindowId, WorkspaceId } from "../../shared/types";
 import { getFoldersForLevel, setFolderOrder } from "../folders/folders.main";
 import { isPinned } from "../pinned-tabs/pinned-tabs.main";
@@ -99,451 +101,447 @@ function tabSnapshot(tab: Tab): Tab {
   return { ...tab, ...(fixedUrl ? { fixedUrl } : {}) };
 }
 
-export function register(deps: Deps): void {
-  fixedUrls.clear();
-  const {
-    commands,
-    events,
-    platform,
-    dataStore,
-    getActiveWindowId,
-    getActiveTabId,
-    setActiveTabId,
-    getActiveWorkspaceId,
-  } = deps;
+export default defineFeature<Deps>({
+  register(deps) {
+    fixedUrls.clear();
+    const {
+      commands,
+      events,
+      platform,
+      dataStore,
+      getActiveWindowId,
+      getActiveTabId,
+      setActiveTabId,
+      getActiveWorkspaceId,
+    } = deps;
 
-  const tabs = new Map<TabId, Tab>();
-  let contentBounds: Bounds = { x: 0, y: 0, width: 0, height: 0 };
-  const eventCleanups = new Map<TabId, (() => void)[]>();
-  const tabsCollection: Collection<PersistedTab> = dataStore.collection("tabs");
-  let builtInCounter = 0;
+    const tabs = new Map<TabId, Tab>();
+    let contentBounds: Bounds = { x: 0, y: 0, width: 0, height: 0 };
+    const tabScope = new TabScope();
+    const tabsCollection: Collection<PersistedTab> = dataStore.collection("tabs");
+    let builtInCounter = 0;
 
-  // Expose for getTabsForWorkspace, start(), and cross-feature accessors
-  _tabs = tabs;
-  _attachTabListeners = attachTabListeners;
-  _persistTab = persistTab;
+    // Expose for getTabsForWorkspace, start(), and cross-feature accessors
+    _tabs = tabs;
+    _attachTabListeners = attachTabListeners;
+    _persistTab = persistTab;
 
-  // ── Persistence helpers ──────────────────────────────────────────
+    // ── Persistence helpers ──────────────────────────────────────────
 
-  function persistTab(tab: Tab): void {
-    if (tab.builtIn) return;
-    const { loading, builtIn, fixedUrl: _fixedUrl, ...persisted } = tab;
-    // Bookmarked tabs with fixed address: persist the original URL
-    const fixedUrl = fixedUrls.get(tab.id);
-    if (tab.bookmarked && fixedUrl && !getCustomization(tab.id)?.fixedAddressDisabled) {
-      (persisted as PersistedTab).url = fixedUrl;
+    function persistTab(tab: Tab): void {
+      if (tab.builtIn) return;
+      const { loading, builtIn, fixedUrl: _fixedUrl, ...persisted } = tab;
+      // Bookmarked tabs with fixed address: persist the original URL
+      const fixedUrl = fixedUrls.get(tab.id);
+      if (tab.bookmarked && fixedUrl && !getCustomization(tab.id)?.fixedAddressDisabled) {
+        (persisted as PersistedTab).url = fixedUrl;
+      }
+      tabsCollection.upsert(persisted as PersistedTab).catch(console.error);
     }
-    tabsCollection.upsert(persisted as PersistedTab).catch(console.error);
-  }
 
-  function removePersistedTab(tabId: TabId): void {
-    tabsCollection.remove(tabId).catch(() => {});
-  }
+    function removePersistedTab(tabId: TabId): void {
+      tabsCollection.remove(tabId).catch(() => {});
+    }
 
-  // ── Debounced list-changed emission ─────────────────────────────
-  let listDirty = false;
-  let listTimer: ReturnType<typeof setTimeout> | undefined;
+    // ── Debounced list-changed emission ─────────────────────────────
+    let listDirty = false;
+    let listTimer: ReturnType<typeof setTimeout> | undefined;
 
-  function scheduleListChanged(): void {
-    if (listDirty) return;
-    listDirty = true;
-    listTimer = setTimeout(() => {
+    function scheduleListChanged(): void {
+      if (listDirty) return;
+      listDirty = true;
+      listTimer = setTimeout(() => {
+        listDirty = false;
+        listTimer = undefined;
+        events.emit(TABS_LIST_CHANGED, { tabs: [...tabs.values()].map(tabSnapshot) });
+      }, 0);
+    }
+
+    function flushListChanged(): void {
+      if (!listDirty) return;
+      if (listTimer !== undefined) clearTimeout(listTimer);
       listDirty = false;
       listTimer = undefined;
       events.emit(TABS_LIST_CHANGED, { tabs: [...tabs.values()].map(tabSnapshot) });
-    }, 0);
-  }
-
-  function flushListChanged(): void {
-    if (!listDirty) return;
-    if (listTimer !== undefined) clearTimeout(listTimer);
-    listDirty = false;
-    listTimer = undefined;
-    events.emit(TABS_LIST_CHANGED, { tabs: [...tabs.values()].map(tabSnapshot) });
-  }
-
-  // ── Helpers ─────────────────────────────────────────────────────
-
-  function findMruTab(workspaceId: WorkspaceId, excludeTabId?: TabId): Tab | undefined {
-    let best: Tab | undefined;
-    for (const tab of tabs.values()) {
-      if (tab.workspaceId !== workspaceId) continue;
-      if (tab.id === excludeTabId) continue;
-      if (!best || tab.lastAccessedAt > best.lastAccessedAt) {
-        best = tab;
-      }
     }
-    return best;
-  }
 
-  function attachTabListeners(tabId: TabId): void {
-    const cleanups: (() => void)[] = [];
+    // ── Helpers ─────────────────────────────────────────────────────
 
-    cleanups.push(
-      platform.onTabEvent(tabId, "page-title-updated", (_event: unknown, title: unknown) => {
-        const tab = tabs.get(tabId);
-        if (!tab) return;
-        tab.title = title as string;
-        events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
-        persistTab(tab);
-      }),
-    );
+    function findMruTab(workspaceId: WorkspaceId, excludeTabId?: TabId): Tab | undefined {
+      let best: Tab | undefined;
+      for (const tab of tabs.values()) {
+        if (tab.workspaceId !== workspaceId) continue;
+        if (tab.id === excludeTabId) continue;
+        if (!best || tab.lastAccessedAt > best.lastAccessedAt) {
+          best = tab;
+        }
+      }
+      return best;
+    }
 
-    cleanups.push(
-      platform.onTabEvent(tabId, "did-navigate", (_event: unknown, url: unknown) => {
-        const tab = tabs.get(tabId);
-        if (!tab) return;
-        tab.url = url as string;
-        events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
-        persistTab(tab);
-      }),
-    );
-
-    cleanups.push(
-      platform.onTabEvent(tabId, "did-navigate-in-page", (_event: unknown, url: unknown) => {
-        const tab = tabs.get(tabId);
-        if (!tab) return;
-        tab.url = url as string;
-        events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
-        persistTab(tab);
-      }),
-    );
-
-    cleanups.push(
-      platform.onTabEvent(tabId, "did-start-loading", () => {
-        const tab = tabs.get(tabId);
-        if (!tab) return;
-        tab.loading = true;
-        events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
-        events.emit("tab:loading-changed", { tabId, loading: true });
-      }),
-    );
-
-    cleanups.push(
-      platform.onTabEvent(tabId, "did-stop-loading", () => {
-        const tab = tabs.get(tabId);
-        if (!tab) return;
-        tab.loading = false;
-        const currentUrl = platform.getTabUrl(tabId);
-        if (currentUrl) tab.url = currentUrl;
-        const currentTitle = platform.getTabTitle(tabId);
-        if (currentTitle) tab.title = currentTitle;
-        events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
-        events.emit("tab:loading-changed", { tabId, loading: false });
-        persistTab(tab);
-      }),
-    );
-
-    cleanups.push(
-      platform.onTabEvent(tabId, "page-favicon-updated", (_event: unknown, favicons: unknown) => {
-        const tab = tabs.get(tabId);
-        if (!tab) return;
-        const urls = favicons as string[];
-        if (urls.length > 0 && urls[0]) {
-          const faviconUrl = urls[0];
-          tab.favicon = faviconUrl;
+    function attachTabListeners(tabId: TabId): void {
+      tabScope.add(
+        tabId,
+        platform.onTabEvent(tabId, "page-title-updated", (_event: unknown, title: unknown) => {
+          const tab = tabs.get(tabId);
+          if (!tab) return;
+          tab.title = title as string;
           events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
           persistTab(tab);
-          // Convert localhost favicons to data URLs so they survive across sessions
-          // (dev servers aren't running until the tab is activated)
-          if (isLocalhostUrl(faviconUrl)) {
-            platform.fetchAsDataUrl(faviconUrl).then((dataUrl) => {
-              if (!dataUrl) return;
-              const current = tabs.get(tabId);
-              if (!current || current.favicon !== faviconUrl) return;
-              current.favicon = dataUrl;
-              events.emit(TABS_UPDATED, { tab: tabSnapshot(current) });
-              persistTab(current);
-            });
+        }),
+      );
+
+      tabScope.add(
+        tabId,
+        platform.onTabEvent(tabId, "did-navigate", (_event: unknown, url: unknown) => {
+          const tab = tabs.get(tabId);
+          if (!tab) return;
+          tab.url = url as string;
+          events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
+          persistTab(tab);
+        }),
+      );
+
+      tabScope.add(
+        tabId,
+        platform.onTabEvent(tabId, "did-navigate-in-page", (_event: unknown, url: unknown) => {
+          const tab = tabs.get(tabId);
+          if (!tab) return;
+          tab.url = url as string;
+          events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
+          persistTab(tab);
+        }),
+      );
+
+      tabScope.add(
+        tabId,
+        platform.onTabEvent(tabId, "did-start-loading", () => {
+          const tab = tabs.get(tabId);
+          if (!tab) return;
+          tab.loading = true;
+          events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
+          events.emit("tab:loading-changed", { tabId, loading: true });
+        }),
+      );
+
+      tabScope.add(
+        tabId,
+        platform.onTabEvent(tabId, "did-stop-loading", () => {
+          const tab = tabs.get(tabId);
+          if (!tab) return;
+          tab.loading = false;
+          const currentUrl = platform.getTabUrl(tabId);
+          if (currentUrl) tab.url = currentUrl;
+          const currentTitle = platform.getTabTitle(tabId);
+          if (currentTitle) tab.title = currentTitle;
+          events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
+          events.emit("tab:loading-changed", { tabId, loading: false });
+          persistTab(tab);
+        }),
+      );
+
+      tabScope.add(
+        tabId,
+        platform.onTabEvent(tabId, "page-favicon-updated", (_event: unknown, favicons: unknown) => {
+          const tab = tabs.get(tabId);
+          if (!tab) return;
+          const urls = favicons as string[];
+          if (urls.length > 0 && urls[0]) {
+            const faviconUrl = urls[0];
+            tab.favicon = faviconUrl;
+            events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
+            persistTab(tab);
+            // Convert localhost favicons to data URLs so they survive across sessions
+            // (dev servers aren't running until the tab is activated)
+            if (isLocalhostUrl(faviconUrl)) {
+              platform.fetchAsDataUrl(faviconUrl).then((dataUrl) => {
+                if (!dataUrl) return;
+                const current = tabs.get(tabId);
+                if (!current || current.favicon !== faviconUrl) return;
+                current.favicon = dataUrl;
+                events.emit(TABS_UPDATED, { tab: tabSnapshot(current) });
+                persistTab(current);
+              });
+            }
           }
-        }
-      }),
-    );
-
-    eventCleanups.set(tabId, cleanups);
-  }
-
-  // ── Command handlers ───────────────────────────────────────────
-
-  commands.handle(TABS_CREATE, async (payload) => {
-    const windowId = getActiveWindowId();
-    if (!windowId) throw new Error("No active window");
-
-    const workspaceId = payload.workspaceId ?? getActiveWorkspaceId();
-    if (!workspaceId) throw new Error("No active workspace");
-
-    const isBuiltIn = payload.url.startsWith("app:");
-    const tabId = isBuiltIn
-      ? (`builtin-${++builtInCounter}` as TabId)
-      : await platform.createTab(windowId, payload.url);
-    const now = Date.now();
-
-    const tab: Tab = {
-      id: tabId,
-      workspaceId,
-      url: payload.url,
-      title: isBuiltIn ? resolveBuiltInTitle(payload.url) : payload.url,
-      favicon: "",
-      loading: !isBuiltIn,
-      bookmarked: false,
-      ...(isBuiltIn && { builtIn: true }),
-      lastAccessedAt: now,
-      createdAt: now,
-      order: tabs.size,
-      folderId: null,
-    };
-
-    tabs.set(tabId, tab);
-    if (!isBuiltIn) {
-      attachTabListeners(tabId);
-      persistTab(tab);
-      events.emit("tab:loading-changed", { tabId, loading: true });
+        }),
+      );
     }
 
-    events.emit(TABS_CREATED, { tab });
-    scheduleListChanged();
+    // ── Command handlers ───────────────────────────────────────────
 
-    // Activate by default
-    if (payload.activate !== false) {
-      await commands.send(TABS_ACTIVATE, { tabId });
-    }
+    commands.handle(TABS_CREATE, async (payload) => {
+      const windowId = getActiveWindowId();
+      if (!windowId) throw new Error("No active window");
 
-    return tabId;
-  });
+      const workspaceId = payload.workspaceId ?? getActiveWorkspaceId();
+      if (!workspaceId) throw new Error("No active workspace");
 
-  commands.handle(TABS_CLOSE, async (payload) => {
-    const { tabId } = payload;
-    const tab = tabs.get(tabId);
-    if (!tab) return;
+      const isBuiltIn = payload.url.startsWith("app:");
+      const tabId = isBuiltIn
+        ? (`builtin-${++builtInCounter}` as TabId)
+        : await platform.createTab(windowId, payload.url);
+      const now = Date.now();
 
-    // Clean up event listeners
-    const cleanups = eventCleanups.get(tabId);
-    if (cleanups) {
-      for (const fn of cleanups) fn();
-      eventCleanups.delete(tabId);
-    }
+      const tab: Tab = {
+        id: tabId,
+        workspaceId,
+        url: payload.url,
+        title: isBuiltIn ? resolveBuiltInTitle(payload.url) : payload.url,
+        favicon: "",
+        loading: !isBuiltIn,
+        bookmarked: false,
+        ...(isBuiltIn && { builtIn: true }),
+        lastAccessedAt: now,
+        createdAt: now,
+        order: tabs.size,
+        folderId: null,
+      };
 
-    const wasActive = getActiveTabId() === tabId;
-    if (!tab.builtIn) {
-      await platform.closeTab(tabId);
-      removePersistedTab(tabId);
-    }
-    tabs.delete(tabId);
-    fixedUrls.delete(tabId);
-
-    let activatedTabId: TabId | null = null;
-    if (wasActive) {
-      const mru = findMruTab(tab.workspaceId);
-      if (mru) {
-        activatedTabId = mru.id;
-        await commands.send(TABS_ACTIVATE, { tabId: mru.id });
-      } else {
-        setActiveTabId(undefined);
+      tabs.set(tabId, tab);
+      if (!isBuiltIn) {
+        attachTabListeners(tabId);
+        persistTab(tab);
+        events.emit("tab:loading-changed", { tabId, loading: true });
       }
-    }
 
-    events.emit(TABS_CLOSED, { tabId, activatedTabId });
-    flushListChanged();
-  });
+      events.emit(TABS_CREATED, { tab });
+      scheduleListChanged();
 
-  commands.handle(TABS_ACTIVATE, async (payload) => {
-    const { tabId } = payload;
-    const tab = tabs.get(tabId);
-    if (!tab) return;
-
-    const windowId = getActiveWindowId();
-    if (!windowId) return;
-
-    const previousTabId = getActiveTabId() ?? null;
-
-    // Hide previous tab (skip if previous was built-in — no WCV to hide)
-    if (previousTabId && previousTabId !== tabId) {
-      const prevTab = tabs.get(previousTabId);
-      if (!prevTab?.builtIn) {
-        platform.hideTab(previousTabId);
+      // Activate by default
+      if (payload.activate !== false) {
+        await commands.send(TABS_ACTIVATE, { tabId });
       }
-    }
 
-    // Show new tab (skip platform calls for built-in tabs)
-    setActiveTabId(tabId);
-    tab.lastAccessedAt = Date.now();
-    if (!tab.builtIn && contentBounds.width > 0 && contentBounds.height > 0) {
-      platform.setTabBounds(tabId, contentBounds);
-    }
-
-    events.emit(TABS_ACTIVATED, { tabId, previousTabId });
-    events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
-    persistTab(tab);
-  });
-
-  commands.handle(TABS_NAVIGATE, async (payload) => {
-    const tabId = payload.tabId ?? getActiveTabId();
-    if (!tabId) return;
-    const tab = tabs.get(tabId);
-    if (!tab) return;
-
-    tab.url = payload.url;
-    tab.loading = true;
-    await platform.navigateTab(tabId, payload.url);
-
-    events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
-    events.emit("tab:loading-changed", { tabId, loading: true });
-    persistTab(tab);
-  });
-
-  commands.handle(TABS_TOGGLE_BOOKMARK, async (payload) => {
-    const tabId = payload.tabId ?? getActiveTabId();
-    if (!tabId) return;
-    const tab = tabs.get(tabId);
-    if (!tab) return;
-
-    // Skip pinned tabs
-    if (isPinned(tabId)) return;
-
-    tab.bookmarked = !tab.bookmarked;
-    if (tab.bookmarked) {
-      fixedUrls.set(tabId, tab.url);
-    } else {
-      fixedUrls.delete(tabId);
-      tab.folderId = null;
-    }
-    // Place at end of new section
-    const siblingsInNewSection = [...tabs.values()].filter(
-      (t) => t.workspaceId === tab.workspaceId && t.bookmarked === tab.bookmarked && t.id !== tabId,
-    );
-    const maxOrder = siblingsInNewSection.reduce((m, t) => Math.max(m, t.order), -1);
-    tab.order = maxOrder + 1;
-    events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
-    scheduleListChanged();
-    persistTab(tab);
-  });
-
-  commands.handle(TABS_CLEAR_EPHEMERAL, async (payload) => {
-    const workspaceId = payload.workspaceId ?? getActiveWorkspaceId();
-    if (!workspaceId) return;
-    const toClose: TabId[] = [];
-    for (const tab of tabs.values()) {
-      if (tab.workspaceId === workspaceId && !tab.bookmarked) {
-        toClose.push(tab.id);
-      }
-    }
-    for (const tabId of toClose) {
-      await commands.send(TABS_CLOSE, { tabId });
-    }
-  });
-
-  commands.handle(TABS_REORDER, async (payload) => {
-    const { tabId, targetBookmarked, targetTabId, position, targetFolderId } = payload;
-    const tab = tabs.get(tabId);
-    if (!tab) return;
-
-    // Skip pinned tabs
-    if (isPinned(tabId)) return;
-
-    // Auto-bookmark/unbookmark when moving between sections
-    if (targetBookmarked && !tab.bookmarked) {
-      tab.bookmarked = true;
-      fixedUrls.set(tabId, tab.url);
-    } else if (!targetBookmarked && tab.bookmarked) {
-      tab.bookmarked = false;
-      fixedUrls.delete(tabId);
-      tab.folderId = null;
-    }
-
-    // Update folder membership if specified
-    if (targetFolderId !== undefined) {
-      tab.folderId = targetFolderId;
-    }
-
-    // Per-level ordering: get sibling tabs at the same level (same folderId)
-    const targetLevel = tab.folderId ?? null;
-    const tabSiblings = [...tabs.values()]
-      .filter(
-        (t) =>
-          t.workspaceId === tab.workspaceId &&
-          t.bookmarked === targetBookmarked &&
-          (t.folderId ?? null) === targetLevel &&
-          t.id !== tabId,
-      )
-      .sort((a, b) => a.order - b.order);
-
-    // Include folders at same level for unified ordering
-    const folderSiblings = targetBookmarked ? getFoldersForLevel(tab.workspaceId, targetLevel) : [];
-
-    type Item = { type: "tab"; tab: Tab } | { type: "folder"; id: FolderId; order: number };
-    const items: Item[] = [
-      ...tabSiblings.map((t) => ({ type: "tab" as const, tab: t })),
-      ...folderSiblings.map((f) => ({ type: "folder" as const, id: f.id, order: f.order })),
-    ].sort((a, b) => {
-      const orderA = a.type === "tab" ? a.tab.order : a.order;
-      const orderB = b.type === "tab" ? b.tab.order : b.order;
-      if (orderA !== orderB) return orderA - orderB;
-      // Tiebreaker: folders before tabs
-      if (a.type !== b.type) return a.type === "folder" ? -1 : 1;
-      return 0;
+      return tabId;
     });
 
-    // Determine insert index
-    let insertAt = items.length; // default: append
-    if (targetTabId) {
-      const targetIdx = items.findIndex(
-        (item) => item.type === "tab" && item.tab.id === targetTabId,
-      );
-      if (targetIdx !== -1) {
-        insertAt = position === "after" ? targetIdx + 1 : targetIdx;
-      }
-    }
+    commands.handle(TABS_CLOSE, async (payload) => {
+      const { tabId } = payload;
+      const tab = tabs.get(tabId);
+      if (!tab) return;
 
-    // Splice the dragged tab into position and re-index all
-    items.splice(insertAt, 0, { type: "tab", tab });
-    for (const [i, item] of items.entries()) {
-      if (item.type === "tab") {
-        const orderChanged = item.tab.order !== i;
-        item.tab.order = i;
-        if (orderChanged || item.tab.id === tabId) {
-          persistTab(item.tab);
+      // Clean up event listeners
+      tabScope.cleanup(tabId);
+
+      const wasActive = getActiveTabId() === tabId;
+      if (!tab.builtIn) {
+        await platform.closeTab(tabId);
+        removePersistedTab(tabId);
+      }
+      tabs.delete(tabId);
+      fixedUrls.delete(tabId);
+
+      let activatedTabId: TabId | null = null;
+      if (wasActive) {
+        const mru = findMruTab(tab.workspaceId);
+        if (mru) {
+          activatedTabId = mru.id;
+          await commands.send(TABS_ACTIVATE, { tabId: mru.id });
+        } else {
+          setActiveTabId(undefined);
         }
-      } else if (item.order !== i) {
-        setFolderOrder(item.id, i);
       }
-    }
 
-    events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
-    scheduleListChanged();
-  });
+      events.emit(TABS_CLOSED, { tabId, activatedTabId });
+      flushListChanged();
+    });
 
-  commands.handle(TABS_REPORT_CONTENT_BOUNDS, async (payload) => {
-    contentBounds = payload;
-    const activeTabId = getActiveTabId();
-    if (activeTabId) {
-      const activeTab = tabs.get(activeTabId);
-      if (!activeTab?.builtIn) {
-        platform.setTabBounds(activeTabId, contentBounds);
+    commands.handle(TABS_ACTIVATE, async (payload) => {
+      const { tabId } = payload;
+      const tab = tabs.get(tabId);
+      if (!tab) return;
+
+      const windowId = getActiveWindowId();
+      if (!windowId) return;
+
+      const previousTabId = getActiveTabId() ?? null;
+
+      // Hide previous tab (skip if previous was built-in — no WCV to hide)
+      if (previousTabId && previousTabId !== tabId) {
+        const prevTab = tabs.get(previousTabId);
+        if (!prevTab?.builtIn) {
+          platform.hideTab(previousTabId);
+        }
       }
-    }
-  });
 
-  platform.registerShortcut("CommandOrControl+B", () => {
-    commands.send(TABS_TOGGLE_BOOKMARK, {}).catch(console.error);
-  });
-}
+      // Show new tab (skip platform calls for built-in tabs)
+      setActiveTabId(tabId);
+      tab.lastAccessedAt = Date.now();
+      if (!tab.builtIn && contentBounds.width > 0 && contentBounds.height > 0) {
+        platform.setTabBounds(tabId, contentBounds);
+      }
 
-/** Returns oldId→newId and url→newId maps for cross-feature ID reconciliation */
-export async function start(
-  deps: Deps,
-): Promise<{ idMap: Map<TabId, TabId>; urlMap: Map<string, TabId> }> {
+      events.emit(TABS_ACTIVATED, { tabId, previousTabId });
+      events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
+      persistTab(tab);
+    });
+
+    commands.handle(TABS_NAVIGATE, async (payload) => {
+      const tabId = payload.tabId ?? getActiveTabId();
+      if (!tabId) return;
+      const tab = tabs.get(tabId);
+      if (!tab) return;
+
+      tab.url = payload.url;
+      tab.loading = true;
+      await platform.navigateTab(tabId, payload.url);
+
+      events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
+      events.emit("tab:loading-changed", { tabId, loading: true });
+      persistTab(tab);
+    });
+
+    commands.handle(TABS_TOGGLE_BOOKMARK, async (payload) => {
+      const tabId = payload.tabId ?? getActiveTabId();
+      if (!tabId) return;
+      const tab = tabs.get(tabId);
+      if (!tab) return;
+
+      // Skip pinned tabs
+      if (isPinned(tabId)) return;
+
+      tab.bookmarked = !tab.bookmarked;
+      if (tab.bookmarked) {
+        fixedUrls.set(tabId, tab.url);
+      } else {
+        fixedUrls.delete(tabId);
+        tab.folderId = null;
+      }
+      // Place at end of new section
+      const siblingsInNewSection = [...tabs.values()].filter(
+        (t) =>
+          t.workspaceId === tab.workspaceId && t.bookmarked === tab.bookmarked && t.id !== tabId,
+      );
+      const maxOrder = siblingsInNewSection.reduce((m, t) => Math.max(m, t.order), -1);
+      tab.order = maxOrder + 1;
+      events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
+      scheduleListChanged();
+      persistTab(tab);
+    });
+
+    commands.handle(TABS_CLEAR_EPHEMERAL, async (payload) => {
+      const workspaceId = payload.workspaceId ?? getActiveWorkspaceId();
+      if (!workspaceId) return;
+      const toClose: TabId[] = [];
+      for (const tab of tabs.values()) {
+        if (tab.workspaceId === workspaceId && !tab.bookmarked) {
+          toClose.push(tab.id);
+        }
+      }
+      for (const tabId of toClose) {
+        await commands.send(TABS_CLOSE, { tabId });
+      }
+    });
+
+    commands.handle(TABS_REORDER, async (payload) => {
+      const { tabId, targetBookmarked, targetTabId, position, targetFolderId } = payload;
+      const tab = tabs.get(tabId);
+      if (!tab) return;
+
+      // Skip pinned tabs
+      if (isPinned(tabId)) return;
+
+      // Auto-bookmark/unbookmark when moving between sections
+      if (targetBookmarked && !tab.bookmarked) {
+        tab.bookmarked = true;
+        fixedUrls.set(tabId, tab.url);
+      } else if (!targetBookmarked && tab.bookmarked) {
+        tab.bookmarked = false;
+        fixedUrls.delete(tabId);
+        tab.folderId = null;
+      }
+
+      // Update folder membership if specified
+      if (targetFolderId !== undefined) {
+        tab.folderId = targetFolderId;
+      }
+
+      // Per-level ordering: get sibling tabs at the same level (same folderId)
+      const targetLevel = tab.folderId ?? null;
+      const tabSiblings = [...tabs.values()]
+        .filter(
+          (t) =>
+            t.workspaceId === tab.workspaceId &&
+            t.bookmarked === targetBookmarked &&
+            (t.folderId ?? null) === targetLevel &&
+            t.id !== tabId,
+        )
+        .sort((a, b) => a.order - b.order);
+
+      // Include folders at same level for unified ordering
+      const folderSiblings = targetBookmarked
+        ? getFoldersForLevel(tab.workspaceId, targetLevel)
+        : [];
+
+      type Item = { type: "tab"; tab: Tab } | { type: "folder"; id: FolderId; order: number };
+      const items: Item[] = [
+        ...tabSiblings.map((t) => ({ type: "tab" as const, tab: t })),
+        ...folderSiblings.map((f) => ({ type: "folder" as const, id: f.id, order: f.order })),
+      ].sort((a, b) => {
+        const orderA = a.type === "tab" ? a.tab.order : a.order;
+        const orderB = b.type === "tab" ? b.tab.order : b.order;
+        if (orderA !== orderB) return orderA - orderB;
+        // Tiebreaker: folders before tabs
+        if (a.type !== b.type) return a.type === "folder" ? -1 : 1;
+        return 0;
+      });
+
+      // Determine insert index
+      let insertAt = items.length; // default: append
+      if (targetTabId) {
+        const targetIdx = items.findIndex(
+          (item) => item.type === "tab" && item.tab.id === targetTabId,
+        );
+        if (targetIdx !== -1) {
+          insertAt = position === "after" ? targetIdx + 1 : targetIdx;
+        }
+      }
+
+      // Splice the dragged tab into position and re-index all
+      items.splice(insertAt, 0, { type: "tab", tab });
+      for (const [i, item] of items.entries()) {
+        if (item.type === "tab") {
+          const orderChanged = item.tab.order !== i;
+          item.tab.order = i;
+          if (orderChanged || item.tab.id === tabId) {
+            persistTab(item.tab);
+          }
+        } else if (item.order !== i) {
+          setFolderOrder(item.id, i);
+        }
+      }
+
+      events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
+      scheduleListChanged();
+    });
+
+    commands.handle(TABS_REPORT_CONTENT_BOUNDS, async (payload) => {
+      contentBounds = payload;
+      const activeTabId = getActiveTabId();
+      if (activeTabId) {
+        const activeTab = tabs.get(activeTabId);
+        if (!activeTab?.builtIn) {
+          platform.setTabBounds(activeTabId, contentBounds);
+        }
+      }
+    });
+
+    platform.registerShortcut("CommandOrControl+B", () => {
+      commands.send(TABS_TOGGLE_BOOKMARK, {}).catch(console.error);
+    });
+  },
+});
+
+export async function start(deps: Deps): Promise<void> {
   const { dataStore, platform, getActiveWindowId, getActiveWorkspaceId } = deps;
   const tabsCollection: Collection<PersistedTab> = dataStore.collection("tabs");
 
-  const idMap = new Map<TabId, TabId>(); // old persisted ID → new platform ID
-  const urlMap = new Map<string, TabId>(); // url → new platform ID
-
-  // Restore persisted tabs
   const persisted = await tabsCollection.findMany({});
-  if (persisted.length === 0) return { idMap, urlMap };
+  if (persisted.length === 0) return;
 
   const windowId = getActiveWindowId();
-  if (!windowId) return { idMap, urlMap };
+  if (!windowId) return;
 
   const now = Date.now();
 
@@ -557,7 +555,7 @@ export async function start(
     }
   }
 
-  if (toRestore.length === 0) return { idMap, urlMap };
+  if (toRestore.length === 0) return;
 
   // Restore most recently accessed tab first so it becomes the active one
   toRestore.sort((a, b) => b.lastAccessedAt - a.lastAccessedAt);
@@ -566,13 +564,14 @@ export async function start(
     throw new Error("tabs.main: register() must be called before start()");
   }
 
-  // Recreate tabs from persisted data
+  // Recreate tabs with their original stable IDs
   const activeWsId = getActiveWorkspaceId();
   let firstTabInActiveWs: TabId | undefined;
 
   for (const pt of toRestore) {
     try {
-      const tabId = await platform.createTab(windowId, pt.url);
+      const tabId = pt.id as TabId;
+      await platform.createTab(windowId, pt.url, tabId);
       const tab: Tab = {
         id: tabId,
         workspaceId: pt.workspaceId as WorkspaceId,
@@ -589,14 +588,7 @@ export async function start(
 
       _tabs.set(tabId, tab);
       _attachTabListeners(tabId);
-      idMap.set(pt.id as TabId, tabId);
-      urlMap.set(pt.url, tabId);
       if (pt.bookmarked) fixedUrls.set(tabId, pt.url);
-
-      // Update persisted doc with new tabId (platform assigns new IDs)
-      const { loading, ...newPersisted } = tab;
-      await tabsCollection.upsert(newPersisted as PersistedTab).catch(console.error);
-      await tabsCollection.remove(pt.id).catch(() => {});
 
       // Track first tab in active workspace for activation
       if (tab.workspaceId === activeWsId && !firstTabInActiveWs) {
@@ -619,8 +611,6 @@ export async function start(
   deps.events.emit(TABS_LIST_CHANGED, {
     tabs: [..._tabs.values()].map(tabSnapshot),
   });
-
-  return { idMap, urlMap };
 }
 
 export function getTabsForWorkspace(workspaceId: WorkspaceId): Tab[] {

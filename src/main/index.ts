@@ -6,121 +6,75 @@ import { bridgeBusToIpc } from "../bus/ipc-main-bridge";
 import type { MergeRegistries } from "../bus/types";
 import { createDataStore } from "../data/store";
 import type { DataStore } from "../data/types";
-import {
-  loadPersistedState,
-  onWindowBoundsChanged,
-  register as registerAppState,
-  start as startAppState,
-} from "../features/app-state/app-state.main";
+import appState from "../features/app-state/app-state.main";
+import { loadPersistedState, onWindowBoundsChanged } from "../features/app-state/app-state.main";
 import type { AppStateCommands, AppStateEvents } from "../features/app-state/app-state.shared";
-import {
-  register as registerCommandPalette,
-  start as startCommandPalette,
-} from "../features/command-palette/command-palette.main";
+import commandPalette from "../features/command-palette/command-palette.main";
 import type {
   CommandPaletteCommands,
   CommandPaletteEvents,
 } from "../features/command-palette/command-palette.shared";
-import { register as registerContextMenu } from "../features/context-menu/context-menu.main";
+import contextMenu from "../features/context-menu/context-menu.main";
 import type {
   ContextMenuCommands,
   ContextMenuEvents,
 } from "../features/context-menu/context-menu.shared";
-import { register as registerDevTools } from "../features/dev-tools/dev-tools.main";
+import devTools from "../features/dev-tools/dev-tools.main";
 import type { DevToolsCommands, DevToolsEvents } from "../features/dev-tools/dev-tools.shared";
-import {
-  register as registerDomainCss,
-  start as startDomainCss,
-} from "../features/domain-css/domain-css.main";
+import domainCss from "../features/domain-css/domain-css.main";
 import type { DomainCssCommands, DomainCssEvents } from "../features/domain-css/domain-css.shared";
-import {
-  register as registerDownloads,
-  start as startDownloads,
-} from "../features/downloads/downloads.main";
+import downloads from "../features/downloads/downloads.main";
 import type { DownloadsCommands, DownloadsEvents } from "../features/downloads/downloads.shared";
-import { register as registerDragDrop } from "../features/drag-drop/drag-drop.main";
-import {
-  DRAG_DROP_OPEN_FILES,
-  type DragDropCommands,
-  type DragDropEvents,
-} from "../features/drag-drop/drag-drop.shared";
-import { register as registerFindText } from "../features/find-text/find-text.main";
+import findText from "../features/find-text/find-text.main";
 import type { FindTextCommands, FindTextEvents } from "../features/find-text/find-text.shared";
-import {
-  register as registerFolders,
-  start as startFolders,
-} from "../features/folders/folders.main";
+import folders from "../features/folders/folders.main";
+import { start as startFolders } from "../features/folders/folders.main";
 import type { FoldersCommands, FoldersEvents } from "../features/folders/folders.shared";
-import {
-  register as registerInstaller,
-  start as startInstaller,
-} from "../features/installer/installer.main";
+import installer from "../features/installer/installer.main";
 import type { InstallerCommands, InstallerEvents } from "../features/installer/installer.shared";
-import {
-  register as registerLocalWebApp,
-  start as startLocalWebApp,
-  stopAll as stopAllLocalWebApps,
-} from "../features/local-web-app/local-web-app.main";
+import localWebApp from "../features/local-web-app/local-web-app.main";
+import { start as startLocalWebApp } from "../features/local-web-app/local-web-app.main";
 import type {
   LocalWebAppCommands,
   LocalWebAppEvents,
 } from "../features/local-web-app/local-web-app.shared";
-import {
-  register as registerPinnedTabs,
-  start as startPinnedTabs,
-} from "../features/pinned-tabs/pinned-tabs.main";
+import pinnedTabs from "../features/pinned-tabs/pinned-tabs.main";
+import { start as startPinnedTabs } from "../features/pinned-tabs/pinned-tabs.main";
 import type {
   PinnedTabsCommands,
   PinnedTabsEvents,
 } from "../features/pinned-tabs/pinned-tabs.shared";
-import {
-  register as registerSettings,
-  start as startSettings,
-} from "../features/settings/settings.main";
+import settings from "../features/settings/settings.main";
 import type { SettingsCommands, SettingsEvents } from "../features/settings/settings.shared";
-import {
-  register as registerSidebar,
-  start as startSidebar,
-} from "../features/sidebar/sidebar.main";
+import sidebar from "../features/sidebar/sidebar.main";
 import type { SidebarCommands, SidebarEvents } from "../features/sidebar/sidebar.shared";
-import {
-  register as registerTabCustomization,
-  start as startTabCustomization,
-} from "../features/tab-customization/tab-customization.main";
+import tabCustomization from "../features/tab-customization/tab-customization.main";
+import { start as startTabCustomization } from "../features/tab-customization/tab-customization.main";
 import type {
   TabCustomizationCommands,
   TabCustomizationEvents,
 } from "../features/tab-customization/tab-customization.shared";
-import { register as registerTabs, start as startTabs } from "../features/tabs/tabs.main";
-import { getAllTabs, getTab } from "../features/tabs/tabs.main";
+import tabs from "../features/tabs/tabs.main";
+import { getAllTabs, getTab, start as startTabs } from "../features/tabs/tabs.main";
 import type { TabsCommands, TabsEvents } from "../features/tabs/tabs.shared";
-import {
-  register as registerTerminal,
-  start as startTerminal,
-} from "../features/terminal/terminal.main";
+import terminal from "../features/terminal/terminal.main";
 import type { TerminalCommands, TerminalEvents } from "../features/terminal/terminal.shared";
-import { register as registerTooltip } from "../features/tooltip/tooltip.main";
+import tooltip from "../features/tooltip/tooltip.main";
 import type { TooltipCommands, TooltipEvents } from "../features/tooltip/tooltip.shared";
-import {
-  register as registerWindowChrome,
-  start as startWindowChrome,
-} from "../features/window-chrome/window-chrome.main";
+import windowChrome from "../features/window-chrome/window-chrome.main";
 import type {
   WindowChromeCommands,
   WindowChromeEvents,
 } from "../features/window-chrome/window-chrome.shared";
-import {
-  register as registerWorkspaces,
-  start as startWorkspaces,
-} from "../features/workspaces/workspaces.main";
+import workspaces from "../features/workspaces/workspaces.main";
+import { start as startWorkspaces } from "../features/workspaces/workspaces.main";
 import type {
   WorkspacesCommands,
   WorkspacesEvents,
 } from "../features/workspaces/workspaces.shared";
-import { register as registerZoom } from "../features/zoom/zoom.main";
+import zoom from "../features/zoom/zoom.main";
 import type { ZoomCommands, ZoomEvents } from "../features/zoom/zoom.shared";
 import { ElectronPlatform } from "../platform/electron";
-import { enableNativeFileDrop } from "../platform/native-drop-win32";
 import type { TabId, WindowId, WorkspaceId } from "../shared/types";
 
 // Log uncaught exceptions to stderr for debugging
@@ -151,7 +105,6 @@ type AllCommands = MergeRegistries<
     ZoomCommands,
     DevToolsCommands,
     DomainCssCommands,
-    DragDropCommands,
     DownloadsCommands,
     FindTextCommands,
     TabCustomizationCommands,
@@ -177,7 +130,6 @@ type AllEvents = MergeRegistries<
     ZoomEvents,
     DevToolsEvents,
     DomainCssEvents,
-    DragDropEvents,
     DownloadsEvents,
     FindTextEvents,
     TabCustomizationEvents,
@@ -237,7 +189,7 @@ function createWindow(windowBounds?: {
     boundsTimer = setTimeout(() => {
       if (win.isDestroyed()) return;
       if (!win.isMaximized() && !win.isMinimized()) {
-        onWindowBoundsChanged(win.getBounds(), dataStore);
+        onWindowBoundsChanged(win.getBounds());
       }
     }, 200);
   };
@@ -273,49 +225,56 @@ app.whenReady().then(async () => {
   await dataStore.initialize();
 
   // Phase 1: register all command handlers
-  registerAppState(deps);
-  registerWindowChrome(deps);
-  registerTabs(deps);
-  registerWorkspaces(deps);
-  registerPinnedTabs(deps);
-  registerSidebar(deps);
-  registerCommandPalette(deps);
-  registerSettings(deps);
-  registerTooltip(deps);
-  registerContextMenu(deps);
-  registerFolders(deps);
-  registerZoom(deps);
-  registerDevTools(deps);
-  registerDomainCss({
-    ...deps,
-    dataDir,
-    getTabsSnapshot: getAllTabs,
-  });
-  registerDragDrop(deps);
-  registerDownloads(deps);
-  registerFindText(deps);
-  registerTabCustomization({ ...deps, getTab });
-  registerTerminal(deps);
-  registerLocalWebApp(deps);
-  registerInstaller(deps);
+  appState.register(deps);
+  windowChrome.register(deps);
+  tabs.register(deps);
+  workspaces.register(deps);
+  pinnedTabs.register(deps);
+  sidebar.register(deps);
+  commandPalette.register(deps);
+  settings.register(deps);
+  tooltip.register(deps);
+  contextMenu.register(deps);
+  folders.register(deps);
+  zoom.register(deps);
+  devTools.register(deps);
+  domainCss.register({ ...deps, dataDir, getTabsSnapshot: getAllTabs });
+  downloads.register(deps);
+  findText.register(deps);
+  tabCustomization.register({ ...deps, getTab });
+  terminal.register(deps);
+  localWebApp.register(deps);
+  installer.register(deps);
 
   // Load persisted layout state before creating the window
   const getDisplayBounds = () => screen.getAllDisplays().map((d) => d.workArea);
-  const appState = await loadPersistedState(dataStore, getDisplayBounds);
+  const appStateData = await loadPersistedState(dataStore, getDisplayBounds);
 
   // Bridge bus to IPC (once, before any window creation)
   bridgeBusToIpc(commands, events, () => BrowserWindow.getAllWindows());
 
-  const win = createWindow(appState.windowBounds);
+  // Phase 2: wait for renderer subscriptions, then emit initial state.
+  // Register BEFORE createWindow — the renderer sends "renderer:ready" at
+  // module-import time, so registering after risks losing the signal.
+  ipcMain.once("renderer:ready", async () => {
+    appState.start?.(deps);
+    await startWorkspaces(deps);
+    windowChrome.start?.(deps);
+    await installer.start?.(deps);
+    await startTabs(deps);
+    await startPinnedTabs(deps);
+    sidebar.start?.(deps);
+    await startFolders(deps);
+    await settings.start?.(deps);
+    await domainCss.start?.({ ...deps, dataDir, getTabsSnapshot: getAllTabs });
+    downloads.start?.(deps);
+    await startTabCustomization({ ...deps, getTab });
+    terminal.start?.(deps);
+    await startLocalWebApp(deps);
+  });
 
-  // Use Win32 DragAcceptFiles + WM_DROPFILES for native file drop.
-  // backgroundMaterial: "acrylic" blocks Chromium's OLE drag pipeline,
-  // so we bypass it via the older shell32 drop mechanism.
-  if (process.platform === "win32") {
-    enableNativeFileDrop(win, (filePaths) => {
-      commands.send(DRAG_DROP_OPEN_FILES, { filePaths }).catch(console.error);
-    });
-  }
+  const win = createWindow(appStateData.windowBounds);
+
   if (activeWindowId && process.env.NODE_ENV !== "test") {
     platform.initTooltipOverlay(activeWindowId);
     platform.initContextMenuOverlay(activeWindowId);
@@ -333,29 +292,6 @@ app.whenReady().then(async () => {
     }, 100);
   });
 
-  // Phase 2: wait for renderer subscriptions, then emit initial state
-  ipcMain.once("renderer:ready", async () => {
-    startAppState(deps);
-    await startWorkspaces(deps);
-    startWindowChrome(deps);
-    await startInstaller(deps);
-    const restoredTabs = await startTabs(deps);
-    await startPinnedTabs(deps, restoredTabs);
-    startSidebar(deps);
-    await startFolders(deps);
-    await startCommandPalette(deps);
-    await startSettings(deps);
-    await startDomainCss({
-      ...deps,
-      dataDir,
-      getTabsSnapshot: getAllTabs,
-    });
-    startDownloads(deps);
-    await startTabCustomization({ ...deps, getTab }, restoredTabs);
-    startTerminal(deps);
-    await startLocalWebApp(deps, restoredTabs);
-  });
-
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
@@ -365,7 +301,8 @@ app.whenReady().then(async () => {
 
 app.on("before-quit", () => {
   platform.deactivateShortcuts();
-  stopAllLocalWebApps();
+  localWebApp.teardown?.();
+  installer.teardown?.();
   // Flush app-state immediately before data store teardown
   commands.send("app-state:save", undefined).catch(console.error);
   dataStore.destroy().catch(console.error);

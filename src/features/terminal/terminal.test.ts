@@ -4,7 +4,8 @@ import { EventBus } from "../../bus/event-bus";
 import type { TabId } from "../../shared/types";
 import { createMockPlatform } from "../../test-utils/mock-platform";
 import type { TabsEvents } from "../tabs/tabs.shared";
-import { _reset, register, start } from "./terminal.main";
+import feature from "./terminal.main";
+import { _reset } from "./terminal.main";
 import {
   TERMINAL_CLEAR,
   TERMINAL_CLEARED,
@@ -35,7 +36,7 @@ function setup() {
     getActiveTabId: () => activeTabId.current as TabId | undefined,
   };
 
-  register(deps);
+  feature.register(deps);
 
   return { commands, events, platform, deps, activeTabId };
 }
@@ -173,7 +174,7 @@ describe("terminal feature", () => {
       const handler = vi.fn();
       events.on(TERMINAL_VISIBILITY_CHANGED, handler);
 
-      start(deps);
+      feature.start(deps);
 
       expect(handler).toHaveBeenCalledWith({ visible: false });
     });
@@ -182,7 +183,7 @@ describe("terminal feature", () => {
   describe("keyboard shortcut", () => {
     it("registers local shortcut for ½ key", () => {
       const { platform } = setup();
-      expect(platform.registerShortcut).toHaveBeenCalledWith("½", expect.any(Function));
+      expect(platform.registerShortcut).not.toHaveBeenCalledWith("½", expect.any(Function));
       expect(platform.registerLocalShortcut).toHaveBeenCalledWith("½", expect.any(Function));
     });
   });

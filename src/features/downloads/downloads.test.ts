@@ -3,7 +3,7 @@ import { CommandBus } from "../../bus/command-bus";
 import { EventBus } from "../../bus/event-bus";
 import type { PlatformDownload } from "../../platform/types";
 import { createMockPlatform } from "../../test-utils";
-import { register, start, stop } from "./downloads.main";
+import feature from "./downloads.main";
 import {
   DOWNLOADS_CANCEL,
   DOWNLOADS_COMPLETED,
@@ -88,7 +88,7 @@ function setup() {
     getDesktopPath: vi.fn(() => "/mock/desktop"),
   });
   const deps = { commands, events, platform };
-  register(deps);
+  feature.register(deps);
   return { commands, events, platform, deps };
 }
 
@@ -96,7 +96,8 @@ function simulateDownload(
   mockDl?: ReturnType<typeof createMockDownload>,
 ): ReturnType<typeof createMockDownload> {
   const dl = mockDl ?? createMockDownload();
-  if (!downloadCallback) throw new Error("start() not called — no download callback registered");
+  if (!downloadCallback)
+    throw new Error("feature.start() not called — no download callback registered");
   downloadCallback(dl);
   return dl;
 }
@@ -107,14 +108,14 @@ describe("downloads feature", () => {
   });
 
   afterEach(() => {
-    stop();
+    feature.teardown();
     vi.useRealTimers();
   });
 
   describe("start", () => {
     it("registers onDownload callback", () => {
       const { deps } = setup();
-      start(deps);
+      feature.start(deps);
       expect(deps.platform.onDownload).toHaveBeenCalledOnce();
     });
   });
@@ -122,7 +123,7 @@ describe("downloads feature", () => {
   describe("download lifecycle", () => {
     it("emits started event when download begins", () => {
       const { deps, events } = setup();
-      start(deps);
+      feature.start(deps);
 
       const onStarted = vi.fn();
       events.on(DOWNLOADS_STARTED, onStarted);
@@ -139,7 +140,7 @@ describe("downloads feature", () => {
 
     it("sets save path to desktop", () => {
       const { deps } = setup();
-      start(deps);
+      feature.start(deps);
 
       const dl = simulateDownload();
       expect(dl.setSavePath).toHaveBeenCalledWith("/mock/desktop/test-file.zip");
@@ -147,7 +148,7 @@ describe("downloads feature", () => {
 
     it("emits progress events (throttled)", () => {
       const { deps, events } = setup();
-      start(deps);
+      feature.start(deps);
 
       const onProgress = vi.fn();
       events.on(DOWNLOADS_PROGRESS, onProgress);
@@ -177,7 +178,7 @@ describe("downloads feature", () => {
 
     it("emits completed event when download finishes", () => {
       const { deps, events } = setup();
-      start(deps);
+      feature.start(deps);
 
       const onCompleted = vi.fn();
       events.on(DOWNLOADS_COMPLETED, onCompleted);
@@ -194,7 +195,7 @@ describe("downloads feature", () => {
 
     it("emits completed with cancelled state", () => {
       const { deps, events } = setup();
-      start(deps);
+      feature.start(deps);
 
       const onCompleted = vi.fn();
       events.on(DOWNLOADS_COMPLETED, onCompleted);
@@ -210,7 +211,7 @@ describe("downloads feature", () => {
 
     it("cleans up listeners on done", () => {
       const { deps } = setup();
-      start(deps);
+      feature.start(deps);
 
       const dl = simulateDownload() as PlatformDownload & {
         _emit: (event: string, ...args: unknown[]) => void;
@@ -225,7 +226,7 @@ describe("downloads feature", () => {
   describe("commands", () => {
     it("pause command calls handle.pause() and emits state-changed", async () => {
       const { commands, deps, events } = setup();
-      start(deps);
+      feature.start(deps);
 
       const onStarted = vi.fn();
       const onStateChanged = vi.fn();
@@ -244,7 +245,7 @@ describe("downloads feature", () => {
 
     it("resume command calls handle.resume() and emits state-changed", async () => {
       const { commands, deps, events } = setup();
-      start(deps);
+      feature.start(deps);
 
       const onStarted = vi.fn();
       const onStateChanged = vi.fn();
@@ -263,7 +264,7 @@ describe("downloads feature", () => {
 
     it("cancel command calls handle.cancel()", async () => {
       const { commands, deps, events } = setup();
-      start(deps);
+      feature.start(deps);
 
       const onStarted = vi.fn();
       events.on(DOWNLOADS_STARTED, onStarted);
@@ -277,7 +278,7 @@ describe("downloads feature", () => {
 
     it("commands for unknown downloadId are no-ops", async () => {
       const { commands, deps } = setup();
-      start(deps);
+      feature.start(deps);
 
       // Should not throw
       await commands.send(DOWNLOADS_CANCEL, { downloadId: "nonexistent" });
@@ -287,7 +288,7 @@ describe("downloads feature", () => {
 
     it("cancel does not work after download completes", async () => {
       const { commands, deps, events } = setup();
-      start(deps);
+      feature.start(deps);
 
       const onStarted = vi.fn();
       events.on(DOWNLOADS_STARTED, onStarted);
@@ -309,7 +310,7 @@ describe("downloads feature", () => {
   describe("multiple downloads", () => {
     it("tracks multiple concurrent downloads independently", () => {
       const { deps, events } = setup();
-      start(deps);
+      feature.start(deps);
 
       const onStarted = vi.fn();
       events.on(DOWNLOADS_STARTED, onStarted);

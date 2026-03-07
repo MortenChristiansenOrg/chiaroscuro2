@@ -29,7 +29,7 @@ This is the primary navigation interface — there is no persistent address bar.
 - If the command is a built-in page path (like `/settings`), it must open the corresponding app page.
 - The palette must show suggestions based on navigation history and open tabs as the user types.
 - Search providers must be configurable in settings.
-- The default search provider (no bang) must be configurable, defaulting to DuckDuckGo.
+- The default search provider (no bang) must be configurable, defaulting to Google.
 
 ## Workflows
 

@@ -11,7 +11,8 @@ import {
   TABS_CREATE,
   TABS_UPDATED,
 } from "../tabs/tabs.shared";
-import { register, start } from "./pinned-tabs.main";
+import feature from "./pinned-tabs.main";
+import { start } from "./pinned-tabs.main";
 import {
   PINNED_TABS_ACTIVATE,
   PINNED_TABS_ACTIVE_CHANGED,
@@ -22,10 +23,12 @@ import {
 const WIN_ID = "win-1" as WindowId;
 const TAB_ID = "tab-1" as TabId;
 
-type AllCommands = Parameters<typeof register>[0] extends { commands: CommandBus<infer C> }
+type AllCommands = Parameters<typeof feature.register>[0] extends { commands: CommandBus<infer C> }
   ? C
   : never;
-type AllEvents = Parameters<typeof register>[0] extends { events: EventBus<infer E> } ? E : never;
+type AllEvents = Parameters<typeof feature.register>[0] extends { events: EventBus<infer E> }
+  ? E
+  : never;
 
 function setup(overrides: { activeTabId?: TabId | null } = {}) {
   const commands = new CommandBus<AllCommands>();
@@ -53,7 +56,7 @@ function setup(overrides: { activeTabId?: TabId | null } = {}) {
     setActiveTabId: () => {},
     getActiveWorkspaceId: () => "ws-1" as WorkspaceId | undefined,
   };
-  register(deps);
+  feature.register(deps);
   return { commands, events, platform, dataStore, deps };
 }
 
@@ -166,11 +169,11 @@ describe("pinned-tabs commands", () => {
 });
 
 describe("start()", () => {
-  it("restores pinned tabs using idMap", async () => {
+  it("restores pinned tabs with persisted IDs", async () => {
     const dataStore = new MemoryDataStore();
     const pinnedColl = dataStore.collection("pinned-tabs");
     await pinnedColl.insert({
-      id: "old-tab",
+      id: "tab-pinned",
       url: "https://example.com",
       title: "Example",
       favicon: "",
@@ -197,61 +200,17 @@ describe("start()", () => {
       setActiveTabId: () => {},
       getActiveWorkspaceId: () => "ws-1" as WorkspaceId | undefined,
     };
-    register(deps);
+    feature.register(deps);
 
     const changed = vi.fn();
     events.on(PINNED_TABS_CHANGED, changed);
 
-    const idMap = new Map<TabId, TabId>([["old-tab" as TabId, "new-tab" as TabId]]);
-    const urlMap = new Map<string, TabId>([["https://example.com", "new-tab" as TabId]]);
-    await start(deps, { idMap, urlMap });
+    await start(deps);
 
     expect(changed).toHaveBeenCalledWith(
       expect.objectContaining({
-        pinnedTabs: expect.arrayContaining([expect.objectContaining({ id: "new-tab" })]),
+        pinnedTabs: expect.arrayContaining([expect.objectContaining({ id: "tab-pinned" })]),
       }),
     );
-  });
-
-  it("skips stale pinned entries with no matching restored tab", async () => {
-    const dataStore = new MemoryDataStore();
-    const pinnedColl = dataStore.collection("pinned-tabs");
-    await pinnedColl.insert({
-      id: "old-tab",
-      url: "https://gone.com",
-      title: "Gone",
-      favicon: "",
-      order: 0,
-    });
-
-    const commands = new CommandBus<AllCommands>();
-    const events = new EventBus<AllEvents>();
-    const platform = createMockPlatform();
-    commands.handle(TABS_ACTIVATE, async () => {});
-    commands.handle(TABS_CLOSE, async () => {});
-    commands.handle(TABS_CREATE, async () => "new-tab" as TabId);
-
-    const deps = {
-      commands,
-      events,
-      platform,
-      dataStore,
-      getActiveWindowId: () => WIN_ID as WindowId | undefined,
-      getActiveTabId: () => undefined as TabId | undefined,
-      setActiveTabId: () => {},
-      getActiveWorkspaceId: () => "ws-1" as WorkspaceId | undefined,
-    };
-    register(deps);
-
-    const changed = vi.fn();
-    events.on(PINNED_TABS_CHANGED, changed);
-
-    // Empty maps — no restored tabs
-    const idMap = new Map<TabId, TabId>();
-    const urlMap = new Map<string, TabId>();
-    await start(deps, { idMap, urlMap });
-
-    // No pinned tabs restored → no CHANGED event
-    expect(changed).not.toHaveBeenCalled();
   });
 });

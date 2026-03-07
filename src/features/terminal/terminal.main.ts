@@ -1,6 +1,7 @@
 import type { CommandBus } from "../../bus/command-bus";
 import type { EventBus } from "../../bus/event-bus";
 import type { Platform } from "../../platform/types";
+import { defineFeature } from "../../shared/define-feature";
 import type { TabId } from "../../shared/types";
 import type { TabsEvents } from "../tabs/tabs.shared";
 import { TABS_ACTIVATED, TABS_CLOSED } from "../tabs/tabs.shared";
@@ -36,73 +37,75 @@ interface Deps {
 const buffers = new Map<TabId, TerminalLine[]>();
 let visible = false;
 
-export function register(deps: Deps): void {
-  const { commands, events, platform, getActiveTabId } = deps;
+export default defineFeature<Deps>({
+  register(deps) {
+    const { commands, events, platform, getActiveTabId } = deps;
 
-  commands.handle(TERMINAL_TOGGLE, async () => {
-    visible = !visible;
-    // When terminal is open, remove bottom border radius from WCV
-    const tabId = getActiveTabId();
-    if (tabId) {
-      platform.setTabBorderRadius(tabId, visible ? 0 : 8);
-    }
-    events.emit(TERMINAL_VISIBILITY_CHANGED, { visible });
-  });
+    commands.handle(TERMINAL_TOGGLE, async () => {
+      visible = !visible;
+      // When terminal is open, remove bottom border radius from WCV
+      const tabId = getActiveTabId();
+      if (tabId) {
+        platform.setTabBorderRadius(tabId, visible ? 0 : 8);
+      }
+      events.emit(TERMINAL_VISIBILITY_CHANGED, { visible });
+    });
 
-  commands.handle(TERMINAL_CLEAR, async () => {
-    const tabId = getActiveTabId();
-    if (!tabId) return;
-    buffers.delete(tabId);
-    events.emit(TERMINAL_CLEARED, { tabId });
-  });
+    commands.handle(TERMINAL_CLEAR, async () => {
+      const tabId = getActiveTabId();
+      if (!tabId) return;
+      buffers.delete(tabId);
+      events.emit(TERMINAL_CLEARED, { tabId });
+    });
 
-  commands.handle(TERMINAL_WRITE, async ({ tabId, data, type }) => {
-    let buffer = buffers.get(tabId);
-    if (!buffer) {
-      buffer = [];
-      buffers.set(tabId, buffer);
-    }
+    commands.handle(TERMINAL_WRITE, async ({ tabId, data, type }) => {
+      let buffer = buffers.get(tabId);
+      if (!buffer) {
+        buffer = [];
+        buffers.set(tabId, buffer);
+      }
 
-    // Split data into lines, add each
-    const lines = data.split("\n");
-    for (const [i, text] of lines.entries()) {
-      // Skip only the trailing empty string from split (e.g., "foo\n" → ["foo", ""])
-      if (text.length === 0 && i === lines.length - 1) continue;
-      const line: TerminalLine = { id: crypto.randomUUID(), text: stripAnsi(text), type };
-      buffer.push(line);
-      events.emit(TERMINAL_OUTPUT, { tabId, line });
-    }
+      // Split data into lines, add each
+      const lines = data.split("\n");
+      for (const [i, text] of lines.entries()) {
+        // Skip only the trailing empty string from split (e.g., "foo\n" → ["foo", ""])
+        if (text.length === 0 && i === lines.length - 1) continue;
+        const line: TerminalLine = { id: crypto.randomUUID(), text: stripAnsi(text), type };
+        buffer.push(line);
+        events.emit(TERMINAL_OUTPUT, { tabId, line });
+      }
 
-    // Trim to max
-    if (buffer.length > MAX_LINES) {
-      buffer.splice(0, buffer.length - MAX_LINES);
-    }
-  });
+      // Trim to max
+      if (buffer.length > MAX_LINES) {
+        buffer.splice(0, buffer.length - MAX_LINES);
+      }
+    });
 
-  // Set border radius when tab activates (0 if terminal visible, 8 otherwise)
-  events.on(TABS_ACTIVATED, ({ tabId }) => {
-    if (tabId) {
-      platform.setTabBorderRadius(tabId, visible ? 0 : 8);
-    }
-  });
+    // Set border radius when tab activates (0 if terminal visible, 8 otherwise)
+    events.on(TABS_ACTIVATED, ({ tabId }) => {
+      if (tabId) {
+        platform.setTabBorderRadius(tabId, visible ? 0 : 8);
+      }
+    });
 
-  // Clean up buffer when tab closes
-  events.on(TABS_CLOSED, ({ tabId }) => {
-    buffers.delete(tabId);
-  });
+    // Clean up buffer when tab closes
+    events.on(TABS_CLOSED, ({ tabId }) => {
+      buffers.delete(tabId);
+    });
 
-  // Register keyboard shortcut for ½ key (the key left of 1 on Nordic keyboards)
-  const toggleTerminal = () => {
-    commands.send(TERMINAL_TOGGLE, undefined).catch(console.error);
-  };
-  platform.registerShortcut("½", toggleTerminal);
-  platform.registerLocalShortcut("½", toggleTerminal);
-}
+    // Register keyboard shortcut for ½ key (the key left of 1 on Nordic keyboards)
+    const toggleTerminal = () => {
+      commands.send(TERMINAL_TOGGLE, undefined).catch(console.error);
+    };
+    // ½ is non-ASCII — only works as a local shortcut (before-input-event),
+    // globalShortcut rejects non-ASCII accelerators.
+    platform.registerLocalShortcut("½", toggleTerminal);
+  },
 
-export function start(_deps: Deps): void {
-  // Emit initial visibility state
-  _deps.events.emit(TERMINAL_VISIBILITY_CHANGED, { visible });
-}
+  start(deps) {
+    deps.events.emit(TERMINAL_VISIBILITY_CHANGED, { visible });
+  },
+});
 
 /** Get the buffer for a tab (used by tests). */
 export function getBuffer(tabId: TabId): TerminalLine[] | undefined {

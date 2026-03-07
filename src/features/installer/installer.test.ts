@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CommandBus } from "../../bus/command-bus";
 import { EventBus } from "../../bus/event-bus";
 import { createMockPlatform } from "../../test-utils";
-import { register, start, stop } from "./installer.main";
+import feature from "./installer.main";
 import {
   INSTALLER_ALLOW_PROTOCOL,
   INSTALLER_APPLY_UPDATE,
@@ -87,7 +87,7 @@ function setup(overrides: { isDev?: boolean } = {}) {
     dataStore,
     isDev: overrides.isDev ?? true,
   };
-  register(deps);
+  feature.register(deps);
   return { commands, events, platform, dataStore, deps };
 }
 
@@ -97,7 +97,7 @@ describe("installer feature", () => {
   });
 
   afterEach(async () => {
-    stop();
+    feature.teardown();
     const { autoUpdater } = await import("electron-updater");
     // biome-ignore lint/suspicious/noExplicitAny: test mock helper
     (autoUpdater as any)._reset?.();
@@ -108,13 +108,13 @@ describe("installer feature", () => {
   describe("protocol handling", () => {
     it("registers onProtocolRequest callback on start", async () => {
       const { deps } = setup();
-      await start(deps);
+      await feature.start(deps);
       expect(deps.platform.onProtocolRequest).toHaveBeenCalledOnce();
     });
 
     it("emits protocol-launch-requested for unknown protocol+origin", async () => {
       const { deps, events } = setup();
-      await start(deps);
+      await feature.start(deps);
 
       const onRequested = vi.fn();
       events.on(INSTALLER_PROTOCOL_LAUNCH_REQUESTED, onRequested);
@@ -135,7 +135,7 @@ describe("installer feature", () => {
         { protocol: "slack", origin: "https://example.com" },
       ]);
 
-      await start(deps);
+      await feature.start(deps);
 
       protocolCallback?.("slack://open/channel", "https://example.com");
 
@@ -148,7 +148,7 @@ describe("installer feature", () => {
         { protocol: "slack", origin: "https://trusted.com" },
       ]);
 
-      await start(deps);
+      await feature.start(deps);
 
       const onRequested = vi.fn();
       events.on(INSTALLER_PROTOCOL_LAUNCH_REQUESTED, onRequested);
@@ -161,7 +161,7 @@ describe("installer feature", () => {
 
     it("allow-protocol command opens external using stored pending request", async () => {
       const { commands, deps, events, dataStore, platform } = setup();
-      await start(deps);
+      await feature.start(deps);
 
       // Trigger a protocol request to create a pending entry
       const onRequested = vi.fn();
@@ -180,7 +180,7 @@ describe("installer feature", () => {
 
     it("allow-protocol command opens external without persisting if always=false", async () => {
       const { commands, deps, events, dataStore, platform } = setup();
-      await start(deps);
+      await feature.start(deps);
 
       const onRequested = vi.fn();
       events.on(INSTALLER_PROTOCOL_LAUNCH_REQUESTED, onRequested);
@@ -195,7 +195,7 @@ describe("installer feature", () => {
 
     it("allow-protocol ignores unknown requestId", async () => {
       const { commands, deps, platform } = setup();
-      await start(deps);
+      await feature.start(deps);
 
       await commands.send(INSTALLER_ALLOW_PROTOCOL, { requestId: "bogus", always: false });
 
@@ -204,7 +204,7 @@ describe("installer feature", () => {
 
     it("deny-protocol clears pending request", async () => {
       const { commands, deps, events, platform } = setup();
-      await start(deps);
+      await feature.start(deps);
 
       const onRequested = vi.fn();
       events.on(INSTALLER_PROTOCOL_LAUNCH_REQUESTED, onRequested);
@@ -222,7 +222,7 @@ describe("installer feature", () => {
   describe("dismiss update", () => {
     it("emits update-dismissed event", async () => {
       const { commands, deps, events } = setup();
-      await start(deps);
+      await feature.start(deps);
 
       const onDismissed = vi.fn();
       events.on(INSTALLER_UPDATE_DISMISSED, onDismissed);
@@ -236,7 +236,7 @@ describe("installer feature", () => {
   describe("auto-updater", () => {
     it("skips auto-updater in dev mode", async () => {
       const { deps } = setup({ isDev: true });
-      await start(deps);
+      await feature.start(deps);
 
       const { autoUpdater } = await import("electron-updater");
       expect(autoUpdater.on).not.toHaveBeenCalled();
@@ -244,7 +244,7 @@ describe("installer feature", () => {
 
     it("triggers download when update is available", async () => {
       const { deps } = setup({ isDev: false });
-      await start(deps);
+      await feature.start(deps);
 
       const { autoUpdater } = await import("electron-updater");
       // biome-ignore lint/suspicious/noExplicitAny: test mock helper
@@ -255,7 +255,7 @@ describe("installer feature", () => {
 
     it("schedules initial check after delay", async () => {
       const { deps } = setup({ isDev: false });
-      await start(deps);
+      await feature.start(deps);
 
       const { autoUpdater } = await import("electron-updater");
       expect(autoUpdater.checkForUpdates).not.toHaveBeenCalled();
@@ -268,7 +268,7 @@ describe("installer feature", () => {
   describe("auto-updater commands", () => {
     it("check-for-updates command calls autoUpdater.checkForUpdates", async () => {
       const { commands, deps } = setup({ isDev: false });
-      await start(deps);
+      await feature.start(deps);
 
       const { autoUpdater } = await import("electron-updater");
       await commands.send(INSTALLER_CHECK_FOR_UPDATES, undefined);
@@ -278,7 +278,7 @@ describe("installer feature", () => {
 
     it("check-for-updates emits error event on failure via error listener", async () => {
       const { deps, events } = setup({ isDev: false });
-      await start(deps);
+      await feature.start(deps);
 
       const { autoUpdater } = await import("electron-updater");
 
@@ -295,7 +295,7 @@ describe("installer feature", () => {
 
     it("check-for-updates emits error if auto-updater not initialized", async () => {
       const { commands, deps, events } = setup({ isDev: true });
-      await start(deps); // isDev=true skips auto-updater init
+      await feature.start(deps); // isDev=true skips auto-updater init
 
       const onError = vi.fn();
       events.on(INSTALLER_UPDATE_ERROR, onError);
@@ -310,7 +310,7 @@ describe("installer feature", () => {
 
     it("apply-update command calls autoUpdater.quitAndInstall", async () => {
       const { commands, deps } = setup({ isDev: false });
-      await start(deps);
+      await feature.start(deps);
 
       const { autoUpdater } = await import("electron-updater");
       await commands.send(INSTALLER_APPLY_UPDATE, undefined);
@@ -320,12 +320,12 @@ describe("installer feature", () => {
   });
 
   describe("cleanup", () => {
-    it("stop() cleans up protocol listener", async () => {
+    it("feature.teardown() cleans up protocol listener", async () => {
       const { deps } = setup();
-      await start(deps);
+      await feature.start(deps);
 
       expect(protocolCallback).toBeDefined();
-      stop();
+      feature.teardown();
       expect(protocolCallback).toBeUndefined();
     });
   });

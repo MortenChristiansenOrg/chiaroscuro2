@@ -5,7 +5,7 @@ import { MemoryDataStore } from "../../data/memory-store";
 import type { TabId, WorkspaceId } from "../../shared/types";
 import { DEFAULT_PROVIDERS } from "../command-palette/resolve-input";
 import type { TabsClosedEvent, TabsCommands, TabsEvents } from "../tabs/tabs.shared";
-import { register, start } from "./settings.main";
+import feature from "./settings.main";
 import {
   SETTINGS_CHANGED,
   SETTINGS_GET,
@@ -39,7 +39,7 @@ function setup() {
   });
   commands.handle("tabs:activate", async () => {});
 
-  register(deps);
+  feature.register(deps);
   return { commands, events, dataStore, deps };
 }
 
@@ -149,7 +149,7 @@ describe("settings commands", () => {
     });
   });
 
-  describe("start()", () => {
+  describe("feature.start()", () => {
     it("loads persisted settings and emits SETTINGS_CHANGED", async () => {
       const { events, deps, dataStore } = setup();
       const providers = [
@@ -166,7 +166,7 @@ describe("settings commands", () => {
       const listener = vi.fn();
       events.on(SETTINGS_CHANGED, listener);
 
-      await start(deps);
+      await feature.start(deps);
 
       expect(listener).toHaveBeenCalledWith({
         settings: expect.objectContaining({
@@ -181,7 +181,7 @@ describe("settings commands", () => {
       const listener = vi.fn();
       events.on(SETTINGS_CHANGED, listener);
 
-      await start(deps);
+      await feature.start(deps);
 
       const emitted = listener.mock.calls[0][0] as SettingsChangedEvent;
       expect(emitted.settings.searchProviders).toEqual(DEFAULT_PROVIDERS);

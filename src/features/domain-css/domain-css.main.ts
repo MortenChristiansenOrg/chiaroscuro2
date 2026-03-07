@@ -4,6 +4,8 @@ import type { CommandBus } from "../../bus/command-bus";
 import type { EventBus } from "../../bus/event-bus";
 import type { DataStore } from "../../data/types";
 import type { Platform } from "../../platform/types";
+import { defineFeature } from "../../shared/define-feature";
+import { SingletonTabMap } from "../../shared/singleton-tab";
 import type { TabId } from "../../shared/types";
 import type { Tab, TabsCommands, TabsEvents } from "../tabs/tabs.shared";
 import { TABS_CLOSED, TABS_UPDATED } from "../tabs/tabs.shared";
@@ -36,9 +38,6 @@ interface DomainState {
 
 // Track CSS keys injected per tab for removal
 const injectedCssKeys = new Map<TabId, string>();
-
-// Track singleton built-in tabs per domain
-const domainTabIds = new Map<string, TabId>();
 
 // Per-domain state (enabled/disabled)
 let domainStates = new Map<string, DomainState>();
@@ -190,169 +189,155 @@ async function persistStates(): Promise<void> {
   }
 }
 
-export function register(d: DomainCssDeps): void {
-  deps = d;
-  cssDir = path.join(d.dataDir, "domain-css");
-  domainStates = new Map();
-  injectedCssKeys.clear();
-  domainTabIds.clear();
-  for (const w of watchers.values()) w.close();
-  watchers.clear();
+export default defineFeature<DomainCssDeps>({
+  register(d) {
+    deps = d;
+    cssDir = path.join(d.dataDir, "domain-css");
+    domainStates = new Map();
+    injectedCssKeys.clear();
+    for (const w of watchers.values()) w.close();
+    watchers.clear();
 
-  // Clean up singleton tracking when tab closes
-  d.events.on(TABS_CLOSED, (payload) => {
-    const { tabId } = payload;
-    for (const [domain, id] of domainTabIds) {
-      if (id === tabId) {
-        domainTabIds.delete(domain);
-        break;
-      }
-    }
-    // Also clean up any injected CSS tracking
-    injectedCssKeys.delete(tabId);
-  });
-
-  // When a tab navigates, inject/remove CSS for the new domain
-  d.events.on(TABS_UPDATED, (payload) => {
-    const { tab } = payload;
-    if (tab.builtIn) return;
-
-    const domain = getDomainFromUrl(tab.url);
-    if (!domain) {
-      removeCssFromTab(tab.id).catch(console.error);
-      return;
-    }
-
-    const state = domainStates.get(domain);
-    if (state?.enabled) {
-      injectCssForTab(tab.id, domain).catch(console.error);
-    } else {
-      removeCssFromTab(tab.id).catch(console.error);
-    }
-  });
-
-  // ── Commands ──────────────────────────────────────────────────
-
-  d.commands.handle(DOMAIN_CSS_OPEN, async (payload) => {
-    const { domain } = payload;
-    const existingTabId = domainTabIds.get(domain);
-
-    if (existingTabId) {
-      try {
-        await d.commands.send("tabs:activate", { tabId: existingTabId });
-        return existingTabId;
-      } catch {
-        domainTabIds.delete(domain);
-      }
-    }
-
-    const tabId = await d.commands.send("tabs:create", {
-      url: `app:domain-css?domain=${encodeURIComponent(domain)}`,
+    const domainTabs = new SingletonTabMap({
+      activate: (tabId) => d.commands.send("tabs:activate", { tabId }),
+      create: (url) => d.commands.send("tabs:create", { url }),
     });
-    domainTabIds.set(domain, tabId);
-    return tabId;
-  });
 
-  d.commands.handle(DOMAIN_CSS_GET_STATE, async (payload) => {
-    const { domain } = payload;
-    const state = domainStates.get(domain);
-    return {
-      domain,
-      enabled: state?.enabled ?? false,
-      hasFile: cssFileExists(domain),
-    };
-  });
+    // Clean up singleton + CSS tracking when tab closes
+    d.events.on(TABS_CLOSED, (payload) => {
+      const { tabId } = payload;
+      domainTabs.onClose(tabId);
+      injectedCssKeys.delete(tabId);
+    });
 
-  d.commands.handle(DOMAIN_CSS_TOGGLE, async (payload) => {
-    const { domain } = payload;
-    if (!isValidDomain(domain)) throw new Error(`Invalid domain: ${domain}`);
-    const state = domainStates.get(domain) ?? { enabled: false };
-    state.enabled = !state.enabled;
-    domainStates.set(domain, state);
+    // When a tab navigates, inject/remove CSS for the new domain
+    d.events.on(TABS_UPDATED, (payload) => {
+      const { tab } = payload;
+      if (tab.builtIn) return;
 
-    await persistStates();
-    await injectOrRemoveForAllTabs(domain);
+      const domain = getDomainFromUrl(tab.url);
+      if (!domain) {
+        removeCssFromTab(tab.id).catch(console.error);
+        return;
+      }
 
-    if (state.enabled && cssFileExists(domain)) {
-      startWatching(domain);
-    } else {
-      stopWatching(domain);
-    }
+      const state = domainStates.get(domain);
+      if (state?.enabled) {
+        injectCssForTab(tab.id, domain).catch(console.error);
+      } else {
+        removeCssFromTab(tab.id).catch(console.error);
+      }
+    });
 
-    emitChanged(domain);
-  });
+    // ── Commands ──────────────────────────────────────────────────
 
-  d.commands.handle(DOMAIN_CSS_EDIT, async (payload) => {
-    const { domain } = payload;
-    const filePath = getCssFilePath(domain);
+    d.commands.handle(DOMAIN_CSS_OPEN, async (payload) => {
+      const { domain } = payload;
+      return domainTabs.openOrActivate(
+        domain,
+        `app:domain-css?domain=${encodeURIComponent(domain)}`,
+      );
+    });
 
-    // Ensure CSS directory exists
-    fs.mkdirSync(cssDir, { recursive: true });
+    d.commands.handle(DOMAIN_CSS_GET_STATE, async (payload) => {
+      const { domain } = payload;
+      const state = domainStates.get(domain);
+      return {
+        domain,
+        enabled: state?.enabled ?? false,
+        hasFile: cssFileExists(domain),
+      };
+    });
 
-    // Create empty file if it doesn't exist
-    if (!fs.existsSync(filePath)) {
-      fs.writeFileSync(filePath, `/* Custom CSS for ${domain} */\n`);
-    }
-
-    // Auto-enable CSS
-    const state = domainStates.get(domain) ?? { enabled: false };
-    if (!state.enabled) {
-      state.enabled = true;
+    d.commands.handle(DOMAIN_CSS_TOGGLE, async (payload) => {
+      const { domain } = payload;
+      if (!isValidDomain(domain)) throw new Error(`Invalid domain: ${domain}`);
+      const state = domainStates.get(domain) ?? { enabled: false };
+      state.enabled = !state.enabled;
       domainStates.set(domain, state);
+
       await persistStates();
       await injectOrRemoveForAllTabs(domain);
-    }
 
-    startWatching(domain);
-    emitChanged(domain);
-
-    // Open in system editor
-    await deps.platform.openPath(filePath);
-  });
-
-  d.commands.handle(DOMAIN_CSS_REMOVE, async (payload) => {
-    const { domain } = payload;
-    const filePath = getCssFilePath(domain);
-
-    stopWatching(domain);
-
-    // Remove injected CSS from all tabs
-    const state = domainStates.get(domain);
-    if (state) {
-      state.enabled = false;
-      await persistStates();
-    }
-    await injectOrRemoveForAllTabs(domain);
-
-    // Delete file
-    try {
-      fs.unlinkSync(filePath);
-    } catch {
-      // File may not exist
-    }
-
-    domainStates.delete(domain);
-    await persistStates();
-    emitChanged(domain);
-  });
-}
-
-export async function start(d: DomainCssDeps): Promise<void> {
-  // Ensure CSS directory exists
-  fs.mkdirSync(cssDir, { recursive: true });
-
-  // Load persisted states
-  const stored = await d.dataStore.getSetting<Record<string, DomainState>>("domain-css-states");
-  if (stored) {
-    for (const [domain, state] of Object.entries(stored)) {
-      if (!isValidDomain(domain)) {
-        console.error("Skipping invalid persisted domain CSS state", domain);
-        continue;
-      }
-      domainStates.set(domain, state);
       if (state.enabled && cssFileExists(domain)) {
         startWatching(domain);
+      } else {
+        stopWatching(domain);
+      }
+
+      emitChanged(domain);
+    });
+
+    d.commands.handle(DOMAIN_CSS_EDIT, async (payload) => {
+      const { domain } = payload;
+      const filePath = getCssFilePath(domain);
+
+      // Ensure CSS directory exists
+      fs.mkdirSync(cssDir, { recursive: true });
+
+      // Create empty file if it doesn't exist
+      if (!fs.existsSync(filePath)) {
+        fs.writeFileSync(filePath, `/* Custom CSS for ${domain} */\n`);
+      }
+
+      // Auto-enable CSS
+      const state = domainStates.get(domain) ?? { enabled: false };
+      if (!state.enabled) {
+        state.enabled = true;
+        domainStates.set(domain, state);
+        await persistStates();
+        await injectOrRemoveForAllTabs(domain);
+      }
+
+      startWatching(domain);
+      emitChanged(domain);
+
+      // Open in system editor
+      await deps.platform.openPath(filePath);
+    });
+
+    d.commands.handle(DOMAIN_CSS_REMOVE, async (payload) => {
+      const { domain } = payload;
+      const filePath = getCssFilePath(domain);
+
+      stopWatching(domain);
+
+      // Remove injected CSS from all tabs
+      const state = domainStates.get(domain);
+      if (state) {
+        state.enabled = false;
+        await persistStates();
+      }
+      await injectOrRemoveForAllTabs(domain);
+
+      // Delete file
+      try {
+        fs.unlinkSync(filePath);
+      } catch {
+        // File may not exist
+      }
+
+      domainStates.delete(domain);
+      await persistStates();
+      emitChanged(domain);
+    });
+  },
+
+  async start(d) {
+    fs.mkdirSync(cssDir, { recursive: true });
+
+    const stored = await d.dataStore.getSetting<Record<string, DomainState>>("domain-css-states");
+    if (stored) {
+      for (const [domain, state] of Object.entries(stored)) {
+        if (!isValidDomain(domain)) {
+          console.error("Skipping invalid persisted domain CSS state", domain);
+          continue;
+        }
+        domainStates.set(domain, state);
+        if (state.enabled && cssFileExists(domain)) {
+          startWatching(domain);
+        }
       }
     }
-  }
-}
+  },
+});
