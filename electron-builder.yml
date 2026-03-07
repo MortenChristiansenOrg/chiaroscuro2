@@ -25,7 +25,6 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
   artifactName: "${productName}-Setup-${version}.${ext}"
-  disableWebInstaller: true
 
 # File associations
 fileAssociations:
