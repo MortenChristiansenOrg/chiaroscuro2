@@ -228,23 +228,30 @@ describe("installer feature", () => {
     });
   });
 
-  describe("auto-updater (dev mode)", () => {
-    it("does not start auto-update checks in dev mode", async () => {
+  describe("auto-updater", () => {
+    it("skips auto-updater in dev mode", async () => {
       const { deps } = setup({ isDev: true });
       await start(deps);
 
-      vi.advanceTimersByTime(60_000);
+      const { autoUpdater } = await import("electron-updater");
+      expect(autoUpdater.on).not.toHaveBeenCalled();
+    });
 
-      // electron-updater's checkForUpdates should not be called from start()
-      // (only the command handler calls it directly)
+    it("schedules initial check after delay", async () => {
+      const { deps } = setup({ isDev: false });
+      await start(deps);
+
       const { autoUpdater } = await import("electron-updater");
       expect(autoUpdater.checkForUpdates).not.toHaveBeenCalled();
+
+      vi.advanceTimersByTime(3_000);
+      expect(autoUpdater.checkForUpdates).toHaveBeenCalledOnce();
     });
   });
 
   describe("auto-updater commands", () => {
     it("check-for-updates command calls autoUpdater.checkForUpdates", async () => {
-      const { commands, deps } = setup();
+      const { commands, deps } = setup({ isDev: false });
       await start(deps);
 
       const { autoUpdater } = await import("electron-updater");
@@ -254,7 +261,7 @@ describe("installer feature", () => {
     });
 
     it("check-for-updates emits error event on failure", async () => {
-      const { commands, deps, events } = setup();
+      const { commands, deps, events } = setup({ isDev: false });
       await start(deps);
 
       const { autoUpdater } = await import("electron-updater");
@@ -272,7 +279,7 @@ describe("installer feature", () => {
     });
 
     it("apply-update command calls autoUpdater.quitAndInstall", async () => {
-      const { commands, deps } = setup();
+      const { commands, deps } = setup({ isDev: false });
       await start(deps);
 
       const { autoUpdater } = await import("electron-updater");

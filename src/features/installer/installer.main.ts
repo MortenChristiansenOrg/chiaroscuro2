@@ -32,7 +32,7 @@ interface Deps {
 
 const ALLOWED_PROTOCOLS_KEY = "installer:allowed-protocols";
 const CHECK_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
-const INITIAL_CHECK_DELAY_MS = 30_000; // 30 seconds
+const INITIAL_CHECK_DELAY_MS = 3_000;
 const MAX_PENDING_REQUESTS = 64;
 
 interface AllowedProtocolEntry {
@@ -53,6 +53,10 @@ let checkTimer: ReturnType<typeof setInterval> | undefined;
 let initialCheckTimer: ReturnType<typeof setTimeout> | undefined;
 let stopProtocolListener: (() => void) | undefined;
 let stopProtocolAllowedListener: (() => void) | undefined;
+// Shared autoUpdater reference — populated in start(), used by command handlers.
+// Dynamic import("electron-updater") doesn't expose getter-defined exports reliably
+// across ESM/CJS boundary, so we cache the reference after the first successful import.
+let cachedAutoUpdater: Awaited<typeof import("electron-updater")>["autoUpdater"] | undefined;
 
 /** Make a key for protocol+origin lookups. */
 function protocolKey(protocol: string, origin: string): string {
@@ -62,9 +66,8 @@ function protocolKey(protocol: string, origin: string): string {
 export function register({ commands, events, platform, dataStore }: Deps): void {
   commands.handle(INSTALLER_CHECK_FOR_UPDATES, async () => {
     try {
-      // Dynamic import to avoid loading electron-updater in tests
-      const { autoUpdater } = await import("electron-updater");
-      await autoUpdater.checkForUpdates();
+      if (!cachedAutoUpdater) throw new Error("Auto-updater not initialized");
+      await cachedAutoUpdater.checkForUpdates();
     } catch (err) {
       events.emit(INSTALLER_UPDATE_ERROR, {
         message: err instanceof Error ? err.message : String(err),
@@ -73,8 +76,7 @@ export function register({ commands, events, platform, dataStore }: Deps): void 
   });
 
   commands.handle(INSTALLER_APPLY_UPDATE, async () => {
-    const { autoUpdater } = await import("electron-updater");
-    autoUpdater.quitAndInstall();
+    cachedAutoUpdater?.quitAndInstall();
   });
 
   commands.handle(INSTALLER_DISMISS_UPDATE, async () => {
@@ -152,23 +154,32 @@ export async function start({ events, platform, dataStore, isDev }: Deps): Promi
   if (isDev) return;
 
   try {
-    const { autoUpdater } = await import("electron-updater");
-    autoUpdater.autoDownload = true;
+    const mod = await import("electron-updater");
+    // ESM/CJS interop: getter-defined exports may be on mod directly or mod.default
+    // biome-ignore lint/suspicious/noExplicitAny: CJS interop fallback
+    const autoUpdater = mod.autoUpdater ?? (mod as any).default?.autoUpdater;
+    if (!autoUpdater) throw new Error("electron-updater: autoUpdater not found");
+    cachedAutoUpdater = autoUpdater;
     autoUpdater.autoInstallOnAppQuit = true;
+    autoUpdater.autoDownload = true;
 
     autoUpdater.on("update-available", (info) => {
+      console.log("[installer] Update available:", info.version);
       events.emit(INSTALLER_UPDATE_AVAILABLE, { version: info.version });
     });
 
     autoUpdater.on("update-downloaded", (info) => {
+      console.log("[installer] Update downloaded:", info.version);
       events.emit(INSTALLER_UPDATE_DOWNLOADED, { version: info.version });
     });
 
-    autoUpdater.on("update-not-available", () => {
+    autoUpdater.on("update-not-available", (info) => {
+      console.log("[installer] No update available. Latest:", info?.version);
       events.emit(INSTALLER_UPDATE_NOT_AVAILABLE, undefined);
     });
 
     autoUpdater.on("error", (err) => {
+      console.error("[installer] Update error:", err);
       events.emit(INSTALLER_UPDATE_ERROR, {
         message: err instanceof Error ? err.message : String(err),
       });
@@ -208,4 +219,5 @@ export function stop(): void {
   }
   allowedProtocols = [];
   pendingRequests.clear();
+  cachedAutoUpdater = undefined;
 }
