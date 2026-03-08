@@ -153,7 +153,7 @@ function startWatching(domain: string): void {
             stopWatching(domain);
             const state = domainStates.get(domain);
             if (state?.enabled) {
-              state.enabled = false;
+              domainStates.set(domain, { ...state, enabled: false });
               await persistStates();
               await injectOrRemoveForAllTabs(domain);
               emitChanged(domain);
@@ -258,8 +258,8 @@ export default defineFeature<DomainCssDeps>({
     commands.handle(DOMAIN_CSS_TOGGLE, async (payload) => {
       const { domain } = payload;
       if (!isValidDomain(domain)) throw new Error(`Invalid domain: ${domain}`);
-      const state = domainStates.get(domain) ?? { enabled: false };
-      state.enabled = !state.enabled;
+      const prev = domainStates.get(domain);
+      const state: DomainState = { enabled: !(prev?.enabled ?? false) };
       domainStates.set(domain, state);
 
       await persistStates();
@@ -287,10 +287,9 @@ export default defineFeature<DomainCssDeps>({
       }
 
       // Auto-enable CSS
-      const state = domainStates.get(domain) ?? { enabled: false };
-      if (!state.enabled) {
-        state.enabled = true;
-        domainStates.set(domain, state);
+      const state = domainStates.get(domain);
+      if (!state?.enabled) {
+        domainStates.set(domain, { ...(state ?? { enabled: false }), enabled: true });
         await persistStates();
         await injectOrRemoveForAllTabs(domain);
       }
@@ -311,7 +310,7 @@ export default defineFeature<DomainCssDeps>({
       // Remove injected CSS from all tabs
       const state = domainStates.get(domain);
       if (state) {
-        state.enabled = false;
+        domainStates.set(domain, { ...state, enabled: false });
         await persistStates();
       }
       await injectOrRemoveForAllTabs(domain);
@@ -327,6 +326,13 @@ export default defineFeature<DomainCssDeps>({
       await persistStates();
       emitChanged(domain);
     });
+  },
+
+  teardown() {
+    for (const w of watchers.values()) w.close();
+    watchers.clear();
+    domainStates.clear();
+    injectedCssKeys.clear();
   },
 
   async start({ dataStore }) {

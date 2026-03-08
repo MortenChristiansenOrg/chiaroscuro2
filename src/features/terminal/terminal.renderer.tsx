@@ -133,8 +133,8 @@ const TRANSITION_MS = 200;
 export function TerminalPanel() {
   const visible = useTerminalStore((s) => s.visible);
   const activeTabId = useTabsStore((s) => s.activeTabId);
-  const buffers = useTerminalStore((s) => s.buffers);
-  const lines = (activeTabId ? buffers.get(activeTabId) : undefined) ?? EMPTY_LINES;
+  const lines =
+    useTerminalStore((s) => (activeTabId ? s.buffers.get(activeTabId) : undefined)) ?? EMPTY_LINES;
 
   // Track mounted state for animation (stay mounted while closing)
   const [mounted, setMounted] = useState(false);

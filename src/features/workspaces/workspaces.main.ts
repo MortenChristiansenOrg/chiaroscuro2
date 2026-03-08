@@ -3,6 +3,7 @@ import type { EventBus } from "../../bus/event-bus";
 import type { Collection, DataStore } from "../../data/types";
 import type { Platform } from "../../platform/types";
 import { defineFeature } from "../../shared/define-feature";
+import { featureState } from "../../shared/feature-state";
 import { logError } from "../../shared/log";
 import type { TabId, WindowId, WorkspaceId } from "../../shared/types";
 import type { Tab, TabsCommands, TabsEvents } from "../tabs/tabs.shared";
@@ -48,18 +49,17 @@ interface Deps {
   getTabsForWorkspace: (workspaceId: WorkspaceId) => Tab[];
 }
 
-// Shared state exposed via accessor for cross-feature queries
-const _workspaces = new Map<WorkspaceId, Workspace>();
-
-// Track original URLs for restore-tab
-const _originalUrls = new Map<TabId, string>();
+const _state = featureState<{
+  workspaces: Map<WorkspaceId, Workspace>;
+  originalUrls: Map<TabId, string>;
+}>("workspaces");
 
 export function getWorkspace(id: WorkspaceId): Workspace | undefined {
-  return _workspaces.get(id);
+  return _state.initialized ? _state.get().workspaces.get(id) : undefined;
 }
 
 export function getAllWorkspaces(): Workspace[] {
-  return [..._workspaces.values()];
+  return _state.initialized ? [..._state.get().workspaces.values()] : [];
 }
 
 export default defineFeature<Deps>({
@@ -77,10 +77,12 @@ export default defineFeature<Deps>({
     } = deps;
 
     const wsCollection: Collection<PersistedWorkspace> = dataStore.collection("workspaces");
-    _workspaces.clear();
+    const workspaces = new Map<WorkspaceId, Workspace>();
+    const originalUrls = new Map<TabId, string>();
+    _state.init({ workspaces, originalUrls });
 
     function emitListChanged(): void {
-      events.emit(WORKSPACES_LIST_CHANGED, { workspaces: [..._workspaces.values()] });
+      events.emit(WORKSPACES_LIST_CHANGED, { workspaces: [...workspaces.values()] });
     }
 
     function persistWorkspace(ws: Workspace, order: number): void {
@@ -99,14 +101,14 @@ export default defineFeature<Deps>({
     // Track original URLs when tabs are first bookmarked
     events.on(TABS_UPDATED, (payload) => {
       const { tab } = payload;
-      if (tab.bookmarked && !_originalUrls.has(tab.id)) {
-        _originalUrls.set(tab.id, tab.url);
+      if (tab.bookmarked && !originalUrls.has(tab.id)) {
+        originalUrls.set(tab.id, tab.url);
       }
     });
 
     commands.handle(WORKSPACES_SWITCH, async (payload) => {
       const { workspaceId } = payload;
-      const ws = _workspaces.get(workspaceId);
+      const ws = workspaces.get(workspaceId);
       if (!ws) return;
 
       const previousWsId = getActiveWorkspaceId() ?? null;
@@ -114,7 +116,7 @@ export default defineFeature<Deps>({
 
       // Save current ws active tab
       if (previousWsId) {
-        const prevWs = _workspaces.get(previousWsId);
+        const prevWs = workspaces.get(previousWsId);
         if (prevWs) {
           prevWs.activeTabId = getActiveTabId() ?? null;
         }
@@ -151,8 +153,8 @@ export default defineFeature<Deps>({
         icon: payload.icon,
         activeTabId: null,
       };
-      _workspaces.set(id, ws);
-      persistWorkspace(ws, _workspaces.size - 1);
+      workspaces.set(id, ws);
+      persistWorkspace(ws, workspaces.size - 1);
 
       events.emit(WORKSPACES_CREATED, { workspace: ws });
       emitListChanged();
@@ -160,7 +162,7 @@ export default defineFeature<Deps>({
     });
 
     commands.handle(WORKSPACES_UPDATE, async (payload) => {
-      const ws = _workspaces.get(payload.workspaceId);
+      const ws = workspaces.get(payload.workspaceId);
       if (!ws) return;
 
       if (payload.changes.name !== undefined) ws.name = payload.changes.name;
@@ -168,9 +170,9 @@ export default defineFeature<Deps>({
       if (payload.changes.icon !== undefined) ws.icon = payload.changes.icon;
 
       // Find index for persistence
-      const allWs = [..._workspaces.values()];
+      const allWs = [...workspaces.values()];
       const idx = allWs.findIndex((w) => w.id === ws.id);
-      persistWorkspace(ws, idx >= 0 ? idx : _workspaces.size - 1);
+      persistWorkspace(ws, idx >= 0 ? idx : workspaces.size - 1);
 
       events.emit(WORKSPACES_UPDATED, { workspace: ws });
       emitListChanged();
@@ -178,14 +180,14 @@ export default defineFeature<Deps>({
 
     commands.handle(WORKSPACES_DELETE, async (payload) => {
       const { workspaceId } = payload;
-      if (_workspaces.size <= 1) return; // Can't delete last workspace
+      if (workspaces.size <= 1) return; // Can't delete last workspace
 
-      const ws = _workspaces.get(workspaceId);
+      const ws = workspaces.get(workspaceId);
       if (!ws) return;
 
       // Find default workspace (first one that isn't being deleted)
       let defaultWsId: WorkspaceId | undefined;
-      for (const w of _workspaces.values()) {
+      for (const w of workspaces.values()) {
         if (w.id !== workspaceId) {
           defaultWsId = w.id;
           break;
@@ -201,10 +203,10 @@ export default defineFeature<Deps>({
 
       // If deleting active workspace, switch to default
       if (getActiveWorkspaceId() === workspaceId) {
-        _workspaces.delete(workspaceId);
+        workspaces.delete(workspaceId);
         await commands.send(WORKSPACES_SWITCH, { workspaceId: defaultWsId });
       } else {
-        _workspaces.delete(workspaceId);
+        workspaces.delete(workspaceId);
       }
 
       wsCollection.remove(workspaceId).catch(logError("workspaces", "remove"));
@@ -215,7 +217,7 @@ export default defineFeature<Deps>({
 
     commands.handle(WORKSPACES_MOVE_TAB, async (payload) => {
       const { targetWorkspaceId } = payload;
-      const targetWs = _workspaces.get(targetWorkspaceId);
+      const targetWs = workspaces.get(targetWorkspaceId);
       if (!targetWs) return;
 
       const tabId = getActiveTabId();
@@ -250,7 +252,7 @@ export default defineFeature<Deps>({
       const tabId = getActiveTabId();
       if (!tabId) return;
 
-      const originalUrl = _originalUrls.get(tabId);
+      const originalUrl = originalUrls.get(tabId);
       if (!originalUrl) return;
 
       await commands.send(TABS_NAVIGATE, { url: originalUrl, tabId });
@@ -267,7 +269,7 @@ export default defineFeature<Deps>({
     // Ctrl+1..9: Switch to workspace N
     for (let n = 1; n <= 9; n++) {
       platform.registerShortcut(`CommandOrControl+${n}`, () => {
-        const all = getAllWorkspaces();
+        const all = [...workspaces.values()];
         const ws = all[n - 1];
         if (ws)
           commands
@@ -279,7 +281,7 @@ export default defineFeature<Deps>({
     // Ctrl+Shift+1..9: Move current tab to workspace N
     for (let n = 1; n <= 9; n++) {
       platform.registerShortcut(`CommandOrControl+Shift+${n}`, () => {
-        const all = getAllWorkspaces();
+        const all = [...workspaces.values()];
         const ws = all[n - 1];
         if (ws)
           commands
@@ -289,8 +291,13 @@ export default defineFeature<Deps>({
     }
   },
 
+  teardown() {
+    _state.reset();
+  },
+
   async start(deps) {
     const { events, dataStore, setActiveWorkspaceId } = deps;
+    const { workspaces } = _state.get();
     const wsCollection: Collection<PersistedWorkspace> = dataStore.collection("workspaces");
 
     // Restore persisted workspaces
@@ -307,14 +314,14 @@ export default defineFeature<Deps>({
           icon: pw.icon,
           activeTabId: null,
         };
-        _workspaces.set(ws.id, ws);
+        workspaces.set(ws.id, ws);
       }
 
       const firstWs = persisted[0] as (typeof persisted)[number];
       setActiveWorkspaceId(firstWs.id as WorkspaceId);
 
       events.emit(WORKSPACES_LIST_CHANGED, {
-        workspaces: [..._workspaces.values()],
+        workspaces: [...workspaces.values()],
       });
     } else {
       // Create default workspace
@@ -326,7 +333,7 @@ export default defineFeature<Deps>({
         icon: "W",
         activeTabId: null,
       };
-      _workspaces.set(defaultId, defaultWs);
+      workspaces.set(defaultId, defaultWs);
       setActiveWorkspaceId(defaultId);
 
       // Persist default
@@ -342,7 +349,7 @@ export default defineFeature<Deps>({
 
       events.emit(WORKSPACES_CREATED, { workspace: defaultWs });
       events.emit(WORKSPACES_LIST_CHANGED, {
-        workspaces: [..._workspaces.values()],
+        workspaces: [...workspaces.values()],
       });
     }
   },

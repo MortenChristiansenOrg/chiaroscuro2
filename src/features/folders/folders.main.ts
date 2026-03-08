@@ -2,6 +2,7 @@ import type { CommandBus } from "../../bus/command-bus";
 import type { EventBus } from "../../bus/event-bus";
 import type { DataStore } from "../../data/types";
 import { defineFeature } from "../../shared/define-feature";
+import { featureState } from "../../shared/feature-state";
 import { PersistedMap } from "../../shared/persisted-map";
 import type { FolderId, TabId, WorkspaceId } from "../../shared/types";
 import type { Tab } from "../tabs/tabs.shared";
@@ -39,8 +40,10 @@ interface Deps {
   setTabOrder: (tabId: TabId, order: number) => void;
 }
 
-let _folders: PersistedMap<FolderId, Folder, PersistedFolder> | undefined;
-let _setFolderOrder: ((folderId: FolderId, order: number) => void) | undefined;
+const _state = featureState<{
+  folders: PersistedMap<FolderId, Folder, PersistedFolder>;
+  setFolderOrder: (folderId: FolderId, order: number) => void;
+}>("folders");
 
 export default defineFeature<Deps>({
   register(deps) {
@@ -81,8 +84,6 @@ export default defineFeature<Deps>({
         source: "folders",
       },
     );
-    _folders = folders;
-
     function emitChanged(): void {
       events.emit(FOLDERS_CHANGED, { folders: folders.values() });
     }
@@ -98,12 +99,14 @@ export default defineFeature<Deps>({
       return Math.max(-1, ...folderOrders, ...tabOrders) + 1;
     }
 
-    _setFolderOrder = (folderId: FolderId, order: number) => {
+    const setFolderOrderFn = (folderId: FolderId, order: number) => {
       const folder = folders.get(folderId);
       if (!folder || folder.order === order) return;
       folders.set(folder.id, { ...folder, order });
       emitChanged();
     };
+
+    _state.init({ folders, setFolderOrder: setFolderOrderFn });
 
     // ── Command handlers ───────────────────────────────────────────
 
@@ -339,33 +342,41 @@ export default defineFeature<Deps>({
       emitChanged();
     });
   },
+
+  teardown() {
+    _state.reset();
+  },
 });
 
 export async function start(deps: Deps): Promise<void> {
   const { events } = deps;
-  if (!_folders) throw new Error("folders.main: register() must be called before start()");
-  await _folders.load();
-  if (_folders.size > 0) {
-    events.emit(FOLDERS_CHANGED, { folders: _folders.values() });
+  const { folders } = _state.get();
+  await folders.load();
+  if (folders.size > 0) {
+    events.emit(FOLDERS_CHANGED, { folders: folders.values() });
   }
 }
 
 export function getFoldersForWorkspace(workspaceId: WorkspaceId): Folder[] {
-  if (!_folders) return [];
-  return _folders.values().filter((f) => f.workspaceId === workspaceId);
+  if (!_state.initialized) return [];
+  return _state
+    .get()
+    .folders.values()
+    .filter((f) => f.workspaceId === workspaceId);
 }
 
 export function getFoldersForLevel(
   workspaceId: WorkspaceId,
   parentFolderId: FolderId | null,
 ): Folder[] {
-  if (!_folders) return [];
-  return _folders
-    .values()
+  if (!_state.initialized) return [];
+  return _state
+    .get()
+    .folders.values()
     .filter((f) => f.workspaceId === workspaceId && f.parentFolderId === parentFolderId);
 }
 
 export function setFolderOrder(folderId: FolderId, order: number): void {
-  if (!_folders || !_setFolderOrder) return;
-  _setFolderOrder(folderId, order);
+  if (!_state.initialized) return;
+  _state.get().setFolderOrder(folderId, order);
 }

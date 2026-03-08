@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { Icon } from "../../renderer/src/components/Icon";
 import {
   INSTALLER_ALLOW_PROTOCOL,
@@ -137,45 +137,42 @@ export function ProtocolDialog() {
   const dialogRef = useRef<HTMLDivElement>(null);
   const requestId = request?.requestId;
 
-  const dismiss = useCallback((id: string) => {
+  const dismiss = (id: string) => {
     useInstallerStore.setState((state) =>
       state.protocolRequest?.requestId === id ? { protocolRequest: null } : {},
     );
-  }, []);
+  };
 
-  const handleDeny = useCallback(() => {
+  const handleDeny = () => {
     if (!requestId) return;
     void sendCommand(INSTALLER_DENY_PROTOCOL, { requestId })
       .then(() => dismiss(requestId))
       .catch(console.error);
-  }, [requestId, dismiss]);
+  };
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "Escape") {
-        handleDeny();
-        return;
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") {
+      handleDeny();
+      return;
+    }
+    if (e.key === "Tab") {
+      const el = dialogRef.current;
+      if (!el) return;
+      const focusable = el.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!first || !last) return;
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
       }
-      if (e.key === "Tab") {
-        const el = dialogRef.current;
-        if (!el) return;
-        const focusable = el.querySelectorAll<HTMLElement>(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-        );
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-        if (!first || !last) return;
-        if (e.shiftKey && document.activeElement === first) {
-          e.preventDefault();
-          last.focus();
-        } else if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault();
-          first.focus();
-        }
-      }
-    },
-    [handleDeny],
-  );
+    }
+  };
 
   useEffect(() => {
     if (!request) return;

@@ -1,4 +1,3 @@
-import { useCallback } from "react";
 import { Icon } from "../../renderer/src/components/Icon";
 import {
   SettingItem,
@@ -84,25 +83,19 @@ function ProviderEditor({
   providers: SearchProvider[];
   onChange: (providers: SearchProvider[]) => void;
 }) {
-  const handleUpdate = useCallback(
-    (index: number, updated: SearchProvider) => {
-      const next = [...providers];
-      next[index] = updated;
-      onChange(next);
-    },
-    [providers, onChange],
-  );
+  const handleUpdate = (index: number, updated: SearchProvider) => {
+    const next = [...providers];
+    next[index] = updated;
+    onChange(next);
+  };
 
-  const handleRemove = useCallback(
-    (index: number) => {
-      onChange(providers.filter((_, i) => i !== index));
-    },
-    [providers, onChange],
-  );
+  const handleRemove = (index: number) => {
+    onChange(providers.filter((_, i) => i !== index));
+  };
 
-  const handleAdd = useCallback(() => {
+  const handleAdd = () => {
     onChange([...providers, { id: crypto.randomUUID(), bang: "", name: "", urlTemplate: "" }]);
-  }, [providers, onChange]);
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
@@ -314,9 +307,9 @@ export default function SettingsPage(_props: { params: Record<string, string> })
   const setSearchQuery = useSettingsStore((s) => s.setSearchQuery);
   const { scrollRef, activeCategory } = useScrollSpy("settings");
 
-  const handleSettingsChange = useCallback((updated: Settings) => {
+  const handleSettingsChange = (updated: Settings) => {
     saveSettings(updated);
-  }, []);
+  };
 
   if (!settings) {
     return (

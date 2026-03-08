@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSettingsStore } from "../settings/settings.store";
 import {
   COMMAND_PALETTE_EXECUTE,
@@ -29,13 +29,9 @@ function sendCommand<K extends keyof UsedCommands>(name: K, payload: UsedCommand
 export function CommandPaletteOverlay() {
   const open = useCommandPaletteStore((s) => s.open);
   const settings = useSettingsStore((s) => s.settings);
-  const providerConfig = useMemo<ProviderConfig | undefined>(
-    () =>
-      settings
-        ? { providers: settings.searchProviders, defaultBang: settings.defaultSearchProviderId }
-        : undefined,
-    [settings],
-  );
+  const providerConfig: ProviderConfig | undefined = settings
+    ? { providers: settings.searchProviders, defaultBang: settings.defaultSearchProviderId }
+    : undefined;
   const inputRef = useRef<HTMLInputElement>(null);
   const triggerRef = useRef<Element | null>(null);
   const [status, setStatus] = useState<"hidden" | "open" | "closing">("hidden");

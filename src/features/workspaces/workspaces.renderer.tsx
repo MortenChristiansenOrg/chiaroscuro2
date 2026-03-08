@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "../../renderer/src/components/Icon";
 import { FA_SOLID_SEARCH } from "../../shared/fa-icon-search.generated";
 import type { FaSolidIcon } from "../../shared/fa-icons.generated";
@@ -143,7 +143,7 @@ export function WorkspaceEditor({
   const resolvedIcon = selectedFaIcon ? `fa:${selectedFaIcon}` : displayTextIcon.trim() || "?";
 
   // Search results
-  const iconResults = useMemo(() => searchIcons(iconQuery), [iconQuery]);
+  const iconResults = searchIcons(iconQuery);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();

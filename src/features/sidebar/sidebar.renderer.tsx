@@ -1,4 +1,5 @@
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
+import { useShallow } from "zustand/react/shallow";
 import { useContextMenu } from "../../renderer/src/components/ContextMenu";
 import type { FolderId, TabId, WorkspaceId } from "../../shared/types";
 import {
@@ -156,38 +157,32 @@ function useSidebarResize(sidebarWidth: number) {
   const startXRef = useRef(0);
   const startWidthRef = useRef(0);
 
-  const onPointerDown = useCallback(
-    (e: React.PointerEvent) => {
-      e.preventDefault();
-      startXRef.current = e.clientX;
-      startWidthRef.current = sidebarWidth;
-      setDragWidth(sidebarWidth);
+  const onPointerDown = (e: React.PointerEvent) => {
+    e.preventDefault();
+    startXRef.current = e.clientX;
+    startWidthRef.current = sidebarWidth;
+    setDragWidth(sidebarWidth);
 
-      const target = e.currentTarget as HTMLElement;
-      target.setPointerCapture(e.pointerId);
-    },
-    [sidebarWidth],
-  );
+    const target = e.currentTarget as HTMLElement;
+    target.setPointerCapture(e.pointerId);
+  };
 
-  const onPointerMove = useCallback(
-    (e: React.PointerEvent) => {
-      if (dragWidth === null) return;
-      const delta = e.clientX - startXRef.current;
-      const newWidth = Math.max(
-        MIN_SIDEBAR_WIDTH,
-        Math.min(MAX_SIDEBAR_WIDTH, startWidthRef.current + delta),
-      );
-      setDragWidth(newWidth);
-    },
-    [dragWidth],
-  );
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (dragWidth === null) return;
+    const delta = e.clientX - startXRef.current;
+    const newWidth = Math.max(
+      MIN_SIDEBAR_WIDTH,
+      Math.min(MAX_SIDEBAR_WIDTH, startWidthRef.current + delta),
+    );
+    setDragWidth(newWidth);
+  };
 
-  const onPointerUp = useCallback(() => {
+  const onPointerUp = () => {
     if (dragWidth === null) return;
     const finalWidth = Math.round(dragWidth);
     setDragWidth(null);
     window.chiaroscuro.sendCommand(APP_STATE_SET_SIDEBAR_WIDTH, { width: finalWidth });
-  }, [dragWidth]);
+  };
 
   return {
     width: dragWidth ?? sidebarWidth,
@@ -202,13 +197,13 @@ export function SidebarPanel() {
   const visible = useSidebarStore((s) => s.visible);
   const announcement = useSidebarStore((s) => s.announcement);
   const sidebarWidth = useAppStateStore((s) => s.sidebarWidth);
-  const tabs = useTabsStore((s) => s.tabs);
+  const tabs = useTabsStore(useShallow((s) => s.tabs));
   const activeTabId = useTabsStore((s) => s.activeTabId);
   const pinnedTabs = usePinnedTabsStore((s) => s.pinnedTabs);
-  const pinnedTabIds = useMemo(() => new Set(pinnedTabs.map((p) => p.id)), [pinnedTabs]);
+  const pinnedTabIds = new Set(pinnedTabs.map((p) => p.id));
   const workspaces = useWorkspacesStore((s) => s.workspaces);
   const activeWorkspaceId = useWorkspacesStore((s) => s.activeWorkspaceId);
-  const folders = useFoldersStore((s) => s.folders);
+  const folders = useFoldersStore(useShallow((s) => s.folders));
   const renamingFolderId = useFoldersStore((s) => s.renamingFolderId);
 
   // Workspace editor state
@@ -237,13 +232,10 @@ export function SidebarPanel() {
   ].sort((a, b) => a.order - b.order);
 
   // Build folder tree for bookmarked tabs
-  const bookmarkedTree = useMemo(
-    () => buildBookmarkedTree(bookmarked, folders, activeWorkspaceId),
-    [bookmarked, folders, activeWorkspaceId],
-  );
+  const bookmarkedTree = buildBookmarkedTree(bookmarked, folders, activeWorkspaceId);
 
   // Previous workspace tabs (for slide-out during transition)
-  const prevTabs = useMemo(() => {
+  const prevTabs = (() => {
     if (!wsTransition) return null;
     const prevAll = [...tabs.values()].filter(
       (t) => t.workspaceId === wsTransition.fromWorkspaceId && !pinnedTabIds.has(t.id),
@@ -254,11 +246,11 @@ export function SidebarPanel() {
       bookmarkedTree: buildBookmarkedTree(prevBookmarked, folders, wsTransition.fromWorkspaceId),
       ephemeral: prevAll.filter((t) => !t.bookmarked).sort((a, b) => a.order - b.order),
     };
-  }, [wsTransition, tabs, pinnedTabIds, folders]);
+  })();
 
   // Drag & drop
   const [isDragging, setIsDragging] = useState(false);
-  const handleDragEnd = useCallback(() => setIsDragging(false), []);
+  const handleDragEnd = () => setIsDragging(false);
 
   const handleClearEphemeral = () => {
     if (activeWorkspaceId) {

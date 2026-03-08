@@ -103,6 +103,11 @@ export default defineFeature<Deps>({
     platform.registerLocalShortcut("½", toggleTerminal);
   },
 
+  teardown() {
+    buffers.clear();
+    visible = false;
+  },
+
   start(deps) {
     deps.events.emit(TERMINAL_VISIBILITY_CHANGED, { visible });
   },

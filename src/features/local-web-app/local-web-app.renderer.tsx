@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "../../renderer/src/components/Icon";
 import {
   SettingItem,
@@ -95,33 +95,33 @@ export function LocalWebAppSettings({ tabId }: { tabId: TabId }) {
     sendCommand(LOCAL_WEB_APP_GET_CONFIG, { tabId }).catch(console.error);
   }, [tabId]);
 
-  const handleBrowse = useCallback(async () => {
+  const handleBrowse = async () => {
     const dir = await sendCommand(LOCAL_WEB_APP_BROWSE_DIRECTORY, undefined);
     if (dir) setDirOverride(dir);
-  }, []);
+  };
 
-  const handleSave = useCallback(() => {
+  const handleSave = () => {
     if (!localDir.trim() || !localCmd.trim()) return;
     sendCommand(LOCAL_WEB_APP_SAVE_CONFIG, {
       tabId,
       directory: localDir.trim(),
       command: localCmd.trim(),
     });
-  }, [tabId, localDir, localCmd]);
+  };
 
-  const handleDelete = useCallback(() => {
+  const handleDelete = () => {
     sendCommand(LOCAL_WEB_APP_DELETE_CONFIG, { tabId });
     setDirOverride(null);
     setCmdOverride(null);
-  }, [tabId]);
+  };
 
-  const handleToggleProcess = useCallback(() => {
+  const handleToggleProcess = () => {
     if (status === "running") {
       sendCommand(LOCAL_WEB_APP_STOP, { tabId });
     } else {
       sendCommand(LOCAL_WEB_APP_START, { tabId });
     }
-  }, [tabId, status]);
+  };
 
   const isDirty = dirOverride !== null || cmdOverride !== null;
 

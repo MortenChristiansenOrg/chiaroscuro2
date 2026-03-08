@@ -3,6 +3,7 @@ import type { EventBus } from "../../bus/event-bus";
 import type { Collection, DataStore } from "../../data/types";
 import type { Bounds, Platform } from "../../platform/types";
 import { defineFeature } from "../../shared/define-feature";
+import { featureState } from "../../shared/feature-state";
 import { logError, logWarn } from "../../shared/log";
 import { TabScope } from "../../shared/tab-scope";
 import type { FolderId, TabId, WindowId, WorkspaceId } from "../../shared/types";
@@ -95,10 +96,11 @@ function resolveBuiltInTitle(url: string): string {
   return url;
 }
 
-// Shared state exposed via accessor for cross-feature queries
-let _tabs: Map<TabId, Tab> | undefined;
-let _attachTabListeners: ((tabId: TabId) => void) | undefined;
-let _persistTab: ((tab: Tab) => void) | undefined;
+const _state = featureState<{
+  tabs: Map<TabId, Tab>;
+  attachTabListeners: (tabId: TabId) => void;
+  persistTab: (tab: Tab) => void;
+}>("tabs");
 
 // Tracks the "fixed" URL for bookmarked tabs (URL at time of bookmarking).
 // Used to restore bookmarked tabs to their original address unless
@@ -134,11 +136,6 @@ export default defineFeature<Deps>({
     const tabScope = new TabScope();
     const tabsCollection: Collection<PersistedTab> = dataStore.collection("tabs");
     let builtInCounter = 0;
-
-    // Expose for getTabsForWorkspace, start(), and cross-feature accessors
-    _tabs = tabs;
-    _attachTabListeners = attachTabListeners;
-    _persistTab = persistTab;
 
     // ── Persistence helpers ──────────────────────────────────────────
 
@@ -284,6 +281,9 @@ export default defineFeature<Deps>({
         }),
       );
     }
+
+    // Expose for getTabsForWorkspace, start(), and cross-feature accessors
+    _state.init({ tabs, attachTabListeners, persistTab });
 
     // ── Command handlers ───────────────────────────────────────────
 
@@ -573,6 +573,10 @@ export default defineFeature<Deps>({
       commands.send(TABS_TOGGLE_BOOKMARK, {}).catch(logError("tabs", "toggle bookmark shortcut"));
     });
   },
+  teardown() {
+    _state.reset();
+    fixedUrls.clear();
+  },
 });
 
 export async function start(deps: Deps): Promise<void> {
@@ -602,9 +606,7 @@ export async function start(deps: Deps): Promise<void> {
   // Restore most recently accessed tab first so it becomes the active one
   toRestore.sort((a, b) => b.lastAccessedAt - a.lastAccessedAt);
 
-  if (!_tabs || !_attachTabListeners) {
-    throw new Error("tabs.main: register() must be called before start()");
-  }
+  const { tabs, attachTabListeners } = _state.get();
 
   // Recreate tabs with their original stable IDs
   const activeWsId = getActiveWorkspaceId();
@@ -628,8 +630,8 @@ export async function start(deps: Deps): Promise<void> {
         folderId: (pt.folderId as FolderId) ?? null,
       };
 
-      _tabs.set(tabId, tab);
-      _attachTabListeners(tabId);
+      tabs.set(tabId, tab);
+      attachTabListeners(tabId);
       if (pt.bookmarked) fixedUrls.set(tabId, pt.url);
 
       // Track first tab in active workspace for activation
@@ -651,35 +653,37 @@ export async function start(deps: Deps): Promise<void> {
 
   // Emit full list (enrich with fixedUrl for renderer)
   deps.events.emit(TABS_LIST_CHANGED, {
-    tabs: [..._tabs.values()].map(tabSnapshot),
+    tabs: [...tabs.values()].map(tabSnapshot),
   });
 }
 
 export function getTabsForWorkspace(workspaceId: WorkspaceId): Tab[] {
-  if (!_tabs) return [];
-  return [..._tabs.values()].filter((t) => t.workspaceId === workspaceId);
+  if (!_state.initialized) return [];
+  return [..._state.get().tabs.values()].filter((t) => t.workspaceId === workspaceId);
 }
 
 export function getTab(tabId: TabId): Tab | undefined {
-  return _tabs?.get(tabId);
+  return _state.initialized ? _state.get().tabs.get(tabId) : undefined;
 }
 
 export function getAllTabs(): Map<TabId, Tab> {
-  return _tabs ? new Map(_tabs) : new Map();
+  return _state.initialized ? new Map(_state.get().tabs) : new Map();
 }
 
 export function setTabFolderId(tabId: TabId, folderId: FolderId | null): void {
-  if (!_tabs || !_persistTab) return;
-  const tab = _tabs.get(tabId);
+  if (!_state.initialized) return;
+  const { tabs, persistTab } = _state.get();
+  const tab = tabs.get(tabId);
   if (!tab) return;
   tab.folderId = folderId;
-  _persistTab(tab);
+  persistTab(tab);
 }
 
 export function setTabOrder(tabId: TabId, order: number): void {
-  if (!_tabs || !_persistTab) return;
-  const tab = _tabs.get(tabId);
+  if (!_state.initialized) return;
+  const { tabs, persistTab } = _state.get();
+  const tab = tabs.get(tabId);
   if (!tab) return;
   tab.order = order;
-  _persistTab(tab);
+  persistTab(tab);
 }

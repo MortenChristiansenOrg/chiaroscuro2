@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { BuiltInPageProps } from "../../renderer/src/components/BuiltInPage";
 import { Icon } from "../../renderer/src/components/Icon";
 import {
@@ -62,27 +62,24 @@ function AppearanceSettings({ tabId }: { tabId: TabId }) {
     };
   }, [tabId]);
 
-  const handleTitleChange = useCallback(
-    (value: string) => {
-      setTitleOverride(value);
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-      saveTimeoutRef.current = setTimeout(() => {
-        saveTimeoutRef.current = null;
-        sendCommand(TAB_CUSTOMIZATION_SET_TITLE, {
-          tabId,
-          title: value.trim() || null,
-        });
-      }, 300);
-    },
-    [tabId],
-  );
+  const handleTitleChange = (value: string) => {
+    setTitleOverride(value);
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    saveTimeoutRef.current = setTimeout(() => {
+      saveTimeoutRef.current = null;
+      sendCommand(TAB_CUSTOMIZATION_SET_TITLE, {
+        tabId,
+        title: value.trim() || null,
+      });
+    }, 300);
+  };
 
-  const handleFixedAddressToggle = useCallback(() => {
+  const handleFixedAddressToggle = () => {
     sendCommand(TAB_CUSTOMIZATION_SET_FIXED_ADDRESS_DISABLED, {
       tabId,
       disabled: !(customization?.fixedAddressDisabled ?? false),
     });
-  }, [tabId, customization?.fixedAddressDisabled]);
+  };
 
   const fixedAddressDisabled = customization?.fixedAddressDisabled ?? false;
 

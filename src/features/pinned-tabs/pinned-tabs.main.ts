@@ -3,6 +3,7 @@ import type { EventBus } from "../../bus/event-bus";
 import type { DataStore } from "../../data/types";
 import type { Platform } from "../../platform/types";
 import { defineFeature } from "../../shared/define-feature";
+import { featureState } from "../../shared/feature-state";
 import { logError } from "../../shared/log";
 import { PersistedMap } from "../../shared/persisted-map";
 import type { TabId, WindowId, WorkspaceId } from "../../shared/types";
@@ -41,10 +42,12 @@ interface Deps {
   getCustomization: (tabId: TabId) => { fixedAddressDisabled: boolean } | undefined;
 }
 
-let _pinnedTabs: PersistedMap<TabId, PinnedTab, PersistedPinnedTab> | undefined;
+const _state = featureState<{
+  pinnedTabs: PersistedMap<TabId, PinnedTab, PersistedPinnedTab>;
+}>("pinned-tabs");
 
 export function isPinned(tabId: TabId): boolean {
-  return _pinnedTabs?.has(tabId) ?? false;
+  return _state.initialized ? _state.get().pinnedTabs.has(tabId) : false;
 }
 
 export default defineFeature<Deps>({
@@ -74,7 +77,7 @@ export default defineFeature<Deps>({
         source: "pinned-tabs",
       },
     );
-    _pinnedTabs = pinnedTabs;
+    _state.init({ pinnedTabs });
 
     function emitChanged(): void {
       const sorted = pinnedTabs.values().sort((a, b) => a.order - b.order);
@@ -151,14 +154,18 @@ export default defineFeature<Deps>({
 
     commands.handle(PINNED_TABS_IS_PINNED, (payload) => pinnedTabs.has(payload.tabId));
   },
+
+  teardown() {
+    _state.reset();
+  },
 });
 
 export async function start(deps: Deps): Promise<void> {
-  if (!_pinnedTabs) throw new Error("pinned-tabs: register() must be called before start()");
-  await _pinnedTabs.load({ sort: [{ field: "order", direction: "asc" }] });
-  if (_pinnedTabs.size > 0) {
+  const { pinnedTabs } = _state.get();
+  await pinnedTabs.load({ sort: [{ field: "order", direction: "asc" }] });
+  if (pinnedTabs.size > 0) {
     deps.events.emit(PINNED_TABS_CHANGED, {
-      pinnedTabs: _pinnedTabs.values().sort((a, b) => a.order - b.order),
+      pinnedTabs: pinnedTabs.values().sort((a, b) => a.order - b.order),
     });
   }
 }
