@@ -7,8 +7,8 @@
       "dependencies": {
         "@fortawesome/fontawesome-free": "^7.2.0",
         "electron-updater": "^6.6.2",
-        "react": "^19.1.0",
-        "react-dom": "^19.1.0",
+        "react": "^19.2.0",
+        "react-dom": "^19.2.0",
         "react-error-boundary": "^6.1.1",
         "rxdb": "^16.12.0",
         "zod": "^3.25.67",
@@ -22,10 +22,10 @@
         "@tailwindcss/vite": "^4.1.8",
         "@testing-library/jest-dom": "^6.6.3",
         "@testing-library/react": "^16.3.0",
-        "@types/react": "^19.1.8",
-        "@types/react-dom": "^19.1.6",
+        "@types/react": "^19.2.0",
+        "@types/react-dom": "^19.2.0",
         "@vitejs/plugin-react": "^4.5.2",
-        "babel-plugin-react-compiler": "^19.1.0-rc.2",
+        "babel-plugin-react-compiler": "^1.0.0",
         "clsx": "^2.1.1",
         "electron": "^40.2.1",
         "electron-builder": "^26.0.12",
@@ -607,7 +607,7 @@
 
     "available-typed-arrays": ["available-typed-arrays@1.0.7", "", { "dependencies": { "possible-typed-array-names": "^1.0.0" } }, "sha512-wvUjBtSGN7+7SjNpq/9M2Tg350UZD3q62IFZLbRAR1bSMlCo1ZaeW+BJ+D090e4hIIZLBcTDWe4Mh4jvUDajzQ=="],
 
-    "babel-plugin-react-compiler": ["babel-plugin-react-compiler@19.1.0-rc.1-rc-af1b7da-20250421", "", { "dependencies": { "@babel/types": "^7.26.0" } }, "sha512-E3kaokBhWDLf7ZD8fuYjYn0ZJHYZ+3EHtAWCdX2hl4lpu1z9S/Xr99sxhx2bTCVB41oIesz9FtM8f4INsrZaOw=="],
+    "babel-plugin-react-compiler": ["babel-plugin-react-compiler@1.0.0", "", { "dependencies": { "@babel/types": "^7.26.0" } }, "sha512-Ixm8tFfoKKIPYdCCKYTsqv+Fd4IJ0DQqMyEimo+pxUOMUR9cVPlwTrFt9Avu+3cb6Zp3mAzl+t1MrG2fxxKsxw=="],
 
     "bail": ["bail@2.0.2", "", {}, "sha512-0xO6mYd7JB2YesxDKplafRpsiOzPt9V02ddPCLbY1xYGPOX24NTyN50qnUxgCPcSoYMhKpAuBTjQoRZCAkUDRw=="],
 
