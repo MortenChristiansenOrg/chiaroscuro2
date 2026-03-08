@@ -13,6 +13,7 @@ export const TABS_GET = "tabs:get" as const;
 export const TABS_GET_FOR_WORKSPACE = "tabs:get-for-workspace" as const;
 export const TABS_SET_FOLDER_ID = "tabs:set-folder-id" as const;
 export const TABS_SET_ORDER = "tabs:set-order" as const;
+export const TABS_SET_WORKSPACE = "tabs:set-workspace" as const;
 
 // ── Event names ──────────────────────────────────────────────────
 export const TABS_CREATED = "tabs:created" as const;
@@ -131,6 +132,10 @@ export type TabsCommands = {
     response: undefined;
   };
   [TABS_SET_ORDER]: { payload: { tabId: TabId; order: number }; response: undefined };
+  [TABS_SET_WORKSPACE]: {
+    payload: { tabId: TabId; workspaceId: WorkspaceId };
+    response: undefined;
+  };
 };
 
 // ── Event registry ───────────────────────────────────────────────

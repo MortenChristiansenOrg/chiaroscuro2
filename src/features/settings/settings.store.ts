@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import type { Settings, SettingsChangedEvent } from "./settings.shared";
+import { typedOnEvent } from "../../shared/typed-on-event";
+import type { Settings, SettingsEvents } from "./settings.shared";
 import { SETTINGS_CHANGED } from "./settings.shared";
 
 interface SettingsState {
@@ -29,11 +30,11 @@ export function saveSettings(settings: Settings): void {
 export function subscribeToEvents(
   onEvent: (name: string, callback: (payload: unknown) => void) => () => void,
 ): () => void {
+  const on = typedOnEvent<SettingsEvents>(onEvent);
   const unsubs: (() => void)[] = [];
 
   unsubs.push(
-    onEvent(SETTINGS_CHANGED, (payload) => {
-      const { settings } = payload as SettingsChangedEvent;
+    on(SETTINGS_CHANGED, ({ settings }) => {
       useSettingsStore.setState({ settings });
     }),
   );

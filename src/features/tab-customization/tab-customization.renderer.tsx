@@ -16,11 +16,18 @@ import {
   TAB_CUSTOMIZATION_GET_STATE,
   TAB_CUSTOMIZATION_SET_FIXED_ADDRESS_DISABLED,
   TAB_CUSTOMIZATION_SET_TITLE,
-  type TabCustomization,
+  type TabCustomizationCommands,
 } from "./tab-customization.shared";
 import { useTabCustomizationStore } from "./tab-customization.store";
 
-function sendCommand(name: string, payload: unknown) {
+type UsedCommands = Pick<
+  TabCustomizationCommands,
+  | typeof TAB_CUSTOMIZATION_CLOSE
+  | typeof TAB_CUSTOMIZATION_SET_TITLE
+  | typeof TAB_CUSTOMIZATION_SET_FIXED_ADDRESS_DISABLED
+>;
+
+function sendCommand<K extends keyof UsedCommands>(name: K, payload: UsedCommands[K]["payload"]) {
   void window.chiaroscuro.sendCommand(name, payload).catch(console.error);
 }
 
@@ -32,36 +39,32 @@ const categories = [
 function AppearanceSettings({ tabId }: { tabId: TabId }) {
   const customization = useTabCustomizationStore((s) => s.customizations.get(tabId));
   const tab = useTabsStore((s) => s.tabs.get(tabId));
-  const [localTitle, setLocalTitle] = useState(customization?.title ?? "");
 
-  // Fetch current state on mount (or when tabId changes)
+  // Track local title override; null = use store value
+  const [titleOverride, setTitleOverride] = useState<string | null>(null);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const localTitle = titleOverride ?? customization?.title ?? "";
+
+  // Clear override when store confirms the save (title matches what we sent)
+  const prevTitle = useRef(customization?.title);
+  if (customization?.title !== prevTitle.current) {
+    prevTitle.current = customization?.title;
+    if (!saveTimeoutRef.current) {
+      setTitleOverride(null);
+    }
+  }
+
+  // Fetch current state on mount (populates store via event)
   useEffect(() => {
-    let cancelled = false;
-    window.chiaroscuro
-      .sendCommand(TAB_CUSTOMIZATION_GET_STATE, { tabId })
-      .then((result: unknown) => {
-        if (cancelled) return;
-        const state = result as TabCustomization;
-        setLocalTitle(state.title ?? "");
-      })
-      .catch(console.error);
+    window.chiaroscuro.sendCommand(TAB_CUSTOMIZATION_GET_STATE, { tabId }).catch(console.error);
     return () => {
-      cancelled = true;
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     };
   }, [tabId]);
 
-  // Sync local title from store only when not actively editing (debounce idle)
-  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  useEffect(() => {
-    if (!saveTimeoutRef.current) {
-      setLocalTitle(customization?.title ?? "");
-    }
-  }, [customization?.title]);
-
   const handleTitleChange = useCallback(
     (value: string) => {
-      setLocalTitle(value);
+      setTitleOverride(value);
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
       saveTimeoutRef.current = setTimeout(() => {
         saveTimeoutRef.current = null;

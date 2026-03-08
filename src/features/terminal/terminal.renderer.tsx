@@ -1,12 +1,19 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { Icon } from "../../renderer/src/components/Icon";
 import { useTabsStore } from "../tabs/tabs.store";
-import { TERMINAL_CLEAR, TERMINAL_TOGGLE, type TerminalLine } from "./terminal.shared";
+import {
+  TERMINAL_CLEAR,
+  TERMINAL_TOGGLE,
+  type TerminalCommands,
+  type TerminalLine,
+} from "./terminal.shared";
 import { useTerminalStore } from "./terminal.store";
 
 const EMPTY_LINES: TerminalLine[] = [];
 
-function sendCommand(name: string, payload: unknown) {
+type UsedCommands = Pick<TerminalCommands, typeof TERMINAL_CLEAR | typeof TERMINAL_TOGGLE>;
+
+function sendCommand<K extends keyof UsedCommands>(name: K, payload: UsedCommands[K]["payload"]) {
   void window.chiaroscuro.sendCommand(name, payload);
 }
 

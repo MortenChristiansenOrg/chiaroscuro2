@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TabId } from "../../shared/types";
 import { makeTab } from "../../test-utils";
-import { TabItem } from "./sidebar.renderer";
+import { TabItem } from "./TabItem";
 
 // ── Mocks ───────────────────────────────────────────────────────
 

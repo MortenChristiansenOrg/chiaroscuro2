@@ -21,8 +21,7 @@ export function CommandPaletteOverlay() {
   );
   const inputRef = useRef<HTMLInputElement>(null);
   const triggerRef = useRef<Element | null>(null);
-  const [visible, setVisible] = useState(false);
-  const [closing, setClosing] = useState(false);
+  const [status, setStatus] = useState<"hidden" | "open" | "closing">("hidden");
   const [resolution, setResolution] = useState<ResolvedInput>({ type: "empty" });
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [selectedSuggestion, setSelectedSuggestion] = useState(-1);
@@ -42,27 +41,25 @@ export function CommandPaletteOverlay() {
   useEffect(() => {
     if (open) {
       triggerRef.current = document.activeElement;
-      setVisible(true);
-      setClosing(false);
+      setStatus("open");
       setResolution({ type: "empty" });
       setSuggestions([]);
       setSelectedSuggestion(-1);
       requestAnimationFrame(() => inputRef.current?.focus());
       return;
     }
-    if (!visible) return;
+    if (status === "hidden") return;
     // Play exit animation then unmount
-    setClosing(true);
+    setStatus("closing");
     const timer = setTimeout(() => {
-      setVisible(false);
-      setClosing(false);
+      setStatus("hidden");
       if (triggerRef.current instanceof HTMLElement) {
         triggerRef.current.focus();
         triggerRef.current = null;
       }
     }, 150); // --duration-exit
     return () => clearTimeout(timer);
-  }, [open, visible]);
+  }, [open, status]);
 
   const handleClose = () => {
     window.chiaroscuro.sendCommand("command-palette:hide", undefined);
@@ -70,23 +67,23 @@ export function CommandPaletteOverlay() {
 
   // Global Esc handler — works even if input loses focus
   useEffect(() => {
-    if (!visible || closing) return;
+    if (status !== "open") return;
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") window.chiaroscuro.sendCommand("command-palette:hide", undefined);
     };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
-  }, [visible, closing]);
+  }, [status]);
 
   // Focus trap — nothing else should be focusable while palette is open
   useEffect(() => {
-    if (!visible || closing) return;
+    if (status !== "open") return;
     const input = inputRef.current;
     if (!input) return;
     const refocus = () => requestAnimationFrame(() => input.focus());
     input.addEventListener("blur", refocus);
     return () => input.removeEventListener("blur", refocus);
-  }, [visible, closing]);
+  }, [status]);
 
   const handleInputChange = () => {
     const value = inputRef.current?.value ?? "";
@@ -162,7 +159,8 @@ export function CommandPaletteOverlay() {
     if (value) executeCommand(value, e.ctrlKey || e.metaKey);
   };
 
-  if (!visible) return null;
+  if (status === "hidden") return null;
+  const closing = status === "closing";
 
   return (
     // biome-ignore lint/a11y/useKeyWithClickEvents: Esc handler covers keyboard close

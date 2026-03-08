@@ -6,11 +6,24 @@ import {
   INSTALLER_CHECK_FOR_UPDATES,
   INSTALLER_DENY_PROTOCOL,
   INSTALLER_DISMISS_UPDATE,
+  type InstallerCommands,
 } from "./installer.shared";
 import { useInstallerStore } from "./installer.store";
 
-function sendCommand(name: string, payload: unknown) {
-  return window.chiaroscuro.sendCommand(name, payload);
+type UsedCommands = Pick<
+  InstallerCommands,
+  | typeof INSTALLER_CHECK_FOR_UPDATES
+  | typeof INSTALLER_APPLY_UPDATE
+  | typeof INSTALLER_DISMISS_UPDATE
+  | typeof INSTALLER_ALLOW_PROTOCOL
+  | typeof INSTALLER_DENY_PROTOCOL
+>;
+
+function sendCommand<K extends keyof UsedCommands>(
+  name: K,
+  payload: UsedCommands[K]["payload"],
+): Promise<UsedCommands[K]["response"]> {
+  return window.chiaroscuro.sendCommand(name, payload) as Promise<UsedCommands[K]["response"]>;
 }
 
 export function UpdateNotification() {

@@ -87,12 +87,19 @@ export default defineFeature<Deps>({
       const pt = pinnedTabs.get(tab.id);
       if (!pt) return;
       const canUpdateUrl = getCustomization(tab.id)?.fixedAddressDisabled ?? false;
-      if (canUpdateUrl) {
-        pt.url = tab.url;
-      }
-      pt.title = tab.title;
-      pt.favicon = tab.favicon;
-      pinnedTabs.set(pt.id, pt);
+      const changed =
+        pt.title !== tab.title ||
+        pt.favicon !== tab.favicon ||
+        (canUpdateUrl && pt.url !== tab.url);
+      if (!changed) return;
+      const updated: PinnedTab = {
+        ...pt,
+        title: tab.title,
+        favicon: tab.favicon,
+        url: canUpdateUrl ? tab.url : pt.url,
+      };
+      pinnedTabs.set(updated.id, updated);
+      emitChanged();
     });
 
     // Clean up pinned tabs when the underlying tab is closed

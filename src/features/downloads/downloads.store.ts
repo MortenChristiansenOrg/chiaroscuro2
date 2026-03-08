@@ -1,14 +1,12 @@
 import { create } from "zustand";
+import { typedOnEvent } from "../../shared/typed-on-event";
 import {
   DOWNLOADS_COMPLETED,
   DOWNLOADS_PROGRESS,
   DOWNLOADS_STARTED,
   DOWNLOADS_STATE_CHANGED,
   type Download,
-  type DownloadsCompletedEvent,
-  type DownloadsProgressEvent,
-  type DownloadsStartedEvent,
-  type DownloadsStateChangedEvent,
+  type DownloadsEvents,
 } from "./downloads.shared";
 
 const AUTO_REMOVE_DELAY_MS = 3000;
@@ -24,12 +22,12 @@ export const useDownloadsStore = create<DownloadsState>()(() => ({
 export function subscribeToEvents(
   onEvent: (name: string, callback: (payload: unknown) => void) => () => void,
 ): () => void {
+  const on = typedOnEvent<DownloadsEvents>(onEvent);
   const unsubs: (() => void)[] = [];
   const timers = new Map<string, ReturnType<typeof setTimeout>>();
 
   unsubs.push(
-    onEvent(DOWNLOADS_STARTED, (payload) => {
-      const { download } = payload as DownloadsStartedEvent;
+    on(DOWNLOADS_STARTED, ({ download }) => {
       useDownloadsStore.setState((s) => {
         const next = new Map(s.downloads);
         next.set(download.id, download);
@@ -39,8 +37,7 @@ export function subscribeToEvents(
   );
 
   unsubs.push(
-    onEvent(DOWNLOADS_PROGRESS, (payload) => {
-      const { downloadId, receivedBytes, totalBytes } = payload as DownloadsProgressEvent;
+    on(DOWNLOADS_PROGRESS, ({ downloadId, receivedBytes, totalBytes }) => {
       useDownloadsStore.setState((s) => {
         const existing = s.downloads.get(downloadId);
         if (!existing) return s;
@@ -52,8 +49,7 @@ export function subscribeToEvents(
   );
 
   unsubs.push(
-    onEvent(DOWNLOADS_STATE_CHANGED, (payload) => {
-      const { downloadId, state } = payload as DownloadsStateChangedEvent;
+    on(DOWNLOADS_STATE_CHANGED, ({ downloadId, state }) => {
       useDownloadsStore.setState((s) => {
         const existing = s.downloads.get(downloadId);
         if (!existing) return s;
@@ -65,8 +61,7 @@ export function subscribeToEvents(
   );
 
   unsubs.push(
-    onEvent(DOWNLOADS_COMPLETED, (payload) => {
-      const { downloadId, state } = payload as DownloadsCompletedEvent;
+    on(DOWNLOADS_COMPLETED, ({ downloadId, state }) => {
       useDownloadsStore.setState((s) => {
         const existing = s.downloads.get(downloadId);
         if (!existing) return s;

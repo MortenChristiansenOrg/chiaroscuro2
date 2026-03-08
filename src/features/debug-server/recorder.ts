@@ -31,10 +31,15 @@ function push(entry: RecordedEntry): void {
   if (buffer.length > MAX_ENTRIES) buffer.shift();
 }
 
+let registered = false;
+
 export function register<C extends CommandRegistry, E extends EventRegistry>(
   commandBus: CommandBus<C>,
   eventBus: EventBus<E>,
 ): void {
+  if (registered) return;
+  registered = true;
+
   // Patch commandBus.handle to record registrations
   const originalHandle = commandBus.handle.bind(commandBus);
   commandBus.handle = (<K extends string & keyof C>(

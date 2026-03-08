@@ -84,8 +84,7 @@ export default defineFeature<TabCustomizationDeps>({
 
     commands.handle(TAB_CUSTOMIZATION_SET_TITLE, async (payload) => {
       const { tabId, title } = payload;
-      const current = customizations.get(tabId) ?? { ...DEFAULT_CUSTOMIZATION };
-      current.title = title;
+      const current = { ...(customizations.get(tabId) ?? DEFAULT_CUSTOMIZATION), title };
 
       if (isDefault(current)) {
         customizations.delete(tabId);
@@ -101,13 +100,15 @@ export default defineFeature<TabCustomizationDeps>({
           .catch(logError("tab-customization", "upsert"));
       }
 
-      events.emit(TAB_CUSTOMIZATION_CHANGED, { tabId, customization: { ...current } });
+      events.emit(TAB_CUSTOMIZATION_CHANGED, { tabId, customization: current });
     });
 
     commands.handle(TAB_CUSTOMIZATION_SET_FIXED_ADDRESS_DISABLED, async (payload) => {
       const { tabId, disabled } = payload;
-      const current = customizations.get(tabId) ?? { ...DEFAULT_CUSTOMIZATION };
-      current.fixedAddressDisabled = disabled;
+      const current = {
+        ...(customizations.get(tabId) ?? DEFAULT_CUSTOMIZATION),
+        fixedAddressDisabled: disabled,
+      };
 
       if (isDefault(current)) {
         customizations.delete(tabId);
@@ -123,7 +124,7 @@ export default defineFeature<TabCustomizationDeps>({
           .catch(logError("tab-customization", "upsert"));
       }
 
-      events.emit(TAB_CUSTOMIZATION_CHANGED, { tabId, customization: { ...current } });
+      events.emit(TAB_CUSTOMIZATION_CHANGED, { tabId, customization: current });
     });
 
     commands.handle(TAB_CUSTOMIZATION_GET_STATE, async (payload) => {

@@ -418,14 +418,21 @@ export function WorkspaceEditor({
 function FadePresence({ visible, children }: { visible: boolean; children: React.ReactNode }) {
   const [mounted, setMounted] = useState(visible);
   const [show, setShow] = useState(false);
+  const rafRef = useRef(0);
 
   useEffect(() => {
     if (visible) {
       setMounted(true);
-      requestAnimationFrame(() => requestAnimationFrame(() => setShow(true)));
-    } else {
-      setShow(false);
+      const outer = requestAnimationFrame(() => {
+        rafRef.current = requestAnimationFrame(() => setShow(true));
+      });
+      return () => {
+        cancelAnimationFrame(outer);
+        cancelAnimationFrame(rafRef.current);
+      };
     }
+    setShow(false);
+    return undefined;
   }, [visible]);
 
   if (!mounted) return null;

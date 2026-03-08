@@ -27,6 +27,7 @@ import {
   TABS_REPORT_CONTENT_BOUNDS,
   TABS_SET_FOLDER_ID,
   TABS_SET_ORDER,
+  TABS_SET_WORKSPACE,
   TABS_TOGGLE_BOOKMARK,
   TABS_UPDATED,
   type Tab,
@@ -267,14 +268,17 @@ export default defineFeature<Deps>({
             // Convert localhost favicons to data URLs so they survive across sessions
             // (dev servers aren't running until the tab is activated)
             if (isLocalhostUrl(faviconUrl)) {
-              platform.fetchAsDataUrl(faviconUrl).then((dataUrl) => {
-                if (!dataUrl) return;
-                const current = tabs.get(tabId);
-                if (!current || current.favicon !== faviconUrl) return;
-                current.favicon = dataUrl;
-                events.emit(TABS_UPDATED, { tab: tabSnapshot(current) });
-                persistTab(current);
-              });
+              platform
+                .fetchAsDataUrl(faviconUrl)
+                .then((dataUrl) => {
+                  if (!dataUrl) return;
+                  const current = tabs.get(tabId);
+                  if (!current || current.favicon !== faviconUrl) return;
+                  current.favicon = dataUrl;
+                  events.emit(TABS_UPDATED, { tab: tabSnapshot(current) });
+                  persistTab(current);
+                })
+                .catch(logError("tabs", "fetch favicon as data url"));
             }
           }
         }),
@@ -554,6 +558,14 @@ export default defineFeature<Deps>({
       const tab = tabs.get(payload.tabId);
       if (!tab) return;
       tab.order = payload.order;
+      persistTab(tab);
+    });
+    commands.handle(TABS_SET_WORKSPACE, (payload) => {
+      const tab = tabs.get(payload.tabId);
+      if (!tab) return;
+      tab.workspaceId = payload.workspaceId;
+      events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
+      scheduleListChanged();
       persistTab(tab);
     });
 

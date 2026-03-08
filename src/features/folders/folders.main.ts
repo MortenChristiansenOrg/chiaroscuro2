@@ -101,8 +101,7 @@ export default defineFeature<Deps>({
     _setFolderOrder = (folderId: FolderId, order: number) => {
       const folder = folders.get(folderId);
       if (!folder || folder.order === order) return;
-      folder.order = order;
-      folders.set(folder.id, folder);
+      folders.set(folder.id, { ...folder, order });
       emitChanged();
     };
 
@@ -166,16 +165,14 @@ export default defineFeature<Deps>({
     commands.handle(FOLDERS_RENAME, async (payload) => {
       const folder = folders.get(payload.folderId);
       if (!folder) return;
-      folder.name = payload.name;
-      folders.set(folder.id, folder);
+      folders.set(folder.id, { ...folder, name: payload.name });
       emitChanged();
     });
 
     commands.handle(FOLDERS_TOGGLE_COLLAPSE, async (payload) => {
       const folder = folders.get(payload.folderId);
       if (!folder) return;
-      folder.collapsed = !folder.collapsed;
-      folders.set(folder.id, folder);
+      folders.set(folder.id, { ...folder, collapsed: !folder.collapsed });
       emitChanged();
     });
 
@@ -197,9 +194,7 @@ export default defineFeature<Deps>({
       // Promote child folders to parent level
       for (const child of folders.values()) {
         if (child.parentFolderId === folder.id) {
-          child.parentFolderId = targetParentId;
-          child.order = order++;
-          folders.set(child.id, child);
+          folders.set(child.id, { ...child, parentFolderId: targetParentId, order: order++ });
         }
       }
 
@@ -212,8 +207,11 @@ export default defineFeature<Deps>({
     });
 
     commands.handle(FOLDERS_REORDER, async (payload) => {
-      const folder = folders.get(payload.folderId);
-      if (!folder) return;
+      const existing = folders.get(payload.folderId);
+      if (!existing) return;
+
+      // Work with a copy to avoid mutating the stored object
+      let folder: Folder = { ...existing };
 
       // Update parent if specified
       if (payload.parentFolderId !== undefined) {
@@ -226,7 +224,7 @@ export default defineFeature<Deps>({
             ancestor = ancestor.parentFolderId ? folders.get(ancestor.parentFolderId) : undefined;
           }
         }
-        folder.parentFolderId = payload.parentFolderId;
+        folder = { ...folder, parentFolderId: payload.parentFolderId };
       }
 
       // Unified ordering: include both folders and tabs at the target level
@@ -281,9 +279,9 @@ export default defineFeature<Deps>({
       let tabsReordered = false;
       for (const [i, item] of items.entries()) {
         if (item.type === "folder") {
-          if (item.folder.order === i) continue;
-          item.folder.order = i;
-          folders.set(item.folder.id, item.folder);
+          // Always persist the reordered folder (parentFolderId may have changed)
+          if (item.folder.order === i && item.folder.id !== folder.id) continue;
+          folders.set(item.folder.id, { ...item.folder, order: i });
         } else if (item.tab.order !== i) {
           setTabOrder(item.tab.id, i);
           tabsReordered = true;
@@ -337,8 +335,7 @@ export default defineFeature<Deps>({
     commands.handle(FOLDERS_SET_ORDER, (payload) => {
       const folder = folders.get(payload.folderId);
       if (!folder || folder.order === payload.order) return;
-      folder.order = payload.order;
-      folders.set(folder.id, folder);
+      folders.set(folder.id, { ...folder, order: payload.order });
       emitChanged();
     });
   },

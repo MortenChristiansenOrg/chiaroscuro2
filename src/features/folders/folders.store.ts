@@ -1,11 +1,11 @@
 import { create } from "zustand";
+import { typedOnEvent } from "../../shared/typed-on-event";
 import type { FolderId } from "../../shared/types";
 import {
   FOLDERS_CHANGED,
   FOLDERS_RENAME_REQUESTED,
   type Folder,
-  type FoldersChangedEvent,
-  type FoldersRenameRequestedEvent,
+  type FoldersEvents,
 } from "./folders.shared";
 
 interface FoldersState {
@@ -21,11 +21,11 @@ export const useFoldersStore = create<FoldersState>()(() => ({
 export function subscribeToEvents(
   onEvent: (name: string, callback: (payload: unknown) => void) => () => void,
 ): () => void {
+  const on = typedOnEvent<FoldersEvents>(onEvent);
   const unsubs: (() => void)[] = [];
 
   unsubs.push(
-    onEvent(FOLDERS_CHANGED, (payload) => {
-      const { folders } = payload as FoldersChangedEvent;
+    on(FOLDERS_CHANGED, ({ folders }) => {
       const next = new Map<FolderId, Folder>();
       for (const folder of folders) {
         next.set(folder.id, folder);
@@ -35,8 +35,7 @@ export function subscribeToEvents(
   );
 
   unsubs.push(
-    onEvent(FOLDERS_RENAME_REQUESTED, (payload) => {
-      const { folderId } = payload as FoldersRenameRequestedEvent;
+    on(FOLDERS_RENAME_REQUESTED, ({ folderId }) => {
       useFoldersStore.setState({ renamingFolderId: folderId });
     }),
   );

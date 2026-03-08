@@ -210,12 +210,12 @@ export default defineFeature<LocalWebAppDeps>({
 
       // Only restart if this is the active tab
       if (deps.getActiveTabId() === tabId) {
-        startProcess(deps, tabId);
+        await startProcess(deps, tabId);
       }
     });
 
     commands.handle(LOCAL_WEB_APP_DELETE_CONFIG, async ({ tabId }) => {
-      killProcess(tabId);
+      await killProcess(tabId);
       configs.delete(tabId);
       statuses.delete(tabId);
       collection.remove(tabId).catch(logError("local-web-app", "remove config"));
@@ -224,11 +224,11 @@ export default defineFeature<LocalWebAppDeps>({
     });
 
     commands.handle(LOCAL_WEB_APP_START, async ({ tabId }) => {
-      startProcess(deps, tabId);
+      await startProcess(deps, tabId);
     });
 
     commands.handle(LOCAL_WEB_APP_STOP, async ({ tabId }) => {
-      killProcess(tabId);
+      await killProcess(tabId);
       statuses.set(tabId, "stopped");
       events.emit(LOCAL_WEB_APP_STATUS_CHANGED, { tabId, status: "stopped" });
     });

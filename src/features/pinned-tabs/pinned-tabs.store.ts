@@ -1,11 +1,11 @@
 import { create } from "zustand";
+import { typedOnEvent } from "../../shared/typed-on-event";
 import type { TabId } from "../../shared/types";
 import {
   PINNED_TABS_ACTIVE_CHANGED,
   PINNED_TABS_CHANGED,
   type PinnedTab,
-  type PinnedTabsActiveChangedEvent,
-  type PinnedTabsChangedEvent,
+  type PinnedTabsEvents,
 } from "./pinned-tabs.shared";
 
 interface PinnedTabsState {
@@ -21,18 +21,17 @@ export const usePinnedTabsStore = create<PinnedTabsState>()(() => ({
 export function subscribeToEvents(
   onEvent: (name: string, callback: (payload: unknown) => void) => () => void,
 ): () => void {
+  const on = typedOnEvent<PinnedTabsEvents>(onEvent);
   const unsubs: (() => void)[] = [];
 
   unsubs.push(
-    onEvent(PINNED_TABS_CHANGED, (payload) => {
-      const { pinnedTabs } = payload as PinnedTabsChangedEvent;
+    on(PINNED_TABS_CHANGED, ({ pinnedTabs }) => {
       usePinnedTabsStore.setState({ pinnedTabs });
     }),
   );
 
   unsubs.push(
-    onEvent(PINNED_TABS_ACTIVE_CHANGED, (payload) => {
-      const { tabId } = payload as PinnedTabsActiveChangedEvent;
+    on(PINNED_TABS_ACTIVE_CHANGED, ({ tabId }) => {
       usePinnedTabsStore.setState({ activePinnedTabId: tabId });
     }),
   );

@@ -145,23 +145,26 @@ function startWatching(domain: string): void {
   if (!fs.existsSync(filePath)) return;
 
   try {
-    const watcher = fs.watch(filePath, async (eventType) => {
-      if (eventType === "rename") {
-        // File was deleted
-        if (!fs.existsSync(filePath)) {
-          stopWatching(domain);
-          const state = domainStates.get(domain);
-          if (state?.enabled) {
-            state.enabled = false;
-            await persistStates();
-            await injectOrRemoveForAllTabs(domain);
-            emitChanged(domain);
+    const watcher = fs.watch(filePath, (eventType) => {
+      const handleChange = async () => {
+        if (eventType === "rename") {
+          // File was deleted
+          if (!fs.existsSync(filePath)) {
+            stopWatching(domain);
+            const state = domainStates.get(domain);
+            if (state?.enabled) {
+              state.enabled = false;
+              await persistStates();
+              await injectOrRemoveForAllTabs(domain);
+              emitChanged(domain);
+            }
+            return;
           }
-          return;
         }
-      }
-      // File was changed — re-inject
-      await injectOrRemoveForAllTabs(domain);
+        // File was changed — re-inject
+        await injectOrRemoveForAllTabs(domain);
+      };
+      handleChange().catch(logError("domain-css", `watch ${domain}`));
     });
 
     watchers.set(domain, watcher);
@@ -191,28 +194,30 @@ async function persistStates(): Promise<void> {
 }
 
 export default defineFeature<DomainCssDeps>({
-  register(d) {
-    deps = d;
-    cssDir = path.join(d.dataDir, "domain-css");
+  register(d_) {
+    deps = d_;
+    cssDir = path.join(d_.dataDir, "domain-css");
     domainStates = new Map();
     injectedCssKeys.clear();
     for (const w of watchers.values()) w.close();
     watchers.clear();
 
+    const { commands, events } = d_;
+
     const domainTabs = new SingletonTabMap({
-      activate: (tabId) => d.commands.send("tabs:activate", { tabId }),
-      create: (url) => d.commands.send("tabs:create", { url }),
+      activate: (tabId) => commands.send("tabs:activate", { tabId }),
+      create: (url) => commands.send("tabs:create", { url }),
     });
 
     // Clean up singleton + CSS tracking when tab closes
-    d.events.on(TABS_CLOSED, (payload) => {
+    events.on(TABS_CLOSED, (payload) => {
       const { tabId } = payload;
       domainTabs.onClose(tabId);
       injectedCssKeys.delete(tabId);
     });
 
     // When a tab navigates, inject/remove CSS for the new domain
-    d.events.on(TABS_UPDATED, (payload) => {
+    events.on(TABS_UPDATED, (payload) => {
       const { tab } = payload;
       if (tab.builtIn) return;
 
@@ -232,7 +237,7 @@ export default defineFeature<DomainCssDeps>({
 
     // ── Commands ──────────────────────────────────────────────────
 
-    d.commands.handle(DOMAIN_CSS_OPEN, async (payload) => {
+    commands.handle(DOMAIN_CSS_OPEN, async (payload) => {
       const { domain } = payload;
       return domainTabs.openOrActivate(
         domain,
@@ -240,7 +245,7 @@ export default defineFeature<DomainCssDeps>({
       );
     });
 
-    d.commands.handle(DOMAIN_CSS_GET_STATE, async (payload) => {
+    commands.handle(DOMAIN_CSS_GET_STATE, async (payload) => {
       const { domain } = payload;
       const state = domainStates.get(domain);
       return {
@@ -250,7 +255,7 @@ export default defineFeature<DomainCssDeps>({
       };
     });
 
-    d.commands.handle(DOMAIN_CSS_TOGGLE, async (payload) => {
+    commands.handle(DOMAIN_CSS_TOGGLE, async (payload) => {
       const { domain } = payload;
       if (!isValidDomain(domain)) throw new Error(`Invalid domain: ${domain}`);
       const state = domainStates.get(domain) ?? { enabled: false };
@@ -269,7 +274,7 @@ export default defineFeature<DomainCssDeps>({
       emitChanged(domain);
     });
 
-    d.commands.handle(DOMAIN_CSS_EDIT, async (payload) => {
+    commands.handle(DOMAIN_CSS_EDIT, async (payload) => {
       const { domain } = payload;
       const filePath = getCssFilePath(domain);
 
@@ -297,7 +302,7 @@ export default defineFeature<DomainCssDeps>({
       await deps.platform.openPath(filePath);
     });
 
-    d.commands.handle(DOMAIN_CSS_REMOVE, async (payload) => {
+    commands.handle(DOMAIN_CSS_REMOVE, async (payload) => {
       const { domain } = payload;
       const filePath = getCssFilePath(domain);
 
@@ -324,10 +329,10 @@ export default defineFeature<DomainCssDeps>({
     });
   },
 
-  async start(d) {
+  async start({ dataStore }) {
     fs.mkdirSync(cssDir, { recursive: true });
 
-    const stored = await d.dataStore.getSetting<Record<string, DomainState>>("domain-css-states");
+    const stored = await dataStore.getSetting<Record<string, DomainState>>("domain-css-states");
     if (stored) {
       for (const [domain, state] of Object.entries(stored)) {
         if (!isValidDomain(domain)) {

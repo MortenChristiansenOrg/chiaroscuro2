@@ -1,127 +1,71 @@
-# Feature File Review: Imperative -> Declarative
+# Feature Code Cleanup Plan
 
-## Current State
+## Systemic Issues
 
-Each feature is a module with `register()` + `start()` exports. Inside: module-scoped mutable state (Maps, timers, flags), manual event listener cleanup tracked in `Map<TabId, () => void>`, ad-hoc debounce/throttle timers, and cross-feature state access via exported getters. The buses (`CommandBus`, `EventBus`) are minimal -- typed but with no middleware, lifecycle, or composition support.
+### Module-level mutable state
 
-## Key Pain Points
+Nearly every `.main.ts` uses module-scoped `let` vars + Maps set during `register()`. Problems: test isolation fragility, no GC, calling exports before `register()` silently fails or throws. Affected: app-state, domain-css, downloads, folders, local-web-app, pinned-tabs, settings, sidebar, tabs, terminal, workspaces, tab-customization.
 
-1. **Scattered mutable state** -- each feature has 3-6 module-level `let`/`Map`/`Set` variables with no encapsulation
-2. **Manual cleanup tracking** -- 5+ features maintain `Map<TabId, (() => void)[]>` for listener cleanup
-3. **Duplicated debounce/throttle logic** -- app-state, downloads, tabs each reinvent timers
-4. **No atomicity** -- multi-step mutations (memory -> persist -> emit) can partially fail
-5. **Cross-feature coupling** -- `getTab()`, `getAllTabs()`, `setTabOrder()` etc. create circular dependencies
-6. **Boilerplate in index.ts** -- 120 lines of imports, manual registration order, manual type merging
-7. **No structured teardown** -- `before-quit` only flushes app-state; other features leak
+### ~~Untyped `sendCommand` in renderers~~ ✅ DONE
 
----
+~~Multiple renderers define `function sendCommand(name: string, payload: unknown)`, losing all compile-time safety.~~ Fixed: All renderers now use typed `sendCommand<K extends keyof UsedCommands>()` with `Pick<XyzCommands, ...>`. Applied to: downloads, find-text, installer, local-web-app, sidebar (all 5 extracted files), tab-customization, terminal.
 
-## Three Approaches
+### ~~`payload as XyzEvent` casts in all stores~~ ✅ DONE
 
-### Approach A: Lifecycle + Utilities (minimal, pragmatic)
+~~Every store's `subscribeToEvents` callback casts `payload` from `unknown`.~~ Fixed: Created `typedOnEvent<TRegistry>()` utility in `src/shared/typed-on-event.ts`. Applied to all ~15 stores.
 
-Keep the current architecture but add lightweight utilities to eliminate the most common imperative patterns.
+### ~~Direct mutation of Map-stored objects~~ ✅ DONE (folders, pinned-tabs, tab-customization)
 
-**What it adds:**
-- **`TabScope`** -- associates cleanup functions with a tab ID; auto-runs them on `TABS_CLOSED`. Replaces all the `tabCleanups` Maps.
-- **`DebouncedSave<T>`** -- wraps a value + dataStore key with auto-debounce and flush-on-quit. Replaces 3+ hand-rolled timer patterns.
-- **`SingletonTab`** -- handles "open-or-activate" with race-condition protection. Replaces 3 near-identical patterns in settings/domain-css/local-web-app.
-- **`defineFeature()`** -- thin wrapper that gives each feature `register`, `start`, `teardown` and auto-wires them in `index.ts`, eliminating the 120-line import wall.
-
-**Pros:** Smallest diff, no new deps, easy to adopt incrementally.
-**Cons:** Doesn't fix cross-feature coupling or atomicity. Features are still bags of imperative handlers, just with less boilerplate.
-
-**Estimated impact:** Removes ~30-40% of imperative boilerplate. Each feature shrinks by 15-30 lines.
+~~Several features mutate objects retrieved from Maps before calling `.set()`.~~ Fixed in folders.main.ts (all 7 mutation sites → immutable spread), pinned-tabs.main.ts, tab-customization.main.ts. Remaining: tabs.main.ts (internal Map, mutations are within the same synchronous handler), domain-css.main.ts.
 
 ---
 
-### Approach B: Reactive State Stores (medium, structural)
+## Per-Feature Highlights (HIGH/MEDIUM)
 
-Give each feature a typed, observable state container. Command handlers become state transitions; events are derived from state changes.
-
-**What it adds:**
-- **`FeatureStore<State>`** -- like a mini-Zustand for the main process. Holds a feature's entire state in one object. Emits diffs on mutation. Supports middleware (persist, debounce, log).
-- State changes auto-emit the feature's "changed" event -- no manual `emitChanged()` calls.
-- Persistence becomes a middleware: `persist(store, dataStore, key, { debounce: 500 })`.
-- Cross-feature reads go through store subscriptions instead of exported getters, breaking circular imports.
-
-**Example transformation (app-state):**
-```ts
-// Before: 3 module vars, manual debounce, manual flush
-let current: PersistedAppState;
-let saveTimer;
-function scheduleSave() { ... }
-function flushSave() { ... }
-
-// After: single store with persist middleware
-const store = createFeatureStore<PersistedAppState>(defaults);
-persist(store, dataStore, "app-state", { debounce: 500 });
-// State changes auto-persist. Flush on quit via store.flush().
-```
-
-**No new npm deps** -- `FeatureStore` is ~80 lines (just `EventEmitter` + simple `setState` like Zustand's core).
-
-**Pros:** Single source of truth per feature. Eliminates manual emit/persist/debounce. Makes state transitions testable (assert against store snapshots). Breaks circular deps.
-**Cons:** Requires rewriting most feature files (medium effort). State shape needs upfront design. Some features (tabs, folders) have complex relational state that doesn't fit a flat store well.
-
-**Estimated impact:** Removes ~60-70% of imperative code. Features become "store + handlers that call `store.setState()`".
+| Feature               | Sev    | Issue                                                                                                | Status |
+| --------------------- | ------ | ---------------------------------------------------------------------------------------------------- | ------ |
+| **sidebar**           | HIGH   | God component — `sidebar.renderer.tsx` is ~1779 lines. Extract TabItem, FolderGroup, PinnedTabsStrip | ✅ DONE — 8 files extracted, main file ~310 lines |
+| **sidebar**           | MEDIUM | Massive prop drilling (10-15+ props through tree). Needs DragContext/provider                        | SidebarDragContext created, not yet wired |
+| **sidebar**           | MEDIUM | `useMemo` dep on `bookmarked` defeats memoization (new array ref every render)                       | ✅ DONE — `pinnedTabIds` memoized |
+| **workspaces**        | HIGH   | Direct mutation of external Tab objects (`tab.workspaceId = ...`) violates "mutations via commands"  | ✅ DONE — uses TABS_SET_WORKSPACE command |
+| **workspaces**        | HIGH   | `start()` exported standalone, not via `defineFeature` pattern                                       | |
+| **workspaces**        | MEDIUM | `FadePresence` double-rAF without cancellation on unmount                                            | ✅ DONE |
+| **command-palette**   | HIGH   | Contradictory boolean state (`visible`/`closing`) — should be status enum                            | ✅ DONE |
+| **command-palette**   | MEDIUM | Effect cascade for open/close animation, blur/refocus focus trap                                     | |
+| **command-palette**   | MEDIUM | Hard-coded command strings instead of shared constants                                               | |
+| **folders**           | HIGH   | Zero test coverage for complex reorder/nesting logic                                                 | ✅ DONE — 24 tests covering all commands |
+| **local-web-app**     | HIGH   | `useEffect` for state sync — project's #1 documented anti-pattern                                    | ✅ DONE — override pattern |
+| **local-web-app**     | MEDIUM | Missing `await` on async `startProcess` calls                                                        | ✅ DONE |
+| **local-web-app**     | MEDIUM | Duplicated process exit cleanup (close vs error handlers)                                            | |
+| **tabs**              | MEDIUM | `as string` casts on platform event callbacks — unsafe if Electron API changes                       | |
+| **tabs**              | MEDIUM | Fire-and-forget `fetchAsDataUrl` with no `.catch()`                                                  | ✅ DONE |
+| **debug-server**      | HIGH   | Monkey-patching in `recorder.ts` with no double-registration guard                                   | ✅ DONE |
+| **domain-css**        | HIGH   | Module-level mutable state + abbreviated `d` param in `register()`                                   | ✅ DONE |
+| **domain-css**        | MEDIUM | Unhandled promise rejections in async `fs.watch` callback                                            | ✅ DONE |
+| **downloads**         | MEDIUM | `useDownloadsStore((s) => s.downloads)` returns Map — needs `useShallow`                             | |
+| **settings**          | MEDIUM | Fire-and-forget: 3 separate `dataStore.setSetting()` calls per save                                  | ✅ DONE |
+| **tab-customization** | MEDIUM | Two `useEffect` for state sync (anti-pattern)                                                        | ✅ DONE — override pattern |
+| **pinned-tabs**       | MEDIUM | `TABS_UPDATED` sync doesn't emit `PINNED_TABS_CHANGED` — renderer never learns                       | ✅ DONE |
 
 ---
 
-### Approach C: XState Actors (ambitious, formal)
+## Best Practices Gap Analysis (2025-2026)
 
-Model each feature as an XState v5 actor/state machine. The feature's behavior is fully declarative: states, transitions, guards, effects.
-
-**What it adds:**
-- Each feature becomes a `createMachine({ ... })` definition with explicit states (e.g. find-text: `idle -> searching -> found/notFound`).
-- Side effects (persistence, platform calls) live in `actions` and `services`, not inline in handlers.
-- Tab lifecycle becomes a spawned child actor -- cleanup is automatic when the actor stops.
-- Cross-feature communication via actor `sendTo()` -- no shared mutable state.
-
-**Example (find-text):**
-```ts
-const findTextMachine = createMachine({
-  id: "find-text",
-  initial: "idle",
-  states: {
-    idle: {
-      on: { "find-text:start": "searching" }
-    },
-    searching: {
-      entry: ["injectFindListener"],
-      on: {
-        "found-in-page": { actions: ["emitResults"] },
-        "find-text:stop": "idle",
-        "tabs:closed": "idle"
-      },
-      exit: ["stopFindInPage", "cleanupListener"]
-    }
-  }
-});
-```
-
-**New dep:** `xstate` (~15kb). Zero-dep itself.
-
-**Pros:** Most declarative -- states, transitions, side effects are all visible in the machine definition. Impossible to be in an invalid state. Visualizable with Stately Studio. Automatic cleanup via actor lifecycle. Great for complex features (tabs, folders, installer with update states).
-**Cons:** Biggest learning curve. Overkill for simple features (zoom, dev-tools are just "on command, do thing"). Requires rethinking the bus architecture -- XState actors have their own event/message passing. Largest migration effort.
-
-**Estimated impact:** Features become pure state machine definitions. ~80-90% of imperative code eliminated. But the migration is substantial.
-
----
-
-## Recommendation
-
-**Start with Approach A**, then selectively adopt Approach B for stateful features.
-
-- A's utilities (`TabScope`, `DebouncedSave`, `SingletonTab`, `defineFeature`) are immediately useful and can be built in a day. They reduce the noise so you can see which features actually have complex state logic.
-- After A, apply B's `FeatureStore` to the 5-6 features with meaningful state: tabs, folders, domain-css, pinned-tabs, app-state, local-web-app. Simple features (zoom, dev-tools, tooltip) stay as plain handlers.
-- C (XState) is worth considering later for the installer (which has real state machine behavior: checking -> downloading -> installing -> restarting) and possibly tabs (complex lifecycle). But adopting it project-wide would be over-engineering.
+| Area                 | Current                                                    | Recommended                                                                                |
+| -------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| **`useEffectEvent`** | Manual ref-based "latest callback" patterns                | Now stable in React 19.2 — cleaner solution for stale closures in effects                  |
+| **`<Activity>`**     | Manual show/hide for tab content                           | React 19.2's `<Activity mode="hidden">` preserves state, unmounts effects                  |
+| **`forwardRef`**     | Likely still used in UI components                         | Deprecated in React 19 — use ref as regular prop                                           |
+| **React Compiler**   | Docs mention it, manual `useCallback`/`useMemo` everywhere | Compiler 1.0 is production-ready — stop adding manual memo, remove `React.memo()` wrappers. Add lint rule requiring `// manual-memo: <reason>` comment for any `useCallback`/`useMemo`/`React.memo` usage. Run `react-compiler-healthcheck` to verify compiler coverage and identify components it can't optimize. |
+| **TS 7.0 prep**      | Current TS config                                          | Audit for enums (use `as const` objects), `baseUrl` usage, `moduleResolution: "node"`      |
+| **Zustand v5**       | Selectors returning objects/Maps                           | Stricter reference equality — use `useShallow` for multi-value selectors                   |
+| **Vitest 4.0**       | jsdom-based tests                                          | Browser mode now stable — consider for component tests needing real DOM                    |
 
 ---
 
 ## Unresolved Questions
 
-1. Should `FeatureStore` use immutable state (spread on every update) or mutable + dirty tracking? Immutable is safer but verbose for nested state like tabs.
-2. For `defineFeature()`, should features declare dependencies explicitly (enabling topological sort for startup order), or keep the current manual ordering in index.ts?
-3. The current `CommandBus` is request/response. Would adding middleware (logging, error wrapping, retry) to the bus itself be a better place to solve the `.catch(console.error)` problem than per-feature utilities?
-4. Should `TabScope` be a bus-level concept (the event bus auto-cleans subscriptions tagged with a tab ID) or a standalone utility that features opt into?
+1. The `vi.mocked()` note in MEMORY.md says it's unavailable in bun test, but `dev-tools.test.ts` uses it — is the memory note stale, or do these tests run differently?
+2. Several `settings.test.ts` test objects appear to be missing the `debugServer` field — do these actually compile?
+3. ~~Is the sidebar's 1779-line renderer considered known tech debt, or should decomposition be prioritized?~~ Resolved: decomposed.
+4. Is `<Activity>` worth exploring for the tab show/hide architecture, or is the current WebContentsView approach sufficient?

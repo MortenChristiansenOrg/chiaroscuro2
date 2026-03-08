@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { typedOnEvent } from "../../shared/typed-on-event";
 import type { WorkspaceId } from "../../shared/types";
 import {
   WORKSPACES_CREATED,
@@ -7,11 +8,7 @@ import {
   WORKSPACES_SWITCHED,
   WORKSPACES_UPDATED,
   type Workspace,
-  type WorkspacesCreatedEvent,
-  type WorkspacesDeletedEvent,
-  type WorkspacesListChangedEvent,
-  type WorkspacesSwitchedEvent,
-  type WorkspacesUpdatedEvent,
+  type WorkspacesEvents,
 } from "./workspaces.shared";
 
 interface WorkspacesState {
@@ -27,18 +24,17 @@ export const useWorkspacesStore = create<WorkspacesState>()(() => ({
 export function subscribeToEvents(
   onEvent: (name: string, callback: (payload: unknown) => void) => () => void,
 ): () => void {
+  const on = typedOnEvent<WorkspacesEvents>(onEvent);
   const unsubs: (() => void)[] = [];
 
   unsubs.push(
-    onEvent(WORKSPACES_SWITCHED, (payload) => {
-      const { workspaceId } = payload as WorkspacesSwitchedEvent;
+    on(WORKSPACES_SWITCHED, ({ workspaceId }) => {
       useWorkspacesStore.setState({ activeWorkspaceId: workspaceId });
     }),
   );
 
   unsubs.push(
-    onEvent(WORKSPACES_CREATED, (payload) => {
-      const { workspace } = payload as WorkspacesCreatedEvent;
+    on(WORKSPACES_CREATED, ({ workspace }) => {
       useWorkspacesStore.setState((state) => ({
         workspaces: [...state.workspaces, workspace],
         // Auto-set first workspace as active
@@ -48,8 +44,7 @@ export function subscribeToEvents(
   );
 
   unsubs.push(
-    onEvent(WORKSPACES_UPDATED, (payload) => {
-      const { workspace } = payload as WorkspacesUpdatedEvent;
+    on(WORKSPACES_UPDATED, ({ workspace }) => {
       useWorkspacesStore.setState((state) => ({
         workspaces: state.workspaces.map((w) => (w.id === workspace.id ? workspace : w)),
       }));
@@ -57,8 +52,7 @@ export function subscribeToEvents(
   );
 
   unsubs.push(
-    onEvent(WORKSPACES_DELETED, (payload) => {
-      const { workspaceId } = payload as WorkspacesDeletedEvent;
+    on(WORKSPACES_DELETED, ({ workspaceId }) => {
       useWorkspacesStore.setState((state) => ({
         workspaces: state.workspaces.filter((w) => w.id !== workspaceId),
       }));
@@ -66,8 +60,7 @@ export function subscribeToEvents(
   );
 
   unsubs.push(
-    onEvent(WORKSPACES_LIST_CHANGED, (payload) => {
-      const { workspaces } = payload as WorkspacesListChangedEvent;
+    on(WORKSPACES_LIST_CHANGED, ({ workspaces }) => {
       useWorkspacesStore.setState((state) => ({
         workspaces,
         activeWorkspaceId:

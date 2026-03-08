@@ -6,12 +6,7 @@ import { logError } from "../../shared/log";
 import { SingletonTab } from "../../shared/singleton-tab";
 import type { TabId } from "../../shared/types";
 import { DEFAULT_PROVIDERS, type SearchProvider } from "../command-palette/resolve-input";
-import {
-  TABS_CLOSED,
-  type TabsClosedEvent,
-  type TabsCommands,
-  type TabsEvents,
-} from "../tabs/tabs.shared";
+import { TABS_CLOSED, type TabsCommands, type TabsEvents } from "../tabs/tabs.shared";
 import {
   SETTINGS_CHANGED,
   SETTINGS_GET,
@@ -52,8 +47,7 @@ export default defineFeature<Deps>({
     });
 
     events.on(TABS_CLOSED, (payload) => {
-      const { tabId } = payload as TabsClosedEvent;
-      settingsTab.onClose(tabId);
+      settingsTab.onClose(payload.tabId);
     });
 
     commands.handle(SETTINGS_OPEN, async () => {
@@ -67,15 +61,17 @@ export default defineFeature<Deps>({
     commands.handle(SETTINGS_SAVE, async (payload) => {
       currentSettings = { ...payload };
       events.emit(SETTINGS_CHANGED, { settings: { ...currentSettings } });
-      dataStore
-        .setSetting("search-providers", payload.searchProviders)
-        .catch(logError("settings", "persist search providers"));
-      dataStore
-        .setSetting("default-search-provider", payload.defaultSearchProviderId)
-        .catch(logError("settings", "persist default provider"));
-      dataStore
-        .setSetting("debug-server", payload.debugServer)
-        .catch(logError("settings", "persist debug server"));
+      await Promise.all([
+        dataStore
+          .setSetting("search-providers", payload.searchProviders)
+          .catch(logError("settings", "persist search providers")),
+        dataStore
+          .setSetting("default-search-provider", payload.defaultSearchProviderId)
+          .catch(logError("settings", "persist default provider")),
+        dataStore
+          .setSetting("debug-server", payload.debugServer)
+          .catch(logError("settings", "persist debug server")),
+      ]);
     });
   },
 

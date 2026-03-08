@@ -11,6 +11,7 @@ import {
   TABS_ACTIVATED,
   TABS_CLOSE,
   TABS_NAVIGATE,
+  TABS_SET_WORKSPACE,
   TABS_UPDATED,
 } from "../tabs/tabs.shared";
 import {
@@ -192,11 +193,10 @@ export default defineFeature<Deps>({
       }
       if (!defaultWsId) return;
 
-      // Move tabs to default workspace
+      // Move tabs to default workspace via command (avoids mutating external Tab objects)
       const tabsInWs = getTabsForWorkspace(workspaceId);
       for (const tab of tabsInWs) {
-        tab.workspaceId = defaultWsId;
-        events.emit(TABS_UPDATED, { tab: { ...tab } });
+        await commands.send(TABS_SET_WORKSPACE, { tabId: tab.id, workspaceId: defaultWsId });
       }
 
       // If deleting active workspace, switch to default
@@ -229,8 +229,7 @@ export default defineFeature<Deps>({
       const tab = allTabs.find((t) => t.id === tabId);
       if (!tab) return;
 
-      tab.workspaceId = targetWorkspaceId;
-      events.emit(TABS_UPDATED, { tab: { ...tab } });
+      await commands.send(TABS_SET_WORKSPACE, { tabId, workspaceId: targetWorkspaceId });
 
       // Hide tab since it's moving to another workspace
       platform.hideTab(tabId);

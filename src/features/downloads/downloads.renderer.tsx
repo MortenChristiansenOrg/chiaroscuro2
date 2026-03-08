@@ -4,10 +4,16 @@ import {
   DOWNLOADS_PAUSE,
   DOWNLOADS_RESUME,
   type Download,
+  type DownloadsCommands,
 } from "./downloads.shared";
 import { useDownloadsStore } from "./downloads.store";
 
-function sendCommand(name: string, payload: unknown) {
+type UsedCommands = Pick<
+  DownloadsCommands,
+  typeof DOWNLOADS_CANCEL | typeof DOWNLOADS_PAUSE | typeof DOWNLOADS_RESUME
+>;
+
+function sendCommand<K extends keyof UsedCommands>(name: K, payload: UsedCommands[K]["payload"]) {
   void window.chiaroscuro.sendCommand(name, payload);
 }
 

@@ -1,10 +1,18 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "../../renderer/src/components/Icon";
-import { FIND_NEXT, FIND_PREVIOUS, FIND_STOP } from "./find-text.shared";
+import { FIND_NEXT, FIND_PREVIOUS, FIND_STOP, type FindTextCommands } from "./find-text.shared";
 import { useFindTextStore } from "./find-text.store";
 
-function sendCommand(name: string, payload?: unknown) {
-  window.chiaroscuro.sendCommand(name, payload);
+type UsedCommands = Pick<
+  FindTextCommands,
+  typeof FIND_NEXT | typeof FIND_PREVIOUS | typeof FIND_STOP
+>;
+
+function sendCommand<K extends keyof UsedCommands>(
+  name: K,
+  ...args: UsedCommands[K]["payload"] extends undefined ? [] : [payload: UsedCommands[K]["payload"]]
+) {
+  void window.chiaroscuro.sendCommand(name, args[0]);
 }
 
 export function FindBar() {

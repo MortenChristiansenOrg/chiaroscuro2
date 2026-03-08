@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { typedOnEvent } from "../../shared/typed-on-event";
 import type { TabId } from "../../shared/types";
 import {
   TAB_CUSTOMIZATION_CHANGED,
@@ -6,10 +7,7 @@ import {
   TAB_CUSTOMIZATION_OPENED,
   TAB_CUSTOMIZATION_REMOVED,
   type TabCustomization,
-  type TabCustomizationChangedEvent,
-  type TabCustomizationClosedEvent,
-  type TabCustomizationOpenedEvent,
-  type TabCustomizationRemovedEvent,
+  type TabCustomizationEvents,
 } from "./tab-customization.shared";
 
 interface TabCustomizationState {
@@ -25,18 +23,17 @@ export const useTabCustomizationStore = create<TabCustomizationState>()(() => ({
 export function subscribeToEvents(
   onEvent: (name: string, callback: (payload: unknown) => void) => () => void,
 ): () => void {
+  const on = typedOnEvent<TabCustomizationEvents>(onEvent);
   const unsubs: (() => void)[] = [];
 
   unsubs.push(
-    onEvent(TAB_CUSTOMIZATION_OPENED, (payload) => {
-      const { tabId } = payload as TabCustomizationOpenedEvent;
+    on(TAB_CUSTOMIZATION_OPENED, ({ tabId }) => {
       useTabCustomizationStore.setState({ editingTabId: tabId });
     }),
   );
 
   unsubs.push(
-    onEvent(TAB_CUSTOMIZATION_CLOSED, (payload) => {
-      const { tabId } = payload as TabCustomizationClosedEvent;
+    on(TAB_CUSTOMIZATION_CLOSED, ({ tabId }) => {
       useTabCustomizationStore.setState((state) =>
         state.editingTabId === tabId ? { editingTabId: null } : state,
       );
@@ -44,8 +41,7 @@ export function subscribeToEvents(
   );
 
   unsubs.push(
-    onEvent(TAB_CUSTOMIZATION_CHANGED, (payload) => {
-      const { tabId, customization } = payload as TabCustomizationChangedEvent;
+    on(TAB_CUSTOMIZATION_CHANGED, ({ tabId, customization }) => {
       useTabCustomizationStore.setState((prev) => {
         const next = new Map(prev.customizations);
         next.set(tabId, customization);
@@ -55,8 +51,7 @@ export function subscribeToEvents(
   );
 
   unsubs.push(
-    onEvent(TAB_CUSTOMIZATION_REMOVED, (payload) => {
-      const { tabId } = payload as TabCustomizationRemovedEvent;
+    on(TAB_CUSTOMIZATION_REMOVED, ({ tabId }) => {
       useTabCustomizationStore.setState((prev) => {
         const next = new Map(prev.customizations);
         next.delete(tabId);
