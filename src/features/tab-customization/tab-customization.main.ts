@@ -2,8 +2,8 @@ import type { CommandBus } from "../../bus/command-bus";
 import type { EventBus } from "../../bus/event-bus";
 import type { Collection, DataStore } from "../../data/types";
 import { defineFeature } from "../../shared/define-feature";
+import { logError } from "../../shared/log";
 import type { TabId } from "../../shared/types";
-import { isPinned } from "../pinned-tabs/pinned-tabs.main";
 import type { Tab, TabsCommands, TabsEvents } from "../tabs/tabs.shared";
 import { TABS_ACTIVATE, TABS_CLOSED } from "../tabs/tabs.shared";
 import {
@@ -35,6 +35,7 @@ export interface TabCustomizationDeps {
   events: EventBus<AllEvents>;
   dataStore: DataStore;
   getTab: (tabId: TabId) => Tab | undefined;
+  isPinned: (tabId: TabId) => boolean;
 }
 
 const DEFAULT_CUSTOMIZATION: TabCustomization = {
@@ -51,7 +52,7 @@ function isDefault(c: TabCustomization): boolean {
 
 export default defineFeature<TabCustomizationDeps>({
   register(deps) {
-    const { commands, events, dataStore, getTab } = deps;
+    const { commands, events, dataStore, getTab, isPinned } = deps;
     customizations = new Map();
     collection = dataStore.collection<PersistedCustomization>("tab-customizations");
 
@@ -60,7 +61,7 @@ export default defineFeature<TabCustomizationDeps>({
       const { tabId } = payload;
       if (customizations.has(tabId)) {
         customizations.delete(tabId);
-        collection.remove(tabId).catch(console.error);
+        collection.remove(tabId).catch(logError("tab-customization", "remove"));
         events.emit(TAB_CUSTOMIZATION_REMOVED, { tabId });
       }
     });
@@ -88,7 +89,7 @@ export default defineFeature<TabCustomizationDeps>({
 
       if (isDefault(current)) {
         customizations.delete(tabId);
-        collection.remove(tabId).catch(console.error);
+        collection.remove(tabId).catch(logError("tab-customization", "remove"));
       } else {
         customizations.set(tabId, current);
         collection
@@ -97,7 +98,7 @@ export default defineFeature<TabCustomizationDeps>({
             title: current.title,
             fixedAddressDisabled: current.fixedAddressDisabled,
           })
-          .catch(console.error);
+          .catch(logError("tab-customization", "upsert"));
       }
 
       events.emit(TAB_CUSTOMIZATION_CHANGED, { tabId, customization: { ...current } });
@@ -110,7 +111,7 @@ export default defineFeature<TabCustomizationDeps>({
 
       if (isDefault(current)) {
         customizations.delete(tabId);
-        collection.remove(tabId).catch(console.error);
+        collection.remove(tabId).catch(logError("tab-customization", "remove"));
       } else {
         customizations.set(tabId, current);
         collection
@@ -119,7 +120,7 @@ export default defineFeature<TabCustomizationDeps>({
             title: current.title,
             fixedAddressDisabled: current.fixedAddressDisabled,
           })
-          .catch(console.error);
+          .catch(logError("tab-customization", "upsert"));
       }
 
       events.emit(TAB_CUSTOMIZATION_CHANGED, { tabId, customization: { ...current } });

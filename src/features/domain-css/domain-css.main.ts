@@ -5,6 +5,7 @@ import type { EventBus } from "../../bus/event-bus";
 import type { DataStore } from "../../data/types";
 import type { Platform } from "../../platform/types";
 import { defineFeature } from "../../shared/define-feature";
+import { logError } from "../../shared/log";
 import { SingletonTabMap } from "../../shared/singleton-tab";
 import type { TabId } from "../../shared/types";
 import type { Tab, TabsCommands, TabsEvents } from "../tabs/tabs.shared";
@@ -217,15 +218,15 @@ export default defineFeature<DomainCssDeps>({
 
       const domain = getDomainFromUrl(tab.url);
       if (!domain) {
-        removeCssFromTab(tab.id).catch(console.error);
+        removeCssFromTab(tab.id).catch(logError("domain-css", "remove css"));
         return;
       }
 
       const state = domainStates.get(domain);
       if (state?.enabled) {
-        injectCssForTab(tab.id, domain).catch(console.error);
+        injectCssForTab(tab.id, domain).catch(logError("domain-css", "inject css"));
       } else {
-        removeCssFromTab(tab.id).catch(console.error);
+        removeCssFromTab(tab.id).catch(logError("domain-css", "remove css"));
       }
     });
 

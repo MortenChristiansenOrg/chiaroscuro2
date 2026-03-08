@@ -2,6 +2,7 @@ import type { CommandBus } from "../../bus/command-bus";
 import type { EventBus } from "../../bus/event-bus";
 import type { Platform } from "../../platform/types";
 import { defineFeature } from "../../shared/define-feature";
+import { logError } from "../../shared/log";
 import { TabScope } from "../../shared/tab-scope";
 import type { TabId } from "../../shared/types";
 import {
@@ -75,9 +76,12 @@ export default defineFeature<Deps>({
 
     // ── Keyboard shortcuts ─────────────────────────────────────────
 
-    const zoomIn = () => commands.send(ZOOM_IN, undefined).catch(console.error);
-    const zoomOut = () => commands.send(ZOOM_OUT, undefined).catch(console.error);
-    const zoomReset = () => commands.send(ZOOM_RESET, undefined).catch(console.error);
+    const zoomIn = () =>
+      commands.send(ZOOM_IN, undefined).catch(logError("zoom", "shortcut zoom-in"));
+    const zoomOut = () =>
+      commands.send(ZOOM_OUT, undefined).catch(logError("zoom", "shortcut zoom-out"));
+    const zoomReset = () =>
+      commands.send(ZOOM_RESET, undefined).catch(logError("zoom", "shortcut zoom-reset"));
 
     // "=" for US layouts, "Plus" for layouts where + is the primary key
     platform.registerShortcut("CommandOrControl+=", zoomIn);

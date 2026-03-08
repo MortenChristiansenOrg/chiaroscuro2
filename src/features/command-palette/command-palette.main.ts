@@ -3,6 +3,7 @@ import type { EventBus } from "../../bus/event-bus";
 import type { DataStore } from "../../data/types";
 import type { Platform } from "../../platform/types";
 import { defineFeature } from "../../shared/define-feature";
+import { logError, logWarn } from "../../shared/log";
 import type { TabId, WindowId } from "../../shared/types";
 import type { SettingsChangedEvent, SettingsEvents } from "../settings/settings.shared";
 import { SETTINGS_CHANGED } from "../settings/settings.shared";
@@ -58,7 +59,7 @@ export default defineFeature<Deps>({
     events.on(TABS_UPDATED, (payload) => {
       const { tab } = payload;
       if (!tab.loading && tab.url && tab.title) {
-        recordVisit(tab.url, tab.title).catch(() => {});
+        recordVisit(tab.url, tab.title).catch(logWarn("command-palette", "record visit"));
       }
     });
 
@@ -123,7 +124,9 @@ export default defineFeature<Deps>({
     });
 
     platform.registerShortcut("CommandOrControl+T", () => {
-      commands.send(COMMAND_PALETTE_TOGGLE, undefined).catch(console.error);
+      commands
+        .send(COMMAND_PALETTE_TOGGLE, undefined)
+        .catch(logError("command-palette", "shortcut toggle"));
     });
   },
 });

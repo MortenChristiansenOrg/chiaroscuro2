@@ -2,6 +2,7 @@ import type { CommandBus } from "../../bus/command-bus";
 import type { EventBus } from "../../bus/event-bus";
 import type { Platform } from "../../platform/types";
 import { defineFeature } from "../../shared/define-feature";
+import { logError } from "../../shared/log";
 import { TabScope } from "../../shared/tab-scope";
 import type { TabId, WindowId } from "../../shared/types";
 import {
@@ -106,7 +107,7 @@ export default defineFeature<Deps>({
     // Stop find when tab changes or closes
     events.on(TABS_ACTIVATED, () => {
       if (findActive) {
-        commands.send(FIND_STOP, undefined).catch(console.error);
+        commands.send(FIND_STOP, undefined).catch(logError("find-text", "stop on tab change"));
       }
     });
 
@@ -122,7 +123,7 @@ export default defineFeature<Deps>({
     // globalShortcut, active only when app is focused) and local (before-input-event
     // + menu accelerator fallback) for maximum reliability.
     const startFind = () => {
-      commands.send(FIND_START, undefined).catch(console.error);
+      commands.send(FIND_START, undefined).catch(logError("find-text", "shortcut find"));
     };
     platform.registerShortcut("CommandOrControl+F", startFind);
     platform.registerLocalShortcut("CommandOrControl+F", startFind);

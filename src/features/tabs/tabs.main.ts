@@ -3,11 +3,9 @@ import type { EventBus } from "../../bus/event-bus";
 import type { Collection, DataStore } from "../../data/types";
 import type { Bounds, Platform } from "../../platform/types";
 import { defineFeature } from "../../shared/define-feature";
+import { logError, logWarn } from "../../shared/log";
 import { TabScope } from "../../shared/tab-scope";
 import type { FolderId, TabId, WindowId, WorkspaceId } from "../../shared/types";
-import { getFoldersForLevel, setFolderOrder } from "../folders/folders.main";
-import { isPinned } from "../pinned-tabs/pinned-tabs.main";
-import { getCustomization } from "../tab-customization/tab-customization.main";
 import type {
   TAB_LOADING_CHANGED,
   TabLoadingChangedPayload,
@@ -21,10 +19,14 @@ import {
   TABS_CLOSED,
   TABS_CREATE,
   TABS_CREATED,
+  TABS_GET,
+  TABS_GET_FOR_WORKSPACE,
   TABS_LIST_CHANGED,
   TABS_NAVIGATE,
   TABS_REORDER,
   TABS_REPORT_CONTENT_BOUNDS,
+  TABS_SET_FOLDER_ID,
+  TABS_SET_ORDER,
   TABS_TOGGLE_BOOKMARK,
   TABS_UPDATED,
   type Tab,
@@ -61,6 +63,13 @@ interface Deps {
   getActiveTabId: () => TabId | undefined;
   setActiveTabId: (tabId: TabId | undefined) => void;
   getActiveWorkspaceId: () => WorkspaceId | undefined;
+  isPinned: (tabId: TabId) => boolean;
+  getCustomization: (tabId: TabId) => { fixedAddressDisabled: boolean } | undefined;
+  getFoldersForLevel: (
+    workspaceId: WorkspaceId,
+    parentFolderId: FolderId | null,
+  ) => { id: FolderId; order: number }[];
+  setFolderOrder: (folderId: FolderId, order: number) => void;
 }
 
 function resolveBuiltInTitle(url: string): string {
@@ -113,6 +122,10 @@ export default defineFeature<Deps>({
       getActiveTabId,
       setActiveTabId,
       getActiveWorkspaceId,
+      isPinned,
+      getCustomization,
+      getFoldersForLevel,
+      setFolderOrder,
     } = deps;
 
     const tabs = new Map<TabId, Tab>();
@@ -136,11 +149,11 @@ export default defineFeature<Deps>({
       if (tab.bookmarked && fixedUrl && !getCustomization(tab.id)?.fixedAddressDisabled) {
         (persisted as PersistedTab).url = fixedUrl;
       }
-      tabsCollection.upsert(persisted as PersistedTab).catch(console.error);
+      tabsCollection.upsert(persisted as PersistedTab).catch(logError("tabs", "persist tab"));
     }
 
     function removePersistedTab(tabId: TabId): void {
-      tabsCollection.remove(tabId).catch(() => {});
+      tabsCollection.remove(tabId).catch(logWarn("tabs", "remove persisted tab"));
     }
 
     // ── Debounced list-changed emission ─────────────────────────────
@@ -527,8 +540,25 @@ export default defineFeature<Deps>({
       }
     });
 
+    commands.handle(TABS_GET, (payload) => tabs.get(payload.tabId));
+    commands.handle(TABS_GET_FOR_WORKSPACE, (payload) =>
+      [...tabs.values()].filter((t) => t.workspaceId === payload.workspaceId).map(tabSnapshot),
+    );
+    commands.handle(TABS_SET_FOLDER_ID, (payload) => {
+      const tab = tabs.get(payload.tabId);
+      if (!tab) return;
+      tab.folderId = payload.folderId;
+      persistTab(tab);
+    });
+    commands.handle(TABS_SET_ORDER, (payload) => {
+      const tab = tabs.get(payload.tabId);
+      if (!tab) return;
+      tab.order = payload.order;
+      persistTab(tab);
+    });
+
     platform.registerShortcut("CommandOrControl+B", () => {
-      commands.send(TABS_TOGGLE_BOOKMARK, {}).catch(console.error);
+      commands.send(TABS_TOGGLE_BOOKMARK, {}).catch(logError("tabs", "toggle bookmark shortcut"));
     });
   },
 });
@@ -549,7 +579,7 @@ export async function start(deps: Deps): Promise<void> {
   const toRestore: PersistedTab[] = [];
   for (const pt of persisted) {
     if (!pt.bookmarked && now - pt.lastAccessedAt > EPHEMERAL_TTL_MS) {
-      tabsCollection.remove(pt.id).catch(() => {});
+      tabsCollection.remove(pt.id).catch(logWarn("tabs", "remove expired ephemeral"));
     } else {
       toRestore.push(pt);
     }

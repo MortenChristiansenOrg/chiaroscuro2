@@ -1,18 +1,21 @@
 import type { CommandBus } from "../../bus/command-bus";
 import type { EventBus } from "../../bus/event-bus";
-import type { Collection, DataStore } from "../../data/types";
+import type { DataStore } from "../../data/types";
 import { defineFeature } from "../../shared/define-feature";
+import { PersistedMap } from "../../shared/persisted-map";
 import type { FolderId, TabId, WorkspaceId } from "../../shared/types";
-import { getTab, getTabsForWorkspace, setTabFolderId, setTabOrder } from "../tabs/tabs.main";
+import type { Tab } from "../tabs/tabs.shared";
 import type { TabsEvents } from "../tabs/tabs.shared";
 import { TABS_LIST_CHANGED, TABS_UPDATED } from "../tabs/tabs.shared";
 import {
   FOLDERS_CHANGED,
   FOLDERS_CREATE,
+  FOLDERS_GET_FOR_LEVEL,
   FOLDERS_REMOVE,
   FOLDERS_RENAME,
   FOLDERS_RENAME_REQUESTED,
   FOLDERS_REORDER,
+  FOLDERS_SET_ORDER,
   FOLDERS_TOGGLE,
   FOLDERS_TOGGLE_COLLAPSE,
   type Folder,
@@ -30,43 +33,63 @@ interface Deps {
   dataStore: DataStore;
   getActiveTabId: () => TabId | undefined;
   getActiveWorkspaceId: () => WorkspaceId | undefined;
+  getTab: (tabId: TabId) => Tab | undefined;
+  getTabsForWorkspace: (workspaceId: WorkspaceId) => Tab[];
+  setTabFolderId: (tabId: TabId, folderId: FolderId | null) => void;
+  setTabOrder: (tabId: TabId, order: number) => void;
 }
 
-let _folders: Map<FolderId, Folder> | undefined;
+let _folders: PersistedMap<FolderId, Folder, PersistedFolder> | undefined;
 let _setFolderOrder: ((folderId: FolderId, order: number) => void) | undefined;
 
 export default defineFeature<Deps>({
   register(deps) {
-    const { commands, events, dataStore, getActiveTabId, getActiveWorkspaceId } = deps;
+    const {
+      commands,
+      events,
+      dataStore,
+      getActiveTabId,
+      getActiveWorkspaceId,
+      getTab,
+      getTabsForWorkspace,
+      setTabFolderId,
+      setTabOrder,
+    } = deps;
 
-    const folders = new Map<FolderId, Folder>();
+    const folders = new PersistedMap<FolderId, Folder, PersistedFolder>(
+      dataStore.collection("folders"),
+      {
+        serialize: (_key, folder) => ({
+          id: folder.id,
+          workspaceId: folder.workspaceId,
+          name: folder.name,
+          parentFolderId: folder.parentFolderId,
+          collapsed: folder.collapsed,
+          order: folder.order,
+        }),
+        deserialize: (pf) => [
+          pf.id as FolderId,
+          {
+            id: pf.id as FolderId,
+            workspaceId: pf.workspaceId as WorkspaceId,
+            name: pf.name,
+            parentFolderId: pf.parentFolderId as FolderId | null,
+            collapsed: pf.collapsed,
+            order: pf.order,
+          },
+        ],
+        source: "folders",
+      },
+    );
     _folders = folders;
-    const foldersCollection: Collection<PersistedFolder> = dataStore.collection("folders");
-
-    // ── Persistence helpers ──────────────────────────────────────────
-
-    function persistFolder(folder: Folder): void {
-      const persisted: PersistedFolder = {
-        id: folder.id,
-        workspaceId: folder.workspaceId,
-        name: folder.name,
-        parentFolderId: folder.parentFolderId,
-        collapsed: folder.collapsed,
-        order: folder.order,
-      };
-      foldersCollection.upsert(persisted).catch(console.error);
-    }
-
-    function removePersistedFolder(folderId: FolderId): void {
-      foldersCollection.remove(folderId).catch(console.error);
-    }
 
     function emitChanged(): void {
-      events.emit(FOLDERS_CHANGED, { folders: [...folders.values()] });
+      events.emit(FOLDERS_CHANGED, { folders: folders.values() });
     }
 
     function nextOrderForLevel(workspaceId: WorkspaceId, parentFolderId: FolderId | null): number {
-      const folderOrders = [...folders.values()]
+      const folderOrders = folders
+        .values()
         .filter((f) => f.workspaceId === workspaceId && f.parentFolderId === parentFolderId)
         .map((f) => f.order);
       const tabOrders = getTabsForWorkspace(workspaceId)
@@ -79,7 +102,7 @@ export default defineFeature<Deps>({
       const folder = folders.get(folderId);
       if (!folder || folder.order === order) return;
       folder.order = order;
-      persistFolder(folder);
+      folders.set(folder.id, folder);
       emitChanged();
     };
 
@@ -107,7 +130,8 @@ export default defineFeature<Deps>({
       } else {
         // Create new folder containing this tab
         const folderId = crypto.randomUUID() as FolderId;
-        const folderOrders = [...folders.values()]
+        const folderOrders = folders
+          .values()
           .filter((f) => f.workspaceId === tab.workspaceId && f.parentFolderId === null)
           .map((f) => f.order);
         const tabOrders = getTabsForWorkspace(tab.workspaceId)
@@ -125,7 +149,6 @@ export default defineFeature<Deps>({
         };
 
         folders.set(folderId, folder);
-        persistFolder(folder);
         setTabFolderId(tabId, folderId);
         setTabOrder(tabId, 0);
         const updatedTab2 = getTab(tabId);
@@ -144,7 +167,7 @@ export default defineFeature<Deps>({
       const folder = folders.get(payload.folderId);
       if (!folder) return;
       folder.name = payload.name;
-      persistFolder(folder);
+      folders.set(folder.id, folder);
       emitChanged();
     });
 
@@ -152,7 +175,7 @@ export default defineFeature<Deps>({
       const folder = folders.get(payload.folderId);
       if (!folder) return;
       folder.collapsed = !folder.collapsed;
-      persistFolder(folder);
+      folders.set(folder.id, folder);
       emitChanged();
     });
 
@@ -176,12 +199,11 @@ export default defineFeature<Deps>({
         if (child.parentFolderId === folder.id) {
           child.parentFolderId = targetParentId;
           child.order = order++;
-          persistFolder(child);
+          folders.set(child.id, child);
         }
       }
 
       folders.delete(folder.id);
-      removePersistedFolder(folder.id);
 
       if (tabsInFolder.length > 0) {
         events.emit(TABS_LIST_CHANGED, { tabs: getTabsForWorkspace(folder.workspaceId) });
@@ -208,7 +230,8 @@ export default defineFeature<Deps>({
       }
 
       // Unified ordering: include both folders and tabs at the target level
-      const folderSiblings = [...folders.values()]
+      const folderSiblings = folders
+        .values()
         .filter(
           (f) =>
             f.workspaceId === folder.workspaceId &&
@@ -260,7 +283,7 @@ export default defineFeature<Deps>({
         if (item.type === "folder") {
           if (item.folder.order === i) continue;
           item.folder.order = i;
-          persistFolder(item.folder);
+          folders.set(item.folder.id, item.folder);
         } else if (item.tab.order !== i) {
           setTabOrder(item.tab.id, i);
           tabsReordered = true;
@@ -278,7 +301,8 @@ export default defineFeature<Deps>({
       if (!workspaceId) return;
 
       const parentFolderId = (payload.parentFolderId as FolderId | null) ?? null;
-      const folderOrders = [...folders.values()]
+      const folderOrders = folders
+        .values()
         .filter((f) => f.workspaceId === workspaceId && f.parentFolderId === parentFolderId)
         .map((f) => f.order);
       const tabOrders = getTabsForWorkspace(workspaceId)
@@ -297,40 +321,41 @@ export default defineFeature<Deps>({
       };
 
       folders.set(folderId, folder);
-      persistFolder(folder);
       events.emit(FOLDERS_RENAME_REQUESTED, { folderId });
+      emitChanged();
+    });
+
+    commands.handle(FOLDERS_GET_FOR_LEVEL, (payload) =>
+      folders
+        .values()
+        .filter(
+          (f) =>
+            f.workspaceId === payload.workspaceId && f.parentFolderId === payload.parentFolderId,
+        ),
+    );
+
+    commands.handle(FOLDERS_SET_ORDER, (payload) => {
+      const folder = folders.get(payload.folderId);
+      if (!folder || folder.order === payload.order) return;
+      folder.order = payload.order;
+      folders.set(folder.id, folder);
       emitChanged();
     });
   },
 });
 
 export async function start(deps: Deps): Promise<void> {
-  const { dataStore, events } = deps;
-  const foldersCollection: Collection<PersistedFolder> = dataStore.collection("folders");
-
+  const { events } = deps;
   if (!_folders) throw new Error("folders.main: register() must be called before start()");
-
-  const persisted = await foldersCollection.findMany({});
-  for (const pf of persisted) {
-    const folder: Folder = {
-      id: pf.id as FolderId,
-      workspaceId: pf.workspaceId as WorkspaceId,
-      name: pf.name,
-      parentFolderId: pf.parentFolderId as FolderId | null,
-      collapsed: pf.collapsed,
-      order: pf.order,
-    };
-    _folders.set(folder.id, folder);
-  }
-
+  await _folders.load();
   if (_folders.size > 0) {
-    events.emit(FOLDERS_CHANGED, { folders: [..._folders.values()] });
+    events.emit(FOLDERS_CHANGED, { folders: _folders.values() });
   }
 }
 
 export function getFoldersForWorkspace(workspaceId: WorkspaceId): Folder[] {
   if (!_folders) return [];
-  return [..._folders.values()].filter((f) => f.workspaceId === workspaceId);
+  return _folders.values().filter((f) => f.workspaceId === workspaceId);
 }
 
 export function getFoldersForLevel(
@@ -338,9 +363,9 @@ export function getFoldersForLevel(
   parentFolderId: FolderId | null,
 ): Folder[] {
   if (!_folders) return [];
-  return [..._folders.values()].filter(
-    (f) => f.workspaceId === workspaceId && f.parentFolderId === parentFolderId,
-  );
+  return _folders
+    .values()
+    .filter((f) => f.workspaceId === workspaceId && f.parentFolderId === parentFolderId);
 }
 
 export function setFolderOrder(folderId: FolderId, order: number): void {

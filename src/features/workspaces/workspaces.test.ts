@@ -63,6 +63,7 @@ function setup() {
     setActiveWorkspaceId: (id: WorkspaceId) => {
       activeWsId = id;
     },
+    getTabsForWorkspace: (wsId: WorkspaceId) => getTabsForWorkspace(wsId),
   };
   feature.register(deps);
   return {
@@ -82,7 +83,7 @@ function setup() {
 
 describe("workspaces commands", () => {
   beforeEach(() => {
-    vi.mocked(getTabsForWorkspace).mockReturnValue([]);
+    (getTabsForWorkspace as ReturnType<typeof vi.fn>).mockReturnValue([]);
   });
 
   describe("WORKSPACES_CREATE", () => {
@@ -225,7 +226,7 @@ describe("workspaces commands", () => {
         createdAt: 0,
         order: 0,
       };
-      vi.mocked(getTabsForWorkspace).mockReturnValue([mockTab]);
+      (getTabsForWorkspace as ReturnType<typeof vi.fn>).mockReturnValue([mockTab]);
 
       const deleted = vi.fn();
       events.on(WORKSPACES_DELETED, deleted);
@@ -265,7 +266,7 @@ describe("workspaces commands", () => {
         createdAt: 0,
         order: 0,
       };
-      vi.mocked(getTabsForWorkspace).mockReturnValue([mockTab]);
+      (getTabsForWorkspace as ReturnType<typeof vi.fn>).mockReturnValue([mockTab]);
       setActiveTabId("t1" as TabId);
 
       const updated = vi.fn();
@@ -305,6 +306,7 @@ describe("start()", () => {
       setActiveWorkspaceId: (id: WorkspaceId) => {
         activeWsId = id;
       },
+      getTabsForWorkspace: (wsId: WorkspaceId) => getTabsForWorkspace(wsId),
     };
     feature.register(deps);
 
@@ -345,6 +347,7 @@ describe("start()", () => {
       setActiveWorkspaceId: (id: WorkspaceId) => {
         activeWsId = id;
       },
+      getTabsForWorkspace: (wsId: WorkspaceId) => getTabsForWorkspace(wsId),
     };
     feature.register(deps);
 

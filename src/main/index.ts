@@ -35,7 +35,11 @@ import type { DownloadsCommands, DownloadsEvents } from "../features/downloads/d
 import findText from "../features/find-text/find-text.main";
 import type { FindTextCommands, FindTextEvents } from "../features/find-text/find-text.shared";
 import folders from "../features/folders/folders.main";
-import { start as startFolders } from "../features/folders/folders.main";
+import {
+  getFoldersForLevel,
+  setFolderOrder,
+  start as startFolders,
+} from "../features/folders/folders.main";
 import type { FoldersCommands, FoldersEvents } from "../features/folders/folders.shared";
 import installer from "../features/installer/installer.main";
 import type { InstallerCommands, InstallerEvents } from "../features/installer/installer.shared";
@@ -46,7 +50,7 @@ import type {
   LocalWebAppEvents,
 } from "../features/local-web-app/local-web-app.shared";
 import pinnedTabs from "../features/pinned-tabs/pinned-tabs.main";
-import { start as startPinnedTabs } from "../features/pinned-tabs/pinned-tabs.main";
+import { isPinned, start as startPinnedTabs } from "../features/pinned-tabs/pinned-tabs.main";
 import type {
   PinnedTabsCommands,
   PinnedTabsEvents,
@@ -56,13 +60,23 @@ import type { SettingsCommands, SettingsEvents } from "../features/settings/sett
 import sidebar from "../features/sidebar/sidebar.main";
 import type { SidebarCommands, SidebarEvents } from "../features/sidebar/sidebar.shared";
 import tabCustomization from "../features/tab-customization/tab-customization.main";
-import { start as startTabCustomization } from "../features/tab-customization/tab-customization.main";
+import {
+  getCustomization,
+  start as startTabCustomization,
+} from "../features/tab-customization/tab-customization.main";
 import type {
   TabCustomizationCommands,
   TabCustomizationEvents,
 } from "../features/tab-customization/tab-customization.shared";
 import tabs from "../features/tabs/tabs.main";
-import { getAllTabs, getTab, start as startTabs } from "../features/tabs/tabs.main";
+import {
+  getAllTabs,
+  getTab,
+  getTabsForWorkspace,
+  setTabFolderId,
+  setTabOrder,
+  start as startTabs,
+} from "../features/tabs/tabs.main";
 import type { TabsCommands, TabsEvents } from "../features/tabs/tabs.shared";
 import terminal from "../features/terminal/terminal.main";
 import type { TerminalCommands, TerminalEvents } from "../features/terminal/terminal.shared";
@@ -82,6 +96,7 @@ import type {
 import zoom from "../features/zoom/zoom.main";
 import type { ZoomCommands, ZoomEvents } from "../features/zoom/zoom.shared";
 import { ElectronPlatform } from "../platform/electron";
+import { logError } from "../shared/log";
 import type { TabId, WindowId, WorkspaceId } from "../shared/types";
 
 // Log uncaught exceptions to stderr for debugging
@@ -243,21 +258,21 @@ app.whenReady().then(async () => {
 
   appState.register(deps);
   windowChrome.register(deps);
-  tabs.register(deps);
-  workspaces.register(deps);
-  pinnedTabs.register(deps);
+  tabs.register({ ...deps, isPinned, getCustomization, getFoldersForLevel, setFolderOrder });
+  workspaces.register({ ...deps, getTabsForWorkspace });
+  pinnedTabs.register({ ...deps, getCustomization });
   sidebar.register(deps);
   commandPalette.register(deps);
   settings.register(deps);
   tooltip.register(deps);
   contextMenu.register(deps);
-  folders.register(deps);
+  folders.register({ ...deps, getTab, getTabsForWorkspace, setTabFolderId, setTabOrder });
   zoom.register(deps);
   devTools.register(deps);
   domainCss.register({ ...deps, dataDir, getTabsSnapshot: getAllTabs });
   downloads.register(deps);
   findText.register(deps);
-  tabCustomization.register({ ...deps, getTab });
+  tabCustomization.register({ ...deps, getTab, isPinned });
   terminal.register(deps);
   localWebApp.register(deps);
   installer.register(deps);
@@ -296,17 +311,17 @@ app.whenReady().then(async () => {
   // module-import time, so registering after risks losing the signal.
   ipcMain.once("renderer:ready", async () => {
     appState.start?.(deps);
-    await startWorkspaces(deps);
+    await startWorkspaces({ ...deps, getTabsForWorkspace });
     windowChrome.start?.(deps);
     await installer.start?.(deps);
-    await startTabs(deps);
-    await startPinnedTabs(deps);
+    await startTabs({ ...deps, isPinned, getCustomization, getFoldersForLevel, setFolderOrder });
+    await startPinnedTabs({ ...deps, getCustomization });
     sidebar.start?.(deps);
-    await startFolders(deps);
+    await startFolders({ ...deps, getTab, getTabsForWorkspace, setTabFolderId, setTabOrder });
     await settings.start?.(deps);
     await domainCss.start?.({ ...deps, dataDir, getTabsSnapshot: getAllTabs });
     downloads.start?.(deps);
-    await startTabCustomization({ ...deps, getTab });
+    await startTabCustomization({ ...deps, getTab, isPinned });
     terminal.start?.(deps);
     await startLocalWebApp(deps);
   });
@@ -343,8 +358,8 @@ app.on("before-quit", () => {
   localWebApp.teardown?.();
   installer.teardown?.();
   // Flush app-state immediately before data store teardown
-  commands.send("app-state:save", undefined).catch(console.error);
-  dataStore.destroy().catch(console.error);
+  commands.send("app-state:save", undefined).catch(logError("main", "flush app-state"));
+  dataStore.destroy().catch(logError("main", "destroy datastore"));
 });
 
 app.on("window-all-closed", () => {

@@ -2,10 +2,11 @@ import http from "node:http";
 import type { CommandBus } from "../../bus/command-bus";
 import type { EventBus } from "../../bus/event-bus";
 import type { CommandRegistry, EventRegistry } from "../../bus/types";
+import { debugLog } from "../../shared/debug-log";
 import { defineFeature } from "../../shared/define-feature";
+import { logError } from "../../shared/log";
 import type { SettingsChangedEvent, SettingsEvents } from "../settings/settings.shared";
 import { SETTINGS_CHANGED } from "../settings/settings.shared";
-import { debugLog } from "./debug-log";
 import type { DebugServerCommands } from "./debug-server.shared";
 import { DEBUG_SERVER_START, DEBUG_SERVER_STOP } from "./debug-server.shared";
 import { clearHistory, getHistory, register as registerRecorder } from "./recorder";
@@ -126,42 +127,46 @@ function handleRequest(
     const fieldsParam = url.searchParams.get("fields");
     const fields = fieldsParam ? fieldsParam.split(",").map((f) => f.trim()) : undefined;
 
-    let state: Record<string, unknown>;
-    if (featuresParam) {
-      const names = featuresParam.split(",").map((f) => f.trim());
-      state = {};
-      for (const name of names) {
-        const s = getDebugState(name);
-        Object.assign(state, s);
+    (async () => {
+      let state: Record<string, unknown>;
+      if (featuresParam) {
+        const names = featuresParam.split(",").map((f) => f.trim());
+        const parts = await Promise.all(names.map((name) => getDebugState(name)));
+        state = {};
+        for (const s of parts) Object.assign(state, s);
+      } else {
+        state = await getDebugState();
       }
-    } else {
-      state = getDebugState();
-    }
 
-    if (fields) {
-      for (const key of Object.keys(state)) {
-        state[key] = pluckFields(state[key], fields);
+      if (fields) {
+        for (const key of Object.keys(state)) {
+          state[key] = pluckFields(state[key], fields);
+        }
       }
-    }
-    respond(res, 200, state, pretty);
+      respond(res, 200, state, pretty);
+    })().catch((err) => respond(res, 500, { error: String(err) }, pretty));
     return;
   }
 
   if (req.method === "GET" && pathname.startsWith("/state/")) {
     const feature = pathname.slice("/state/".length);
     const fieldsParam = url.searchParams.get("fields");
-    const state = getDebugState(feature);
-    const featureState = state[feature];
-    if (featureState === undefined) {
-      respond(res, 404, { error: `Unknown feature: ${feature}` }, pretty);
-      return;
-    }
-    if (fieldsParam) {
-      const fields = fieldsParam.split(",").map((f) => f.trim());
-      respond(res, 200, pluckFields(featureState, fields), pretty);
-    } else {
-      respond(res, 200, featureState, pretty);
-    }
+
+    getDebugState(feature)
+      .then((state) => {
+        const featureState = state[feature];
+        if (featureState === undefined) {
+          respond(res, 404, { error: `Unknown feature: ${feature}` }, pretty);
+          return;
+        }
+        if (fieldsParam) {
+          const fields = fieldsParam.split(",").map((f) => f.trim());
+          respond(res, 200, pluckFields(featureState, fields), pretty);
+        } else {
+          respond(res, 200, featureState, pretty);
+        }
+      })
+      .catch((err) => respond(res, 500, { error: String(err) }, pretty));
     return;
   }
 
@@ -356,9 +361,9 @@ export default defineFeature<Deps>({
         if (enabled) {
           stopServer()
             .then(() => startServer(configuredPort, commandBus, eventBus))
-            .catch(console.error);
+            .catch(logError("debug-server", "restart server"));
         } else {
-          stopServer().catch(console.error);
+          stopServer().catch(logError("debug-server", "stop server"));
         }
       }
     });

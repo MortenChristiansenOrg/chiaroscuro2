@@ -66,6 +66,10 @@ function setup(platformOverrides = {}) {
       activeTabId = id;
     },
     getActiveWorkspaceId: () => WS_ID as WorkspaceId | undefined,
+    isPinned: (id: TabId) => isPinned(id),
+    getCustomization: () => undefined as { fixedAddressDisabled: boolean } | undefined,
+    getFoldersForLevel: () => [] as { id: import("../../shared/types").FolderId; order: number }[],
+    setFolderOrder: () => {},
   };
   feature.register(deps);
   return { commands, events, platform, dataStore, deps, getActiveTabId: () => activeTabId };
@@ -74,7 +78,7 @@ function setup(platformOverrides = {}) {
 describe("tabs commands", () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    vi.mocked(isPinned).mockReturnValue(false);
+    (isPinned as ReturnType<typeof vi.fn>).mockReturnValue(false);
   });
 
   afterEach(() => {
@@ -234,7 +238,7 @@ describe("tabs commands", () => {
     it("skips pinned tabs", async () => {
       const { commands, events } = setup();
       await commands.send(TABS_CREATE, { url: "https://example.com" });
-      vi.mocked(isPinned).mockReturnValue(true);
+      (isPinned as ReturnType<typeof vi.fn>).mockReturnValue(true);
 
       const updated = vi.fn();
       events.on(TABS_UPDATED, updated);
@@ -329,7 +333,7 @@ describe("tabs commands", () => {
 describe("start()", () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    vi.mocked(isPinned).mockReturnValue(false);
+    (isPinned as ReturnType<typeof vi.fn>).mockReturnValue(false);
   });
 
   afterEach(() => {
@@ -388,6 +392,11 @@ describe("start()", () => {
         activeTabId = id;
       },
       getActiveWorkspaceId: () => WS_ID as WorkspaceId | undefined,
+      isPinned: (id: TabId) => isPinned(id),
+      getCustomization: () => undefined as { fixedAddressDisabled: boolean } | undefined,
+      getFoldersForLevel: () =>
+        [] as { id: import("../../shared/types").FolderId; order: number }[],
+      setFolderOrder: () => {},
     };
     feature.register(deps);
     await start(deps);
@@ -414,6 +423,11 @@ describe("start()", () => {
         activeTabId = id;
       },
       getActiveWorkspaceId: () => WS_ID as WorkspaceId | undefined,
+      isPinned: (id: TabId) => isPinned(id),
+      getCustomization: () => undefined as { fixedAddressDisabled: boolean } | undefined,
+      getFoldersForLevel: () =>
+        [] as { id: import("../../shared/types").FolderId; order: number }[],
+      setFolderOrder: () => {},
     };
     feature.register(deps);
     await start(deps);

@@ -3,9 +3,9 @@ import type { EventBus } from "../../bus/event-bus";
 import type { Collection, DataStore } from "../../data/types";
 import type { Platform } from "../../platform/types";
 import { defineFeature } from "../../shared/define-feature";
+import { logError } from "../../shared/log";
 import type { TabId, WindowId, WorkspaceId } from "../../shared/types";
-import { getTabsForWorkspace } from "../tabs/tabs.main";
-import type { TabsCommands, TabsEvents } from "../tabs/tabs.shared";
+import type { Tab, TabsCommands, TabsEvents } from "../tabs/tabs.shared";
 import {
   TABS_ACTIVATE,
   TABS_ACTIVATED,
@@ -44,6 +44,7 @@ interface Deps {
   setActiveTabId: (tabId: TabId | undefined) => void;
   getActiveWorkspaceId: () => WorkspaceId | undefined;
   setActiveWorkspaceId: (id: WorkspaceId) => void;
+  getTabsForWorkspace: (workspaceId: WorkspaceId) => Tab[];
 }
 
 // Shared state exposed via accessor for cross-feature queries
@@ -71,6 +72,7 @@ export default defineFeature<Deps>({
       setActiveTabId,
       getActiveWorkspaceId,
       setActiveWorkspaceId,
+      getTabsForWorkspace,
     } = deps;
 
     const wsCollection: Collection<PersistedWorkspace> = dataStore.collection("workspaces");
@@ -89,7 +91,7 @@ export default defineFeature<Deps>({
         order,
       };
       wsCollection.update(ws.id, persisted).catch(() => {
-        wsCollection.insert(persisted).catch(console.error);
+        wsCollection.insert(persisted).catch(logError("workspaces", "persist"));
       });
     }
 
@@ -205,7 +207,7 @@ export default defineFeature<Deps>({
         _workspaces.delete(workspaceId);
       }
 
-      wsCollection.remove(workspaceId).catch(() => {});
+      wsCollection.remove(workspaceId).catch(logError("workspaces", "remove"));
 
       events.emit(WORKSPACES_DELETED, { workspaceId });
       emitListChanged();
@@ -259,7 +261,8 @@ export default defineFeature<Deps>({
     // Ctrl+W: Close current tab
     platform.registerShortcut("CommandOrControl+W", () => {
       const tabId = getActiveTabId();
-      if (tabId) commands.send(TABS_CLOSE, { tabId }).catch(console.error);
+      if (tabId)
+        commands.send(TABS_CLOSE, { tabId }).catch(logError("workspaces", "close tab shortcut"));
     });
 
     // Ctrl+1..9: Switch to workspace N
@@ -267,7 +270,10 @@ export default defineFeature<Deps>({
       platform.registerShortcut(`CommandOrControl+${n}`, () => {
         const all = getAllWorkspaces();
         const ws = all[n - 1];
-        if (ws) commands.send(WORKSPACES_SWITCH, { workspaceId: ws.id }).catch(console.error);
+        if (ws)
+          commands
+            .send(WORKSPACES_SWITCH, { workspaceId: ws.id })
+            .catch(logError("workspaces", "switch shortcut"));
       });
     }
 
@@ -277,7 +283,9 @@ export default defineFeature<Deps>({
         const all = getAllWorkspaces();
         const ws = all[n - 1];
         if (ws)
-          commands.send(WORKSPACES_MOVE_TAB, { targetWorkspaceId: ws.id }).catch(console.error);
+          commands
+            .send(WORKSPACES_MOVE_TAB, { targetWorkspaceId: ws.id })
+            .catch(logError("workspaces", "move tab shortcut"));
       });
     }
   },
@@ -326,7 +334,7 @@ export async function start(deps: Deps): Promise<void> {
     // Persist default
     wsCollection
       .insert({ id: defaultId, name: "Work", color: "oklch(0.6 0.12 230)", icon: "W", order: 0 })
-      .catch(console.error);
+      .catch(logError("workspaces", "create default"));
 
     events.emit(WORKSPACES_CREATED, { workspace: defaultWs });
     events.emit(WORKSPACES_LIST_CHANGED, {

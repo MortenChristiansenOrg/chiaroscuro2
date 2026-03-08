@@ -1,10 +1,11 @@
 import type { CommandBus } from "../../bus/command-bus";
 import type { EventBus } from "../../bus/event-bus";
-import type { Collection, DataStore } from "../../data/types";
+import type { DataStore } from "../../data/types";
 import type { Platform } from "../../platform/types";
 import { defineFeature } from "../../shared/define-feature";
+import { logError } from "../../shared/log";
+import { PersistedMap } from "../../shared/persisted-map";
 import type { TabId, WindowId, WorkspaceId } from "../../shared/types";
-import { getCustomization } from "../tab-customization/tab-customization.main";
 import type { TabsCommands, TabsEvents } from "../tabs/tabs.shared";
 import {
   TABS_ACTIVATE,
@@ -17,6 +18,7 @@ import {
   PINNED_TABS_ACTIVATE,
   PINNED_TABS_ACTIVE_CHANGED,
   PINNED_TABS_CHANGED,
+  PINNED_TABS_IS_PINNED,
   PINNED_TABS_TOGGLE_PIN,
   type PersistedPinnedTab,
   type PinnedTab,
@@ -36,43 +38,53 @@ interface Deps {
   getActiveTabId: () => TabId | undefined;
   setActiveTabId: (tabId: TabId | undefined) => void;
   getActiveWorkspaceId: () => WorkspaceId | undefined;
+  getCustomization: (tabId: TabId) => { fixedAddressDisabled: boolean } | undefined;
 }
 
-const _pinnedTabs = new Map<TabId, PinnedTab>();
+let _pinnedTabs: PersistedMap<TabId, PinnedTab, PersistedPinnedTab> | undefined;
 
 export function isPinned(tabId: TabId): boolean {
-  return _pinnedTabs.has(tabId);
+  return _pinnedTabs?.has(tabId) ?? false;
 }
 
 export default defineFeature<Deps>({
   register(deps) {
-    const { commands, events, platform, dataStore, getActiveTabId } = deps;
+    const { commands, events, platform, dataStore, getActiveTabId, getCustomization } = deps;
 
-    const pinnedCollection: Collection<PersistedPinnedTab> = dataStore.collection("pinned-tabs");
-    _pinnedTabs.clear();
+    const pinnedTabs = new PersistedMap<TabId, PinnedTab, PersistedPinnedTab>(
+      dataStore.collection("pinned-tabs"),
+      {
+        serialize: (_key, pt) => ({
+          id: pt.id,
+          url: pt.url,
+          title: pt.title,
+          favicon: pt.favicon,
+          order: pt.order,
+        }),
+        deserialize: (pp) => [
+          pp.id as TabId,
+          {
+            id: pp.id as TabId,
+            url: pp.url,
+            title: pp.title,
+            favicon: pp.favicon,
+            order: pp.order,
+          },
+        ],
+        source: "pinned-tabs",
+      },
+    );
+    _pinnedTabs = pinnedTabs;
 
     function emitChanged(): void {
-      const sorted = [..._pinnedTabs.values()].sort((a, b) => a.order - b.order);
+      const sorted = pinnedTabs.values().sort((a, b) => a.order - b.order);
       events.emit(PINNED_TABS_CHANGED, { pinnedTabs: sorted });
-    }
-
-    function persistPinnedTab(pt: PinnedTab): void {
-      const persisted: PersistedPinnedTab = {
-        id: pt.id,
-        url: pt.url,
-        title: pt.title,
-        favicon: pt.favicon,
-        order: pt.order,
-      };
-      pinnedCollection.update(pt.id, persisted).catch(() => {
-        pinnedCollection.insert(persisted).catch(console.error);
-      });
     }
 
     // Track tab updates to sync pinned tab data
     events.on(TABS_UPDATED, (payload) => {
       const { tab } = payload;
-      const pt = _pinnedTabs.get(tab.id);
+      const pt = pinnedTabs.get(tab.id);
       if (!pt) return;
       const canUpdateUrl = getCustomization(tab.id)?.fixedAddressDisabled ?? false;
       if (canUpdateUrl) {
@@ -80,15 +92,14 @@ export default defineFeature<Deps>({
       }
       pt.title = tab.title;
       pt.favicon = tab.favicon;
-      persistPinnedTab(pt);
+      pinnedTabs.set(pt.id, pt);
     });
 
     // Clean up pinned tabs when the underlying tab is closed
     events.on(TABS_CLOSED, (payload) => {
       const { tabId } = payload;
-      if (_pinnedTabs.has(tabId)) {
-        _pinnedTabs.delete(tabId);
-        pinnedCollection.remove(tabId).catch(() => {});
+      if (pinnedTabs.has(tabId)) {
+        pinnedTabs.delete(tabId);
         emitChanged();
       }
     });
@@ -97,10 +108,9 @@ export default defineFeature<Deps>({
       const tabId = payload?.tabId ?? getActiveTabId();
       if (!tabId) return;
 
-      if (_pinnedTabs.has(tabId)) {
+      if (pinnedTabs.has(tabId)) {
         // Unpin
-        _pinnedTabs.delete(tabId);
-        pinnedCollection.remove(tabId).catch(() => {});
+        pinnedTabs.delete(tabId);
         emitChanged();
       } else {
         // Pin — get current tab data from platform
@@ -111,50 +121,37 @@ export default defineFeature<Deps>({
           url,
           title,
           favicon: "",
-          order: _pinnedTabs.size,
+          order: pinnedTabs.size,
         };
-        _pinnedTabs.set(tabId, pt);
-        persistPinnedTab(pt);
+        pinnedTabs.set(tabId, pt);
         emitChanged();
       }
     });
 
     commands.handle(PINNED_TABS_ACTIVATE, async (payload) => {
       const { tabId } = payload;
-      if (!_pinnedTabs.has(tabId)) return;
+      if (!pinnedTabs.has(tabId)) return;
 
       await commands.send(TABS_ACTIVATE, { tabId });
       events.emit(PINNED_TABS_ACTIVE_CHANGED, { tabId });
     });
 
     platform.registerShortcut("CommandOrControl+P", () => {
-      commands.send(PINNED_TABS_TOGGLE_PIN, {}).catch(console.error);
+      commands
+        .send(PINNED_TABS_TOGGLE_PIN, {})
+        .catch(logError("pinned-tabs", "toggle pin shortcut"));
     });
+
+    commands.handle(PINNED_TABS_IS_PINNED, (payload) => pinnedTabs.has(payload.tabId));
   },
 });
 
 export async function start(deps: Deps): Promise<void> {
-  const { dataStore, events } = deps;
-  const pinnedCollection: Collection<PersistedPinnedTab> = dataStore.collection("pinned-tabs");
-
-  const persisted = await pinnedCollection.findMany({
-    sort: [{ field: "order", direction: "asc" }],
-  });
-
-  for (const pp of persisted) {
-    const pt: PinnedTab = {
-      id: pp.id as TabId,
-      url: pp.url,
-      title: pp.title,
-      favicon: pp.favicon,
-      order: pp.order,
-    };
-    _pinnedTabs.set(pt.id, pt);
-  }
-
+  if (!_pinnedTabs) throw new Error("pinned-tabs: register() must be called before start()");
+  await _pinnedTabs.load({ sort: [{ field: "order", direction: "asc" }] });
   if (_pinnedTabs.size > 0) {
-    events.emit(PINNED_TABS_CHANGED, {
-      pinnedTabs: [..._pinnedTabs.values()].sort((a, b) => a.order - b.order),
+    deps.events.emit(PINNED_TABS_CHANGED, {
+      pinnedTabs: _pinnedTabs.values().sort((a, b) => a.order - b.order),
     });
   }
 }

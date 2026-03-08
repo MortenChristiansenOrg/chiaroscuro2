@@ -3,6 +3,7 @@ import type { EventBus } from "../../bus/event-bus";
 import type { DataStore } from "../../data/types";
 import type { Platform } from "../../platform/types";
 import { defineFeature } from "../../shared/define-feature";
+import { logError, logWarn } from "../../shared/log";
 import {
   INSTALLER_ALLOW_PROTOCOL,
   INSTALLER_APPLY_UPDATE,
@@ -72,7 +73,7 @@ export default defineFeature<Deps>({
         return;
       }
       // Swallow rejection — the "error" event handler already emits INSTALLER_UPDATE_ERROR
-      await cachedAutoUpdater.checkForUpdates().catch(() => {});
+      await cachedAutoUpdater.checkForUpdates().catch(logWarn("installer", "check for updates"));
     });
 
     commands.handle(INSTALLER_APPLY_UPDATE, async () => {
@@ -93,7 +94,9 @@ export default defineFeature<Deps>({
         const exists = allowedProtocols.some((e) => e.protocol === protocol && e.origin === origin);
         if (!exists) {
           allowedProtocols.push({ protocol, origin });
-          void dataStore.setSetting(ALLOWED_PROTOCOLS_KEY, allowedProtocols).catch(console.error);
+          void dataStore
+            .setSetting(ALLOWED_PROTOCOLS_KEY, allowedProtocols)
+            .catch(logError("installer", "persist allowed protocols"));
         }
       }
       events.emit(INSTALLER_PROTOCOL_ALLOWED, { protocol, origin, always });
@@ -125,7 +128,7 @@ export default defineFeature<Deps>({
         const key = protocolKey(proto, origin);
         if (allowedSet.has(key)) {
           // Auto-allow previously approved protocol+origin
-          platform.openExternalApproved(url).catch(console.error);
+          platform.openExternalApproved(url).catch(logError("installer", "open external"));
         } else {
           if (pendingRequests.size >= MAX_PENDING_REQUESTS) return;
           const requestId = String(++nextRequestId);
@@ -194,12 +197,12 @@ export default defineFeature<Deps>({
       // Initial check after delay
       initialCheckTimer = setTimeout(() => {
         initialCheckTimer = undefined;
-        autoUpdater.checkForUpdates().catch(console.error);
+        autoUpdater.checkForUpdates().catch(logError("installer", "initial update check"));
       }, INITIAL_CHECK_DELAY_MS);
 
       // Periodic checks
       checkTimer = setInterval(() => {
-        autoUpdater.checkForUpdates().catch(console.error);
+        autoUpdater.checkForUpdates().catch(logError("installer", "periodic update check"));
       }, CHECK_INTERVAL_MS);
     } catch (err) {
       console.error("[installer] Failed to initialize auto-updater:", err);

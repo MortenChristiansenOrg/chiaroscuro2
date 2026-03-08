@@ -9,6 +9,10 @@ export const TABS_TOGGLE_BOOKMARK = "tabs:toggle-bookmark" as const;
 export const TABS_CLEAR_EPHEMERAL = "tabs:clear-ephemeral" as const;
 export const TABS_REORDER = "tabs:reorder" as const;
 export const TABS_REPORT_CONTENT_BOUNDS = "tabs:report-content-bounds" as const;
+export const TABS_GET = "tabs:get" as const;
+export const TABS_GET_FOR_WORKSPACE = "tabs:get-for-workspace" as const;
+export const TABS_SET_FOLDER_ID = "tabs:set-folder-id" as const;
+export const TABS_SET_ORDER = "tabs:set-order" as const;
 
 // ── Event names ──────────────────────────────────────────────────
 export const TABS_CREATED = "tabs:created" as const;
@@ -120,6 +124,13 @@ export type TabsCommands = {
   [TABS_CLEAR_EPHEMERAL]: { payload: TabsClearEphemeralPayload; response: undefined };
   [TABS_REORDER]: { payload: TabsReorderPayload; response: undefined };
   [TABS_REPORT_CONTENT_BOUNDS]: { payload: Bounds; response: undefined };
+  [TABS_GET]: { payload: { tabId: TabId }; response: Tab | undefined };
+  [TABS_GET_FOR_WORKSPACE]: { payload: { workspaceId: WorkspaceId }; response: Tab[] };
+  [TABS_SET_FOLDER_ID]: {
+    payload: { tabId: TabId; folderId: FolderId | null };
+    response: undefined;
+  };
+  [TABS_SET_ORDER]: { payload: { tabId: TabId; order: number }; response: undefined };
 };
 
 // ── Event registry ───────────────────────────────────────────────

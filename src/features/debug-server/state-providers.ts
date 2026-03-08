@@ -6,16 +6,17 @@ export function registerDebugState(name: string, provider: StateProvider): void 
   providers.set(name, provider);
 }
 
-export function getDebugState(name?: string): Record<string, unknown> {
+export async function getDebugState(name?: string): Promise<Record<string, unknown>> {
   if (name) {
     const provider = providers.get(name);
     if (!provider) return {};
-    return { [name]: provider() };
+    return { [name]: await provider() };
   }
   const result: Record<string, unknown> = {};
-  for (const [key, provider] of providers) {
-    result[key] = provider();
-  }
+  const entries = [...providers].map(async ([key, provider]) => {
+    result[key] = await provider();
+  });
+  await Promise.all(entries);
   return result;
 }
 

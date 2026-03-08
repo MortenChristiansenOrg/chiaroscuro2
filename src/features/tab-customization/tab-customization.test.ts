@@ -64,6 +64,7 @@ function setup() {
     events,
     dataStore,
     getTab: (id) => tabs.get(id),
+    isPinned: (id) => mockIsPinned(id),
   };
 
   commands.handle(TABS_ACTIVATE, async () => {});

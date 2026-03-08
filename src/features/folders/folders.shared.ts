@@ -7,6 +7,8 @@ export const FOLDERS_TOGGLE_COLLAPSE = "folders:toggle-collapse" as const;
 export const FOLDERS_REMOVE = "folders:remove" as const;
 export const FOLDERS_REORDER = "folders:reorder" as const;
 export const FOLDERS_CREATE = "folders:create" as const;
+export const FOLDERS_GET_FOR_LEVEL = "folders:get-for-level" as const;
+export const FOLDERS_SET_ORDER = "folders:set-order" as const;
 
 // ── Event names ──────────────────────────────────────────────────
 export const FOLDERS_CHANGED = "folders:changed" as const;
@@ -86,6 +88,11 @@ export type FoldersCommands = {
   [FOLDERS_REMOVE]: { payload: FoldersRemovePayload; response: undefined };
   [FOLDERS_REORDER]: { payload: FoldersReorderPayload; response: undefined };
   [FOLDERS_CREATE]: { payload: FoldersCreatePayload; response: undefined };
+  [FOLDERS_GET_FOR_LEVEL]: {
+    payload: { workspaceId: WorkspaceId; parentFolderId: FolderId | null };
+    response: Folder[];
+  };
+  [FOLDERS_SET_ORDER]: { payload: { folderId: FolderId; order: number }; response: undefined };
 };
 
 // ── Event registry ───────────────────────────────────────────────
