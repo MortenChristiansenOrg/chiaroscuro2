@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSettingsStore } from "../settings/settings.store";
-import type { Suggestion } from "./command-palette.shared";
+import {
+  COMMAND_PALETTE_EXECUTE,
+  COMMAND_PALETTE_HIDE,
+  COMMAND_PALETTE_SEARCH_VISITS,
+  type CommandPaletteCommands,
+  type Suggestion,
+} from "./command-palette.shared";
 import { useCommandPaletteStore } from "./command-palette.store";
 import {
   type ProviderConfig,
@@ -8,6 +14,17 @@ import {
   getBuiltInPages,
   resolveInputDetailed,
 } from "./resolve-input";
+
+type UsedCommands = Pick<
+  CommandPaletteCommands,
+  | typeof COMMAND_PALETTE_HIDE
+  | typeof COMMAND_PALETTE_EXECUTE
+  | typeof COMMAND_PALETTE_SEARCH_VISITS
+>;
+
+function sendCommand<K extends keyof UsedCommands>(name: K, payload: UsedCommands[K]["payload"]) {
+  return window.chiaroscuro.sendCommand(name, payload);
+}
 
 export function CommandPaletteOverlay() {
   const open = useCommandPaletteStore((s) => s.open);
@@ -27,17 +44,10 @@ export function CommandPaletteOverlay() {
   const [selectedSuggestion, setSelectedSuggestion] = useState(-1);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  // Cancel debounce when palette closes (component stays mounted)
-  useEffect(() => {
-    if (!open) {
-      clearTimeout(debounceRef.current);
-      debounceRef.current = undefined;
-    }
-  }, [open]);
-
   // Clean up debounce timer on unmount
   useEffect(() => () => clearTimeout(debounceRef.current), []);
 
+  // Open/close lifecycle: animation, focus trap, Esc handler, debounce cleanup
   useEffect(() => {
     if (open) {
       triggerRef.current = document.activeElement;
@@ -46,11 +56,30 @@ export function CommandPaletteOverlay() {
       setSuggestions([]);
       setSelectedSuggestion(-1);
       requestAnimationFrame(() => inputRef.current?.focus());
-      return;
+
+      // Esc handler + focus trap (active while open)
+      const onKeyDown = (e: KeyboardEvent) => {
+        if (e.key === "Escape") sendCommand(COMMAND_PALETTE_HIDE, undefined);
+      };
+      const input = inputRef.current;
+      const refocus = () => requestAnimationFrame(() => input?.focus());
+      document.addEventListener("keydown", onKeyDown);
+      input?.addEventListener("blur", refocus);
+      return () => {
+        document.removeEventListener("keydown", onKeyDown);
+        input?.removeEventListener("blur", refocus);
+      };
     }
-    if (status === "hidden") return;
-    // Play exit animation then unmount
-    setStatus("closing");
+
+    // Cancel debounce when palette closes
+    clearTimeout(debounceRef.current);
+    debounceRef.current = undefined;
+
+    // Play exit animation then hide
+    setStatus((prev) => {
+      if (prev === "hidden") return prev;
+      return "closing";
+    });
     const timer = setTimeout(() => {
       setStatus("hidden");
       if (triggerRef.current instanceof HTMLElement) {
@@ -59,31 +88,11 @@ export function CommandPaletteOverlay() {
       }
     }, 150); // --duration-exit
     return () => clearTimeout(timer);
-  }, [open, status]);
+  }, [open]);
 
   const handleClose = () => {
-    window.chiaroscuro.sendCommand("command-palette:hide", undefined);
+    sendCommand(COMMAND_PALETTE_HIDE, undefined);
   };
-
-  // Global Esc handler — works even if input loses focus
-  useEffect(() => {
-    if (status !== "open") return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") window.chiaroscuro.sendCommand("command-palette:hide", undefined);
-    };
-    document.addEventListener("keydown", onKeyDown);
-    return () => document.removeEventListener("keydown", onKeyDown);
-  }, [status]);
-
-  // Focus trap — nothing else should be focusable while palette is open
-  useEffect(() => {
-    if (status !== "open") return;
-    const input = inputRef.current;
-    if (!input) return;
-    const refocus = () => requestAnimationFrame(() => input.focus());
-    input.addEventListener("blur", refocus);
-    return () => input.removeEventListener("blur", refocus);
-  }, [status]);
 
   const handleInputChange = () => {
     const value = inputRef.current?.value ?? "";
@@ -111,7 +120,7 @@ export function CommandPaletteOverlay() {
     if (trimmed.length >= 2) {
       debounceRef.current = setTimeout(() => {
         window.chiaroscuro
-          .sendCommand("command-palette:search-visits", { query: trimmed })
+          .sendCommand(COMMAND_PALETTE_SEARCH_VISITS, { query: trimmed })
           .then((results) => setSuggestions(results as Suggestion[]))
           .catch(() => setSuggestions([]));
       }, 150);
@@ -122,11 +131,8 @@ export function CommandPaletteOverlay() {
 
   const executeCommand = (value: string, inCurrentTab: boolean) => {
     if (!value.trim()) return;
-    window.chiaroscuro.sendCommand("command-palette:execute", {
-      command: value,
-      inCurrentTab,
-    });
-    window.chiaroscuro.sendCommand("command-palette:hide", undefined);
+    sendCommand(COMMAND_PALETTE_EXECUTE, { command: value, inCurrentTab });
+    sendCommand(COMMAND_PALETTE_HIDE, undefined);
     if (inputRef.current) inputRef.current.value = "";
     setSuggestions([]);
     setResolution({ type: "empty" });

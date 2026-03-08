@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import type { ContextMenuItem } from "../../renderer/src/components/ContextMenu";
 import { Icon } from "../../renderer/src/components/Icon";
 import type { FolderId, TabId } from "../../shared/types";
 import type { Tab } from "../tabs/tabs.shared";
 import { BookmarkedTree } from "./BookmarkedTree";
 import { SectionDropZone } from "./SectionDropZone";
+import { useSidebarDrag } from "./SidebarContext";
 import { TabItem } from "./TabItem";
 import type { TreeItem } from "./sidebar.renderer";
 
@@ -14,27 +14,20 @@ export function TabSection({
   ephemeral,
   activeTabId,
   exitingIds,
-  dragTabIdRef,
-  dragFolderIdRef,
-  isDragging,
   onClearEphemeral,
   disableEntryAnimation,
   renamingFolderId,
-  onContextMenu,
 }: {
   bookmarked: Tab[];
   bookmarkedTree: TreeItem[];
   ephemeral: Tab[];
   activeTabId: TabId | null;
   exitingIds: Set<TabId>;
-  dragTabIdRef: React.RefObject<TabId | null>;
-  dragFolderIdRef: React.RefObject<FolderId | null>;
-  isDragging: boolean;
   onClearEphemeral: () => void;
   disableEntryAnimation?: boolean;
   renamingFolderId: FolderId | null;
-  onContextMenu?: (items: ContextMenuItem[], e: React.MouseEvent) => void;
 }) {
+  const { dragTabIdRef, dragFolderIdRef, isDragging, onContextMenu } = useSidebarDrag();
   // Divider visible when ephemeral tabs exist or during drag; lingers for fade-out
   const dividerTarget = ephemeral.length > 0 || isDragging;
   const [showDivider, setShowDivider] = useState(dividerTarget);
@@ -51,6 +44,15 @@ export function TabSection({
   const flipContainerRef = useRef<HTMLDivElement>(null);
   const prevRectsRef = useRef<Map<string, DOMRect>>(new Map());
 
+  const {
+    onBeforeReorderRef,
+    onBeforeReorder,
+    lastSwapRef,
+    lastSwapTimeRef,
+    lastFolderSwapRef,
+    lastFolderSwapTimeRef,
+  } = useSidebarDrag();
+
   const snapshotPositions = useCallback(() => {
     const container = flipContainerRef.current;
     if (!container) return;
@@ -61,6 +63,9 @@ export function TabSection({
     }
     prevRectsRef.current = rects;
   }, []);
+
+  // Register snapshot callback so children can trigger FLIP via context
+  onBeforeReorderRef.current = snapshotPositions;
 
   useLayoutEffect(() => {
     const container = flipContainerRef.current;
@@ -104,12 +109,6 @@ export function TabSection({
     });
   });
 
-  // ── Drag swap tracking ──
-  const lastSwapRef = useRef<{ targetId: TabId; position: string } | null>(null);
-  const lastSwapTimeRef = useRef(0);
-  const lastFolderSwapRef = useRef<{ targetId: FolderId; position: string } | null>(null);
-  const lastFolderSwapTimeRef = useRef(0);
-
   return (
     <div ref={flipContainerRef}>
       {bookmarked.length > 0 || bookmarkedTree.some((item) => item.type === "folder") ? (
@@ -118,35 +117,14 @@ export function TabSection({
             tree={bookmarkedTree}
             activeTabId={activeTabId}
             exitingIds={exitingIds}
-            dragTabIdRef={dragTabIdRef}
-            dragFolderIdRef={dragFolderIdRef}
-            isDragging={isDragging}
-            onBeforeReorder={snapshotPositions}
-            lastSwapRef={lastSwapRef}
-            lastSwapTimeRef={lastSwapTimeRef}
-            lastFolderSwapRef={lastFolderSwapRef}
-            lastFolderSwapTimeRef={lastFolderSwapTimeRef}
             disableEntryAnimation={disableEntryAnimation}
             renamingFolderId={renamingFolderId}
-            onContextMenu={onContextMenu}
           />
           {/* Root-level drop zone — visible during drag so tabs/folders can be placed outside folders */}
-          <SectionDropZone
-            targetBookmarked={true}
-            dragTabIdRef={dragTabIdRef}
-            dragFolderIdRef={dragFolderIdRef}
-            visible={isDragging}
-            onBeforeReorder={snapshotPositions}
-          />
+          <SectionDropZone targetBookmarked={true} />
         </>
       ) : (
-        <SectionDropZone
-          targetBookmarked={true}
-          dragTabIdRef={dragTabIdRef}
-          dragFolderIdRef={dragFolderIdRef}
-          visible={isDragging}
-          onBeforeReorder={snapshotPositions}
-        />
+        <SectionDropZone targetBookmarked={true} />
       )}
 
       {/* Ephemeral divider — fades in/out based on content or drag state */}
@@ -197,23 +175,11 @@ export function TabSection({
             isEphemeral={true}
             exiting={exitingIds.has(tab.id)}
             isBookmarkedSection={false}
-            dragTabIdRef={dragTabIdRef}
-            isDragged={tab.id === (isDragging ? dragTabIdRef.current : null)}
-            isDragging={isDragging}
-            onBeforeReorder={snapshotPositions}
-            lastSwapRef={lastSwapRef}
-            lastSwapTimeRef={lastSwapTimeRef}
             disableEntryAnimation={disableEntryAnimation}
-            onContextMenu={onContextMenu}
           />
         ))
       ) : (
-        <SectionDropZone
-          targetBookmarked={false}
-          dragTabIdRef={dragTabIdRef}
-          visible={isDragging}
-          onBeforeReorder={snapshotPositions}
-        />
+        <SectionDropZone targetBookmarked={false} />
       )}
     </div>
   );

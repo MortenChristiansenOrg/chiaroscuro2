@@ -88,7 +88,6 @@ import type {
   WindowChromeEvents,
 } from "../features/window-chrome/window-chrome.shared";
 import workspaces from "../features/workspaces/workspaces.main";
-import { start as startWorkspaces } from "../features/workspaces/workspaces.main";
 import type {
   WorkspacesCommands,
   WorkspacesEvents,
@@ -311,7 +310,7 @@ app.whenReady().then(async () => {
   // module-import time, so registering after risks losing the signal.
   ipcMain.once("renderer:ready", async () => {
     appState.start?.(deps);
-    await startWorkspaces({ ...deps, getTabsForWorkspace });
+    await workspaces.start?.({ ...deps, getTabsForWorkspace });
     windowChrome.start?.(deps);
     await installer.start?.(deps);
     await startTabs({ ...deps, isPinned, getCustomization, getFoldersForLevel, setFolderOrder });

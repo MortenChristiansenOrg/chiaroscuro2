@@ -1,3 +1,4 @@
+import { useShallow } from "zustand/react/shallow";
 import { Icon } from "../../renderer/src/components/Icon";
 import {
   DOWNLOADS_CANCEL,
@@ -184,9 +185,9 @@ export function DownloadItem({ download }: { download: Download }) {
 }
 
 export function DownloadsSection() {
-  const downloads = useDownloadsStore((s) => s.downloads);
+  const downloads = useDownloadsStore(useShallow((s) => [...s.downloads.values()]));
 
-  if (downloads.size === 0) return null;
+  if (downloads.length === 0) return null;
 
   return (
     <div style={{ padding: "0.25rem 0" }}>
@@ -212,7 +213,7 @@ export function DownloadsSection() {
       </div>
 
       {/* Download items */}
-      {[...downloads.values()].map((dl) => (
+      {downloads.map((dl) => (
         <DownloadItem key={dl.id} download={dl} />
       ))}
     </div>

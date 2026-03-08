@@ -25,24 +25,24 @@ Nearly every `.main.ts` uses module-scoped `let` vars + Maps set during `registe
 | Feature               | Sev    | Issue                                                                                                | Status |
 | --------------------- | ------ | ---------------------------------------------------------------------------------------------------- | ------ |
 | **sidebar**           | HIGH   | God component — `sidebar.renderer.tsx` is ~1779 lines. Extract TabItem, FolderGroup, PinnedTabsStrip | ✅ DONE — 8 files extracted, main file ~310 lines |
-| **sidebar**           | MEDIUM | Massive prop drilling (10-15+ props through tree). Needs DragContext/provider                        | SidebarDragContext created, not yet wired |
+| **sidebar**           | MEDIUM | Massive prop drilling (10-15+ props through tree). Needs DragContext/provider                        | ✅ DONE — SidebarDragProvider wired, ~10 drilled props eliminated |
 | **sidebar**           | MEDIUM | `useMemo` dep on `bookmarked` defeats memoization (new array ref every render)                       | ✅ DONE — `pinnedTabIds` memoized |
 | **workspaces**        | HIGH   | Direct mutation of external Tab objects (`tab.workspaceId = ...`) violates "mutations via commands"  | ✅ DONE — uses TABS_SET_WORKSPACE command |
-| **workspaces**        | HIGH   | `start()` exported standalone, not via `defineFeature` pattern                                       | |
+| **workspaces**        | HIGH   | `start()` exported standalone, not via `defineFeature` pattern                                       | ✅ DONE |
 | **workspaces**        | MEDIUM | `FadePresence` double-rAF without cancellation on unmount                                            | ✅ DONE |
 | **command-palette**   | HIGH   | Contradictory boolean state (`visible`/`closing`) — should be status enum                            | ✅ DONE |
-| **command-palette**   | MEDIUM | Effect cascade for open/close animation, blur/refocus focus trap                                     | |
-| **command-palette**   | MEDIUM | Hard-coded command strings instead of shared constants                                               | |
+| **command-palette**   | MEDIUM | Effect cascade for open/close animation, blur/refocus focus trap                                     | ✅ DONE — 4 effects → 2 |
+| **command-palette**   | MEDIUM | Hard-coded command strings instead of shared constants                                               | ✅ DONE — typed sendCommand + constants |
 | **folders**           | HIGH   | Zero test coverage for complex reorder/nesting logic                                                 | ✅ DONE — 24 tests covering all commands |
 | **local-web-app**     | HIGH   | `useEffect` for state sync — project's #1 documented anti-pattern                                    | ✅ DONE — override pattern |
 | **local-web-app**     | MEDIUM | Missing `await` on async `startProcess` calls                                                        | ✅ DONE |
-| **local-web-app**     | MEDIUM | Duplicated process exit cleanup (close vs error handlers)                                            | |
-| **tabs**              | MEDIUM | `as string` casts on platform event callbacks — unsafe if Electron API changes                       | |
+| **local-web-app**     | MEDIUM | Duplicated process exit cleanup (close vs error handlers)                                            | ✅ DONE — extracted cleanupProcess() |
+| **tabs**              | MEDIUM | `as string` casts on platform event callbacks — unsafe if Electron API changes                       | ✅ DONE — runtime type guards |
 | **tabs**              | MEDIUM | Fire-and-forget `fetchAsDataUrl` with no `.catch()`                                                  | ✅ DONE |
 | **debug-server**      | HIGH   | Monkey-patching in `recorder.ts` with no double-registration guard                                   | ✅ DONE |
 | **domain-css**        | HIGH   | Module-level mutable state + abbreviated `d` param in `register()`                                   | ✅ DONE |
 | **domain-css**        | MEDIUM | Unhandled promise rejections in async `fs.watch` callback                                            | ✅ DONE |
-| **downloads**         | MEDIUM | `useDownloadsStore((s) => s.downloads)` returns Map — needs `useShallow`                             | |
+| **downloads**         | MEDIUM | `useDownloadsStore((s) => s.downloads)` returns Map — needs `useShallow`                             | ✅ DONE — useShallow + array selector |
 | **settings**          | MEDIUM | Fire-and-forget: 3 separate `dataStore.setSetting()` calls per save                                  | ✅ DONE |
 | **tab-customization** | MEDIUM | Two `useEffect` for state sync (anti-pattern)                                                        | ✅ DONE — override pattern |
 | **pinned-tabs**       | MEDIUM | `TABS_UPDATED` sync doesn't emit `PINNED_TABS_CHANGED` — renderer never learns                       | ✅ DONE |

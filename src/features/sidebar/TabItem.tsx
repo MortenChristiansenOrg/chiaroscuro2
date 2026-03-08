@@ -18,6 +18,7 @@ import {
   TABS_TOGGLE_BOOKMARK,
 } from "../tabs/tabs.shared";
 import { Favicon } from "./Favicon";
+import { useSidebarDrag } from "./SidebarContext";
 
 // ── Typed sendCommand ───────────────────────────────────────────
 
@@ -50,17 +51,8 @@ export function TabItem({
   exiting,
   isBookmarkedSection,
   folderId,
-  dragTabIdRef,
-  dragFolderIdRef,
   isDragged,
-  isDragging,
-  onBeforeReorder,
-  lastSwapRef,
-  lastSwapTimeRef,
-  lastFolderSwapRef,
-  lastFolderSwapTimeRef,
   disableEntryAnimation,
-  onContextMenu,
 }: {
   tab: Tab;
   isActive: boolean;
@@ -69,18 +61,20 @@ export function TabItem({
   exiting?: boolean;
   isBookmarkedSection: boolean;
   folderId?: FolderId | null;
-  dragTabIdRef: React.RefObject<TabId | null>;
-  dragFolderIdRef?: React.RefObject<FolderId | null>;
-  isDragged: boolean;
-  isDragging: boolean;
-  onBeforeReorder: () => void;
-  lastSwapRef: React.RefObject<{ targetId: TabId; position: string } | null>;
-  lastSwapTimeRef: React.RefObject<number>;
-  lastFolderSwapRef?: React.RefObject<{ targetId: string; position: string } | null>;
-  lastFolderSwapTimeRef?: React.RefObject<number>;
+  isDragged?: boolean;
   disableEntryAnimation?: boolean;
-  onContextMenu?: (items: ContextMenuItem[], e: React.MouseEvent) => void;
 }) {
+  const {
+    isDragging,
+    dragTabIdRef,
+    dragFolderIdRef,
+    onBeforeReorder,
+    lastSwapRef,
+    lastSwapTimeRef,
+    lastFolderSwapRef,
+    lastFolderSwapTimeRef,
+    onContextMenu,
+  } = useSidebarDrag();
   const customization = useTabCustomizationStore((s) => s.customizations.get(tab.id));
   const customTitle = customization?.title;
   const mountedRef = useRef(false);
@@ -172,14 +166,9 @@ export function TabItem({
     e.dataTransfer.dropEffect = "move";
 
     // Handle folder being dragged over this tab
-    const draggingFolderId = dragFolderIdRef?.current;
+    const draggingFolderId = dragFolderIdRef.current;
     if (draggingFolderId && isBookmarkedSection) {
-      if (
-        !lastFolderSwapRef ||
-        !lastFolderSwapTimeRef ||
-        Date.now() - lastFolderSwapTimeRef.current < 100
-      )
-        return;
+      if (Date.now() - lastFolderSwapTimeRef.current < 100) return;
       const rect = elRef.current?.getBoundingClientRect();
       if (!rect) return;
       const position = e.clientY > rect.top + rect.height / 2 ? "after" : "before";

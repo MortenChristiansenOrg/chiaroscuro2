@@ -196,10 +196,10 @@ export default defineFeature<Deps>({
     function attachTabListeners(tabId: TabId): void {
       tabScope.add(
         tabId,
-        platform.onTabEvent(tabId, "page-title-updated", (_event: unknown, title: unknown) => {
+        platform.onTabEvent(tabId, "page-title-updated", (_event, title) => {
           const tab = tabs.get(tabId);
-          if (!tab) return;
-          tab.title = title as string;
+          if (!tab || typeof title !== "string") return;
+          tab.title = title;
           events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
           persistTab(tab);
         }),
@@ -207,10 +207,10 @@ export default defineFeature<Deps>({
 
       tabScope.add(
         tabId,
-        platform.onTabEvent(tabId, "did-navigate", (_event: unknown, url: unknown) => {
+        platform.onTabEvent(tabId, "did-navigate", (_event, url) => {
           const tab = tabs.get(tabId);
-          if (!tab) return;
-          tab.url = url as string;
+          if (!tab || typeof url !== "string") return;
+          tab.url = url;
           events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
           persistTab(tab);
         }),
@@ -218,10 +218,10 @@ export default defineFeature<Deps>({
 
       tabScope.add(
         tabId,
-        platform.onTabEvent(tabId, "did-navigate-in-page", (_event: unknown, url: unknown) => {
+        platform.onTabEvent(tabId, "did-navigate-in-page", (_event, url) => {
           const tab = tabs.get(tabId);
-          if (!tab) return;
-          tab.url = url as string;
+          if (!tab || typeof url !== "string") return;
+          tab.url = url;
           events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
           persistTab(tab);
         }),
@@ -256,11 +256,11 @@ export default defineFeature<Deps>({
 
       tabScope.add(
         tabId,
-        platform.onTabEvent(tabId, "page-favicon-updated", (_event: unknown, favicons: unknown) => {
+        platform.onTabEvent(tabId, "page-favicon-updated", (_event, favicons) => {
           const tab = tabs.get(tabId);
-          if (!tab) return;
+          if (!tab || !Array.isArray(favicons)) return;
           const urls = favicons as string[];
-          if (urls.length > 0 && urls[0]) {
+          if (urls.length > 0 && typeof urls[0] === "string") {
             const faviconUrl = urls[0];
             tab.favicon = faviconUrl;
             events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });

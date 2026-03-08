@@ -1,8 +1,9 @@
 import { useState } from "react";
-import type { FolderId, TabId } from "../../shared/types";
+import type { FolderId } from "../../shared/types";
 import { FOLDERS_REORDER, type FoldersCommands } from "../folders/folders.shared";
 import type { TabsCommands } from "../tabs/tabs.shared";
 import { TABS_REORDER } from "../tabs/tabs.shared";
+import { useSidebarDrag } from "./SidebarContext";
 
 // ── Typed sendCommand ───────────────────────────────────────────
 
@@ -20,19 +21,12 @@ function sendCommand<K extends keyof DropZoneUsedCommands>(
 
 export function SectionDropZone({
   targetBookmarked,
-  dragTabIdRef,
-  dragFolderIdRef,
-  visible,
-  onBeforeReorder,
   targetFolderId,
 }: {
   targetBookmarked: boolean;
-  dragTabIdRef: React.RefObject<TabId | null>;
-  dragFolderIdRef?: React.RefObject<FolderId | null>;
-  visible: boolean;
-  onBeforeReorder?: () => void;
   targetFolderId?: FolderId | null;
 }) {
+  const { isDragging: visible, dragTabIdRef, dragFolderIdRef, onBeforeReorder } = useSidebarDrag();
   const [over, setOver] = useState(false);
   return (
     <div
@@ -60,10 +54,10 @@ export function SectionDropZone({
         e.preventDefault();
         setOver(false);
         // Handle folder drop — move to root level
-        if (dragFolderIdRef?.current) {
+        if (dragFolderIdRef.current) {
           const folderId = dragFolderIdRef.current;
           dragFolderIdRef.current = null;
-          onBeforeReorder?.();
+          onBeforeReorder();
           sendCommand(FOLDERS_REORDER, {
             folderId,
             parentFolderId: null,
@@ -74,7 +68,7 @@ export function SectionDropZone({
         const tabId = dragTabIdRef.current;
         dragTabIdRef.current = null;
         if (!tabId) return;
-        onBeforeReorder?.();
+        onBeforeReorder();
         sendCommand(TABS_REORDER, {
           tabId,
           targetBookmarked,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useContextMenu } from "../../renderer/src/components/ContextMenu";
 import type { FolderId, TabId, WorkspaceId } from "../../shared/types";
 import {
@@ -25,6 +25,7 @@ import type { Workspace } from "../workspaces/workspaces.shared";
 // shell-composite: read-only cross-feature store access
 import { useWorkspacesStore } from "../workspaces/workspaces.store";
 import { PinnedTabsStrip } from "./PinnedTabsStrip";
+import { SidebarDragProvider } from "./SidebarContext";
 import { TabSection } from "./TabSection";
 import { useSidebarStore } from "./sidebar.store";
 
@@ -256,32 +257,8 @@ export function SidebarPanel() {
   }, [wsTransition, tabs, pinnedTabIds, folders]);
 
   // Drag & drop
-  const dragTabIdRef = useRef<TabId | null>(null);
-  const dragFolderIdRef = useRef<FolderId | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-
-  // Safety net: when React repositions the drag source DOM node mid-drag
-  // (cross-section reorder), Chrome loses track of it and never fires dragend.
-  // Listen for drop (which does fire) + dragend + Escape as fallbacks.
-  useEffect(() => {
-    if (!isDragging) return;
-    const reset = () => {
-      setIsDragging(false);
-      dragTabIdRef.current = null;
-      dragFolderIdRef.current = null;
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") reset();
-    };
-    document.addEventListener("dragend", reset);
-    document.addEventListener("drop", reset);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("dragend", reset);
-      document.removeEventListener("drop", reset);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [isDragging]);
+  const handleDragEnd = useCallback(() => setIsDragging(false), []);
 
   const handleClearEphemeral = () => {
     if (activeWorkspaceId) {
@@ -322,101 +299,96 @@ export function SidebarPanel() {
       }}
     >
       <div className="relative flex h-full" style={{ width: sidebarPx }}>
-        <nav
-          aria-label="Sidebar"
-          className="flex flex-col overflow-hidden h-full flex-1"
-          onDragStart={() => setIsDragging(true)}
-          onDragEnd={() => {
-            setIsDragging(false);
-            dragTabIdRef.current = null;
-            dragFolderIdRef.current = null;
-          }}
-          onContextMenu={handleSidebarContextMenu}
+        <SidebarDragProvider
+          isDragging={isDragging}
+          onDragEnd={handleDragEnd}
+          onContextMenu={openContextMenu}
         >
-          <div className="sr-only" aria-live="polite" aria-atomic="true">
-            {announcement}
-          </div>
+          <nav
+            aria-label="Sidebar"
+            className="flex flex-col overflow-hidden h-full flex-1"
+            onDragStart={() => setIsDragging(true)}
+            onDragEnd={handleDragEnd}
+            onContextMenu={handleSidebarContextMenu}
+          >
+            <div className="sr-only" aria-live="polite" aria-atomic="true">
+              {announcement}
+            </div>
 
-          {pinnedTabs.length > 0 && (
-            <PinnedTabsStrip
-              pinnedTabs={pinnedTabs}
-              tabs={tabs}
-              activeTabId={activeTabId}
-              onContextMenu={openContextMenu}
-            />
-          )}
-          {contextMenuPortal}
+            {pinnedTabs.length > 0 && (
+              <PinnedTabsStrip
+                pinnedTabs={pinnedTabs}
+                tabs={tabs}
+                activeTabId={activeTabId}
+                onContextMenu={openContextMenu}
+              />
+            )}
+            {contextMenuPortal}
 
-          <div className="flex-1 overflow-y-auto">
-            <div style={{ position: "relative", overflow: "hidden" }}>
-              {/* Exiting workspace tabs (slide out) */}
-              {wsTransition && prevTabs && (
+            <div className="flex-1 overflow-y-auto">
+              <div style={{ position: "relative", overflow: "hidden" }}>
+                {/* Exiting workspace tabs (slide out) */}
+                {wsTransition && prevTabs && (
+                  <div
+                    key={`exit-${wsTransition.fromWorkspaceId}`}
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      willChange: "transform, opacity",
+                      animation: `${wsTransition.direction === "right" ? "ws-out-left" : "ws-out-right"} ${WS_SLIDE_MS}ms cubic-bezier(0.4, 0, 0.2, 1) forwards`,
+                    }}
+                  >
+                    <TabSection
+                      bookmarked={prevTabs.bookmarked}
+                      bookmarkedTree={prevTabs.bookmarkedTree}
+                      ephemeral={prevTabs.ephemeral}
+                      activeTabId={null}
+                      exitingIds={new Set()}
+                      onClearEphemeral={() => {}}
+                      disableEntryAnimation
+                      renamingFolderId={null}
+                    />
+                  </div>
+                )}
+                {/* Current workspace tabs (slide in) */}
                 <div
-                  key={`exit-${wsTransition.fromWorkspaceId}`}
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    right: 0,
-                    willChange: "transform, opacity",
-                    animation: `${wsTransition.direction === "right" ? "ws-out-left" : "ws-out-right"} ${WS_SLIDE_MS}ms cubic-bezier(0.4, 0, 0.2, 1) forwards`,
-                  }}
+                  key={activeWorkspaceId ?? undefined}
+                  style={
+                    wsTransition
+                      ? {
+                          willChange: "transform, opacity",
+                          animation: `${wsTransition.direction === "right" ? "ws-in-from-right" : "ws-in-from-left"} ${WS_SLIDE_MS}ms cubic-bezier(0.4, 0, 0.2, 1) both`,
+                        }
+                      : undefined
+                  }
                 >
                   <TabSection
-                    bookmarked={prevTabs.bookmarked}
-                    bookmarkedTree={prevTabs.bookmarkedTree}
-                    ephemeral={prevTabs.ephemeral}
-                    activeTabId={null}
-                    exitingIds={new Set()}
-                    dragTabIdRef={dragTabIdRef}
-                    dragFolderIdRef={dragFolderIdRef}
-                    isDragging={false}
-                    onClearEphemeral={() => {}}
-                    disableEntryAnimation
-                    renamingFolderId={null}
+                    bookmarked={bookmarked}
+                    bookmarkedTree={bookmarkedTree}
+                    ephemeral={ephemeral}
+                    activeTabId={activeTabId}
+                    exitingIds={exitingIds}
+                    onClearEphemeral={handleClearEphemeral}
+                    disableEntryAnimation={!!wsTransition}
+                    renamingFolderId={renamingFolderId}
                   />
                 </div>
-              )}
-              {/* Current workspace tabs (slide in) */}
-              <div
-                key={activeWorkspaceId ?? undefined}
-                style={
-                  wsTransition
-                    ? {
-                        willChange: "transform, opacity",
-                        animation: `${wsTransition.direction === "right" ? "ws-in-from-right" : "ws-in-from-left"} ${WS_SLIDE_MS}ms cubic-bezier(0.4, 0, 0.2, 1) both`,
-                      }
-                    : undefined
-                }
-              >
-                <TabSection
-                  bookmarked={bookmarked}
-                  bookmarkedTree={bookmarkedTree}
-                  ephemeral={ephemeral}
-                  activeTabId={activeTabId}
-                  exitingIds={exitingIds}
-                  dragTabIdRef={dragTabIdRef}
-                  dragFolderIdRef={dragFolderIdRef}
-                  isDragging={isDragging}
-                  onClearEphemeral={handleClearEphemeral}
-                  disableEntryAnimation={!!wsTransition}
-                  renamingFolderId={renamingFolderId}
-                  onContextMenu={openContextMenu}
-                />
               </div>
             </div>
-          </div>
 
-          <DownloadsSection />
-          <UpdateNotification />
+            <DownloadsSection />
+            <UpdateNotification />
 
-          <WorkspaceSwitcher
-            workspaces={workspaces}
-            activeWorkspaceId={activeWorkspaceId}
-            editorMode={editorMode}
-            onEditorModeChange={setEditorMode}
-          />
-        </nav>
+            <WorkspaceSwitcher
+              workspaces={workspaces}
+              activeWorkspaceId={activeWorkspaceId}
+              editorMode={editorMode}
+              onEditorModeChange={setEditorMode}
+            />
+          </nav>
+        </SidebarDragProvider>
         {/* Invisible resize handle */}
         <div
           className="absolute top-0 right-0 h-full cursor-col-resize"

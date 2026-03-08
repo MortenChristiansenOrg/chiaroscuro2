@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import type { ContextMenuItem } from "../../renderer/src/components/ContextMenu";
 import { Icon } from "../../renderer/src/components/Icon";
 import type { FolderId, TabId } from "../../shared/types";
 import type { Folder, FoldersCommands } from "../folders/folders.shared";
@@ -13,6 +12,7 @@ import {
 import { useFoldersStore } from "../folders/folders.store";
 import type { TabsCommands } from "../tabs/tabs.shared";
 import { TABS_REORDER } from "../tabs/tabs.shared";
+import { useSidebarDrag } from "./SidebarContext";
 
 // ── Typed sendCommand ───────────────────────────────────────────
 
@@ -38,34 +38,27 @@ function sendCommand<K extends keyof FolderHeaderUsedCommands>(
 export function FolderHeader({
   folder,
   isRenaming,
-  isDragging,
-  dragTabIdRef,
-  dragFolderIdRef,
   depth,
-  onBeforeReorder,
-  lastFolderSwapRef,
-  lastFolderSwapTimeRef,
-  lastSwapRef,
-  lastSwapTimeRef,
   firstSubtreeTabId,
   lastSubtreeTabId,
-  onContextMenu,
 }: {
   folder: Folder;
   isRenaming: boolean;
-  isDragging: boolean;
-  dragTabIdRef: React.RefObject<TabId | null>;
-  dragFolderIdRef: React.RefObject<FolderId | null>;
   depth: number;
-  onBeforeReorder: () => void;
-  lastFolderSwapRef: React.RefObject<{ targetId: FolderId; position: string } | null>;
-  lastFolderSwapTimeRef: React.RefObject<number>;
-  lastSwapRef: React.RefObject<{ targetId: TabId; position: string } | null>;
-  lastSwapTimeRef: React.RefObject<number>;
   firstSubtreeTabId: TabId | null;
   lastSubtreeTabId: TabId | null;
-  onContextMenu?: (items: ContextMenuItem[], e: React.MouseEvent) => void;
 }) {
+  const {
+    isDragging,
+    dragTabIdRef,
+    dragFolderIdRef,
+    onBeforeReorder,
+    lastFolderSwapRef,
+    lastFolderSwapTimeRef,
+    lastSwapRef,
+    lastSwapTimeRef,
+    onContextMenu,
+  } = useSidebarDrag();
   const inputRef = useRef<HTMLInputElement>(null);
   const [renameValue, setRenameValue] = useState(folder.name);
   const [dropOver, setDropOver] = useState(false);

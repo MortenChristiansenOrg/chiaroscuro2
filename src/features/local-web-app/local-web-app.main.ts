@@ -159,7 +159,7 @@ async function startProcess(deps: LocalWebAppDeps, tabId: TabId): Promise<void> 
       .catch(logError("local-web-app", "write stderr"));
   });
 
-  proc.on("close", (code) => {
+  function cleanupProcess(status: LocalWebAppStatus): void {
     if (processes.get(tabId)?.proc !== proc) return;
     const pendingReload = reloadTimeouts.get(tabId);
     if (pendingReload) {
@@ -167,21 +167,16 @@ async function startProcess(deps: LocalWebAppDeps, tabId: TabId): Promise<void> 
       reloadTimeouts.delete(tabId);
     }
     processes.delete(tabId);
-    const status: LocalWebAppStatus = code === 0 || code === null ? "stopped" : "error";
     statuses.set(tabId, status);
     events.emit(LOCAL_WEB_APP_STATUS_CHANGED, { tabId, status });
+  }
+
+  proc.on("close", (code) => {
+    cleanupProcess(code === 0 || code === null ? "stopped" : "error");
   });
 
   proc.on("error", (err) => {
-    if (processes.get(tabId)?.proc !== proc) return;
-    const pendingReload = reloadTimeouts.get(tabId);
-    if (pendingReload) {
-      clearTimeout(pendingReload);
-      reloadTimeouts.delete(tabId);
-    }
-    processes.delete(tabId);
-    statuses.set(tabId, "error");
-    events.emit(LOCAL_WEB_APP_STATUS_CHANGED, { tabId, status: "error" });
+    cleanupProcess("error");
     commands
       .send(TERMINAL_WRITE, { tabId, data: `Error: ${err.message}`, type: "stderr" })
       .catch(logError("local-web-app", "write error"));

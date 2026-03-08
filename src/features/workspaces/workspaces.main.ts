@@ -288,56 +288,62 @@ export default defineFeature<Deps>({
       });
     }
   },
-});
 
-export async function start(deps: Deps): Promise<void> {
-  const { events, dataStore, setActiveWorkspaceId } = deps;
-  const wsCollection: Collection<PersistedWorkspace> = dataStore.collection("workspaces");
+  async start(deps) {
+    const { events, dataStore, setActiveWorkspaceId } = deps;
+    const wsCollection: Collection<PersistedWorkspace> = dataStore.collection("workspaces");
 
-  // Restore persisted workspaces
-  const persisted = await wsCollection.findMany({
-    sort: [{ field: "order", direction: "asc" }],
-  });
+    // Restore persisted workspaces
+    const persisted = await wsCollection.findMany({
+      sort: [{ field: "order", direction: "asc" }],
+    });
 
-  if (persisted.length > 0) {
-    for (const pw of persisted) {
-      const ws: Workspace = {
-        id: pw.id as WorkspaceId,
-        name: pw.name,
-        color: pw.color,
-        icon: pw.icon,
+    if (persisted.length > 0) {
+      for (const pw of persisted) {
+        const ws: Workspace = {
+          id: pw.id as WorkspaceId,
+          name: pw.name,
+          color: pw.color,
+          icon: pw.icon,
+          activeTabId: null,
+        };
+        _workspaces.set(ws.id, ws);
+      }
+
+      const firstWs = persisted[0] as (typeof persisted)[number];
+      setActiveWorkspaceId(firstWs.id as WorkspaceId);
+
+      events.emit(WORKSPACES_LIST_CHANGED, {
+        workspaces: [..._workspaces.values()],
+      });
+    } else {
+      // Create default workspace
+      const defaultId = crypto.randomUUID() as WorkspaceId;
+      const defaultWs: Workspace = {
+        id: defaultId,
+        name: "Work",
+        color: "oklch(0.6 0.12 230)",
+        icon: "W",
         activeTabId: null,
       };
-      _workspaces.set(ws.id, ws);
+      _workspaces.set(defaultId, defaultWs);
+      setActiveWorkspaceId(defaultId);
+
+      // Persist default
+      wsCollection
+        .insert({
+          id: defaultId,
+          name: "Work",
+          color: "oklch(0.6 0.12 230)",
+          icon: "W",
+          order: 0,
+        })
+        .catch(logError("workspaces", "create default"));
+
+      events.emit(WORKSPACES_CREATED, { workspace: defaultWs });
+      events.emit(WORKSPACES_LIST_CHANGED, {
+        workspaces: [..._workspaces.values()],
+      });
     }
-
-    const firstWs = persisted[0] as (typeof persisted)[number];
-    setActiveWorkspaceId(firstWs.id as WorkspaceId);
-
-    events.emit(WORKSPACES_LIST_CHANGED, {
-      workspaces: [..._workspaces.values()],
-    });
-  } else {
-    // Create default workspace
-    const defaultId = crypto.randomUUID() as WorkspaceId;
-    const defaultWs: Workspace = {
-      id: defaultId,
-      name: "Work",
-      color: "oklch(0.6 0.12 230)",
-      icon: "W",
-      activeTabId: null,
-    };
-    _workspaces.set(defaultId, defaultWs);
-    setActiveWorkspaceId(defaultId);
-
-    // Persist default
-    wsCollection
-      .insert({ id: defaultId, name: "Work", color: "oklch(0.6 0.12 230)", icon: "W", order: 0 })
-      .catch(logError("workspaces", "create default"));
-
-    events.emit(WORKSPACES_CREATED, { workspace: defaultWs });
-    events.emit(WORKSPACES_LIST_CHANGED, {
-      workspaces: [..._workspaces.values()],
-    });
-  }
-}
+  },
+});

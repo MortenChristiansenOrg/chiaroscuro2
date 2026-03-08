@@ -19,7 +19,6 @@ import {
   TABS_UPDATED,
 } from "../tabs/tabs.shared";
 import feature from "./workspaces.main";
-import { start } from "./workspaces.main";
 import {
   WORKSPACES_CREATE,
   WORKSPACES_CREATED,
@@ -312,7 +311,7 @@ describe("start()", () => {
     const listChanged = vi.fn();
     events.on(WORKSPACES_LIST_CHANGED, listChanged);
 
-    await start(deps);
+    await feature.start?.(deps);
 
     expect(activeWsId).toBe("ws-1" as WorkspaceId);
     expect(listChanged).toHaveBeenCalledWith(
@@ -353,7 +352,7 @@ describe("start()", () => {
     const created = vi.fn();
     events.on(WORKSPACES_CREATED, created);
 
-    await start(deps);
+    await feature.start?.(deps);
 
     expect(activeWsId).toBeDefined();
     expect(created).toHaveBeenCalledWith(
