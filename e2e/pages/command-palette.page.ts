@@ -22,7 +22,8 @@ export class CommandPalettePage {
   /** Open via native Ctrl+T shortcut. Requires electronApp because CDP
    *  keyboard events don't trigger Electron's before-input-event handler.
    *  Retries the input event since sendInputEvent can be unreliable under
-   *  parallel load. */
+   *  parallel load. Also focuses the webContents after opening since
+   *  sendInputEvent doesn't imply window focus (needed for CI). */
   async openViaKeyboard(electronApp: ElectronApplication) {
     const sendCtrlT = () =>
       electronApp.evaluate(({ BrowserWindow }) => {
@@ -36,12 +37,19 @@ export class CommandPalettePage {
     for (let attempt = 0; attempt < 3; attempt++) {
       try {
         await this.overlay.waitFor({ state: "visible", timeout: 1_500 });
+        // Ensure webContents has focus so document.activeElement reports correctly
+        await electronApp.evaluate(({ BrowserWindow }) => {
+          BrowserWindow.getAllWindows()[0]?.webContents.focus();
+        });
         return;
       } catch {
         await sendCtrlT();
       }
     }
     await this.overlay.waitFor({ state: "visible", timeout: 2_000 });
+    await electronApp.evaluate(({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows()[0]?.webContents.focus();
+    });
   }
 
   async close() {
