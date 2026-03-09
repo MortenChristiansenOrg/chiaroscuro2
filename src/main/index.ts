@@ -330,6 +330,7 @@ app.whenReady().then(async () => {
   if (activeWindowId && process.env.NODE_ENV !== "test") {
     platform.initTooltipOverlay(activeWindowId);
     platform.initContextMenuOverlay(activeWindowId);
+    platform.initCommandPaletteOverlay(activeWindowId);
   }
 
   // Activate keyboard shortcuts immediately (window is focused on creation)

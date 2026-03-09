@@ -23,8 +23,7 @@ import {
 import { type ProviderConfig, resolveInput } from "./resolve-input";
 import { initVisitTracking, recordVisit, searchVisits } from "./suggestions";
 
-type AllCommands = CommandPaletteCommands &
-  Pick<TabsCommands, "tabs:activate" | "tabs:create" | "tabs:navigate">;
+type AllCommands = CommandPaletteCommands & Pick<TabsCommands, "tabs:create" | "tabs:navigate">;
 type AllEvents = CommandPaletteEvents &
   Pick<TabsEvents, typeof TABS_UPDATED> &
   Pick<SettingsEvents, typeof SETTINGS_CHANGED>;
@@ -66,21 +65,20 @@ export default defineFeature<Deps>({
     commands.handle(COMMAND_PALETTE_SHOW, async () => {
       if (isOpen) return;
       isOpen = true;
-      const tabId = getActiveTabId();
-      if (tabId) platform.hideTab(tabId);
-      const windowId = getActiveWindowId();
-      if (windowId) platform.focusShell(windowId);
+      // Pass current provider config to the overlay
+      if (providerConfig) {
+        platform
+          .updateCommandPalette(`providerConfig=${JSON.stringify(providerConfig)}`)
+          .catch(() => {});
+      }
+      platform.showCommandPalette();
       events.emit(COMMAND_PALETTE_SHOWN, undefined);
     });
 
     commands.handle(COMMAND_PALETTE_HIDE, async () => {
       if (!isOpen) return;
       isOpen = false;
-      // Re-show active tab by re-activating it (sets bounds)
-      const tabId = getActiveTabId();
-      if (tabId) {
-        await commands.send("tabs:activate", { tabId });
-      }
+      platform.hideCommandPalette();
       events.emit(COMMAND_PALETTE_HIDDEN, undefined);
     });
 

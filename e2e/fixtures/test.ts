@@ -15,8 +15,8 @@ export const test = electronTest.extend<AppFixtures>({
   sidebarPage: async ({ shellPage }, use) => {
     await use(new SidebarPage(shellPage));
   },
-  commandPalettePage: async ({ shellPage }, use) => {
-    await use(new CommandPalettePage(shellPage));
+  commandPalettePage: async ({ shellPage, electronApp }, use) => {
+    await use(new CommandPalettePage(shellPage, electronApp));
   },
   windowChromePage: async ({ shellPage }, use) => {
     await use(new WindowChromePage(shellPage));
