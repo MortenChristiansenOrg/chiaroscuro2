@@ -346,7 +346,7 @@ export function SidebarPanel() {
                 )}
                 {/* Current workspace tabs (slide in) */}
                 <div
-                  key={activeWorkspaceId ?? undefined}
+                  key={activeWorkspaceId ?? "no-workspace"}
                   style={
                     wsTransition
                       ? {

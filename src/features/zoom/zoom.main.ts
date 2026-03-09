@@ -85,9 +85,13 @@ export default defineFeature<Deps>({
 
     // "=" for US layouts, "Plus" for layouts where + is the primary key
     platform.registerShortcut("CommandOrControl+=", zoomIn);
+    platform.registerLocalShortcut("CommandOrControl+=", zoomIn);
     platform.registerShortcut("CommandOrControl+Plus", zoomIn);
+    platform.registerLocalShortcut("CommandOrControl+Plus", zoomIn);
     platform.registerShortcut("CommandOrControl+-", zoomOut);
+    platform.registerLocalShortcut("CommandOrControl+-", zoomOut);
     platform.registerShortcut("CommandOrControl+0", zoomReset);
+    platform.registerLocalShortcut("CommandOrControl+0", zoomReset);
 
     // ── Ctrl+MouseWheel zoom ─────────────────────────────────────────
     // The tab preload applies zoom directly via webFrame and notifies

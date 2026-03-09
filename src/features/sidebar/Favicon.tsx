@@ -69,7 +69,7 @@ export function Favicon({ tab }: { tab: Pick<Tab, "favicon" | "title" | "url"> }
   }, [imgFailed, retries, tab.favicon]);
 
   const letter = tab.title?.[0]?.toUpperCase() || tab.url?.[0]?.toUpperCase() || "?";
-  const hue = hashToHue(tab.url || tab.title);
+  const hue = hashToHue(tab.url || tab.title || "");
 
   if (tab.favicon && !imgFailed) {
     return (

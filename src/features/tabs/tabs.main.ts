@@ -569,9 +569,11 @@ export default defineFeature<Deps>({
       persistTab(tab);
     });
 
-    platform.registerShortcut("CommandOrControl+B", () => {
+    const toggleBookmark = () => {
       commands.send(TABS_TOGGLE_BOOKMARK, {}).catch(logError("tabs", "toggle bookmark shortcut"));
-    });
+    };
+    platform.registerShortcut("CommandOrControl+B", toggleBookmark);
+    platform.registerLocalShortcut("CommandOrControl+B", toggleBookmark);
   },
   teardown() {
     _state.reset();

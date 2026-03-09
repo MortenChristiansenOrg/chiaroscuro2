@@ -115,7 +115,7 @@ export default defineFeature<Deps>({
       allowedProtocols = Array.isArray(saved) ? saved : [];
     } catch (err) {
       allowedProtocols = [];
-      console.error("[installer] Failed to load allowed protocols:", err);
+      logError("installer", "load allowed protocols")(err);
     }
 
     // Listen for protocol navigations from web content

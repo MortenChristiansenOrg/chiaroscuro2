@@ -260,34 +260,40 @@ export default defineFeature<Deps>({
 
     // ── Keyboard shortcuts ──────────────────────────────────────────
     // Ctrl+W: Close current tab
-    platform.registerShortcut("CommandOrControl+W", () => {
+    const closeTab = () => {
       const tabId = getActiveTabId();
       if (tabId)
         commands.send(TABS_CLOSE, { tabId }).catch(logError("workspaces", "close tab shortcut"));
-    });
+    };
+    platform.registerShortcut("CommandOrControl+W", closeTab);
+    platform.registerLocalShortcut("CommandOrControl+W", closeTab);
 
     // Ctrl+1..9: Switch to workspace N
     for (let n = 1; n <= 9; n++) {
-      platform.registerShortcut(`CommandOrControl+${n}`, () => {
+      const switchToN = () => {
         const all = [...workspaces.values()];
         const ws = all[n - 1];
         if (ws)
           commands
             .send(WORKSPACES_SWITCH, { workspaceId: ws.id })
             .catch(logError("workspaces", "switch shortcut"));
-      });
+      };
+      platform.registerShortcut(`CommandOrControl+${n}`, switchToN);
+      platform.registerLocalShortcut(`CommandOrControl+${n}`, switchToN);
     }
 
     // Ctrl+Shift+1..9: Move current tab to workspace N
     for (let n = 1; n <= 9; n++) {
-      platform.registerShortcut(`CommandOrControl+Shift+${n}`, () => {
+      const moveToN = () => {
         const all = [...workspaces.values()];
         const ws = all[n - 1];
         if (ws)
           commands
             .send(WORKSPACES_MOVE_TAB, { targetWorkspaceId: ws.id })
             .catch(logError("workspaces", "move tab shortcut"));
-      });
+      };
+      platform.registerShortcut(`CommandOrControl+Shift+${n}`, moveToN);
+      platform.registerLocalShortcut(`CommandOrControl+Shift+${n}`, moveToN);
     }
   },
 

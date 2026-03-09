@@ -357,8 +357,10 @@ app.on("before-quit", () => {
   localWebApp.teardown?.();
   installer.teardown?.();
   // Flush app-state immediately before data store teardown
-  commands.send("app-state:save", undefined).catch(logError("main", "flush app-state"));
-  dataStore.destroy().catch(logError("main", "destroy datastore"));
+  commands
+    .send("app-state:save", undefined)
+    .catch(logError("main", "flush app-state"))
+    .finally(() => dataStore.destroy().catch(logError("main", "destroy datastore")));
 });
 
 app.on("window-all-closed", () => {

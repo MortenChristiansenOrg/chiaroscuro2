@@ -67,6 +67,7 @@ export function TabSection({
   // Register snapshot callback so children can trigger FLIP via context
   onBeforeReorderRef.current = snapshotPositions;
 
+  // Runs every render intentionally — FLIP requires comparing positions after each DOM update
   useLayoutEffect(() => {
     const container = flipContainerRef.current;
     const prev = prevRectsRef.current;

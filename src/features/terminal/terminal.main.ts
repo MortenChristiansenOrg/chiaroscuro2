@@ -104,8 +104,7 @@ export default defineFeature<Deps>({
   },
 
   teardown() {
-    buffers.clear();
-    visible = false;
+    _reset();
   },
 
   start(deps) {

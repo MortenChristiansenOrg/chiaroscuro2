@@ -12,12 +12,10 @@ export async function getDebugState(name?: string): Promise<Record<string, unkno
     if (!provider) return {};
     return { [name]: await provider() };
   }
-  const result: Record<string, unknown> = {};
-  const entries = [...providers].map(async ([key, provider]) => {
-    result[key] = await provider();
-  });
-  await Promise.all(entries);
-  return result;
+  const entries = await Promise.all(
+    [...providers].map(async ([key, provider]) => [key, await provider()] as const),
+  );
+  return Object.fromEntries(entries);
 }
 
 export function getDebugStateNames(): string[] {
