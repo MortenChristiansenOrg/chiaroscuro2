@@ -323,11 +323,13 @@ export function SidebarPanel() {
                 {wsTransition && prevTabs && (
                   <div
                     key={`exit-${wsTransition.fromWorkspaceId}`}
+                    aria-hidden="true"
                     style={{
                       position: "absolute",
                       top: 0,
                       left: 0,
                       right: 0,
+                      pointerEvents: "none",
                       willChange: "transform, opacity",
                       animation: `${wsTransition.direction === "right" ? "ws-out-left" : "ws-out-right"} ${WS_SLIDE_MS}ms cubic-bezier(0.4, 0, 0.2, 1) forwards`,
                     }}

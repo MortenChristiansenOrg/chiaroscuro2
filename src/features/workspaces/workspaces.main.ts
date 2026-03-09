@@ -332,11 +332,14 @@ export default defineFeature<Deps>({
     } else {
       // Create default workspace
       const defaultId = crypto.randomUUID() as WorkspaceId;
-      const defaultWs: Workspace = {
-        id: defaultId,
+      const defaultProps = {
         name: "Work",
         color: "oklch(0.6 0.12 230)",
         icon: "W",
+      } as const;
+      const defaultWs: Workspace = {
+        id: defaultId,
+        ...defaultProps,
         activeTabId: null,
       };
       workspaces.set(defaultId, defaultWs);
@@ -346,9 +349,7 @@ export default defineFeature<Deps>({
       wsCollection
         .insert({
           id: defaultId,
-          name: "Work",
-          color: "oklch(0.6 0.12 230)",
-          icon: "W",
+          ...defaultProps,
           order: 0,
         })
         .catch(logError("workspaces", "create default"));

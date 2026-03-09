@@ -56,7 +56,11 @@ import type {
   PinnedTabsEvents,
 } from "../features/pinned-tabs/pinned-tabs.shared";
 import settings from "../features/settings/settings.main";
-import type { SettingsCommands, SettingsEvents } from "../features/settings/settings.shared";
+import {
+  SETTINGS_GET,
+  type SettingsCommands,
+  type SettingsEvents,
+} from "../features/settings/settings.shared";
 import sidebar from "../features/sidebar/sidebar.main";
 import type { SidebarCommands, SidebarEvents } from "../features/sidebar/sidebar.shared";
 import tabCustomization from "../features/tab-customization/tab-customization.main";
@@ -283,11 +287,7 @@ app.whenReady().then(async () => {
     return { all, activeTabId };
   });
   registerDebugState("workspaces", () => ({ activeWorkspaceId }));
-  registerDebugState("settings", () =>
-    commands
-      .send("settings:get" as string & keyof AllCommands, undefined as never)
-      .catch(() => null),
-  );
+  registerDebugState("settings", () => commands.send(SETTINGS_GET, undefined).catch(() => null));
   registerDebugState("window", () => {
     const win = BrowserWindow.getAllWindows()[0];
     return {

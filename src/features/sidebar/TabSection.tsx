@@ -158,7 +158,6 @@ export function TabSection({
               whiteSpace: "nowrap",
               letterSpacing: "0.02em",
             }}
-            tabIndex={-1}
             onClick={onClearEphemeral}
             data-tip="Clear ephemeral tabs"
           >
