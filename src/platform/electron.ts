@@ -55,24 +55,29 @@ const COMMAND_PALETTE_HTML = `<!DOCTYPE html><html><head><meta charset="utf-8"><
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{background:transparent;overflow:hidden;
   font-family:"Plus Jakarta Sans",-apple-system,system-ui,sans-serif}
-#backdrop{position:fixed;inset:0;display:flex;align-items:flex-start;justify-content:center;
-  padding-top:min(18vh,160px);border-radius:8px;
-  background:oklch(0 0 0/.4);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
+#backdrop{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+  border-radius:8px;
+  background:oklch(0 0 0/.4);
   opacity:0;transition:opacity .2s cubic-bezier(0,0,.2,1)}
 #backdrop.open{opacity:1}
 #panel{width:560px;display:flex;flex-direction:column;
-  background:rgba(22,22,26,.94);
+  background:rgb(22,22,26);
   border-radius:16px;border:1px solid oklch(1 0 0/.08);
   box-shadow:0 8px 32px oklch(0 0 0/.4),0 2px 8px oklch(0 0 0/.2),
     inset 0 .5px 0 oklch(1 0 0/.1),inset 0 0 0 .5px oklch(1 0 0/.06);
-  opacity:0;transition:opacity .15s cubic-bezier(0,0,.2,1)}
-#backdrop.open #panel{opacity:1}
+  opacity:0;scale:.96;transition:opacity .15s cubic-bezier(0,0,.2,1),scale .15s cubic-bezier(0,0,.2,1)}
+#backdrop.open #panel{opacity:1;scale:1}
 #input{width:100%;background:transparent;border:none;outline:none;
   color:oklch(1 0 0/.95);font-size:.875rem;padding:14px 18px;font-family:inherit}
 #input::placeholder{color:oklch(1 0 0/.3)}
 #res{padding:0 18px 8px;font-size:.6875rem;color:oklch(1 0 0/.4);display:none}
 #res strong{color:oklch(1 0 0/.55)}
-#suggestions{border-top:1px solid oklch(1 0 0/.07);max-height:240px;overflow-y:auto;display:none}
+#suggestions{border-top:1px solid oklch(1 0 0/.07);max-height:240px;overflow-y:auto;display:none;
+  scrollbar-width:thin;scrollbar-color:oklch(1 0 0/.12) transparent}
+#suggestions::-webkit-scrollbar{width:5px}
+#suggestions::-webkit-scrollbar-track{background:transparent}
+#suggestions::-webkit-scrollbar-thumb{background:oklch(1 0 0/.12);border-radius:999px}
+#suggestions::-webkit-scrollbar-thumb:hover{background:oklch(1 0 0/.25)}
 .sg{display:flex;align-items:center;gap:.625rem;padding:7px 18px;cursor:pointer;
   font-size:.6875rem;border-radius:7px;margin:2px 5px;
   transition:background 80ms ease-out}
@@ -933,30 +938,54 @@ export class ElectronPlatform implements Platform {
     fs.writeFileSync(paletteTmpPath, COMMAND_PALETTE_HTML, "utf-8");
     this.paletteWin.loadFile(paletteTmpPath);
 
+    // Show immediately as click-through overlay to avoid OS show/hide animations.
+    // Visibility is controlled purely via CSS (the .open class).
+    this.paletteWin.webContents.on("did-finish-load", () => {
+      if (!this.paletteWin || this.paletteWin.isDestroyed()) return;
+      const bounds = this.paletteBounds();
+      if (bounds) this.paletteWin.setBounds(bounds);
+      this.paletteWin.setIgnoreMouseEvents(true);
+      this.paletteWin.showInactive();
+    });
+
     // Follow parent resize/move
     parent.on("resize", () => this.syncPaletteBounds());
     parent.on("move", () => this.syncPaletteBounds());
   }
 
+  private paletteBounds(): Electron.Rectangle | null {
+    const parent = this.getWin();
+    if (!parent) return null;
+    const b = parent.getContentBounds();
+    // Shrink by 1px to counter Electron DPI-rounding overshoot
+    return { x: b.x, y: b.y, width: b.width - 1, height: b.height - 1 };
+  }
+
   private syncPaletteBounds(): void {
     if (!this.paletteWin || this.paletteWin.isDestroyed() || !this.paletteWin.isVisible()) return;
-    const parent = this.getWin();
-    if (!parent) return;
-    this.paletteWin.setBounds(parent.getContentBounds());
+    const bounds = this.paletteBounds();
+    if (!bounds) return;
+    this.paletteWin.setBounds(bounds);
   }
 
   showCommandPalette(): void {
-    const parent = this.getWin();
-    if (!parent || !this.paletteWin || this.paletteWin.isDestroyed()) return;
-    this.paletteWin.setBounds(parent.getContentBounds());
+    if (!this.paletteWin || this.paletteWin.isDestroyed()) return;
+    const bounds = this.paletteBounds();
+    if (!bounds) return;
+    this.paletteWin.setBounds(bounds);
+    if (!this.paletteWin.isVisible()) this.paletteWin.showInactive();
+    this.paletteWin.setIgnoreMouseEvents(false);
     this.paletteWin.webContents.executeJavaScript("resetPalette()");
-    this.paletteWin.show();
     this.paletteWin.focus();
   }
 
   hideCommandPalette(): void {
     if (!this.paletteWin || this.paletteWin.isDestroyed()) return;
-    this.paletteWin.hide();
+    // Animate out via CSS, then disable interaction
+    this.paletteWin.webContents
+      .executeJavaScript("document.getElementById('backdrop').classList.remove('open')")
+      .catch(() => {});
+    this.paletteWin.setIgnoreMouseEvents(true);
     // Refocus parent
     const win = this.getWin();
     if (win && !win.isDestroyed()) win.focus();
