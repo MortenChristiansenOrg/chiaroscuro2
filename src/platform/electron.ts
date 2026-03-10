@@ -121,7 +121,7 @@ function resolveInput(v){
   if(v.startsWith('!')){
     var parts=v.slice(1).split(/\\s+/,2),bang=parts[0]||'';
     if(providerConfig){
-      var p=providerConfig.providers.find(function(x){return x.bang===bang});
+      var p=providerConfig.providers.find(function(x){return x.bang==='!'+bang});
       if(p)return{type:'search',provider:p.name};
     }
     return{type:'search',provider:'default'};
