@@ -921,14 +921,35 @@ export class ElectronPlatform implements Platform {
     if (!parent) return;
     if (this.paletteWin && !this.paletteWin.isDestroyed()) return;
 
-    // Transparent child BrowserWindows crash under --ozone-platform=headless
-    // (used in CI E2E tests). Disable transparency in test mode.
-    const isTest = process.env.NODE_ENV === "test";
+    // In test mode (headless CI), defer palette creation to first show.
+    // Creating child BrowserWindows at startup crashes under --ozone-platform=headless.
+    if (process.env.NODE_ENV === "test") return;
 
+    this.createPaletteWindow(parent);
+
+    // Show immediately as click-through overlay to avoid OS show/hide animations.
+    // Visibility is controlled purely via CSS (the .open class).
+    this.paletteWin?.webContents.on("did-finish-load", () => {
+      if (!this.paletteWin || this.paletteWin.isDestroyed()) return;
+      const bounds = this.paletteBounds();
+      if (bounds) this.paletteWin.setBounds(bounds);
+      this.paletteWin.setIgnoreMouseEvents(true);
+      this.paletteWin.showInactive();
+    });
+
+    // Follow parent resize/move (register once to avoid accumulation)
+    if (!this.paletteParentListenersSet) {
+      parent.on("resize", () => this.syncPaletteBounds());
+      parent.on("move", () => this.syncPaletteBounds());
+      this.paletteParentListenersSet = true;
+    }
+  }
+
+  private createPaletteWindow(parent: BrowserWindow): void {
     this.paletteWin = new BrowserWindow({
       parent,
       frame: false,
-      transparent: !isTest,
+      transparent: true,
       focusable: true,
       skipTaskbar: true,
       resizable: false,
@@ -948,23 +969,6 @@ export class ElectronPlatform implements Platform {
     );
     fs.writeFileSync(paletteTmpPath, COMMAND_PALETTE_HTML, "utf-8");
     this.paletteWin.loadFile(paletteTmpPath);
-
-    // Show immediately as click-through overlay to avoid OS show/hide animations.
-    // Visibility is controlled purely via CSS (the .open class).
-    this.paletteWin.webContents.on("did-finish-load", () => {
-      if (!this.paletteWin || this.paletteWin.isDestroyed()) return;
-      const bounds = this.paletteBounds();
-      if (bounds) this.paletteWin.setBounds(bounds);
-      this.paletteWin.setIgnoreMouseEvents(true);
-      this.paletteWin.showInactive();
-    });
-
-    // Follow parent resize/move (register once to avoid accumulation)
-    if (!this.paletteParentListenersSet) {
-      parent.on("resize", () => this.syncPaletteBounds());
-      parent.on("move", () => this.syncPaletteBounds());
-      this.paletteParentListenersSet = true;
-    }
   }
 
   private paletteBounds(): Electron.Rectangle | null {
@@ -983,6 +987,22 @@ export class ElectronPlatform implements Platform {
   }
 
   showCommandPalette(): void {
+    // Lazy-create in test mode (deferred from initCommandPaletteOverlay)
+    if (!this.paletteWin || this.paletteWin.isDestroyed()) {
+      const parent = this.getWin();
+      if (!parent) return;
+      this.createPaletteWindow(parent);
+      // Wait for HTML to load before interacting
+      this.paletteWin?.webContents.on("did-finish-load", () => {
+        this.revealPalette();
+      });
+      return;
+    }
+
+    this.revealPalette();
+  }
+
+  private revealPalette(): void {
     if (!this.paletteWin || this.paletteWin.isDestroyed()) return;
     const bounds = this.paletteBounds();
     if (!bounds) return;
