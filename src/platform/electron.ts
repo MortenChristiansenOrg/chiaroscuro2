@@ -290,6 +290,7 @@ export class ElectronPlatform implements Platform {
   private paletteWin: BrowserWindow | null = null;
   private ctxResolve: ((index: number) => void) | null = null;
   private ctxParentListenersSet = false;
+  private paletteParentListenersSet = false;
   private permissionHandlerSet = false;
   private zoomIpcHooked = false;
   private protocolRequestCallback: ((url: string, origin: string) => void) | undefined;
@@ -950,9 +951,12 @@ export class ElectronPlatform implements Platform {
       this.paletteWin.showInactive();
     });
 
-    // Follow parent resize/move
-    parent.on("resize", () => this.syncPaletteBounds());
-    parent.on("move", () => this.syncPaletteBounds());
+    // Follow parent resize/move (register once to avoid accumulation)
+    if (!this.paletteParentListenersSet) {
+      parent.on("resize", () => this.syncPaletteBounds());
+      parent.on("move", () => this.syncPaletteBounds());
+      this.paletteParentListenersSet = true;
+    }
   }
 
   private paletteBounds(): Electron.Rectangle | null {
@@ -977,7 +981,7 @@ export class ElectronPlatform implements Platform {
     this.paletteWin.setBounds(bounds);
     if (!this.paletteWin.isVisible()) this.paletteWin.showInactive();
     this.paletteWin.setIgnoreMouseEvents(false);
-    this.paletteWin.webContents.executeJavaScript("resetPalette()");
+    this.paletteWin.webContents.executeJavaScript("resetPalette()").catch(() => {});
     this.paletteWin.focus();
   }
 
