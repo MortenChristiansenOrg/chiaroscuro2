@@ -7,6 +7,11 @@ export class CommandPalettePage {
   /** Locator into the palette's own BrowserWindow page (set after open). */
   private palettePage: Page | null = null;
 
+  get page(): Page {
+    if (!this.palettePage) throw new Error("Palette not open");
+    return this.palettePage;
+  }
+
   get overlay(): Locator {
     if (!this.palettePage) throw new Error("Palette not open");
     return this.palettePage.locator("#backdrop");
@@ -92,11 +97,11 @@ export class CommandPalettePage {
         }
       }
     }).toPass({ timeout: 3_000 });
-    this.palettePage = null;
   }
 
-  isOpen(): boolean {
-    return this.palettePage !== null;
+  async isOpen(): Promise<boolean> {
+    if (!this.palettePage) return false;
+    return (await this.palettePage.locator("#backdrop.open").count()) > 0;
   }
 
   async search(query: string) {

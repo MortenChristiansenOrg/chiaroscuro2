@@ -58,8 +58,8 @@ html,body{background:transparent;overflow:hidden;
 #backdrop{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
   border-radius:8px;
   background:oklch(0 0 0/.4);
-  opacity:0;transition:opacity .2s cubic-bezier(0,0,.2,1)}
-#backdrop.open{opacity:1}
+  opacity:0;visibility:hidden;transition:opacity .2s cubic-bezier(0,0,.2,1),visibility 0s .2s}
+#backdrop.open{opacity:1;visibility:visible;transition:opacity .2s cubic-bezier(0,0,.2,1),visibility 0s 0s}
 #panel{width:560px;display:flex;flex-direction:column;
   background:rgb(22,22,26);
   border-radius:16px;border:1px solid oklch(1 0 0/.08);
@@ -170,8 +170,9 @@ $('input').addEventListener('input',function(){
   var q=$('input').value.trim();
   if(q.startsWith('/')){
     window.chiaroscuro.sendCommand('command-palette:search-visits',{query:q})
-      .then(function(){/* built-in pages handled by main */});
-    suggestions=[];renderSuggestions();return;
+      .then(function(r){suggestions=r||[];renderSuggestions()})
+      .catch(function(){suggestions=[];renderSuggestions()});
+    return;
   }
   if(q.length>=2){
     debounceTimer=setTimeout(function(){
@@ -291,6 +292,7 @@ export class ElectronPlatform implements Platform {
   private ctxResolve: ((index: number) => void) | null = null;
   private ctxParentListenersSet = false;
   private paletteParentListenersSet = false;
+  private pendingPaletteJs: string | null = null;
   private permissionHandlerSet = false;
   private zoomIpcHooked = false;
   private protocolRequestCallback: ((url: string, origin: string) => void) | undefined;
@@ -1009,6 +1011,11 @@ export class ElectronPlatform implements Platform {
     this.paletteWin.setBounds(bounds);
     if (!this.paletteWin.isVisible()) this.paletteWin.showInactive();
     this.paletteWin.setIgnoreMouseEvents(false);
+    // Apply buffered provider config before resetting the palette
+    if (this.pendingPaletteJs) {
+      this.paletteWin.webContents.executeJavaScript(this.pendingPaletteJs).catch(() => {});
+      this.pendingPaletteJs = null;
+    }
     this.paletteWin.webContents.executeJavaScript("resetPalette()").catch(() => {});
     this.paletteWin.focus();
   }
@@ -1026,7 +1033,11 @@ export class ElectronPlatform implements Platform {
   }
 
   async updateCommandPalette(js: string): Promise<unknown> {
-    if (!this.paletteWin || this.paletteWin.isDestroyed()) return;
+    if (!this.paletteWin || this.paletteWin.isDestroyed()) {
+      // Buffer for lazy-created palette (test mode)
+      this.pendingPaletteJs = js;
+      return;
+    }
     return this.paletteWin.webContents.executeJavaScript(js);
   }
 

@@ -20,7 +20,7 @@ import {
   type CommandPaletteCommands,
   type CommandPaletteEvents,
 } from "./command-palette.shared";
-import { type ProviderConfig, resolveInput } from "./resolve-input";
+import { type ProviderConfig, getBuiltInPages, resolveInput } from "./resolve-input";
 import { initVisitTracking, recordVisit, searchVisits } from "./suggestions";
 
 type AllCommands = CommandPaletteCommands & Pick<TabsCommands, "tabs:create" | "tabs:navigate">;
@@ -113,12 +113,24 @@ export default defineFeature<Deps>({
     });
 
     commands.handle(COMMAND_PALETTE_SEARCH_VISITS, async (payload) => {
-      const visits = await searchVisits(payload.query);
-      return visits.map((v) => ({
+      const q = payload.query;
+      const visits = await searchVisits(q);
+      const results = visits.map((v) => ({
         url: v.url,
         title: v.title,
         visitCount: v.visitCount,
       }));
+
+      // Prepend matching built-in pages for `/` queries
+      if (q.startsWith("/")) {
+        const lower = q.toLowerCase();
+        const pages = getBuiltInPages()
+          .filter((p) => p.route.toLowerCase().startsWith(lower))
+          .map((p) => ({ url: p.route, title: p.title, visitCount: 0 }));
+        return [...pages, ...results];
+      }
+
+      return results;
     });
 
     platform.registerShortcut("CommandOrControl+T", () => {
