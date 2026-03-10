@@ -2,9 +2,15 @@
 # Source this file to load GH_TOKEN from .env.local
 # Usage: source .claude/skills/coderabbit-review/scripts/load-env.sh
 
+fail() {
+  echo "Error: $1" >&2
+  return 1 2>/dev/null || exit 1
+}
+
 # Find repo root by looking for .env.local up the directory tree
 find_repo_root() {
-  local dir="$PWD"
+  local dir
+  dir="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
   while [[ "$dir" != "/" ]]; do
     if [[ -f "$dir/.env.local" ]]; then
       echo "$dir"
@@ -18,14 +24,12 @@ find_repo_root() {
 REPO_ROOT=$(find_repo_root)
 
 if [[ -z "$REPO_ROOT" ]]; then
-  echo "Error: .env.local not found in any parent directory" >&2
-  exit 1
+  fail ".env.local not found in any parent directory"
 fi
 
 GH_TOKEN=$(grep '^GH_TOKEN=' "$REPO_ROOT/.env.local" | cut -d'=' -f2- | tr -d '\r')
 export GH_TOKEN
 
 if [[ -z "$GH_TOKEN" ]]; then
-  echo "Error: GH_TOKEN not found in $REPO_ROOT/.env.local" >&2
-  exit 1
+  fail "GH_TOKEN not found in $REPO_ROOT/.env.local"
 fi

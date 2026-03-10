@@ -126,5 +126,10 @@ export default defineFeature<Deps>({
         .send(COMMAND_PALETTE_TOGGLE, undefined)
         .catch(logError("command-palette", "shortcut toggle"));
     });
+    platform.registerLocalShortcut("CommandOrControl+T", () => {
+      commands
+        .send(COMMAND_PALETTE_TOGGLE, undefined)
+        .catch(logError("command-palette", "shortcut toggle"));
+    });
   },
 });

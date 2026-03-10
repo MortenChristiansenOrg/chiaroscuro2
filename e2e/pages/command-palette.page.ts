@@ -97,7 +97,7 @@ export class CommandPalettePage {
     this.palettePage = null;
   }
 
-  async isOpen(): Promise<boolean> {
+  isOpen(): boolean {
     return this.palettePage !== null;
   }
 

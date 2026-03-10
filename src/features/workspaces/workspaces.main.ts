@@ -197,8 +197,10 @@ export default defineFeature<Deps>({
 
       // Move tabs to default workspace via command (avoids mutating external Tab objects)
       const tabsInWs = getTabsForWorkspace(workspaceId);
+      const defaultWs = workspaces.get(defaultWsId);
       for (const tab of tabsInWs) {
         await commands.send(TABS_SET_WORKSPACE, { tabId: tab.id, workspaceId: defaultWsId });
+        if (defaultWs && !defaultWs.activeTabId) defaultWs.activeTabId = tab.id;
       }
 
       // If deleting active workspace, switch to default
@@ -233,6 +235,11 @@ export default defineFeature<Deps>({
 
       await commands.send(TABS_SET_WORKSPACE, { tabId, workspaceId: targetWorkspaceId });
 
+      // Update destination workspace's active tab if it had none
+      if (!targetWs.activeTabId) {
+        targetWs.activeTabId = tabId;
+      }
+
       // Hide tab since it's moving to another workspace
       platform.hideTab(tabId);
 
@@ -245,6 +252,7 @@ export default defineFeature<Deps>({
         await commands.send(TABS_ACTIVATE, { tabId: mru.id });
       } else {
         setActiveTabId(undefined);
+        events.emit(TABS_ACTIVATED, { tabId: null, previousTabId: tabId });
       }
     });
 

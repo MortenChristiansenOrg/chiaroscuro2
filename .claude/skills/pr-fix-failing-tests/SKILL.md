@@ -81,10 +81,11 @@ Group related fixes into logical commits.
 
 ### 6. Verify Locally
 
-Before pushing, run the failing tests locally:
+Before pushing, repro the failing tests locally, then run the full verification suite:
 
 ```bash
 bun run e2e  # or specific test file
+bun run verify
 ```
 
 ### 7. Commit and Push
@@ -119,7 +120,7 @@ All scripts auto-load `GH_TOKEN` from `.env.local`.
 
 ## Failed Jobs
 
-| Job | Status | Run ID |
+| Job | Status | Job ID |
 |-----|--------|--------|
 | e2e | FAILURE | 123456 |
 
@@ -146,7 +147,7 @@ User to run `git push` to trigger CI re-run.
 
 ## Error Handling
 
-- If `gh` not authenticated: prompt to check `.env.local` or run `gh auth login`
+- If `gh` not authenticated: prompt to add `GH_TOKEN=ghp_xxx` to `.env.local`
 - If PR not found: show error with branch name
 - If no failed checks: report success and exit
 - If logs unavailable: note and continue with available info

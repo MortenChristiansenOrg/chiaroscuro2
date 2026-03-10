@@ -179,6 +179,15 @@ const platform = new ElectronPlatform(() => activeWindowId);
 const dataDir = process.env.DATA_DIR ?? path.join(app.getPath("userData"), "data");
 const dataStore: DataStore = createDataStore(dataDir);
 
+function initOverlays(): void {
+  if (!activeWindowId) return;
+  if (process.env.NODE_ENV !== "test") {
+    platform.initTooltipOverlay(activeWindowId);
+    platform.initContextMenuOverlay(activeWindowId);
+  }
+  platform.initCommandPaletteOverlay(activeWindowId);
+}
+
 function createWindow(windowBounds?: {
   x: number;
   y: number;
@@ -289,7 +298,10 @@ app.whenReady().then(async () => {
   registerDebugState("workspaces", () => ({ activeWorkspaceId }));
   registerDebugState("settings", () => commands.send(SETTINGS_GET, undefined).catch(() => null));
   registerDebugState("window", () => {
-    const win = BrowserWindow.getAllWindows()[0];
+    const win =
+      (activeWindowId ? BrowserWindow.fromId(Number(activeWindowId)) : null) ??
+      BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && !w.getParentWindow()) ??
+      null;
     return {
       activeWindowId,
       bounds: win && !win.isDestroyed() ? win.getBounds() : null,
@@ -326,14 +338,7 @@ app.whenReady().then(async () => {
   });
 
   const win = createWindow(appStateData.windowBounds);
-
-  if (activeWindowId && process.env.NODE_ENV !== "test") {
-    platform.initTooltipOverlay(activeWindowId);
-    platform.initContextMenuOverlay(activeWindowId);
-  }
-  if (activeWindowId) {
-    platform.initCommandPaletteOverlay(activeWindowId);
-  }
+  initOverlays();
 
   // Activate keyboard shortcuts immediately (window is focused on creation)
   // and toggle on focus/blur so they don't intercept keys from other apps.
@@ -350,6 +355,7 @@ app.whenReady().then(async () => {
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
+      initOverlays();
     }
   });
 });

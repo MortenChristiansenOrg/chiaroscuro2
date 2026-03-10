@@ -15,6 +15,10 @@ REPO=$(echo "$REPO_INFO" | cut -d' ' -f2)
 # Get PR number
 if [[ $# -ge 1 ]]; then
   PR_NUMBER="$1"
+  if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+    echo "Error: PR number must be numeric" >&2
+    exit 1
+  fi
 else
   BRANCH=$(git branch --show-current 2>/dev/null || echo "")
   if [[ -n "$BRANCH" ]]; then

@@ -116,7 +116,7 @@ function closePalette(){
 
 function resolveInput(v){
   v=v.trim();if(!v)return null;
-  if(/^(https?|ftp):\\/\\//i.test(v))return{type:'url',url:v};
+  if(/^https?:\\/\\//i.test(v))return{type:'url',url:v};
   if(/^[^\\s]+\\.[^\\s]+$/.test(v)&&v.length>2)return{type:'url',url:'https://'+v};
   if(v.startsWith('!')){
     var parts=v.slice(1).split(/\\s+/,2),bang=parts[0]||'';
@@ -140,8 +140,10 @@ function updateResolution(){
   var el=$('res');
   if(!r||r.type==='builtin'){el.style.display='none';return}
   el.style.display='block';
-  if(r.type==='search')el.innerHTML='Search with <strong>'+r.provider+'</strong>';
-  else el.innerHTML='Navigate to <strong>'+r.url+'</strong>';
+  el.textContent=r.type==='search'?'Search with ':'Navigate to ';
+  var strong=document.createElement('strong');
+  strong.textContent=r.type==='search'?r.provider:r.url;
+  el.appendChild(strong);
 }
 
 function renderSuggestions(){
