@@ -55,9 +55,7 @@ export class CommandPalettePage {
   async openViaKeyboard(electronApp: ElectronApplication) {
     const sendCtrlT = () =>
       electronApp.evaluate(({ BrowserWindow }) => {
-        const win = BrowserWindow.getAllWindows().find(
-          (w) => !w.webContents.getURL().startsWith("data:"),
-        );
+        const win = BrowserWindow.getAllWindows().find((w) => !w.getParentWindow());
         if (win) {
           win.webContents.sendInputEvent({
             type: "keyDown",

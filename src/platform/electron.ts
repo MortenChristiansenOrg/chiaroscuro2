@@ -921,10 +921,14 @@ export class ElectronPlatform implements Platform {
     if (!parent) return;
     if (this.paletteWin && !this.paletteWin.isDestroyed()) return;
 
+    // Transparent child BrowserWindows crash under --ozone-platform=headless
+    // (used in CI E2E tests). Disable transparency in test mode.
+    const isTest = process.env.NODE_ENV === "test";
+
     this.paletteWin = new BrowserWindow({
       parent,
       frame: false,
-      transparent: true,
+      transparent: !isTest,
       focusable: true,
       skipTaskbar: true,
       resizable: false,
@@ -937,7 +941,11 @@ export class ElectronPlatform implements Platform {
       },
     });
 
-    const paletteTmpPath = path.join(app.getPath("temp"), "chiaroscuro-cmd-palette.html");
+    // Use PID-suffixed filename to avoid races when parallel workers write simultaneously
+    const paletteTmpPath = path.join(
+      app.getPath("temp"),
+      `chiaroscuro-cmd-palette-${process.pid}.html`,
+    );
     fs.writeFileSync(paletteTmpPath, COMMAND_PALETTE_HTML, "utf-8");
     this.paletteWin.loadFile(paletteTmpPath);
 
