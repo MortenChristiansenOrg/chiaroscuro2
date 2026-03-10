@@ -330,6 +330,8 @@ app.whenReady().then(async () => {
   if (activeWindowId && process.env.NODE_ENV !== "test") {
     platform.initTooltipOverlay(activeWindowId);
     platform.initContextMenuOverlay(activeWindowId);
+  }
+  if (activeWindowId) {
     platform.initCommandPaletteOverlay(activeWindowId);
   }
 
