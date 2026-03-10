@@ -4,6 +4,7 @@ import type { EventBus } from "../../bus/event-bus";
 import type { Collection, DataStore } from "../../data/types";
 import type { Platform } from "../../platform/types";
 import { defineFeature } from "../../shared/define-feature";
+import { logError } from "../../shared/log";
 import type { TabId } from "../../shared/types";
 import type { TabsEvents } from "../tabs/tabs.shared";
 import { TABS_ACTIVATED, TABS_CLOSED } from "../tabs/tabs.shared";
@@ -149,16 +150,16 @@ async function startProcess(deps: LocalWebAppDeps, tabId: TabId): Promise<void> 
   proc.stdout?.on("data", (chunk: Buffer) => {
     commands
       .send(TERMINAL_WRITE, { tabId, data: chunk.toString(), type: "stdout" })
-      .catch(console.error);
+      .catch(logError("local-web-app", "write stdout"));
   });
 
   proc.stderr?.on("data", (chunk: Buffer) => {
     commands
       .send(TERMINAL_WRITE, { tabId, data: chunk.toString(), type: "stderr" })
-      .catch(console.error);
+      .catch(logError("local-web-app", "write stderr"));
   });
 
-  proc.on("close", (code) => {
+  function cleanupProcess(status: LocalWebAppStatus): void {
     if (processes.get(tabId)?.proc !== proc) return;
     const pendingReload = reloadTimeouts.get(tabId);
     if (pendingReload) {
@@ -166,24 +167,19 @@ async function startProcess(deps: LocalWebAppDeps, tabId: TabId): Promise<void> 
       reloadTimeouts.delete(tabId);
     }
     processes.delete(tabId);
-    const status: LocalWebAppStatus = code === 0 || code === null ? "stopped" : "error";
     statuses.set(tabId, status);
     events.emit(LOCAL_WEB_APP_STATUS_CHANGED, { tabId, status });
+  }
+
+  proc.on("close", (code) => {
+    cleanupProcess(code === 0 || code === null ? "stopped" : "error");
   });
 
   proc.on("error", (err) => {
-    if (processes.get(tabId)?.proc !== proc) return;
-    const pendingReload = reloadTimeouts.get(tabId);
-    if (pendingReload) {
-      clearTimeout(pendingReload);
-      reloadTimeouts.delete(tabId);
-    }
-    processes.delete(tabId);
-    statuses.set(tabId, "error");
-    events.emit(LOCAL_WEB_APP_STATUS_CHANGED, { tabId, status: "error" });
+    cleanupProcess("error");
     commands
       .send(TERMINAL_WRITE, { tabId, data: `Error: ${err.message}`, type: "stderr" })
-      .catch(console.error);
+      .catch(logError("local-web-app", "write error"));
   });
 
   // Reload tab after a short delay to let the server start
@@ -202,30 +198,32 @@ export default defineFeature<LocalWebAppDeps>({
     commands.handle(LOCAL_WEB_APP_SAVE_CONFIG, async ({ tabId, directory, command }) => {
       const config: LocalWebAppConfig = { directory, command };
       configs.set(tabId, config);
-      collection.upsert({ id: tabId, directory, command }).catch(console.error);
+      collection
+        .upsert({ id: tabId, directory, command })
+        .catch(logError("local-web-app", "persist config"));
       events.emit(LOCAL_WEB_APP_CONFIG_CHANGED, { tabId, config });
 
       // Only restart if this is the active tab
       if (deps.getActiveTabId() === tabId) {
-        startProcess(deps, tabId);
+        await startProcess(deps, tabId);
       }
     });
 
     commands.handle(LOCAL_WEB_APP_DELETE_CONFIG, async ({ tabId }) => {
-      killProcess(tabId);
+      await killProcess(tabId);
       configs.delete(tabId);
       statuses.delete(tabId);
-      collection.remove(tabId).catch(console.error);
+      collection.remove(tabId).catch(logError("local-web-app", "remove config"));
       events.emit(LOCAL_WEB_APP_CONFIG_REMOVED, { tabId });
       events.emit(LOCAL_WEB_APP_STATUS_CHANGED, { tabId, status: "stopped" });
     });
 
     commands.handle(LOCAL_WEB_APP_START, async ({ tabId }) => {
-      startProcess(deps, tabId);
+      await startProcess(deps, tabId);
     });
 
     commands.handle(LOCAL_WEB_APP_STOP, async ({ tabId }) => {
-      killProcess(tabId);
+      await killProcess(tabId);
       statuses.set(tabId, "stopped");
       events.emit(LOCAL_WEB_APP_STATUS_CHANGED, { tabId, status: "stopped" });
     });
@@ -258,7 +256,7 @@ export default defineFeature<LocalWebAppDeps>({
       killProcess(tabId);
       configs.delete(tabId);
       statuses.delete(tabId);
-      collection.remove(tabId).catch(console.error);
+      collection.remove(tabId).catch(logError("local-web-app", "remove config"));
     });
   },
 

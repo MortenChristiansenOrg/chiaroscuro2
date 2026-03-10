@@ -2,8 +2,9 @@ import type { CommandBus } from "../../bus/command-bus";
 import type { EventBus } from "../../bus/event-bus";
 import type { Collection, DataStore } from "../../data/types";
 import { defineFeature } from "../../shared/define-feature";
+import { featureState } from "../../shared/feature-state";
+import { logError } from "../../shared/log";
 import type { TabId } from "../../shared/types";
-import { isPinned } from "../pinned-tabs/pinned-tabs.main";
 import type { Tab, TabsCommands, TabsEvents } from "../tabs/tabs.shared";
 import { TABS_ACTIVATE, TABS_CLOSED } from "../tabs/tabs.shared";
 import {
@@ -35,6 +36,7 @@ export interface TabCustomizationDeps {
   events: EventBus<AllEvents>;
   dataStore: DataStore;
   getTab: (tabId: TabId) => Tab | undefined;
+  isPinned: (tabId: TabId) => boolean;
 }
 
 const DEFAULT_CUSTOMIZATION: TabCustomization = {
@@ -42,8 +44,10 @@ const DEFAULT_CUSTOMIZATION: TabCustomization = {
   fixedAddressDisabled: false,
 };
 
-let customizations: Map<TabId, TabCustomization>;
-let collection: Collection<PersistedCustomization>;
+const _state = featureState<{
+  customizations: Map<TabId, TabCustomization>;
+  collection: Collection<PersistedCustomization>;
+}>("tab-customization");
 
 function isDefault(c: TabCustomization): boolean {
   return c.title === null && !c.fixedAddressDisabled;
@@ -51,16 +55,17 @@ function isDefault(c: TabCustomization): boolean {
 
 export default defineFeature<TabCustomizationDeps>({
   register(deps) {
-    const { commands, events, dataStore, getTab } = deps;
-    customizations = new Map();
-    collection = dataStore.collection<PersistedCustomization>("tab-customizations");
+    const { commands, events, dataStore, getTab, isPinned } = deps;
+    const customizations = new Map<TabId, TabCustomization>();
+    const coll = dataStore.collection<PersistedCustomization>("tab-customizations");
+    _state.init({ customizations, collection: coll });
 
     // ── Clean up on tab close ──────────────────────────────────────
     events.on(TABS_CLOSED, (payload) => {
       const { tabId } = payload;
       if (customizations.has(tabId)) {
         customizations.delete(tabId);
-        collection.remove(tabId).catch(console.error);
+        coll.remove(tabId).catch(logError("tab-customization", "remove"));
         events.emit(TAB_CUSTOMIZATION_REMOVED, { tabId });
       }
     });
@@ -83,55 +88,61 @@ export default defineFeature<TabCustomizationDeps>({
 
     commands.handle(TAB_CUSTOMIZATION_SET_TITLE, async (payload) => {
       const { tabId, title } = payload;
-      const current = customizations.get(tabId) ?? { ...DEFAULT_CUSTOMIZATION };
-      current.title = title;
+      const current = { ...(customizations.get(tabId) ?? DEFAULT_CUSTOMIZATION), title };
 
       if (isDefault(current)) {
         customizations.delete(tabId);
-        collection.remove(tabId).catch(console.error);
+        coll.remove(tabId).catch(logError("tab-customization", "remove"));
       } else {
         customizations.set(tabId, current);
-        collection
+        coll
           .upsert({
             id: tabId,
             title: current.title,
             fixedAddressDisabled: current.fixedAddressDisabled,
           })
-          .catch(console.error);
+          .catch(logError("tab-customization", "upsert"));
       }
 
-      events.emit(TAB_CUSTOMIZATION_CHANGED, { tabId, customization: { ...current } });
+      events.emit(TAB_CUSTOMIZATION_CHANGED, { tabId, customization: current });
     });
 
     commands.handle(TAB_CUSTOMIZATION_SET_FIXED_ADDRESS_DISABLED, async (payload) => {
       const { tabId, disabled } = payload;
-      const current = customizations.get(tabId) ?? { ...DEFAULT_CUSTOMIZATION };
-      current.fixedAddressDisabled = disabled;
+      const current = {
+        ...(customizations.get(tabId) ?? DEFAULT_CUSTOMIZATION),
+        fixedAddressDisabled: disabled,
+      };
 
       if (isDefault(current)) {
         customizations.delete(tabId);
-        collection.remove(tabId).catch(console.error);
+        coll.remove(tabId).catch(logError("tab-customization", "remove"));
       } else {
         customizations.set(tabId, current);
-        collection
+        coll
           .upsert({
             id: tabId,
             title: current.title,
             fixedAddressDisabled: current.fixedAddressDisabled,
           })
-          .catch(console.error);
+          .catch(logError("tab-customization", "upsert"));
       }
 
-      events.emit(TAB_CUSTOMIZATION_CHANGED, { tabId, customization: { ...current } });
+      events.emit(TAB_CUSTOMIZATION_CHANGED, { tabId, customization: current });
     });
 
     commands.handle(TAB_CUSTOMIZATION_GET_STATE, async (payload) => {
       return customizations.get(payload.tabId) ?? { ...DEFAULT_CUSTOMIZATION };
     });
   },
+
+  teardown() {
+    _state.reset();
+  },
 });
 
 export async function start(deps: TabCustomizationDeps): Promise<void> {
+  const { customizations, collection } = _state.get();
   const persisted = await collection.findMany({});
   for (const doc of persisted) {
     const tabId = doc.id as TabId;
@@ -146,5 +157,5 @@ export async function start(deps: TabCustomizationDeps): Promise<void> {
 
 /** Read-only accessor for cross-feature queries (e.g. sidebar custom title). */
 export function getCustomization(tabId: TabId): TabCustomization | undefined {
-  return customizations?.get(tabId);
+  return _state.initialized ? _state.get().customizations.get(tabId) : undefined;
 }

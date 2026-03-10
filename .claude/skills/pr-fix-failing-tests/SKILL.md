@@ -26,60 +26,32 @@ Requires `gh` CLI with a token that has PR read access.
 
 ## Workflow
 
-### 0. Load Environment
-
-Export `GH_TOKEN` from `.env.local` for `gh` CLI:
+### 1. Get PR Info
 
 ```bash
-[[ -f .env.local ]] && set -a && source <(grep '^GH_TOKEN=' .env.local) && set +a
+# Returns {"owner": "...", "repo": "...", "pr": N}
+.claude/skills/pr-fix-failing-tests/scripts/get-pr-info.sh [pr_number]
 ```
 
-Run this before any `gh` commands.
-
-### 1. Identify PR
-
-If no PR number provided, get from current branch:
+### 2. Fetch Failed Jobs
 
 ```bash
-gh pr view --json number -q '.number'
+# Returns JSON array of failed jobs with name, jobId, detailsUrl
+.claude/skills/pr-fix-failing-tests/scripts/fetch-failed-jobs.sh <owner> <repo> <pr>
 ```
 
-Get repo info:
+If no failed jobs, report success and exit.
 
-```bash
-gh repo view --json owner,name -q '"\(.owner.login)/\(.name)"'
-```
-
-### 2. Get PR Check Status
-
-Fetch all checks for the PR:
-
-```bash
-gh pr view <PR_NUMBER> --json statusCheckRollup
-```
-
-Filter for failed checks (`conclusion: "FAILURE"`). Each check has:
-- `name` - job name (e.g., "e2e", "checks", "lint")
-- `detailsUrl` - contains run ID and job ID
-- `conclusion` - "SUCCESS", "FAILURE", etc.
-
-### 3. Extract Job Info from detailsUrl
-
-Parse the `detailsUrl` to get job ID:
-- Format: `https://github.com/<owner>/<repo>/actions/runs/<run_id>/job/<job_id>`
-- Extract `<job_id>` from the URL
-
-### 4. Fetch Job Logs
+### 3. Fetch Job Logs
 
 For each failed job:
 
 ```bash
-gh api repos/<owner>/<repo>/actions/jobs/<job_id>/logs
+# Returns last N lines of job log (default 200)
+.claude/skills/pr-fix-failing-tests/scripts/fetch-job-logs.sh <owner> <repo> <job_id> [tail_lines]
 ```
 
-This returns the full log output. Use `tail -200` or similar to get the relevant failure section.
-
-### 5. Analyze Failures
+### 4. Analyze Failures
 
 Common failure patterns:
 
@@ -97,7 +69,7 @@ For each failure, identify:
 - Error message and call stack
 - Whether it's a test issue or app code issue
 
-### 6. Apply Fixes
+### 5. Apply Fixes
 
 Based on analysis:
 
@@ -107,15 +79,16 @@ Based on analysis:
 
 Group related fixes into logical commits.
 
-### 7. Verify Locally
+### 6. Verify Locally
 
-Before pushing, run the failing tests locally:
+Before pushing, repro the failing tests locally, then run the full verification suite:
 
 ```bash
 bun run e2e  # or specific test file
+bun run verify
 ```
 
-### 8. Commit and Push
+### 7. Commit and Push
 
 Commit fixes with descriptive messages:
 
@@ -130,6 +103,16 @@ Ask user to push (token may not have write access):
 git push
 ```
 
+## Scripts
+
+| Script | Purpose | Args |
+|--------|---------|------|
+| `get-pr-info.sh` | Get owner/repo/pr | `[pr_number]` |
+| `fetch-failed-jobs.sh` | Get failed CI jobs | `<owner> <repo> <pr>` |
+| `fetch-job-logs.sh` | Get job log output | `<owner> <repo> <job_id> [tail_lines]` |
+
+All scripts auto-load `GH_TOKEN` from `.env.local`.
+
 ## Output Format
 
 ```markdown
@@ -137,7 +120,7 @@ git push
 
 ## Failed Jobs
 
-| Job | Status | Run ID |
+| Job | Status | Job ID |
 |-----|--------|--------|
 | e2e | FAILURE | 123456 |
 
@@ -164,7 +147,7 @@ User to run `git push` to trigger CI re-run.
 
 ## Error Handling
 
-- If `gh` not authenticated: prompt to check `.env.local` or run `gh auth login`
+- If `gh` not authenticated: prompt to add `GH_TOKEN=ghp_xxx` to `.env.local`
 - If PR not found: show error with branch name
 - If no failed checks: report success and exit
 - If logs unavailable: note and continue with available info

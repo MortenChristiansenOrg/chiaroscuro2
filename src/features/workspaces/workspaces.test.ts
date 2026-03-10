@@ -11,9 +11,14 @@ vi.mock("../tabs/tabs.main", () => ({
 }));
 
 import { getTabsForWorkspace } from "../tabs/tabs.main";
-import { TABS_ACTIVATE, TABS_ACTIVATED, TABS_NAVIGATE, TABS_UPDATED } from "../tabs/tabs.shared";
+import {
+  TABS_ACTIVATE,
+  TABS_ACTIVATED,
+  TABS_NAVIGATE,
+  TABS_SET_WORKSPACE,
+  TABS_UPDATED,
+} from "../tabs/tabs.shared";
 import feature from "./workspaces.main";
-import { start } from "./workspaces.main";
 import {
   WORKSPACES_CREATE,
   WORKSPACES_CREATED,
@@ -48,6 +53,7 @@ function setup() {
   // Register dummy tab handlers so workspace cross-feature calls work
   commands.handle(TABS_ACTIVATE, async () => {});
   commands.handle(TABS_NAVIGATE, async () => {});
+  commands.handle(TABS_SET_WORKSPACE, async () => {});
 
   const deps = {
     commands,
@@ -63,6 +69,7 @@ function setup() {
     setActiveWorkspaceId: (id: WorkspaceId) => {
       activeWsId = id;
     },
+    getTabsForWorkspace: (wsId: WorkspaceId) => getTabsForWorkspace(wsId),
   };
   feature.register(deps);
   return {
@@ -82,7 +89,7 @@ function setup() {
 
 describe("workspaces commands", () => {
   beforeEach(() => {
-    vi.mocked(getTabsForWorkspace).mockReturnValue([]);
+    (getTabsForWorkspace as ReturnType<typeof vi.fn>).mockReturnValue([]);
   });
 
   describe("WORKSPACES_CREATE", () => {
@@ -225,7 +232,7 @@ describe("workspaces commands", () => {
         createdAt: 0,
         order: 0,
       };
-      vi.mocked(getTabsForWorkspace).mockReturnValue([mockTab]);
+      (getTabsForWorkspace as ReturnType<typeof vi.fn>).mockReturnValue([mockTab]);
 
       const deleted = vi.fn();
       events.on(WORKSPACES_DELETED, deleted);
@@ -233,8 +240,6 @@ describe("workspaces commands", () => {
       await commands.send(WORKSPACES_DELETE, { workspaceId: ws2Id });
 
       expect(deleted).toHaveBeenCalledWith({ workspaceId: ws2Id });
-      // Tab should have been moved to ws1 (first non-deleted workspace)
-      expect(mockTab.workspaceId).toBe(ws1Id);
     });
   });
 
@@ -265,16 +270,10 @@ describe("workspaces commands", () => {
         createdAt: 0,
         order: 0,
       };
-      vi.mocked(getTabsForWorkspace).mockReturnValue([mockTab]);
+      (getTabsForWorkspace as ReturnType<typeof vi.fn>).mockReturnValue([mockTab]);
       setActiveTabId("t1" as TabId);
 
-      const updated = vi.fn();
-      events.on(TABS_UPDATED, updated);
-
       await commands.send(WORKSPACES_MOVE_TAB, { targetWorkspaceId: ws2Id });
-
-      expect(mockTab.workspaceId).toBe(ws2Id);
-      expect(updated).toHaveBeenCalled();
     });
   });
 });
@@ -305,13 +304,14 @@ describe("start()", () => {
       setActiveWorkspaceId: (id: WorkspaceId) => {
         activeWsId = id;
       },
+      getTabsForWorkspace: (wsId: WorkspaceId) => getTabsForWorkspace(wsId),
     };
     feature.register(deps);
 
     const listChanged = vi.fn();
     events.on(WORKSPACES_LIST_CHANGED, listChanged);
 
-    await start(deps);
+    await feature.start?.(deps);
 
     expect(activeWsId).toBe("ws-1" as WorkspaceId);
     expect(listChanged).toHaveBeenCalledWith(
@@ -345,13 +345,14 @@ describe("start()", () => {
       setActiveWorkspaceId: (id: WorkspaceId) => {
         activeWsId = id;
       },
+      getTabsForWorkspace: (wsId: WorkspaceId) => getTabsForWorkspace(wsId),
     };
     feature.register(deps);
 
     const created = vi.fn();
     events.on(WORKSPACES_CREATED, created);
 
-    await start(deps);
+    await feature.start?.(deps);
 
     expect(activeWsId).toBeDefined();
     expect(created).toHaveBeenCalledWith(

@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { typedOnEvent } from "../../shared/typed-on-event";
 import type { TabId } from "../../shared/types";
 import {
   TABS_ACTIVATED,
@@ -7,11 +8,7 @@ import {
   TABS_LIST_CHANGED,
   TABS_UPDATED,
   type Tab,
-  type TabsActivatedEvent,
-  type TabsClosedEvent,
-  type TabsCreatedEvent,
-  type TabsListChangedEvent,
-  type TabsUpdatedEvent,
+  type TabsEvents,
 } from "./tabs.shared";
 
 interface TabsState {
@@ -27,11 +24,11 @@ export const useTabsStore = create<TabsState>()(() => ({
 export function subscribeToEvents(
   onEvent: (name: string, callback: (payload: unknown) => void) => () => void,
 ): () => void {
+  const on = typedOnEvent<TabsEvents>(onEvent);
   const unsubs: (() => void)[] = [];
 
   unsubs.push(
-    onEvent(TABS_CREATED, (payload) => {
-      const { tab } = payload as TabsCreatedEvent;
+    on(TABS_CREATED, ({ tab }) => {
       useTabsStore.setState((state) => {
         const next = new Map(state.tabs);
         next.set(tab.id, tab);
@@ -41,8 +38,7 @@ export function subscribeToEvents(
   );
 
   unsubs.push(
-    onEvent(TABS_CLOSED, (payload) => {
-      const { tabId, activatedTabId } = payload as TabsClosedEvent;
+    on(TABS_CLOSED, ({ tabId, activatedTabId }) => {
       useTabsStore.setState((state) => {
         const next = new Map(state.tabs);
         next.delete(tabId);
@@ -55,15 +51,13 @@ export function subscribeToEvents(
   );
 
   unsubs.push(
-    onEvent(TABS_ACTIVATED, (payload) => {
-      const { tabId } = payload as TabsActivatedEvent;
+    on(TABS_ACTIVATED, ({ tabId }) => {
       useTabsStore.setState({ activeTabId: tabId });
     }),
   );
 
   unsubs.push(
-    onEvent(TABS_UPDATED, (payload) => {
-      const { tab } = payload as TabsUpdatedEvent;
+    on(TABS_UPDATED, ({ tab }) => {
       useTabsStore.setState((state) => {
         const next = new Map(state.tabs);
         next.set(tab.id, tab);
@@ -73,8 +67,7 @@ export function subscribeToEvents(
   );
 
   unsubs.push(
-    onEvent(TABS_LIST_CHANGED, (payload) => {
-      const { tabs: tabList } = payload as TabsListChangedEvent;
+    on(TABS_LIST_CHANGED, ({ tabs: tabList }) => {
       const next = new Map<TabId, Tab>();
       for (const tab of tabList) {
         next.set(tab.id, tab);

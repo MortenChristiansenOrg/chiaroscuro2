@@ -2,15 +2,11 @@ import type { CommandBus } from "../../bus/command-bus";
 import type { EventBus } from "../../bus/event-bus";
 import type { DataStore } from "../../data/types";
 import { defineFeature } from "../../shared/define-feature";
+import { logError } from "../../shared/log";
 import { SingletonTab } from "../../shared/singleton-tab";
 import type { TabId } from "../../shared/types";
 import { DEFAULT_PROVIDERS, type SearchProvider } from "../command-palette/resolve-input";
-import {
-  TABS_CLOSED,
-  type TabsClosedEvent,
-  type TabsCommands,
-  type TabsEvents,
-} from "../tabs/tabs.shared";
+import { TABS_CLOSED, type TabsCommands, type TabsEvents } from "../tabs/tabs.shared";
 import {
   SETTINGS_CHANGED,
   SETTINGS_GET,
@@ -37,6 +33,7 @@ function getDefaultSettings(): Settings {
   return {
     searchProviders: [...DEFAULT_PROVIDERS],
     defaultSearchProviderId: "!g",
+    debugServer: { enabled: false, port: 19400 },
   };
 }
 
@@ -50,8 +47,7 @@ export default defineFeature<Deps>({
     });
 
     events.on(TABS_CLOSED, (payload) => {
-      const { tabId } = payload as TabsClosedEvent;
-      settingsTab.onClose(tabId);
+      settingsTab.onClose(payload.tabId);
     });
 
     commands.handle(SETTINGS_OPEN, async () => {
@@ -65,10 +61,17 @@ export default defineFeature<Deps>({
     commands.handle(SETTINGS_SAVE, async (payload) => {
       currentSettings = { ...payload };
       events.emit(SETTINGS_CHANGED, { settings: { ...currentSettings } });
-      dataStore.setSetting("search-providers", payload.searchProviders).catch(console.error);
-      dataStore
-        .setSetting("default-search-provider", payload.defaultSearchProviderId)
-        .catch(console.error);
+      await Promise.all([
+        dataStore
+          .setSetting("search-providers", payload.searchProviders)
+          .catch(logError("settings", "persist search providers")),
+        dataStore
+          .setSetting("default-search-provider", payload.defaultSearchProviderId)
+          .catch(logError("settings", "persist default provider")),
+        dataStore
+          .setSetting("debug-server", payload.debugServer)
+          .catch(logError("settings", "persist debug server")),
+      ]);
     });
   },
 
@@ -82,6 +85,9 @@ export default defineFeature<Deps>({
 
     const defaultBang = await dataStore.getSetting<string>("default-search-provider");
     if (defaultBang) currentSettings.defaultSearchProviderId = defaultBang;
+
+    const debugServer = await dataStore.getSetting<Settings["debugServer"]>("debug-server");
+    if (debugServer) currentSettings.debugServer = debugServer;
 
     events.emit(SETTINGS_CHANGED, { settings: { ...currentSettings } });
   },

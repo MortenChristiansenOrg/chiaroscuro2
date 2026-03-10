@@ -1,14 +1,13 @@
 import { create } from "zustand";
+import { typedOnEvent } from "../../shared/typed-on-event";
 import {
   INSTALLER_PROTOCOL_LAUNCH_REQUESTED,
   INSTALLER_UPDATE_AVAILABLE,
   INSTALLER_UPDATE_DISMISSED,
   INSTALLER_UPDATE_DOWNLOADED,
   INSTALLER_UPDATE_ERROR,
+  type InstallerEvents,
   type ProtocolLaunchRequestedEvent,
-  type UpdateAvailableEvent,
-  type UpdateDownloadedEvent,
-  type UpdateErrorEvent,
 } from "./installer.shared";
 
 interface InstallerState {
@@ -35,11 +34,11 @@ export const useInstallerStore = create<InstallerState>()(() => ({
 export function subscribeToEvents(
   onEvent: (name: string, callback: (payload: unknown) => void) => () => void,
 ): () => void {
+  const on = typedOnEvent<InstallerEvents>(onEvent);
   const unsubs: (() => void)[] = [];
 
   unsubs.push(
-    onEvent(INSTALLER_UPDATE_AVAILABLE, (payload) => {
-      const { version } = payload as UpdateAvailableEvent;
+    on(INSTALLER_UPDATE_AVAILABLE, ({ version }) => {
       useInstallerStore.setState({
         pendingUpdateVersion: version,
         updateDownloaded: false,
@@ -50,8 +49,7 @@ export function subscribeToEvents(
   );
 
   unsubs.push(
-    onEvent(INSTALLER_UPDATE_DOWNLOADED, (payload) => {
-      const { version } = payload as UpdateDownloadedEvent;
+    on(INSTALLER_UPDATE_DOWNLOADED, ({ version }) => {
       useInstallerStore.setState({
         pendingUpdateVersion: version,
         updateDownloaded: true,
@@ -61,23 +59,20 @@ export function subscribeToEvents(
   );
 
   unsubs.push(
-    onEvent(INSTALLER_UPDATE_ERROR, (payload) => {
-      const { message } = payload as UpdateErrorEvent;
+    on(INSTALLER_UPDATE_ERROR, ({ message }) => {
       useInstallerStore.setState({ updateError: message });
     }),
   );
 
   unsubs.push(
-    onEvent(INSTALLER_UPDATE_DISMISSED, () => {
+    on(INSTALLER_UPDATE_DISMISSED, () => {
       useInstallerStore.setState({ updateDismissed: true });
     }),
   );
 
   unsubs.push(
-    onEvent(INSTALLER_PROTOCOL_LAUNCH_REQUESTED, (payload) => {
-      useInstallerStore.setState({
-        protocolRequest: payload as ProtocolLaunchRequestedEvent,
-      });
+    on(INSTALLER_PROTOCOL_LAUNCH_REQUESTED, (payload) => {
+      useInstallerStore.setState({ protocolRequest: payload });
     }),
   );
 

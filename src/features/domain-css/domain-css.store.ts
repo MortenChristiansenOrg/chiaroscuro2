@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import type { DomainCssChangedEvent, DomainCssState } from "./domain-css.shared";
+import { typedOnEvent } from "../../shared/typed-on-event";
+import type { DomainCssEvents, DomainCssState } from "./domain-css.shared";
 import { DOMAIN_CSS_CHANGED } from "./domain-css.shared";
 
 interface DomainCssStoreState {
@@ -14,11 +15,11 @@ export const useDomainCssStore = create<DomainCssStoreState>()(() => ({
 export function subscribeToEvents(
   onEvent: (name: string, callback: (payload: unknown) => void) => () => void,
 ): () => void {
+  const on = typedOnEvent<DomainCssEvents>(onEvent);
   const unsubs: (() => void)[] = [];
 
   unsubs.push(
-    onEvent(DOMAIN_CSS_CHANGED, (payload) => {
-      const { domain, enabled, hasFile } = payload as DomainCssChangedEvent;
+    on(DOMAIN_CSS_CHANGED, ({ domain, enabled, hasFile }) => {
       useDomainCssStore.setState((prev) => {
         const next = new Map(prev.states);
         next.set(domain, { domain, enabled, hasFile });

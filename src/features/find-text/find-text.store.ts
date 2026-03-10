@@ -1,5 +1,6 @@
 import { create } from "zustand";
-import { FIND_RESULT, FIND_STARTED, FIND_STOPPED, type FindResultEvent } from "./find-text.shared";
+import { typedOnEvent } from "../../shared/typed-on-event";
+import { FIND_RESULT, FIND_STARTED, FIND_STOPPED, type FindTextEvents } from "./find-text.shared";
 
 interface FindTextState {
   active: boolean;
@@ -16,23 +17,23 @@ export const useFindTextStore = create<FindTextState>()(() => ({
 export function subscribeToEvents(
   onEvent: (name: string, callback: (payload: unknown) => void) => () => void,
 ): () => void {
+  const on = typedOnEvent<FindTextEvents>(onEvent);
   const unsubs: (() => void)[] = [];
 
   unsubs.push(
-    onEvent(FIND_STARTED, () => {
+    on(FIND_STARTED, () => {
       useFindTextStore.setState({ active: true, activeMatchOrdinal: 0, matches: 0 });
     }),
   );
 
   unsubs.push(
-    onEvent(FIND_STOPPED, () => {
+    on(FIND_STOPPED, () => {
       useFindTextStore.setState({ active: false, activeMatchOrdinal: 0, matches: 0 });
     }),
   );
 
   unsubs.push(
-    onEvent(FIND_RESULT, (payload) => {
-      const { activeMatchOrdinal, matches } = payload as FindResultEvent;
+    on(FIND_RESULT, ({ activeMatchOrdinal, matches }) => {
       useFindTextStore.setState({ activeMatchOrdinal, matches });
     }),
   );

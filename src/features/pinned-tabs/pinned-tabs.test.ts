@@ -55,6 +55,7 @@ function setup(overrides: { activeTabId?: TabId | null } = {}) {
     getActiveTabId: () => activeTabId as TabId | undefined,
     setActiveTabId: () => {},
     getActiveWorkspaceId: () => "ws-1" as WorkspaceId | undefined,
+    getCustomization: () => undefined as { fixedAddressDisabled: boolean } | undefined,
   };
   feature.register(deps);
   return { commands, events, platform, dataStore, deps };
@@ -199,6 +200,7 @@ describe("start()", () => {
       getActiveTabId: () => TAB_ID as TabId | undefined,
       setActiveTabId: () => {},
       getActiveWorkspaceId: () => "ws-1" as WorkspaceId | undefined,
+      getCustomization: () => undefined as { fixedAddressDisabled: boolean } | undefined,
     };
     feature.register(deps);
 

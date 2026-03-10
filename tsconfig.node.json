@@ -20,6 +20,9 @@
     "src/features/**/*.shared.ts",
     "src/features/command-palette/resolve-input.ts",
     "src/features/command-palette/suggestions.ts",
+    "src/features/debug-server/debug-log.ts",
+    "src/features/debug-server/recorder.ts",
+    "src/features/debug-server/state-providers.ts",
     "electron.vite.config.ts"
   ],
   "exclude": ["src/bus/ipc-renderer-bus.ts"]

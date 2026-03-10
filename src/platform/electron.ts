@@ -50,6 +50,159 @@ letter-spacing:.01em;white-space:nowrap}
 .a{animation:i .12s ease}@keyframes i{from{opacity:0;transform:scale(.96)}}
 </style></head><body><span id="t"></span></body></html>`;
 
+// HTML for the command palette overlay — transparent BrowserWindow on top of tab views
+const COMMAND_PALETTE_HTML = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
+*{margin:0;padding:0;box-sizing:border-box}
+html,body{background:transparent;overflow:hidden;
+  font-family:"Plus Jakarta Sans",-apple-system,system-ui,sans-serif}
+#backdrop{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+  border-radius:8px;
+  background:oklch(0 0 0/.4);
+  opacity:0;visibility:hidden;transition:opacity .2s cubic-bezier(0,0,.2,1),visibility 0s .2s}
+#backdrop.open{opacity:1;visibility:visible;transition:opacity .2s cubic-bezier(0,0,.2,1),visibility 0s 0s}
+#panel{width:560px;display:flex;flex-direction:column;
+  background:rgb(22,22,26);
+  border-radius:16px;border:1px solid oklch(1 0 0/.08);
+  box-shadow:0 8px 32px oklch(0 0 0/.4),0 2px 8px oklch(0 0 0/.2),
+    inset 0 .5px 0 oklch(1 0 0/.1),inset 0 0 0 .5px oklch(1 0 0/.06);
+  opacity:0;scale:.96;transition:opacity .15s cubic-bezier(0,0,.2,1),scale .15s cubic-bezier(0,0,.2,1)}
+#backdrop.open #panel{opacity:1;scale:1}
+#input{width:100%;background:transparent;border:none;outline:none;
+  color:oklch(1 0 0/.95);font-size:.875rem;padding:14px 18px;font-family:inherit}
+#input::placeholder{color:oklch(1 0 0/.3)}
+#res{padding:0 18px 8px;font-size:.6875rem;color:oklch(1 0 0/.4);display:none}
+#res strong{color:oklch(1 0 0/.55)}
+#suggestions{border-top:1px solid oklch(1 0 0/.07);max-height:240px;overflow-y:auto;display:none;
+  scrollbar-width:thin;scrollbar-color:oklch(1 0 0/.12) transparent}
+#suggestions::-webkit-scrollbar{width:5px}
+#suggestions::-webkit-scrollbar-track{background:transparent}
+#suggestions::-webkit-scrollbar-thumb{background:oklch(1 0 0/.12);border-radius:999px}
+#suggestions::-webkit-scrollbar-thumb:hover{background:oklch(1 0 0/.25)}
+.sg{display:flex;align-items:center;gap:.625rem;padding:7px 18px;cursor:pointer;
+  font-size:.6875rem;border-radius:7px;margin:2px 5px;
+  transition:background 80ms ease-out}
+.sg:hover,.sg.sel{background:oklch(1 0 0/.1)}
+.sg .title{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:oklch(1 0 0/.55)}
+.sg .url{flex-shrink:0;max-width:200px;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap;color:oklch(1 0 0/.4);font-size:.5625rem}
+#hints{padding:8px 18px 10px;font-size:.6875rem;color:oklch(1 0 0/.3);
+  border-top:1px solid oklch(1 0 0/.07)}
+</style></head><body>
+<div id="backdrop" onclick="closePalette()">
+<div id="panel" onclick="event.stopPropagation()">
+<input id="input" type="text" placeholder="Search or enter URL..."
+  autocomplete="off" spellcheck="false" aria-label="Search or enter URL">
+<div id="res"></div>
+<div id="suggestions"></div>
+<div id="hints">Enter = new tab &middot; Ctrl+Enter = current tab &middot; Esc = close</div>
+</div></div>
+<script>
+var providerConfig=null,debounceTimer=null,suggestions=[],selIdx=-1;
+var $=id=>document.getElementById(id);
+
+function resetPalette(){
+  $('input').value='';
+  $('res').style.display='none';
+  $('suggestions').style.display='none';
+  $('suggestions').innerHTML='';
+  suggestions=[];selIdx=-1;
+  setTimeout(()=>{$('backdrop').classList.add('open');$('input').focus()},16);
+}
+
+function closePalette(){
+  $('backdrop').classList.remove('open');
+  window.chiaroscuro.sendCommand('command-palette:hide',undefined);
+}
+
+function resolveInput(v){
+  v=v.trim();if(!v)return null;
+  if(/^https?:\\/\\//i.test(v))return{type:'url',url:v};
+  if(/^[^\\s]+\\.[^\\s]+$/.test(v)&&v.length>2)return{type:'url',url:'https://'+v};
+  if(v.startsWith('!')){
+    var parts=v.slice(1).split(/\\s+/,2),bang=parts[0]||'';
+    if(providerConfig){
+      var p=providerConfig.providers.find(function(x){return x.bang==='!'+bang});
+      if(p)return{type:'search',provider:p.name};
+    }
+    return{type:'search',provider:'default'};
+  }
+  if(v.startsWith('/'))return{type:'builtin'};
+  var name='Google';
+  if(providerConfig){
+    var dp=providerConfig.providers.find(function(x){return x.id===providerConfig.defaultBang});
+    if(dp)name=dp.name;
+  }
+  return{type:'search',provider:name};
+}
+
+function updateResolution(){
+  var r=resolveInput($('input').value);
+  var el=$('res');
+  if(!r||r.type==='builtin'){el.style.display='none';return}
+  el.style.display='block';
+  el.textContent=r.type==='search'?'Search with ':'Navigate to ';
+  var strong=document.createElement('strong');
+  strong.textContent=r.type==='search'?r.provider:r.url;
+  el.appendChild(strong);
+}
+
+function renderSuggestions(){
+  var el=$('suggestions');
+  if(!suggestions.length){el.style.display='none';el.innerHTML='';return}
+  el.style.display='block';
+  el.innerHTML=suggestions.map(function(s,i){
+    return '<div class="sg'+(i===selIdx?' sel':'')+'" data-i="'+i+'">'
+      +'<span class="title">'+esc(s.title)+'</span>'
+      +'<span class="url">'+esc(s.url)+'</span></div>';
+  }).join('');
+}
+function esc(s){var d=document.createElement('span');d.textContent=s;return d.innerHTML}
+
+function execute(value,inCurrentTab){
+  if(!value.trim())return;
+  window.chiaroscuro.sendCommand('command-palette:execute',{command:value,inCurrentTab:inCurrentTab});
+  window.chiaroscuro.sendCommand('command-palette:hide',undefined);
+}
+
+$('input').addEventListener('input',function(){
+  updateResolution();selIdx=-1;
+  clearTimeout(debounceTimer);
+  var q=$('input').value.trim();
+  if(q.startsWith('/')){
+    window.chiaroscuro.sendCommand('command-palette:search-visits',{query:q})
+      .then(function(r){suggestions=r||[];renderSuggestions()})
+      .catch(function(){suggestions=[];renderSuggestions()});
+    return;
+  }
+  if(q.length>=2){
+    debounceTimer=setTimeout(function(){
+      window.chiaroscuro.sendCommand('command-palette:search-visits',{query:q})
+        .then(function(r){suggestions=r||[];renderSuggestions()})
+        .catch(function(){suggestions=[];renderSuggestions()});
+    },150);
+  }else{suggestions=[];renderSuggestions()}
+});
+
+$('input').addEventListener('keydown',function(e){
+  if(e.key==='Escape'){closePalette();return}
+  if(suggestions.length>0){
+    if(e.key==='ArrowDown'){e.preventDefault();selIdx=Math.min(selIdx+1,suggestions.length-1);renderSuggestions();return}
+    if(e.key==='ArrowUp'){e.preventDefault();selIdx=Math.max(selIdx-1,-1);renderSuggestions();return}
+  }
+  if(e.key==='Enter'){
+    if(selIdx>=0&&suggestions[selIdx]){execute(suggestions[selIdx].url,e.ctrlKey||e.metaKey);return}
+    execute($('input').value,e.ctrlKey||e.metaKey);
+  }
+});
+
+$('suggestions').addEventListener('click',function(e){
+  var t=e.target.closest('.sg');if(!t)return;
+  var i=parseInt(t.dataset.i);if(suggestions[i])execute(suggestions[i].url,false);
+});
+
+document.addEventListener('keydown',function(e){if(e.key==='Escape')closePalette()});
+</script></body></html>`;
+
 // HTML for the context menu overlay — interactive, styled to match the app
 // Generated at init time to inject the resolved FA webfont path
 function buildContextMenuHtml(faFontPath: string): string {
@@ -135,8 +288,11 @@ export class ElectronPlatform implements Platform {
   private views = new Map<TabId, WebContentsView>();
   private tooltipWin: BrowserWindow | null = null;
   private ctxWin: BrowserWindow | null = null;
+  private paletteWin: BrowserWindow | null = null;
   private ctxResolve: ((index: number) => void) | null = null;
   private ctxParentListenersSet = false;
+  private paletteParentListenersSet = false;
+  private pendingPaletteJs: string | null = null;
   private permissionHandlerSet = false;
   private zoomIpcHooked = false;
   private protocolRequestCallback: ((url: string, origin: string) => void) | undefined;
@@ -758,6 +914,131 @@ export class ElectronPlatform implements Platform {
   private refocusParent(): void {
     const win = this.getWin();
     if (win && !win.isDestroyed()) win.webContents.focus();
+  }
+
+  // ── Command palette overlay ──────────────────────────────────
+
+  initCommandPaletteOverlay(windowId: WindowId): void {
+    const parent = this.getWin(windowId);
+    if (!parent) return;
+    if (this.paletteWin && !this.paletteWin.isDestroyed()) return;
+
+    // In test mode (headless CI), defer palette creation to first show.
+    // Creating child BrowserWindows at startup crashes under --ozone-platform=headless.
+    if (process.env.NODE_ENV === "test") return;
+
+    this.createPaletteWindow(parent);
+
+    // Show immediately as click-through overlay to avoid OS show/hide animations.
+    // Visibility is controlled purely via CSS (the .open class).
+    this.paletteWin?.webContents.on("did-finish-load", () => {
+      if (!this.paletteWin || this.paletteWin.isDestroyed()) return;
+      const bounds = this.paletteBounds();
+      if (bounds) this.paletteWin.setBounds(bounds);
+      this.paletteWin.setIgnoreMouseEvents(true);
+      this.paletteWin.showInactive();
+    });
+
+    // Follow parent resize/move (register once to avoid accumulation)
+    if (!this.paletteParentListenersSet) {
+      parent.on("resize", () => this.syncPaletteBounds());
+      parent.on("move", () => this.syncPaletteBounds());
+      this.paletteParentListenersSet = true;
+    }
+  }
+
+  private createPaletteWindow(parent: BrowserWindow): void {
+    this.paletteWin = new BrowserWindow({
+      parent,
+      frame: false,
+      transparent: true,
+      focusable: true,
+      skipTaskbar: true,
+      resizable: false,
+      show: false,
+      hasShadow: false,
+      webPreferences: {
+        sandbox: true,
+        contextIsolation: true,
+        preload: path.join(__dirname, "../preload/index.js"),
+      },
+    });
+
+    // Use PID-suffixed filename to avoid races when parallel workers write simultaneously
+    const paletteTmpPath = path.join(
+      app.getPath("temp"),
+      `chiaroscuro-cmd-palette-${process.pid}.html`,
+    );
+    fs.writeFileSync(paletteTmpPath, COMMAND_PALETTE_HTML, "utf-8");
+    this.paletteWin.loadFile(paletteTmpPath);
+  }
+
+  private paletteBounds(): Electron.Rectangle | null {
+    const parent = this.getWin();
+    if (!parent) return null;
+    const b = parent.getContentBounds();
+    // Shrink by 1px to counter Electron DPI-rounding overshoot
+    return { x: b.x, y: b.y, width: b.width - 1, height: b.height - 1 };
+  }
+
+  private syncPaletteBounds(): void {
+    if (!this.paletteWin || this.paletteWin.isDestroyed() || !this.paletteWin.isVisible()) return;
+    const bounds = this.paletteBounds();
+    if (!bounds) return;
+    this.paletteWin.setBounds(bounds);
+  }
+
+  showCommandPalette(): void {
+    // Lazy-create in test mode (deferred from initCommandPaletteOverlay)
+    if (!this.paletteWin || this.paletteWin.isDestroyed()) {
+      const parent = this.getWin();
+      if (!parent) return;
+      this.createPaletteWindow(parent);
+      // Wait for HTML to load before interacting
+      this.paletteWin?.webContents.on("did-finish-load", () => {
+        this.revealPalette();
+      });
+      return;
+    }
+
+    this.revealPalette();
+  }
+
+  private revealPalette(): void {
+    if (!this.paletteWin || this.paletteWin.isDestroyed()) return;
+    const bounds = this.paletteBounds();
+    if (!bounds) return;
+    this.paletteWin.setBounds(bounds);
+    if (!this.paletteWin.isVisible()) this.paletteWin.showInactive();
+    this.paletteWin.setIgnoreMouseEvents(false);
+    // Apply buffered provider config before resetting the palette
+    if (this.pendingPaletteJs) {
+      this.paletteWin.webContents.executeJavaScript(this.pendingPaletteJs).catch(() => {});
+      this.pendingPaletteJs = null;
+    }
+    this.paletteWin.webContents.executeJavaScript("resetPalette()").catch(() => {});
+    this.paletteWin.focus();
+  }
+
+  hideCommandPalette(): void {
+    if (!this.paletteWin || this.paletteWin.isDestroyed()) return;
+    // Animate out via CSS, then disable interaction
+    this.paletteWin.webContents
+      .executeJavaScript("document.getElementById('backdrop').classList.remove('open')")
+      .catch(() => {});
+    this.paletteWin.setIgnoreMouseEvents(true);
+    // Refocus parent
+    const win = this.getWin();
+    if (win && !win.isDestroyed()) win.focus();
+  }
+
+  async updateCommandPalette(js: string): Promise<unknown> {
+    if (!this.paletteWin || this.paletteWin.isDestroyed()) {
+      // Buffer for lazy-created palette (test mode)
+      this.pendingPaletteJs = js;
+      return;
+    }
+    return this.paletteWin.webContents.executeJavaScript(js);
   }
 
   // ── Downloads ──────────────────────────────────────────────────

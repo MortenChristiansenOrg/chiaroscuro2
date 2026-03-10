@@ -9,9 +9,15 @@ export const SETTINGS_SAVE = "settings:save" as const;
 export const SETTINGS_CHANGED = "settings:changed" as const;
 
 // ── Data types ───────────────────────────────────────────────────
+export interface DebugServerSettings {
+  enabled: boolean;
+  port: number;
+}
+
 export interface Settings {
   searchProviders: SearchProvider[];
   defaultSearchProviderId: string;
+  debugServer: DebugServerSettings;
 }
 
 // ── Payload types ────────────────────────────────────────────────

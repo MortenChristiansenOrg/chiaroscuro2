@@ -1,4 +1,3 @@
-import { useCallback } from "react";
 import { Icon } from "../../renderer/src/components/Icon";
 import {
   SettingItem,
@@ -84,25 +83,19 @@ function ProviderEditor({
   providers: SearchProvider[];
   onChange: (providers: SearchProvider[]) => void;
 }) {
-  const handleUpdate = useCallback(
-    (index: number, updated: SearchProvider) => {
-      const next = [...providers];
-      next[index] = updated;
-      onChange(next);
-    },
-    [providers, onChange],
-  );
+  const handleUpdate = (index: number, updated: SearchProvider) => {
+    const next = [...providers];
+    next[index] = updated;
+    onChange(next);
+  };
 
-  const handleRemove = useCallback(
-    (index: number) => {
-      onChange(providers.filter((_, i) => i !== index));
-    },
-    [providers, onChange],
-  );
+  const handleRemove = (index: number) => {
+    onChange(providers.filter((_, i) => i !== index));
+  };
 
-  const handleAdd = useCallback(() => {
+  const handleAdd = () => {
     onChange([...providers, { id: crypto.randomUUID(), bang: "", name: "", urlTemplate: "" }]);
-  }, [providers, onChange]);
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
@@ -219,9 +212,94 @@ function SearchSettings({
   );
 }
 
+// ── DeveloperSettings ────────────────────────────────────────────
+
+function DeveloperSettings({
+  settings,
+  onSettingsChange,
+}: {
+  settings: Settings;
+  onSettingsChange: (settings: Settings) => void;
+}) {
+  const searchQuery = useSettingsStore((s) => s.searchQuery);
+  const lowerQuery = searchQuery.toLowerCase();
+
+  const showDeveloper =
+    !searchQuery ||
+    "developer".includes(lowerQuery) ||
+    "debug server".includes(lowerQuery) ||
+    "port".includes(lowerQuery);
+
+  if (searchQuery && !showDeveloper) return null;
+
+  // In dev mode, debug server is always on
+  const isDev = window.location.protocol !== "file:";
+
+  return (
+    <section id="settings-developer">
+      <h2 style={settingsCategoryHeadingStyle}>Developer</h2>
+
+      <SettingItem
+        label="Debug Server"
+        description="HTTP endpoint for inspecting app state, command/event history, and logs."
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <label
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "0.375rem",
+              fontSize: "var(--text-sm)",
+              color: "var(--foreground)",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={isDev || settings.debugServer.enabled}
+              disabled={isDev}
+              onChange={(e) =>
+                onSettingsChange({
+                  ...settings,
+                  debugServer: { ...settings.debugServer, enabled: e.target.checked },
+                })
+              }
+            />
+            {isDev ? "Always on in dev mode" : "Enabled"}
+          </label>
+        </div>
+      </SettingItem>
+
+      <SettingItem
+        label="Port"
+        description="Port for the debug HTTP server. If unavailable, the next available port is used."
+      >
+        <input
+          type="number"
+          value={settings.debugServer.port}
+          onChange={(e) => {
+            const port = Number.parseInt(e.target.value, 10);
+            if (port > 0 && port < 65536) {
+              onSettingsChange({
+                ...settings,
+                debugServer: { ...settings.debugServer, port },
+              });
+            }
+          }}
+          min={1}
+          max={65535}
+          style={{ ...settingsInputStyle, width: "8rem" }}
+        />
+      </SettingItem>
+    </section>
+  );
+}
+
 // ── SettingsPage (root) ─────────────────────────────────────────
 
-const categories = [{ id: "search", label: "Search" }];
+const categories = [
+  { id: "search", label: "Search" },
+  { id: "developer", label: "Developer" },
+];
 
 export default function SettingsPage(_props: { params: Record<string, string> }) {
   const settings = useSettingsStore((s) => s.settings);
@@ -229,9 +307,9 @@ export default function SettingsPage(_props: { params: Record<string, string> })
   const setSearchQuery = useSettingsStore((s) => s.setSearchQuery);
   const { scrollRef, activeCategory } = useScrollSpy("settings");
 
-  const handleSettingsChange = useCallback((updated: Settings) => {
+  const handleSettingsChange = (updated: Settings) => {
     saveSettings(updated);
-  }, []);
+  };
 
   if (!settings) {
     return (
@@ -261,6 +339,7 @@ export default function SettingsPage(_props: { params: Record<string, string> })
       activeCategory={activeCategory}
     >
       <SearchSettings settings={settings} onSettingsChange={handleSettingsChange} />
+      <DeveloperSettings settings={settings} onSettingsChange={handleSettingsChange} />
     </SettingsLayout>
   );
 }

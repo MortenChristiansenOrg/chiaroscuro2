@@ -1,9 +1,9 @@
 import { create } from "zustand";
+import { typedOnEvent } from "../../shared/typed-on-event";
 import {
   APP_STATE_RESTORED,
   APP_STATE_SIDEBAR_WIDTH_CHANGED,
-  type AppStateRestoredEvent,
-  type AppStateSidebarWidthChangedEvent,
+  type AppStateEvents,
   DEFAULT_SIDEBAR_WIDTH,
 } from "./app-state.shared";
 
@@ -18,18 +18,17 @@ export const useAppStateStore = create<AppStateStoreState>()(() => ({
 export function subscribeToEvents(
   onEvent: (name: string, callback: (payload: unknown) => void) => () => void,
 ): () => void {
+  const on = typedOnEvent<AppStateEvents>(onEvent);
   const unsubs: (() => void)[] = [];
 
   unsubs.push(
-    onEvent(APP_STATE_RESTORED, (payload) => {
-      const { sidebarWidth } = payload as AppStateRestoredEvent;
+    on(APP_STATE_RESTORED, ({ sidebarWidth }) => {
       useAppStateStore.setState({ sidebarWidth });
     }),
   );
 
   unsubs.push(
-    onEvent(APP_STATE_SIDEBAR_WIDTH_CHANGED, (payload) => {
-      const { width } = payload as AppStateSidebarWidthChangedEvent;
+    on(APP_STATE_SIDEBAR_WIDTH_CHANGED, ({ width }) => {
       useAppStateStore.setState({ sidebarWidth: width });
     }),
   );

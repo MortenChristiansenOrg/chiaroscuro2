@@ -1,14 +1,13 @@
 import { create } from "zustand";
+import { typedOnEvent } from "../../shared/typed-on-event";
 import type { TabId } from "../../shared/types";
 import {
   LOCAL_WEB_APP_CONFIG_CHANGED,
   LOCAL_WEB_APP_CONFIG_REMOVED,
   LOCAL_WEB_APP_STATUS_CHANGED,
   type LocalWebAppConfig,
-  type LocalWebAppConfigChangedEvent,
-  type LocalWebAppConfigRemovedEvent,
+  type LocalWebAppEvents,
   type LocalWebAppStatus,
-  type LocalWebAppStatusChangedEvent,
 } from "./local-web-app.shared";
 
 interface LocalWebAppState {
@@ -24,11 +23,11 @@ export const useLocalWebAppStore = create<LocalWebAppState>()(() => ({
 export function subscribeToEvents(
   onEvent: (name: string, callback: (payload: unknown) => void) => () => void,
 ): () => void {
+  const on = typedOnEvent<LocalWebAppEvents>(onEvent);
   const unsubs: (() => void)[] = [];
 
   unsubs.push(
-    onEvent(LOCAL_WEB_APP_CONFIG_CHANGED, (payload) => {
-      const { tabId, config } = payload as LocalWebAppConfigChangedEvent;
+    on(LOCAL_WEB_APP_CONFIG_CHANGED, ({ tabId, config }) => {
       useLocalWebAppStore.setState((s) => {
         const next = new Map(s.configs);
         next.set(tabId, config);
@@ -38,8 +37,7 @@ export function subscribeToEvents(
   );
 
   unsubs.push(
-    onEvent(LOCAL_WEB_APP_CONFIG_REMOVED, (payload) => {
-      const { tabId } = payload as LocalWebAppConfigRemovedEvent;
+    on(LOCAL_WEB_APP_CONFIG_REMOVED, ({ tabId }) => {
       useLocalWebAppStore.setState((s) => {
         const configs = new Map(s.configs);
         const statuses = new Map(s.statuses);
@@ -51,8 +49,7 @@ export function subscribeToEvents(
   );
 
   unsubs.push(
-    onEvent(LOCAL_WEB_APP_STATUS_CHANGED, (payload) => {
-      const { tabId, status } = payload as LocalWebAppStatusChangedEvent;
+    on(LOCAL_WEB_APP_STATUS_CHANGED, ({ tabId, status }) => {
       useLocalWebAppStore.setState((s) => {
         const next = new Map(s.statuses);
         next.set(tabId, status);

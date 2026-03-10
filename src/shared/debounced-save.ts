@@ -1,3 +1,5 @@
+import { logError } from "./log";
+
 /**
  * Wraps a value with auto-debounced persistence. Call `set()` or `update()`
  * to change the value and schedule a save. Call `flush()` on quit to persist
@@ -30,7 +32,7 @@ export class DebouncedSave<T> {
     if (this.timer !== undefined) clearTimeout(this.timer);
     this.timer = setTimeout(() => {
       this.timer = undefined;
-      this.save(this.value).catch(console.error);
+      this.save(this.value).catch(logError("debounced-save", "persist"));
     }, this.debounceMs);
   }
 
@@ -38,7 +40,7 @@ export class DebouncedSave<T> {
     if (this.timer !== undefined) {
       clearTimeout(this.timer);
       this.timer = undefined;
-      this.save(this.value).catch(console.error);
+      this.save(this.value).catch(logError("debounced-save", "persist"));
     }
   }
 }

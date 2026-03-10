@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "../../renderer/src/components/Icon";
 import {
   SettingItem,
@@ -13,13 +13,26 @@ import {
   LOCAL_WEB_APP_SAVE_CONFIG,
   LOCAL_WEB_APP_START,
   LOCAL_WEB_APP_STOP,
-  type LocalWebAppConfig,
+  type LocalWebAppCommands,
   type LocalWebAppStatus,
 } from "./local-web-app.shared";
 import { useLocalWebAppStore } from "./local-web-app.store";
 
-function sendCommand<T = unknown>(name: string, payload: unknown): Promise<T> {
-  return window.chiaroscuro.sendCommand(name, payload) as Promise<T>;
+type UsedCommands = Pick<
+  LocalWebAppCommands,
+  | typeof LOCAL_WEB_APP_SAVE_CONFIG
+  | typeof LOCAL_WEB_APP_DELETE_CONFIG
+  | typeof LOCAL_WEB_APP_START
+  | typeof LOCAL_WEB_APP_STOP
+  | typeof LOCAL_WEB_APP_BROWSE_DIRECTORY
+  | typeof LOCAL_WEB_APP_GET_CONFIG
+>;
+
+function sendCommand<K extends keyof UsedCommands>(
+  name: K,
+  payload: UsedCommands[K]["payload"],
+): Promise<UsedCommands[K]["response"]> {
+  return window.chiaroscuro.sendCommand(name, payload) as Promise<UsedCommands[K]["response"]>;
 }
 
 function StatusBadge({ status }: { status: LocalWebAppStatus }) {
@@ -60,69 +73,57 @@ export function LocalWebAppSettings({ tabId }: { tabId: TabId }) {
   const config = useLocalWebAppStore((s) => s.configs.get(tabId));
   const status = useLocalWebAppStore((s) => s.statuses.get(tabId)) ?? "stopped";
 
-  const [localDir, setLocalDir] = useState("");
-  const [localCmd, setLocalCmd] = useState("");
+  // Track local overrides for unsaved edits; null = use config value
+  const [dirOverride, setDirOverride] = useState<string | null>(null);
+  const [cmdOverride, setCmdOverride] = useState<string | null>(null);
   const hasConfig = config !== undefined;
 
-  // Sync local state from store
-  useEffect(() => {
-    if (config) {
-      setLocalDir(config.directory);
-      setLocalCmd(config.command);
-    } else {
-      setLocalDir("");
-      setLocalCmd("");
-    }
-  }, [config]);
+  // Derive display values: local override takes precedence, else config, else empty
+  const localDir = dirOverride ?? config?.directory ?? "";
+  const localCmd = cmdOverride ?? config?.command ?? "";
 
-  // Fetch current state on mount
+  // Clear overrides when config changes (save confirmed by main process)
+  const prevConfigRef = useRef(config);
+  if (config !== prevConfigRef.current) {
+    prevConfigRef.current = config;
+    setDirOverride(null);
+    setCmdOverride(null);
+  }
+
+  // Fetch current state on mount (populates store via event)
   useEffect(() => {
-    let cancelled = false;
-    sendCommand<(LocalWebAppConfig & { status: LocalWebAppStatus }) | undefined>(
-      LOCAL_WEB_APP_GET_CONFIG,
-      { tabId },
-    )
-      .then((result) => {
-        if (cancelled || !result) return;
-        setLocalDir(result.directory);
-        setLocalCmd(result.command);
-      })
-      .catch(console.error);
-    return () => {
-      cancelled = true;
-    };
+    sendCommand(LOCAL_WEB_APP_GET_CONFIG, { tabId }).catch(console.error);
   }, [tabId]);
 
-  const handleBrowse = useCallback(async () => {
-    const dir = await sendCommand<string | undefined>(LOCAL_WEB_APP_BROWSE_DIRECTORY, undefined);
-    if (dir) setLocalDir(dir);
-  }, []);
+  const handleBrowse = async () => {
+    const dir = await sendCommand(LOCAL_WEB_APP_BROWSE_DIRECTORY, undefined);
+    if (dir) setDirOverride(dir);
+  };
 
-  const handleSave = useCallback(() => {
+  const handleSave = () => {
     if (!localDir.trim() || !localCmd.trim()) return;
     sendCommand(LOCAL_WEB_APP_SAVE_CONFIG, {
       tabId,
       directory: localDir.trim(),
       command: localCmd.trim(),
     });
-  }, [tabId, localDir, localCmd]);
+  };
 
-  const handleDelete = useCallback(() => {
+  const handleDelete = () => {
     sendCommand(LOCAL_WEB_APP_DELETE_CONFIG, { tabId });
-    setLocalDir("");
-    setLocalCmd("");
-  }, [tabId]);
+    setDirOverride(null);
+    setCmdOverride(null);
+  };
 
-  const handleToggleProcess = useCallback(() => {
+  const handleToggleProcess = () => {
     if (status === "running") {
       sendCommand(LOCAL_WEB_APP_STOP, { tabId });
     } else {
       sendCommand(LOCAL_WEB_APP_START, { tabId });
     }
-  }, [tabId, status]);
+  };
 
-  const isDirty =
-    localDir.trim() !== (config?.directory ?? "") || localCmd.trim() !== (config?.command ?? "");
+  const isDirty = dirOverride !== null || cmdOverride !== null;
 
   return (
     <section id="tab-customization-local-web-app">
@@ -141,7 +142,7 @@ export function LocalWebAppSettings({ tabId }: { tabId: TabId }) {
           <input
             type="text"
             value={localDir}
-            onChange={(e) => setLocalDir(e.target.value)}
+            onChange={(e) => setDirOverride(e.target.value)}
             placeholder="/path/to/project"
             aria-label="Project directory"
             style={{ ...settingsInputStyle, fontFamily: "var(--font-mono)" }}
@@ -175,7 +176,7 @@ export function LocalWebAppSettings({ tabId }: { tabId: TabId }) {
         <input
           type="text"
           value={localCmd}
-          onChange={(e) => setLocalCmd(e.target.value)}
+          onChange={(e) => setCmdOverride(e.target.value)}
           placeholder="npm start"
           aria-label="Start command"
           style={{ ...settingsInputStyle, maxWidth: "24rem", fontFamily: "var(--font-mono)" }}

@@ -35,9 +35,10 @@ All browser interaction uses `playwright-cli` via the Bash tool. The CLI manages
 ```bash
 # Browser lifecycle
 playwright-cli open [url]             # open browser (optionally navigate)
+playwright-cli open --persistent      # use persistent profile (survives browser restart)
 playwright-cli close                  # close browser
 
-# Page inspection
+# Page inspection (also returned automatically after most commands)
 playwright-cli snapshot              # get page accessibility tree with element refs
 playwright-cli screenshot            # screenshot current page
 playwright-cli screenshot <ref>      # screenshot specific element
@@ -59,12 +60,19 @@ playwright-cli console error         # errors only
 playwright-cli network               # list network requests
 playwright-cli eval '<func>'         # evaluate JS on page
 
+# Monitoring
+playwright-cli show                  # open visual dashboard for all sessions
+
 # Tabs
 playwright-cli tab-list              # list tabs
 playwright-cli tab-new [url]         # open new tab
 playwright-cli tab-select <n>        # switch to tab
 playwright-cli tab-close [index]     # close tab
 ```
+
+### Automatic snapshots
+
+Commands like `goto`, `click`, `fill` etc. automatically output a snapshot of the page state after execution. You don't need to run `playwright-cli snapshot` separately unless you want to refresh the view without performing an action.
 
 ### Workflow pattern
 

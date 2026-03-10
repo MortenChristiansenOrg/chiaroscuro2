@@ -1,6 +1,7 @@
 import type { CommandBus } from "../../bus/command-bus";
 import type { Platform } from "../../platform/types";
 import { defineFeature } from "../../shared/define-feature";
+import { logError } from "../../shared/log";
 import type { TabId, WindowId } from "../../shared/types";
 import { DEVTOOLS_TOGGLE, DEVTOOLS_TOGGLE_CHROME, type DevToolsCommands } from "./dev-tools.shared";
 
@@ -33,12 +34,14 @@ export default defineFeature<Deps>({
     });
 
     platform.registerLocalShortcut("F12", () => {
-      commands.send(DEVTOOLS_TOGGLE, undefined).catch(console.error);
+      commands.send(DEVTOOLS_TOGGLE, undefined).catch(logError("dev-tools", "shortcut toggle"));
     });
 
     if (isDev) {
       platform.registerLocalShortcut("F11", () => {
-        commands.send(DEVTOOLS_TOGGLE_CHROME, undefined).catch(console.error);
+        commands
+          .send(DEVTOOLS_TOGGLE_CHROME, undefined)
+          .catch(logError("dev-tools", "shortcut toggle chrome"));
       });
     }
   },

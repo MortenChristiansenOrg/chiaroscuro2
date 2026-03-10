@@ -84,6 +84,12 @@ export interface Platform {
   }): Promise<number>;
   hideContextMenu(): void;
 
+  // Command palette overlay
+  initCommandPaletteOverlay(windowId: WindowId): void;
+  showCommandPalette(): void;
+  hideCommandPalette(): void;
+  updateCommandPalette(js: string): Promise<unknown>;
+
   // Find in page
   findInPage(tabId: TabId, text: string, options?: { forward?: boolean; findNext?: boolean }): void;
   stopFindInPage(tabId: TabId): void;

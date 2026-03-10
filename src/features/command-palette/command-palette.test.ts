@@ -55,15 +55,14 @@ function setup(overrides: { activeTabId?: TabId | undefined } = {}) {
 
 describe("command-palette commands", () => {
   describe("SHOW", () => {
-    it("hides active tab, focuses shell, emits SHOWN", async () => {
+    it("shows palette overlay and emits SHOWN", async () => {
       const { commands, events, platform } = setup();
       const shown = vi.fn();
       events.on(COMMAND_PALETTE_SHOWN, shown);
 
       await commands.send(COMMAND_PALETTE_SHOW, undefined);
 
-      expect(platform.hideTab).toHaveBeenCalledWith(TAB_ID);
-      expect(platform.focusShell).toHaveBeenCalledWith(WIN_ID);
+      expect(platform.showCommandPalette).toHaveBeenCalled();
       expect(shown).toHaveBeenCalled();
     });
 
@@ -80,14 +79,15 @@ describe("command-palette commands", () => {
   });
 
   describe("HIDE", () => {
-    it("re-activates tab, emits HIDDEN", async () => {
-      const { commands, events } = setup();
+    it("hides palette overlay and emits HIDDEN", async () => {
+      const { commands, events, platform } = setup();
       await commands.send(COMMAND_PALETTE_SHOW, undefined);
 
       const hidden = vi.fn();
       events.on(COMMAND_PALETTE_HIDDEN, hidden);
       await commands.send(COMMAND_PALETTE_HIDE, undefined);
 
+      expect(platform.hideCommandPalette).toHaveBeenCalled();
       expect(hidden).toHaveBeenCalled();
     });
 

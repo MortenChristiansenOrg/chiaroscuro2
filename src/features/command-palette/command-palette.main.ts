@@ -3,6 +3,7 @@ import type { EventBus } from "../../bus/event-bus";
 import type { DataStore } from "../../data/types";
 import type { Platform } from "../../platform/types";
 import { defineFeature } from "../../shared/define-feature";
+import { logError, logWarn } from "../../shared/log";
 import type { TabId, WindowId } from "../../shared/types";
 import type { SettingsChangedEvent, SettingsEvents } from "../settings/settings.shared";
 import { SETTINGS_CHANGED } from "../settings/settings.shared";
@@ -19,11 +20,10 @@ import {
   type CommandPaletteCommands,
   type CommandPaletteEvents,
 } from "./command-palette.shared";
-import { type ProviderConfig, resolveInput } from "./resolve-input";
+import { type ProviderConfig, getBuiltInPages, resolveInput } from "./resolve-input";
 import { initVisitTracking, recordVisit, searchVisits } from "./suggestions";
 
-type AllCommands = CommandPaletteCommands &
-  Pick<TabsCommands, "tabs:activate" | "tabs:create" | "tabs:navigate">;
+type AllCommands = CommandPaletteCommands & Pick<TabsCommands, "tabs:create" | "tabs:navigate">;
 type AllEvents = CommandPaletteEvents &
   Pick<TabsEvents, typeof TABS_UPDATED> &
   Pick<SettingsEvents, typeof SETTINGS_CHANGED>;
@@ -58,28 +58,27 @@ export default defineFeature<Deps>({
     events.on(TABS_UPDATED, (payload) => {
       const { tab } = payload;
       if (!tab.loading && tab.url && tab.title) {
-        recordVisit(tab.url, tab.title).catch(() => {});
+        recordVisit(tab.url, tab.title).catch(logWarn("command-palette", "record visit"));
       }
     });
 
     commands.handle(COMMAND_PALETTE_SHOW, async () => {
       if (isOpen) return;
       isOpen = true;
-      const tabId = getActiveTabId();
-      if (tabId) platform.hideTab(tabId);
-      const windowId = getActiveWindowId();
-      if (windowId) platform.focusShell(windowId);
+      // Pass current provider config to the overlay
+      if (providerConfig) {
+        platform
+          .updateCommandPalette(`providerConfig=${JSON.stringify(providerConfig)}`)
+          .catch(() => {});
+      }
+      platform.showCommandPalette();
       events.emit(COMMAND_PALETTE_SHOWN, undefined);
     });
 
     commands.handle(COMMAND_PALETTE_HIDE, async () => {
       if (!isOpen) return;
       isOpen = false;
-      // Re-show active tab by re-activating it (sets bounds)
-      const tabId = getActiveTabId();
-      if (tabId) {
-        await commands.send("tabs:activate", { tabId });
-      }
+      platform.hideCommandPalette();
       events.emit(COMMAND_PALETTE_HIDDEN, undefined);
     });
 
@@ -114,16 +113,35 @@ export default defineFeature<Deps>({
     });
 
     commands.handle(COMMAND_PALETTE_SEARCH_VISITS, async (payload) => {
-      const visits = await searchVisits(payload.query);
-      return visits.map((v) => ({
+      const q = payload.query;
+      const visits = await searchVisits(q);
+      const results = visits.map((v) => ({
         url: v.url,
         title: v.title,
         visitCount: v.visitCount,
       }));
+
+      // Prepend matching built-in pages for `/` queries
+      if (q.startsWith("/")) {
+        const lower = q.toLowerCase();
+        const pages = getBuiltInPages()
+          .filter((p) => p.route.toLowerCase().startsWith(lower))
+          .map((p) => ({ url: p.route, title: p.title, visitCount: 0 }));
+        return [...pages, ...results];
+      }
+
+      return results;
     });
 
     platform.registerShortcut("CommandOrControl+T", () => {
-      commands.send(COMMAND_PALETTE_TOGGLE, undefined).catch(console.error);
+      commands
+        .send(COMMAND_PALETTE_TOGGLE, undefined)
+        .catch(logError("command-palette", "shortcut toggle"));
+    });
+    platform.registerLocalShortcut("CommandOrControl+T", () => {
+      commands
+        .send(COMMAND_PALETTE_TOGGLE, undefined)
+        .catch(logError("command-palette", "shortcut toggle"));
     });
   },
 });

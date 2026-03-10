@@ -2,6 +2,7 @@ import type { CommandBus } from "../../bus/command-bus";
 import type { EventBus } from "../../bus/event-bus";
 import type { Platform } from "../../platform/types";
 import { defineFeature } from "../../shared/define-feature";
+import { logError } from "../../shared/log";
 import {
   SIDEBAR_TOGGLE,
   SIDEBAR_VISIBILITY_CHANGED,
@@ -27,7 +28,7 @@ export default defineFeature<Deps>({
     });
 
     platform.registerShortcut("CommandOrControl+S", () => {
-      commands.send(SIDEBAR_TOGGLE, undefined).catch(console.error);
+      commands.send(SIDEBAR_TOGGLE, undefined).catch(logError("sidebar", "shortcut toggle"));
     });
   },
 

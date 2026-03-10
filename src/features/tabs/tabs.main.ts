@@ -3,11 +3,10 @@ import type { EventBus } from "../../bus/event-bus";
 import type { Collection, DataStore } from "../../data/types";
 import type { Bounds, Platform } from "../../platform/types";
 import { defineFeature } from "../../shared/define-feature";
+import { featureState } from "../../shared/feature-state";
+import { logError, logWarn } from "../../shared/log";
 import { TabScope } from "../../shared/tab-scope";
 import type { FolderId, TabId, WindowId, WorkspaceId } from "../../shared/types";
-import { getFoldersForLevel, setFolderOrder } from "../folders/folders.main";
-import { isPinned } from "../pinned-tabs/pinned-tabs.main";
-import { getCustomization } from "../tab-customization/tab-customization.main";
 import type {
   TAB_LOADING_CHANGED,
   TabLoadingChangedPayload,
@@ -21,10 +20,15 @@ import {
   TABS_CLOSED,
   TABS_CREATE,
   TABS_CREATED,
+  TABS_GET,
+  TABS_GET_FOR_WORKSPACE,
   TABS_LIST_CHANGED,
   TABS_NAVIGATE,
   TABS_REORDER,
   TABS_REPORT_CONTENT_BOUNDS,
+  TABS_SET_FOLDER_ID,
+  TABS_SET_ORDER,
+  TABS_SET_WORKSPACE,
   TABS_TOGGLE_BOOKMARK,
   TABS_UPDATED,
   type Tab,
@@ -61,6 +65,13 @@ interface Deps {
   getActiveTabId: () => TabId | undefined;
   setActiveTabId: (tabId: TabId | undefined) => void;
   getActiveWorkspaceId: () => WorkspaceId | undefined;
+  isPinned: (tabId: TabId) => boolean;
+  getCustomization: (tabId: TabId) => { fixedAddressDisabled: boolean } | undefined;
+  getFoldersForLevel: (
+    workspaceId: WorkspaceId,
+    parentFolderId: FolderId | null,
+  ) => { id: FolderId; order: number }[];
+  setFolderOrder: (folderId: FolderId, order: number) => void;
 }
 
 function resolveBuiltInTitle(url: string): string {
@@ -85,10 +96,11 @@ function resolveBuiltInTitle(url: string): string {
   return url;
 }
 
-// Shared state exposed via accessor for cross-feature queries
-let _tabs: Map<TabId, Tab> | undefined;
-let _attachTabListeners: ((tabId: TabId) => void) | undefined;
-let _persistTab: ((tab: Tab) => void) | undefined;
+const _state = featureState<{
+  tabs: Map<TabId, Tab>;
+  attachTabListeners: (tabId: TabId) => void;
+  persistTab: (tab: Tab) => void;
+}>("tabs");
 
 // Tracks the "fixed" URL for bookmarked tabs (URL at time of bookmarking).
 // Used to restore bookmarked tabs to their original address unless
@@ -113,6 +125,10 @@ export default defineFeature<Deps>({
       getActiveTabId,
       setActiveTabId,
       getActiveWorkspaceId,
+      isPinned,
+      getCustomization,
+      getFoldersForLevel,
+      setFolderOrder,
     } = deps;
 
     const tabs = new Map<TabId, Tab>();
@@ -120,11 +136,6 @@ export default defineFeature<Deps>({
     const tabScope = new TabScope();
     const tabsCollection: Collection<PersistedTab> = dataStore.collection("tabs");
     let builtInCounter = 0;
-
-    // Expose for getTabsForWorkspace, start(), and cross-feature accessors
-    _tabs = tabs;
-    _attachTabListeners = attachTabListeners;
-    _persistTab = persistTab;
 
     // ── Persistence helpers ──────────────────────────────────────────
 
@@ -136,11 +147,11 @@ export default defineFeature<Deps>({
       if (tab.bookmarked && fixedUrl && !getCustomization(tab.id)?.fixedAddressDisabled) {
         (persisted as PersistedTab).url = fixedUrl;
       }
-      tabsCollection.upsert(persisted as PersistedTab).catch(console.error);
+      tabsCollection.upsert(persisted as PersistedTab).catch(logError("tabs", "persist tab"));
     }
 
     function removePersistedTab(tabId: TabId): void {
-      tabsCollection.remove(tabId).catch(() => {});
+      tabsCollection.remove(tabId).catch(logWarn("tabs", "remove persisted tab"));
     }
 
     // ── Debounced list-changed emission ─────────────────────────────
@@ -182,10 +193,10 @@ export default defineFeature<Deps>({
     function attachTabListeners(tabId: TabId): void {
       tabScope.add(
         tabId,
-        platform.onTabEvent(tabId, "page-title-updated", (_event: unknown, title: unknown) => {
+        platform.onTabEvent(tabId, "page-title-updated", (_event, title) => {
           const tab = tabs.get(tabId);
-          if (!tab) return;
-          tab.title = title as string;
+          if (!tab || typeof title !== "string") return;
+          tab.title = title;
           events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
           persistTab(tab);
         }),
@@ -193,10 +204,10 @@ export default defineFeature<Deps>({
 
       tabScope.add(
         tabId,
-        platform.onTabEvent(tabId, "did-navigate", (_event: unknown, url: unknown) => {
+        platform.onTabEvent(tabId, "did-navigate", (_event, url) => {
           const tab = tabs.get(tabId);
-          if (!tab) return;
-          tab.url = url as string;
+          if (!tab || typeof url !== "string") return;
+          tab.url = url;
           events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
           persistTab(tab);
         }),
@@ -204,10 +215,10 @@ export default defineFeature<Deps>({
 
       tabScope.add(
         tabId,
-        platform.onTabEvent(tabId, "did-navigate-in-page", (_event: unknown, url: unknown) => {
+        platform.onTabEvent(tabId, "did-navigate-in-page", (_event, url) => {
           const tab = tabs.get(tabId);
-          if (!tab) return;
-          tab.url = url as string;
+          if (!tab || typeof url !== "string") return;
+          tab.url = url;
           events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
           persistTab(tab);
         }),
@@ -242,11 +253,11 @@ export default defineFeature<Deps>({
 
       tabScope.add(
         tabId,
-        platform.onTabEvent(tabId, "page-favicon-updated", (_event: unknown, favicons: unknown) => {
+        platform.onTabEvent(tabId, "page-favicon-updated", (_event, favicons) => {
           const tab = tabs.get(tabId);
-          if (!tab) return;
+          if (!tab || !Array.isArray(favicons)) return;
           const urls = favicons as string[];
-          if (urls.length > 0 && urls[0]) {
+          if (urls.length > 0 && typeof urls[0] === "string") {
             const faviconUrl = urls[0];
             tab.favicon = faviconUrl;
             events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
@@ -254,19 +265,25 @@ export default defineFeature<Deps>({
             // Convert localhost favicons to data URLs so they survive across sessions
             // (dev servers aren't running until the tab is activated)
             if (isLocalhostUrl(faviconUrl)) {
-              platform.fetchAsDataUrl(faviconUrl).then((dataUrl) => {
-                if (!dataUrl) return;
-                const current = tabs.get(tabId);
-                if (!current || current.favicon !== faviconUrl) return;
-                current.favicon = dataUrl;
-                events.emit(TABS_UPDATED, { tab: tabSnapshot(current) });
-                persistTab(current);
-              });
+              platform
+                .fetchAsDataUrl(faviconUrl)
+                .then((dataUrl) => {
+                  if (!dataUrl) return;
+                  const current = tabs.get(tabId);
+                  if (!current || current.favicon !== faviconUrl) return;
+                  current.favicon = dataUrl;
+                  events.emit(TABS_UPDATED, { tab: tabSnapshot(current) });
+                  persistTab(current);
+                })
+                .catch(logError("tabs", "fetch favicon as data url"));
             }
           }
         }),
       );
     }
+
+    // Expose for getTabsForWorkspace, start(), and cross-feature accessors
+    _state.init({ tabs, attachTabListeners, persistTab });
 
     // ── Command handlers ───────────────────────────────────────────
 
@@ -527,9 +544,40 @@ export default defineFeature<Deps>({
       }
     });
 
-    platform.registerShortcut("CommandOrControl+B", () => {
-      commands.send(TABS_TOGGLE_BOOKMARK, {}).catch(console.error);
+    commands.handle(TABS_GET, (payload) => tabs.get(payload.tabId));
+    commands.handle(TABS_GET_FOR_WORKSPACE, (payload) =>
+      [...tabs.values()].filter((t) => t.workspaceId === payload.workspaceId).map(tabSnapshot),
+    );
+    commands.handle(TABS_SET_FOLDER_ID, (payload) => {
+      const tab = tabs.get(payload.tabId);
+      if (!tab) return;
+      tab.folderId = payload.folderId;
+      persistTab(tab);
     });
+    commands.handle(TABS_SET_ORDER, (payload) => {
+      const tab = tabs.get(payload.tabId);
+      if (!tab) return;
+      tab.order = payload.order;
+      persistTab(tab);
+    });
+    commands.handle(TABS_SET_WORKSPACE, (payload) => {
+      const tab = tabs.get(payload.tabId);
+      if (!tab) return;
+      tab.workspaceId = payload.workspaceId;
+      events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
+      scheduleListChanged();
+      persistTab(tab);
+    });
+
+    const toggleBookmark = () => {
+      commands.send(TABS_TOGGLE_BOOKMARK, {}).catch(logError("tabs", "toggle bookmark shortcut"));
+    };
+    platform.registerShortcut("CommandOrControl+B", toggleBookmark);
+    platform.registerLocalShortcut("CommandOrControl+B", toggleBookmark);
+  },
+  teardown() {
+    _state.reset();
+    fixedUrls.clear();
   },
 });
 
@@ -549,7 +597,7 @@ export async function start(deps: Deps): Promise<void> {
   const toRestore: PersistedTab[] = [];
   for (const pt of persisted) {
     if (!pt.bookmarked && now - pt.lastAccessedAt > EPHEMERAL_TTL_MS) {
-      tabsCollection.remove(pt.id).catch(() => {});
+      tabsCollection.remove(pt.id).catch(logWarn("tabs", "remove expired ephemeral"));
     } else {
       toRestore.push(pt);
     }
@@ -560,9 +608,7 @@ export async function start(deps: Deps): Promise<void> {
   // Restore most recently accessed tab first so it becomes the active one
   toRestore.sort((a, b) => b.lastAccessedAt - a.lastAccessedAt);
 
-  if (!_tabs || !_attachTabListeners) {
-    throw new Error("tabs.main: register() must be called before start()");
-  }
+  const { tabs, attachTabListeners } = _state.get();
 
   // Recreate tabs with their original stable IDs
   const activeWsId = getActiveWorkspaceId();
@@ -586,8 +632,8 @@ export async function start(deps: Deps): Promise<void> {
         folderId: (pt.folderId as FolderId) ?? null,
       };
 
-      _tabs.set(tabId, tab);
-      _attachTabListeners(tabId);
+      tabs.set(tabId, tab);
+      attachTabListeners(tabId);
       if (pt.bookmarked) fixedUrls.set(tabId, pt.url);
 
       // Track first tab in active workspace for activation
@@ -609,35 +655,37 @@ export async function start(deps: Deps): Promise<void> {
 
   // Emit full list (enrich with fixedUrl for renderer)
   deps.events.emit(TABS_LIST_CHANGED, {
-    tabs: [..._tabs.values()].map(tabSnapshot),
+    tabs: [...tabs.values()].map(tabSnapshot),
   });
 }
 
 export function getTabsForWorkspace(workspaceId: WorkspaceId): Tab[] {
-  if (!_tabs) return [];
-  return [..._tabs.values()].filter((t) => t.workspaceId === workspaceId);
+  if (!_state.initialized) return [];
+  return [..._state.get().tabs.values()].filter((t) => t.workspaceId === workspaceId);
 }
 
 export function getTab(tabId: TabId): Tab | undefined {
-  return _tabs?.get(tabId);
+  return _state.initialized ? _state.get().tabs.get(tabId) : undefined;
 }
 
 export function getAllTabs(): Map<TabId, Tab> {
-  return _tabs ? new Map(_tabs) : new Map();
+  return _state.initialized ? new Map(_state.get().tabs) : new Map();
 }
 
 export function setTabFolderId(tabId: TabId, folderId: FolderId | null): void {
-  if (!_tabs || !_persistTab) return;
-  const tab = _tabs.get(tabId);
+  if (!_state.initialized) return;
+  const { tabs, persistTab } = _state.get();
+  const tab = tabs.get(tabId);
   if (!tab) return;
   tab.folderId = folderId;
-  _persistTab(tab);
+  persistTab(tab);
 }
 
 export function setTabOrder(tabId: TabId, order: number): void {
-  if (!_tabs || !_persistTab) return;
-  const tab = _tabs.get(tabId);
+  if (!_state.initialized) return;
+  const { tabs, persistTab } = _state.get();
+  const tab = tabs.get(tabId);
   if (!tab) return;
   tab.order = order;
-  _persistTab(tab);
+  persistTab(tab);
 }

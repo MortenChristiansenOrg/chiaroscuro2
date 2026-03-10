@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 // shell-composite: read-only cross-feature store access
 import { useTabCustomizationStore } from "../../../features/tab-customization/tab-customization.store";
 import { useTabsStore } from "../../../features/tabs/tabs.store";
@@ -17,7 +17,7 @@ export function ContentArea() {
   const isCustomizing = editingTabId !== null && editingTabId === activeTabId;
   const terminalVisible = useTerminalStore((s) => s.visible);
 
-  const reportBounds = useCallback(() => {
+  const reportBounds = () => {
     if (rafId.current !== null) return;
     rafId.current = requestAnimationFrame(() => {
       rafId.current = null;
@@ -32,17 +32,17 @@ export function ContentArea() {
         height: Math.round(rect.height),
       });
     });
-  }, []);
+  };
 
   // Report zero bounds when built-in tab active (hide any WCV)
-  const reportZeroBounds = useCallback(() => {
+  const reportZeroBounds = () => {
     window.chiaroscuro.sendCommand("tabs:report-content-bounds", {
       x: 0,
       y: 0,
       width: 0,
       height: 0,
     });
-  }, []);
+  };
 
   // biome-ignore lint/correctness/useExhaustiveDependencies: terminalVisible changes which element to observe for bounds
   useEffect(() => {
@@ -71,7 +71,7 @@ export function ContentArea() {
       observer.disconnect();
       window.removeEventListener("resize", reportBounds);
     };
-  }, [reportBounds, reportZeroBounds, isBuiltIn, isCustomizing, terminalVisible]);
+  }, [isBuiltIn, isCustomizing, terminalVisible]);
 
   // Show terminal only for non-built-in, non-customizing tabs
   const showTerminal = terminalVisible && !isBuiltIn && !isCustomizing && !!activeTabId;

@@ -3,6 +3,7 @@ import type { TabId } from "../../shared/types";
 // ── Command names ────────────────────────────────────────────────
 export const PINNED_TABS_TOGGLE_PIN = "pinned-tabs:toggle-pin" as const;
 export const PINNED_TABS_ACTIVATE = "pinned-tabs:activate" as const;
+export const PINNED_TABS_IS_PINNED = "pinned-tabs:is-pinned" as const;
 
 // ── Event names ──────────────────────────────────────────────────
 export const PINNED_TABS_CHANGED = "pinned-tabs:changed" as const;
@@ -47,6 +48,7 @@ export interface PinnedTabsActiveChangedEvent {
 export type PinnedTabsCommands = {
   [PINNED_TABS_TOGGLE_PIN]: { payload: PinnedTabsTogglePinPayload; response: undefined };
   [PINNED_TABS_ACTIVATE]: { payload: PinnedTabsActivatePayload; response: undefined };
+  [PINNED_TABS_IS_PINNED]: { payload: { tabId: TabId }; response: boolean };
 };
 
 // ── Event registry ───────────────────────────────────────────────

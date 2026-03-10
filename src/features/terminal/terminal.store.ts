@@ -1,13 +1,12 @@
 import { create } from "zustand";
+import { typedOnEvent } from "../../shared/typed-on-event";
 import type { TabId } from "../../shared/types";
 import {
   TERMINAL_CLEARED,
   TERMINAL_OUTPUT,
   TERMINAL_VISIBILITY_CHANGED,
-  type TerminalClearedEvent,
+  type TerminalEvents,
   type TerminalLine,
-  type TerminalOutputEvent,
-  type TerminalVisibilityChangedEvent,
 } from "./terminal.shared";
 
 const MAX_LINES = 1000;
@@ -25,18 +24,17 @@ export const useTerminalStore = create<TerminalState>()(() => ({
 export function subscribeToEvents(
   onEvent: (name: string, callback: (payload: unknown) => void) => () => void,
 ): () => void {
+  const on = typedOnEvent<TerminalEvents>(onEvent);
   const unsubs: (() => void)[] = [];
 
   unsubs.push(
-    onEvent(TERMINAL_VISIBILITY_CHANGED, (payload) => {
-      const { visible } = payload as TerminalVisibilityChangedEvent;
+    on(TERMINAL_VISIBILITY_CHANGED, ({ visible }) => {
       useTerminalStore.setState({ visible });
     }),
   );
 
   unsubs.push(
-    onEvent(TERMINAL_OUTPUT, (payload) => {
-      const { tabId, line } = payload as TerminalOutputEvent;
+    on(TERMINAL_OUTPUT, ({ tabId, line }) => {
       useTerminalStore.setState((s) => {
         const next = new Map(s.buffers);
         const lines = [...(next.get(tabId) ?? []), line];
@@ -50,8 +48,7 @@ export function subscribeToEvents(
   );
 
   unsubs.push(
-    onEvent(TERMINAL_CLEARED, (payload) => {
-      const { tabId } = payload as TerminalClearedEvent;
+    on(TERMINAL_CLEARED, ({ tabId }) => {
       useTerminalStore.setState((s) => {
         const next = new Map(s.buffers);
         next.delete(tabId);

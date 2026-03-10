@@ -1,13 +1,20 @@
+import { useShallow } from "zustand/react/shallow";
 import { Icon } from "../../renderer/src/components/Icon";
 import {
   DOWNLOADS_CANCEL,
   DOWNLOADS_PAUSE,
   DOWNLOADS_RESUME,
   type Download,
+  type DownloadsCommands,
 } from "./downloads.shared";
 import { useDownloadsStore } from "./downloads.store";
 
-function sendCommand(name: string, payload: unknown) {
+type UsedCommands = Pick<
+  DownloadsCommands,
+  typeof DOWNLOADS_CANCEL | typeof DOWNLOADS_PAUSE | typeof DOWNLOADS_RESUME
+>;
+
+function sendCommand<K extends keyof UsedCommands>(name: K, payload: UsedCommands[K]["payload"]) {
   void window.chiaroscuro.sendCommand(name, payload);
 }
 
@@ -178,9 +185,9 @@ export function DownloadItem({ download }: { download: Download }) {
 }
 
 export function DownloadsSection() {
-  const downloads = useDownloadsStore((s) => s.downloads);
+  const downloads = useDownloadsStore(useShallow((s) => [...s.downloads.values()]));
 
-  if (downloads.size === 0) return null;
+  if (downloads.length === 0) return null;
 
   return (
     <div style={{ padding: "0.25rem 0" }}>
@@ -206,7 +213,7 @@ export function DownloadsSection() {
       </div>
 
       {/* Download items */}
-      {[...downloads.values()].map((dl) => (
+      {downloads.map((dl) => (
         <DownloadItem key={dl.id} download={dl} />
       ))}
     </div>

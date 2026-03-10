@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { Icon } from "../../renderer/src/components/Icon";
 import {
   INSTALLER_ALLOW_PROTOCOL,
@@ -6,11 +6,24 @@ import {
   INSTALLER_CHECK_FOR_UPDATES,
   INSTALLER_DENY_PROTOCOL,
   INSTALLER_DISMISS_UPDATE,
+  type InstallerCommands,
 } from "./installer.shared";
 import { useInstallerStore } from "./installer.store";
 
-function sendCommand(name: string, payload: unknown) {
-  return window.chiaroscuro.sendCommand(name, payload);
+type UsedCommands = Pick<
+  InstallerCommands,
+  | typeof INSTALLER_CHECK_FOR_UPDATES
+  | typeof INSTALLER_APPLY_UPDATE
+  | typeof INSTALLER_DISMISS_UPDATE
+  | typeof INSTALLER_ALLOW_PROTOCOL
+  | typeof INSTALLER_DENY_PROTOCOL
+>;
+
+function sendCommand<K extends keyof UsedCommands>(
+  name: K,
+  payload: UsedCommands[K]["payload"],
+): Promise<UsedCommands[K]["response"]> {
+  return window.chiaroscuro.sendCommand(name, payload) as Promise<UsedCommands[K]["response"]>;
 }
 
 export function UpdateNotification() {
@@ -124,45 +137,42 @@ export function ProtocolDialog() {
   const dialogRef = useRef<HTMLDivElement>(null);
   const requestId = request?.requestId;
 
-  const dismiss = useCallback((id: string) => {
+  const dismiss = (id: string) => {
     useInstallerStore.setState((state) =>
       state.protocolRequest?.requestId === id ? { protocolRequest: null } : {},
     );
-  }, []);
+  };
 
-  const handleDeny = useCallback(() => {
+  const handleDeny = () => {
     if (!requestId) return;
     void sendCommand(INSTALLER_DENY_PROTOCOL, { requestId })
       .then(() => dismiss(requestId))
       .catch(console.error);
-  }, [requestId, dismiss]);
+  };
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "Escape") {
-        handleDeny();
-        return;
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Escape") {
+      handleDeny();
+      return;
+    }
+    if (e.key === "Tab") {
+      const el = dialogRef.current;
+      if (!el) return;
+      const focusable = el.querySelectorAll<HTMLElement>(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
+      );
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (!first || !last) return;
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
       }
-      if (e.key === "Tab") {
-        const el = dialogRef.current;
-        if (!el) return;
-        const focusable = el.querySelectorAll<HTMLElement>(
-          'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])',
-        );
-        const first = focusable[0];
-        const last = focusable[focusable.length - 1];
-        if (!first || !last) return;
-        if (e.shiftKey && document.activeElement === first) {
-          e.preventDefault();
-          last.focus();
-        } else if (!e.shiftKey && document.activeElement === last) {
-          e.preventDefault();
-          first.focus();
-        }
-      }
-    },
-    [handleDeny],
-  );
+    }
+  };
 
   useEffect(() => {
     if (!request) return;

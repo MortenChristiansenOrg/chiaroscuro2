@@ -2,6 +2,7 @@ import type { CommandBus } from "../../bus/command-bus";
 import type { EventBus } from "../../bus/event-bus";
 import type { Platform } from "../../platform/types";
 import { defineFeature } from "../../shared/define-feature";
+import { logError } from "../../shared/log";
 import type { TabId } from "../../shared/types";
 import type { TabsEvents } from "../tabs/tabs.shared";
 import { TABS_ACTIVATED, TABS_CLOSED } from "../tabs/tabs.shared";
@@ -95,11 +96,15 @@ export default defineFeature<Deps>({
 
     // Register keyboard shortcut for ½ key (the key left of 1 on Nordic keyboards)
     const toggleTerminal = () => {
-      commands.send(TERMINAL_TOGGLE, undefined).catch(console.error);
+      commands.send(TERMINAL_TOGGLE, undefined).catch(logError("terminal", "shortcut toggle"));
     };
     // ½ is non-ASCII — only works as a local shortcut (before-input-event),
     // globalShortcut rejects non-ASCII accelerators.
     platform.registerLocalShortcut("½", toggleTerminal);
+  },
+
+  teardown() {
+    _reset();
   },
 
   start(deps) {

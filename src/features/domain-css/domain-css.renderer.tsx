@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from "react";
+import { useEffect } from "react";
 import type { BuiltInPageProps } from "../../renderer/src/components/BuiltInPage";
 import { Icon } from "../../renderer/src/components/Icon";
 import {
@@ -43,17 +43,17 @@ function CssControls({ domain }: { domain: string }) {
   const enabled = state?.enabled ?? false;
   const hasFile = state?.hasFile ?? false;
 
-  const handleToggle = useCallback(() => {
+  const handleToggle = () => {
     sendCommand(DOMAIN_CSS_TOGGLE, { domain });
-  }, [domain]);
+  };
 
-  const handleEdit = useCallback(() => {
+  const handleEdit = () => {
     sendCommand(DOMAIN_CSS_EDIT, { domain });
-  }, [domain]);
+  };
 
-  const handleRemove = useCallback(() => {
+  const handleRemove = () => {
     sendCommand(DOMAIN_CSS_REMOVE, { domain });
-  }, [domain]);
+  };
 
   return (
     <section id="domain-customization-css">

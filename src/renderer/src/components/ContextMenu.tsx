@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useRef } from "react";
 import { CONTEXT_MENU_SHOW } from "../../../features/context-menu/context-menu.shared";
 
 // ── Types ───────────────────────────────────────────────────────
@@ -23,7 +23,7 @@ export function useContextMenu(): {
 } {
   const callbacksRef = useRef<(() => void)[]>([]);
 
-  const open = useCallback((items: ContextMenuItem[], e: React.MouseEvent) => {
+  const open = (items: ContextMenuItem[], e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
 
@@ -42,7 +42,7 @@ export function useContextMenu(): {
         }
       })
       .catch(() => {});
-  }, []);
+  };
 
   // portal kept for API compatibility — no longer renders anything
   return { open, portal: null };

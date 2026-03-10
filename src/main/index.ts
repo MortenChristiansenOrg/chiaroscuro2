@@ -3,7 +3,7 @@ import { BrowserWindow, Menu, app, ipcMain, screen } from "electron";
 import { CommandBus } from "../bus/command-bus";
 import { EventBus } from "../bus/event-bus";
 import { bridgeBusToIpc } from "../bus/ipc-main-bridge";
-import type { MergeRegistries } from "../bus/types";
+import type { CommandRegistry, EventRegistry, MergeRegistries } from "../bus/types";
 import { createDataStore } from "../data/store";
 import type { DataStore } from "../data/types";
 import appState from "../features/app-state/app-state.main";
@@ -19,6 +19,13 @@ import type {
   ContextMenuCommands,
   ContextMenuEvents,
 } from "../features/context-menu/context-menu.shared";
+import debugServer from "../features/debug-server/debug-server.main";
+import { getActualPort } from "../features/debug-server/debug-server.main";
+import type {
+  DebugServerCommands,
+  DebugServerEvents,
+} from "../features/debug-server/debug-server.shared";
+import { registerDebugState } from "../features/debug-server/state-providers";
 import devTools from "../features/dev-tools/dev-tools.main";
 import type { DevToolsCommands, DevToolsEvents } from "../features/dev-tools/dev-tools.shared";
 import domainCss from "../features/domain-css/domain-css.main";
@@ -28,7 +35,11 @@ import type { DownloadsCommands, DownloadsEvents } from "../features/downloads/d
 import findText from "../features/find-text/find-text.main";
 import type { FindTextCommands, FindTextEvents } from "../features/find-text/find-text.shared";
 import folders from "../features/folders/folders.main";
-import { start as startFolders } from "../features/folders/folders.main";
+import {
+  getFoldersForLevel,
+  setFolderOrder,
+  start as startFolders,
+} from "../features/folders/folders.main";
 import type { FoldersCommands, FoldersEvents } from "../features/folders/folders.shared";
 import installer from "../features/installer/installer.main";
 import type { InstallerCommands, InstallerEvents } from "../features/installer/installer.shared";
@@ -39,23 +50,37 @@ import type {
   LocalWebAppEvents,
 } from "../features/local-web-app/local-web-app.shared";
 import pinnedTabs from "../features/pinned-tabs/pinned-tabs.main";
-import { start as startPinnedTabs } from "../features/pinned-tabs/pinned-tabs.main";
+import { isPinned, start as startPinnedTabs } from "../features/pinned-tabs/pinned-tabs.main";
 import type {
   PinnedTabsCommands,
   PinnedTabsEvents,
 } from "../features/pinned-tabs/pinned-tabs.shared";
 import settings from "../features/settings/settings.main";
-import type { SettingsCommands, SettingsEvents } from "../features/settings/settings.shared";
+import {
+  SETTINGS_GET,
+  type SettingsCommands,
+  type SettingsEvents,
+} from "../features/settings/settings.shared";
 import sidebar from "../features/sidebar/sidebar.main";
 import type { SidebarCommands, SidebarEvents } from "../features/sidebar/sidebar.shared";
 import tabCustomization from "../features/tab-customization/tab-customization.main";
-import { start as startTabCustomization } from "../features/tab-customization/tab-customization.main";
+import {
+  getCustomization,
+  start as startTabCustomization,
+} from "../features/tab-customization/tab-customization.main";
 import type {
   TabCustomizationCommands,
   TabCustomizationEvents,
 } from "../features/tab-customization/tab-customization.shared";
 import tabs from "../features/tabs/tabs.main";
-import { getAllTabs, getTab, start as startTabs } from "../features/tabs/tabs.main";
+import {
+  getAllTabs,
+  getTab,
+  getTabsForWorkspace,
+  setTabFolderId,
+  setTabOrder,
+  start as startTabs,
+} from "../features/tabs/tabs.main";
 import type { TabsCommands, TabsEvents } from "../features/tabs/tabs.shared";
 import terminal from "../features/terminal/terminal.main";
 import type { TerminalCommands, TerminalEvents } from "../features/terminal/terminal.shared";
@@ -67,7 +92,6 @@ import type {
   WindowChromeEvents,
 } from "../features/window-chrome/window-chrome.shared";
 import workspaces from "../features/workspaces/workspaces.main";
-import { start as startWorkspaces } from "../features/workspaces/workspaces.main";
 import type {
   WorkspacesCommands,
   WorkspacesEvents,
@@ -75,6 +99,7 @@ import type {
 import zoom from "../features/zoom/zoom.main";
 import type { ZoomCommands, ZoomEvents } from "../features/zoom/zoom.shared";
 import { ElectronPlatform } from "../platform/electron";
+import { logError } from "../shared/log";
 import type { TabId, WindowId, WorkspaceId } from "../shared/types";
 
 // Log uncaught exceptions to stderr for debugging
@@ -111,6 +136,7 @@ type AllCommands = MergeRegistries<
     TerminalCommands,
     LocalWebAppCommands,
     InstallerCommands,
+    DebugServerCommands,
   ]
 >;
 
@@ -136,6 +162,7 @@ type AllEvents = MergeRegistries<
     TerminalEvents,
     LocalWebAppEvents,
     InstallerEvents,
+    DebugServerEvents,
   ]
 >;
 
@@ -151,6 +178,15 @@ const isDev = !!process.env.ELECTRON_RENDERER_URL;
 const platform = new ElectronPlatform(() => activeWindowId);
 const dataDir = process.env.DATA_DIR ?? path.join(app.getPath("userData"), "data");
 const dataStore: DataStore = createDataStore(dataDir);
+
+function initOverlays(): void {
+  if (!activeWindowId) return;
+  if (process.env.NODE_ENV !== "test") {
+    platform.initTooltipOverlay(activeWindowId);
+    platform.initContextMenuOverlay(activeWindowId);
+  }
+  platform.initCommandPaletteOverlay(activeWindowId);
+}
 
 function createWindow(windowBounds?: {
   x: number;
@@ -225,26 +261,54 @@ app.whenReady().then(async () => {
   await dataStore.initialize();
 
   // Phase 1: register all command handlers
+  // Debug server first — recorder patches capture all subsequent registrations
+  debugServer.register({
+    ...deps,
+    commandBus: commands as unknown as CommandBus<CommandRegistry>,
+    eventBus: events as unknown as EventBus<EventRegistry>,
+  });
+
   appState.register(deps);
   windowChrome.register(deps);
-  tabs.register(deps);
-  workspaces.register(deps);
-  pinnedTabs.register(deps);
+  tabs.register({ ...deps, isPinned, getCustomization, getFoldersForLevel, setFolderOrder });
+  workspaces.register({ ...deps, getTabsForWorkspace });
+  pinnedTabs.register({ ...deps, getCustomization });
   sidebar.register(deps);
   commandPalette.register(deps);
   settings.register(deps);
   tooltip.register(deps);
   contextMenu.register(deps);
-  folders.register(deps);
+  folders.register({ ...deps, getTab, getTabsForWorkspace, setTabFolderId, setTabOrder });
   zoom.register(deps);
   devTools.register(deps);
   domainCss.register({ ...deps, dataDir, getTabsSnapshot: getAllTabs });
   downloads.register(deps);
   findText.register(deps);
-  tabCustomization.register({ ...deps, getTab });
+  tabCustomization.register({ ...deps, getTab, isPinned });
   terminal.register(deps);
   localWebApp.register(deps);
   installer.register(deps);
+
+  // Register debug state providers
+  registerDebugState("tabs", () => {
+    const all: Record<string, unknown> = {};
+    for (const [id, tab] of getAllTabs()) all[id] = tab;
+    return { all, activeTabId };
+  });
+  registerDebugState("workspaces", () => ({ activeWorkspaceId }));
+  registerDebugState("settings", () => commands.send(SETTINGS_GET, undefined).catch(() => null));
+  registerDebugState("window", () => {
+    const win =
+      (activeWindowId ? BrowserWindow.fromId(Number(activeWindowId)) : null) ??
+      BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && !w.getParentWindow()) ??
+      null;
+    return {
+      activeWindowId,
+      bounds: win && !win.isDestroyed() ? win.getBounds() : null,
+      maximized: win && !win.isDestroyed() ? win.isMaximized() : null,
+    };
+  });
+  registerDebugState("debug-server", () => ({ actualPort: getActualPort() }));
 
   // Load persisted layout state before creating the window
   const getDisplayBounds = () => screen.getAllDisplays().map((d) => d.workArea);
@@ -258,27 +322,23 @@ app.whenReady().then(async () => {
   // module-import time, so registering after risks losing the signal.
   ipcMain.once("renderer:ready", async () => {
     appState.start?.(deps);
-    await startWorkspaces(deps);
+    await workspaces.start?.({ ...deps, getTabsForWorkspace });
     windowChrome.start?.(deps);
     await installer.start?.(deps);
-    await startTabs(deps);
-    await startPinnedTabs(deps);
+    await startTabs({ ...deps, isPinned, getCustomization, getFoldersForLevel, setFolderOrder });
+    await startPinnedTabs({ ...deps, getCustomization });
     sidebar.start?.(deps);
-    await startFolders(deps);
+    await startFolders({ ...deps, getTab, getTabsForWorkspace, setTabFolderId, setTabOrder });
     await settings.start?.(deps);
     await domainCss.start?.({ ...deps, dataDir, getTabsSnapshot: getAllTabs });
     downloads.start?.(deps);
-    await startTabCustomization({ ...deps, getTab });
+    await startTabCustomization({ ...deps, getTab, isPinned });
     terminal.start?.(deps);
     await startLocalWebApp(deps);
   });
 
   const win = createWindow(appStateData.windowBounds);
-
-  if (activeWindowId && process.env.NODE_ENV !== "test") {
-    platform.initTooltipOverlay(activeWindowId);
-    platform.initContextMenuOverlay(activeWindowId);
-  }
+  initOverlays();
 
   // Activate keyboard shortcuts immediately (window is focused on creation)
   // and toggle on focus/blur so they don't intercept keys from other apps.
@@ -295,17 +355,21 @@ app.whenReady().then(async () => {
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
       createWindow();
+      initOverlays();
     }
   });
 });
 
 app.on("before-quit", () => {
   platform.deactivateShortcuts();
+  debugServer.teardown?.();
   localWebApp.teardown?.();
   installer.teardown?.();
   // Flush app-state immediately before data store teardown
-  commands.send("app-state:save", undefined).catch(console.error);
-  dataStore.destroy().catch(console.error);
+  commands
+    .send("app-state:save", undefined)
+    .catch(logError("main", "flush app-state"))
+    .finally(() => dataStore.destroy().catch(logError("main", "destroy datastore")));
 });
 
 app.on("window-all-closed", () => {
