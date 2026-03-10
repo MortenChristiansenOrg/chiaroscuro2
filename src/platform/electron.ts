@@ -55,30 +55,32 @@ const COMMAND_PALETTE_HTML = `<!DOCTYPE html><html><head><meta charset="utf-8"><
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{background:transparent;overflow:hidden;
   font-family:"Plus Jakarta Sans",-apple-system,system-ui,sans-serif}
-#backdrop{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
-  background:oklch(0 0 0/.4);opacity:0;transition:opacity .2s cubic-bezier(0,0,.2,1)}
+#backdrop{position:fixed;inset:0;display:flex;align-items:flex-start;justify-content:center;
+  padding-top:min(18vh,160px);border-radius:8px;
+  background:oklch(0 0 0/.4);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px);
+  opacity:0;transition:opacity .2s cubic-bezier(0,0,.2,1)}
 #backdrop.open{opacity:1}
 #panel{width:560px;display:flex;flex-direction:column;
-  background:oklch(.45 .04 250/.12);backdrop-filter:blur(12px) saturate(1.4);
-  -webkit-backdrop-filter:blur(12px) saturate(1.4);
-  border-radius:12px;border:1px solid oklch(1 0 0/.07);
-  box-shadow:0 .25rem 1.25rem oklch(0 0 0/.35);
-  transform:scale(.96) translateY(-8px);opacity:0;
-  transition:transform .2s cubic-bezier(0,0,.2,1),opacity .2s cubic-bezier(0,0,.2,1)}
-#backdrop.open #panel{transform:scale(1) translateY(0);opacity:1}
+  background:rgba(22,22,26,.94);
+  border-radius:16px;border:1px solid oklch(1 0 0/.08);
+  box-shadow:0 8px 32px oklch(0 0 0/.4),0 2px 8px oklch(0 0 0/.2),
+    inset 0 .5px 0 oklch(1 0 0/.1),inset 0 0 0 .5px oklch(1 0 0/.06);
+  opacity:0;transition:opacity .15s cubic-bezier(0,0,.2,1)}
+#backdrop.open #panel{opacity:1}
 #input{width:100%;background:transparent;border:none;outline:none;
-  color:oklch(1 0 0/.95);font-size:.875rem;padding:1rem 1.25rem;font-family:inherit}
+  color:oklch(1 0 0/.95);font-size:.875rem;padding:14px 18px;font-family:inherit}
 #input::placeholder{color:oklch(1 0 0/.3)}
-#res{padding:0 1.25rem .5rem;font-size:.6875rem;color:oklch(1 0 0/.4);display:none}
+#res{padding:0 18px 8px;font-size:.6875rem;color:oklch(1 0 0/.4);display:none}
 #res strong{color:oklch(1 0 0/.55)}
 #suggestions{border-top:1px solid oklch(1 0 0/.07);max-height:240px;overflow-y:auto;display:none}
-.sg{display:flex;align-items:center;gap:.625rem;padding:.5rem 1.25rem;cursor:pointer;
-  font-size:.6875rem}
+.sg{display:flex;align-items:center;gap:.625rem;padding:7px 18px;cursor:pointer;
+  font-size:.6875rem;border-radius:7px;margin:2px 5px;
+  transition:background 80ms ease-out}
 .sg:hover,.sg.sel{background:oklch(1 0 0/.1)}
 .sg .title{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:oklch(1 0 0/.55)}
 .sg .url{flex-shrink:0;max-width:200px;overflow:hidden;text-overflow:ellipsis;
   white-space:nowrap;color:oklch(1 0 0/.4);font-size:.5625rem}
-#hints{padding:.5rem 1.25rem .75rem;font-size:.6875rem;color:oklch(1 0 0/.4);
+#hints{padding:8px 18px 10px;font-size:.6875rem;color:oklch(1 0 0/.3);
   border-top:1px solid oklch(1 0 0/.07)}
 </style></head><body>
 <div id="backdrop" onclick="closePalette()">
