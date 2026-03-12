@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import path from "node:path";
 import { BrowserWindow, Menu, app, ipcMain, screen } from "electron";
 import { CommandBus } from "../bus/command-bus";
@@ -63,6 +64,8 @@ import {
 } from "../features/settings/settings.shared";
 import sidebar from "../features/sidebar/sidebar.main";
 import type { SidebarCommands, SidebarEvents } from "../features/sidebar/sidebar.shared";
+import sso from "../features/sso/sso.main";
+import type { SsoCommands, SsoEvents, SsoSettings } from "../features/sso/sso.shared";
 import tabCustomization from "../features/tab-customization/tab-customization.main";
 import {
   getCustomization,
@@ -137,6 +140,7 @@ type AllCommands = MergeRegistries<
     LocalWebAppCommands,
     InstallerCommands,
     DebugServerCommands,
+    SsoCommands,
   ]
 >;
 
@@ -163,6 +167,7 @@ type AllEvents = MergeRegistries<
     LocalWebAppEvents,
     InstallerEvents,
     DebugServerEvents,
+    SsoEvents,
   ]
 >;
 
@@ -178,6 +183,33 @@ const isDev = !!process.env.ELECTRON_RENDERER_URL;
 const platform = new ElectronPlatform(() => activeWindowId);
 const dataDir = process.env.DATA_DIR ?? path.join(app.getPath("userData"), "data");
 const dataStore: DataStore = createDataStore(dataDir);
+
+// ── Boot-time SSO ───────────────────────────────────────────────
+// Command-line switches must be set before app ready. Read settings.json
+// synchronously to apply SSO flags before Chromium initializes.
+const ssoBootState: SsoSettings = { windowsAuth: false, azureAd: false };
+if (process.platform === "win32") {
+  try {
+    const settingsPath = path.join(dataDir, "settings.json");
+    if (fs.existsSync(settingsPath)) {
+      const raw = JSON.parse(fs.readFileSync(settingsPath, "utf-8")) as Record<string, unknown>;
+      const persisted = raw.sso as SsoSettings | undefined;
+      if (persisted) {
+        if (persisted.windowsAuth) {
+          ssoBootState.windowsAuth = true;
+          app.commandLine.appendSwitch("auth-server-whitelist", "*");
+          app.commandLine.appendSwitch("auth-negotiate-delegate-whitelist", "*");
+        }
+        if (persisted.azureAd) {
+          ssoBootState.azureAd = true;
+          app.commandLine.appendSwitch("enable-features", "CloudAPAuthEnabled");
+        }
+      }
+    }
+  } catch {
+    // Corrupted settings — proceed with defaults
+  }
+}
 
 function initOverlays(): void {
   if (!activeWindowId) return;
@@ -288,6 +320,7 @@ app.whenReady().then(async () => {
   terminal.register(deps);
   localWebApp.register(deps);
   installer.register(deps);
+  sso.register({ ...deps, ssoBootState, isWindows: process.platform === "win32" });
 
   // Register debug state providers
   registerDebugState("tabs", () => {
@@ -335,6 +368,7 @@ app.whenReady().then(async () => {
     await startTabCustomization({ ...deps, getTab, isPinned });
     terminal.start?.(deps);
     await startLocalWebApp(deps);
+    await sso.start?.({ ...deps, ssoBootState, isWindows: process.platform === "win32" });
   });
 
   const win = createWindow(appStateData.windowBounds);

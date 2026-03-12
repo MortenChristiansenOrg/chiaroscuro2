@@ -1,7 +1,10 @@
+import { Suspense } from "react";
 import { Icon } from "../../renderer/src/components/Icon";
 import {
   SettingItem,
   SettingsLayout,
+  type SettingsSectionProps,
+  getSettingsSections,
   settingsAddButtonStyle,
   settingsCategoryHeadingStyle,
   settingsColumnHeaderStyle,
@@ -130,16 +133,10 @@ function ProviderEditor({
   );
 }
 
-// ── SettingsContent ─────────────────────────────────────────────
+// ── SearchSettings (registered section) ─────────────────────────
 
-function SearchSettings({
-  settings,
-  onSettingsChange,
-}: {
-  settings: Settings;
-  onSettingsChange: (settings: Settings) => void;
-}) {
-  const searchQuery = useSettingsStore((s) => s.searchQuery);
+export function SearchSettings({ searchQuery }: SettingsSectionProps) {
+  const settings = useSettingsStore((s) => s.settings);
   const lowerQuery = searchQuery.toLowerCase();
 
   const showSearch =
@@ -149,20 +146,12 @@ function SearchSettings({
     "default search".includes(lowerQuery) ||
     "bang".includes(lowerQuery);
 
-  if (searchQuery && !showSearch) {
-    return (
-      <div
-        style={{
-          padding: "2rem",
-          textAlign: "center",
-          color: "var(--muted-foreground)",
-          fontSize: "var(--text-sm)",
-        }}
-      >
-        No settings match &ldquo;{searchQuery}&rdquo;
-      </div>
-    );
-  }
+  if (searchQuery && !showSearch) return null;
+  if (!settings) return null;
+
+  const handleChange = (updated: Settings) => {
+    saveSettings(updated);
+  };
 
   return (
     <section id="settings-search">
@@ -177,7 +166,7 @@ function SearchSettings({
           onChange={(providers) => {
             const hasDefault = providers.some((p) => p.bang === settings.defaultSearchProviderId);
             const fallbackDefault = providers.find((p) => p.bang)?.bang ?? "";
-            onSettingsChange({
+            handleChange({
               ...settings,
               searchProviders: providers,
               defaultSearchProviderId: hasDefault
@@ -194,9 +183,7 @@ function SearchSettings({
       >
         <select
           value={settings.defaultSearchProviderId}
-          onChange={(e) =>
-            onSettingsChange({ ...settings, defaultSearchProviderId: e.target.value })
-          }
+          onChange={(e) => handleChange({ ...settings, defaultSearchProviderId: e.target.value })}
           style={settingsSelectStyle}
         >
           {settings.searchProviders
@@ -212,16 +199,10 @@ function SearchSettings({
   );
 }
 
-// ── DeveloperSettings ────────────────────────────────────────────
+// ── DeveloperSettings (registered section) ───────────────────────
 
-function DeveloperSettings({
-  settings,
-  onSettingsChange,
-}: {
-  settings: Settings;
-  onSettingsChange: (settings: Settings) => void;
-}) {
-  const searchQuery = useSettingsStore((s) => s.searchQuery);
+export function DeveloperSettings({ searchQuery }: SettingsSectionProps) {
+  const settings = useSettingsStore((s) => s.settings);
   const lowerQuery = searchQuery.toLowerCase();
 
   const showDeveloper =
@@ -231,6 +212,11 @@ function DeveloperSettings({
     "port".includes(lowerQuery);
 
   if (searchQuery && !showDeveloper) return null;
+  if (!settings) return null;
+
+  const handleChange = (updated: Settings) => {
+    saveSettings(updated);
+  };
 
   // In dev mode, debug server is always on
   const isDev = window.location.protocol !== "file:";
@@ -258,7 +244,7 @@ function DeveloperSettings({
               checked={isDev || settings.debugServer.enabled}
               disabled={isDev}
               onChange={(e) =>
-                onSettingsChange({
+                handleChange({
                   ...settings,
                   debugServer: { ...settings.debugServer, enabled: e.target.checked },
                 })
@@ -279,7 +265,7 @@ function DeveloperSettings({
           onChange={(e) => {
             const port = Number.parseInt(e.target.value, 10);
             if (port > 0 && port < 65536) {
-              onSettingsChange({
+              handleChange({
                 ...settings,
                 debugServer: { ...settings.debugServer, port },
               });
@@ -296,37 +282,12 @@ function DeveloperSettings({
 
 // ── SettingsPage (root) ─────────────────────────────────────────
 
-const categories = [
-  { id: "search", label: "Search" },
-  { id: "developer", label: "Developer" },
-];
-
 export default function SettingsPage(_props: { params: Record<string, string> }) {
-  const settings = useSettingsStore((s) => s.settings);
   const searchQuery = useSettingsStore((s) => s.searchQuery);
   const setSearchQuery = useSettingsStore((s) => s.setSearchQuery);
+  const sections = getSettingsSections();
+  const categories = sections.map((s) => ({ id: s.id, label: s.label }));
   const { scrollRef, activeCategory } = useScrollSpy("settings");
-
-  const handleSettingsChange = (updated: Settings) => {
-    saveSettings(updated);
-  };
-
-  if (!settings) {
-    return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          height: "100%",
-          color: "var(--muted-foreground)",
-          fontSize: "var(--text-sm)",
-        }}
-      >
-        Loading settings...
-      </div>
-    );
-  }
 
   return (
     <SettingsLayout
@@ -338,8 +299,11 @@ export default function SettingsPage(_props: { params: Record<string, string> })
       scrollRef={scrollRef}
       activeCategory={activeCategory}
     >
-      <SearchSettings settings={settings} onSettingsChange={handleSettingsChange} />
-      <DeveloperSettings settings={settings} onSettingsChange={handleSettingsChange} />
+      {sections.map((section) => (
+        <Suspense key={section.id} fallback={null}>
+          <section.component searchQuery={searchQuery} />
+        </Suspense>
+      ))}
     </SettingsLayout>
   );
 }

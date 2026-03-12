@@ -15,6 +15,7 @@ import "../../features/tab-customization/tab-customization.feature";
 import "../../features/terminal/terminal.feature";
 import "../../features/local-web-app/local-web-app.feature";
 import "../../features/installer/installer.feature";
+import "../../features/sso/sso.feature";
 
 // All subscriptions wired — tell main process to start emitting events (phase 2)
 import { Shell, signalReady } from "./Shell";

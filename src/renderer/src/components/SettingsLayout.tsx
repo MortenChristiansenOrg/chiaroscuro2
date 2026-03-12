@@ -1,6 +1,38 @@
-import { type ReactNode, type RefObject, useEffect, useRef, useState } from "react";
+import {
+  type ComponentType,
+  type ReactNode,
+  type RefObject,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import type { FaIconForStyle } from "../../../shared/fa-icons.generated";
 import { Icon } from "./Icon";
+
+// ── Settings section registry ───────────────────────────────────
+
+export interface SettingsSectionProps {
+  searchQuery: string;
+}
+
+export interface SettingsSectionRegistration {
+  id: string;
+  label: string;
+  order: number;
+  searchTerms: string[];
+  component: ComponentType<SettingsSectionProps>;
+}
+
+const sections: SettingsSectionRegistration[] = [];
+
+export function registerSettingsSection(section: SettingsSectionRegistration): void {
+  sections.push(section);
+  sections.sort((a, b) => a.order - b.order);
+}
+
+export function getSettingsSections(): readonly SettingsSectionRegistration[] {
+  return sections;
+}
 
 // ── Shared styles ───────────────────────────────────────────────
 
