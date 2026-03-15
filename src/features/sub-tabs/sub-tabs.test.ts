@@ -40,7 +40,6 @@ import {
   SUB_TABS_OPENED,
   SUB_TABS_PROMOTE,
   SUB_TABS_PROMOTED,
-  SUB_TABS_REPORT_BOUNDS,
   SUB_TABS_STACK_CHANGED,
   type SubTab,
   type SubTabsCommands,
@@ -174,7 +173,7 @@ describe("sub-tabs:open", () => {
     );
   });
 
-  it("plays enter animation on first sub-tab open", async () => {
+  it("shows sub-tab window on first sub-tab open", async () => {
     const ctx = setup();
     const { tabId: parentId } = await createParentTab(ctx);
 
@@ -183,14 +182,14 @@ describe("sub-tabs:open", () => {
       url: "https://child.com",
     });
 
-    expect(ctx.platform.playSubTabEnterAnimation).toHaveBeenCalledWith(
+    expect(ctx.platform.showSubTabWindow).toHaveBeenCalledWith(
       expect.objectContaining({ width: expect.any(Number) }),
       expect.objectContaining({ width: expect.any(Number) }),
       parentId,
     );
   });
 
-  it("does not play enter animation on subsequent sub-tab opens", async () => {
+  it("does not show sub-tab window on subsequent sub-tab opens", async () => {
     const ctx = setup();
     const { tabId: parentId } = await createParentTab(ctx);
 
@@ -198,14 +197,14 @@ describe("sub-tabs:open", () => {
       parentTabId: parentId,
       url: "https://child1.com",
     });
-    (ctx.platform.playSubTabEnterAnimation as ReturnType<typeof vi.fn>).mockClear();
+    (ctx.platform.showSubTabWindow as ReturnType<typeof vi.fn>).mockClear();
 
     await ctx.commands.send(SUB_TABS_OPEN, {
       parentTabId: parentId,
       url: "https://child2.com",
     });
 
-    expect(ctx.platform.playSubTabEnterAnimation).not.toHaveBeenCalled();
+    expect(ctx.platform.showSubTabWindow).not.toHaveBeenCalled();
   });
 
   it("stacks multiple sub-tabs, hides previous", async () => {
@@ -263,7 +262,7 @@ describe("sub-tabs:close", () => {
     expect(stack).toHaveLength(0);
   });
 
-  it("plays exit animation when last sub-tab closes", async () => {
+  it("hides sub-tab window when last sub-tab closes", async () => {
     const ctx = setup();
     const { tabId: parentId } = await createParentTab(ctx);
 
@@ -274,7 +273,7 @@ describe("sub-tabs:close", () => {
 
     await ctx.commands.send(SUB_TABS_CLOSE, { parentTabId: parentId });
 
-    expect(ctx.platform.playSubTabExitAnimation).toHaveBeenCalled();
+    expect(ctx.platform.hideSubTabWindow).toHaveBeenCalled();
   });
 
   it("reveals previous sub-tab when top is closed (not last)", async () => {
@@ -295,8 +294,8 @@ describe("sub-tabs:close", () => {
     // Close top (child2)
     await ctx.commands.send(SUB_TABS_CLOSE, { parentTabId: parentId });
 
-    // sub1 should be shown with computed frame bounds
-    expect(ctx.platform.setTabBounds).toHaveBeenCalledWith(
+    // sub1 should be re-attached to child window with computed frame bounds
+    expect(ctx.platform.attachTabToSubTabWindow).toHaveBeenCalledWith(
       sub1Id,
       expect.objectContaining({ width: expect.any(Number), height: expect.any(Number) }),
     );
@@ -353,7 +352,7 @@ describe("sub-tabs:close-all", () => {
 
     expect(ctx.platform.closeTab).toHaveBeenCalledWith(sub2);
     expect(ctx.platform.closeTab).toHaveBeenCalledWith(sub1);
-    expect(ctx.platform.playSubTabExitAnimation).toHaveBeenCalled();
+    expect(ctx.platform.hideSubTabWindow).toHaveBeenCalled();
 
     const stack = await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: parentId });
     expect(stack).toHaveLength(0);
@@ -458,8 +457,8 @@ describe("content bounds positioning", () => {
       height: 700,
     });
 
-    // setTabBounds should have been called with computed frame bounds
-    expect(ctx.platform.setTabBounds).toHaveBeenCalledWith(
+    // attachTabToSubTabWindow should have been called with computed frame bounds
+    expect(ctx.platform.attachTabToSubTabWindow).toHaveBeenCalledWith(
       subTabId,
       expect.objectContaining({ width: expect.any(Number), height: expect.any(Number) }),
     );

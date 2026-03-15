@@ -26,10 +26,8 @@ import {
   SUB_TABS_GET_STACK,
   SUB_TABS_OPEN,
   SUB_TABS_OPENED,
-  SUB_TABS_OVERLAY_PASSTHROUGH,
   SUB_TABS_PROMOTE,
   SUB_TABS_PROMOTED,
-  SUB_TABS_REPORT_BOUNDS,
   SUB_TABS_STACK_CHANGED,
   SUB_TABS_UPDATED,
   type SubTab,
@@ -37,29 +35,50 @@ import {
   type SubTabsEvents,
 } from "./sub-tabs.shared";
 
-// CSS animation injected into sub-tab WCV for enter/exit transitions.
-// Uses !important to override any page styles; animates html element.
+// Bounds animation for sub-tab WCV enter/exit transitions.
+// WCV surfaces are composited as opaque layers (no CSS opacity support),
+// so we animate setBounds() to scale in/out instead of fading.
 const ANIM_DURATION = 200;
-const ANIM_SCALE = 0.6;
-function enterAnimCss(originX: number, originY: number): string {
-  return `html{animation:st-enter ${ANIM_DURATION}ms ease-out forwards!important;transform-origin:${originX}px ${originY}px!important}@keyframes st-enter{from{opacity:0;transform:scale(${ANIM_SCALE})}to{opacity:1;transform:scale(1)}}`;
-}
-function exitAnimCss(originX: number, originY: number): string {
-  return `html{animation:st-exit ${ANIM_DURATION}ms ease-in forwards!important;transform-origin:${originX}px ${originY}px!important}@keyframes st-exit{from{opacity:1;transform:scale(1)}to{opacity:0;transform:scale(${ANIM_SCALE})}}`;
+const ENTER_SCALE = 0.88;
+
+/** Compute bounds scaled around center. */
+function scaleBounds(b: Bounds, scale: number): Bounds {
+  const cx = b.x + b.width / 2;
+  const cy = b.y + b.height / 2;
+  const w = b.width * scale;
+  const h = b.height * scale;
+  return {
+    x: Math.round(cx - w / 2),
+    y: Math.round(cy - h / 2),
+    width: Math.round(w),
+    height: Math.round(h),
+  };
 }
 
-// Frame position constants matching SubTabFrame.tsx layout
+// Frame position constants for the sub-tab child window layout
 const FRAME_TOP = 0.075;
 const FRAME_LEFT = 0.08;
 const FRAME_RIGHT = 0.04;
 const FRAME_BTN_WIDTH = 48;
 const FRAME_GAP = 12;
 
+/** Frame bounds in absolute content-area coordinates (for platform.showSubTabWindow etc.) */
 function computeFrameBounds(cb: Bounds): Bounds {
   const w = cb.width * (1 - FRAME_LEFT - FRAME_RIGHT) - FRAME_BTN_WIDTH - FRAME_GAP;
   return {
     x: Math.round(cb.x + cb.width * FRAME_LEFT),
     y: Math.round(cb.y + cb.height * FRAME_TOP),
+    width: Math.round(w),
+    height: Math.round(cb.height * 0.85),
+  };
+}
+
+/** Frame bounds relative to the child window (which covers the content area). */
+function computeChildFrameBounds(cb: Bounds): Bounds {
+  const w = cb.width * (1 - FRAME_LEFT - FRAME_RIGHT) - FRAME_BTN_WIDTH - FRAME_GAP;
+  return {
+    x: Math.round(cb.width * FRAME_LEFT),
+    y: Math.round(cb.height * FRAME_TOP),
     width: Math.round(w),
     height: Math.round(cb.height * 0.85),
   };
@@ -107,8 +126,6 @@ export default defineFeature<Deps>({
     // CSS keys for disabling input on parent tabs while sub-tabs are active.
     // The dark backdrop is handled by the native overlay (canvas with hole).
     const disabledInputKeys = new Map<TabId, Promise<string>>();
-    // Click origin per sub-tab for enter/exit animation transform-origin
-    const clickOrigins = new Map<TabId, { originX: number; originY: number }>();
     const INPUT_BLOCK_CSS =
       "html{pointer-events:none!important;overflow:hidden!important;user-select:none!important}";
 
@@ -150,9 +167,8 @@ export default defineFeature<Deps>({
     function showTopSubTab(parentTabId: TabId): void {
       const top = topSubTab(parentTabId);
       if (!top || contentBounds.width === 0) return;
-      const fb = computeFrameBounds(contentBounds);
-      platform.setTabBounds(top.id, fb);
-      platform.showSubTabButtons(fb, parentTabId);
+      const cfb = computeChildFrameBounds(contentBounds);
+      platform.attachTabToSubTabWindow(top.id, cfb);
     }
 
     function hideAllSubTabs(parentTabId: TabId): void {
@@ -240,7 +256,6 @@ export default defineFeature<Deps>({
 
     async function closeSubTab(parentTabId: TabId, subTabId: TabId): Promise<void> {
       tabScope.cleanup(subTabId);
-      clickOrigins.delete(subTabId);
       platform.hideTab(subTabId);
       platform.closeTab(subTabId).catch(logError("sub-tabs", "close sub-tab"));
 
@@ -289,10 +304,6 @@ export default defineFeature<Deps>({
       }
 
       const subTabId = await platform.createTab(windowId, url);
-      // Transparent background so CSS opacity animations control visibility —
-      // without this, the native view's opaque white background stays visible
-      // even when CSS sets opacity:0, causing the sub-tab to "pop" in/out.
-      platform.setTabBackgroundColor(subTabId, "#00000000");
       const subTab: SubTab = {
         id: subTabId,
         parentTabId,
@@ -310,48 +321,26 @@ export default defineFeature<Deps>({
 
       const isFirst = stack.length === 0;
       if (isFirst) {
-        // Inject CSS that blocks input on the parent tab
         disableParentInput(parentTabId);
       }
 
       stack.push(subTab);
       attachSubTabListeners(subTabId, parentTabId);
 
-      // Position the new sub-tab BEFORE animation so the overlay hole reveals it
       const fb = contentBounds.width > 0 ? computeFrameBounds(contentBounds) : null;
-      if (fb) {
-        platform.setTabBounds(subTabId, fb);
-      }
+      const cfb = contentBounds.width > 0 ? computeChildFrameBounds(contentBounds) : null;
 
-      // Default click origin (center of frame). Updated by playSubTabEnterAnimation.
-      const origin = { originX: fb ? fb.width / 2 : 0, originY: fb ? fb.height / 2 : 0 };
-
-      // Register dom-ready handler BEFORE awaiting overlay animation — otherwise
-      // fast-loading pages fire dom-ready during the 200ms overlay animation
-      // and we miss it, so the enter CSS is never injected.
-      if (isFirst) {
-        let animInjected = false;
-        const animCleanup = platform.onTabEvent(subTabId, "dom-ready", () => {
-          if (animInjected) return;
-          animInjected = true;
-          platform
-            .insertCSS(subTabId, enterAnimCss(origin.originX, origin.originY))
-            .catch(() => {});
-        });
-        tabScope.add(subTabId, animCleanup);
-      }
-
-      // Play overlay enter animation (backdrop fade). Returns click origin
-      // which may update the mutable origin before dom-ready fires.
+      // Show child window with backdrop fade — must await so the child window
+      // is visible before we attach the WCV and start its bounds animation.
       if (isFirst && fb) {
-        const o = await platform.playSubTabEnterAnimation(contentBounds, fb, parentTabId);
-        origin.originX = o.originX;
-        origin.originY = o.originY;
+        await platform.showSubTabWindow(contentBounds, fb, parentTabId);
       }
-      clickOrigins.set(subTabId, origin);
 
-      if (fb) {
-        platform.showSubTabButtons(fb, parentTabId);
+      // Attach WCV at scaled-down bounds, then animate to full size
+      if (cfb) {
+        const startBounds = scaleBounds(cfb, ENTER_SCALE);
+        platform.attachTabToSubTabWindow(subTabId, startBounds);
+        platform.animateTabBounds(subTabId, startBounds, cfb, ANIM_DURATION).catch(() => {});
       }
 
       events.emit(SUB_TABS_OPENED, { parentTabId, subTab: { ...subTab } });
@@ -368,22 +357,18 @@ export default defineFeature<Deps>({
       const wasLast = (stacks.get(parentTabId)?.length ?? 0) <= 1;
 
       if (wasLast) {
-        // Play exit animation BEFORE removing the sub-tab — the native overlay
-        // provides its own backdrop so we can remove the parent CSS during it
-        platform.hideSubTabButtons();
-        // Inject exit CSS so the sub-tab scales+fades out — must await so CSS is
-        // applied before the overlay exit animation begins
-        const origin = clickOrigins.get(top.id) ?? { originX: 0, originY: 0 };
-        await platform
-          .insertCSS(top.id, exitAnimCss(origin.originX, origin.originY))
-          .catch(logError("sub-tabs", "inject exit CSS"));
-        emitStackChanged(parentTabId); // notify renderer stack is empty
-        await platform.playSubTabExitAnimation();
+        emitStackChanged(parentTabId);
+        // Animate WCV bounds down + backdrop fade out in parallel
+        const cfb = computeChildFrameBounds(contentBounds);
+        const exitBounds = scaleBounds(cfb, ENTER_SCALE);
+        await Promise.all([
+          platform.animateTabBounds(top.id, cfb, exitBounds, ANIM_DURATION),
+          platform.hideSubTabWindow(),
+        ]);
+        platform.detachTabFromSubTabWindow(top.id);
         await closeSubTab(parentTabId, top.id);
-        clickOrigins.delete(top.id);
         enableParentInput(parentTabId);
       } else {
-        clickOrigins.delete(top.id);
         await closeSubTab(parentTabId, top.id);
         showTopSubTab(parentTabId);
       }
@@ -396,20 +381,24 @@ export default defineFeature<Deps>({
       const stack = stacks.get(parentTabId);
       if (!stack || stack.length === 0) return;
 
-      platform.hideSubTabButtons();
-      // Inject exit CSS into the top sub-tab — await so CSS applies before overlay exit
+      // Animate top sub-tab bounds down + backdrop fade out in parallel
       const topSt = stack[stack.length - 1];
-      if (topSt) {
-        const origin = clickOrigins.get(topSt.id) ?? { originX: 0, originY: 0 };
-        await platform
-          .insertCSS(topSt.id, exitAnimCss(origin.originX, origin.originY))
-          .catch(logError("sub-tabs", "inject exit CSS"));
+      const cfb = computeChildFrameBounds(contentBounds);
+      const exitBounds = scaleBounds(cfb, ENTER_SCALE);
+      await Promise.all([
+        topSt
+          ? platform.animateTabBounds(topSt.id, cfb, exitBounds, ANIM_DURATION)
+          : Promise.resolve(),
+        platform.hideSubTabWindow(),
+      ]);
+
+      // Detach all WCVs back to main window
+      for (const st of stack) {
+        platform.detachTabFromSubTabWindow(st.id);
       }
-      await platform.playSubTabExitAnimation();
 
       const toClose = [...stack].reverse();
       for (const st of toClose) {
-        clickOrigins.delete(st.id);
         await closeSubTab(parentTabId, st.id);
       }
 
@@ -436,6 +425,7 @@ export default defineFeature<Deps>({
           for (const st of above) {
             if (st.id !== subTabId) {
               tabScope.cleanup(st.id);
+              platform.detachTabFromSubTabWindow(st.id);
               await platform.closeTab(st.id);
               events.emit(SUB_TABS_CLOSED, { parentTabId, subTabId: st.id });
             }
@@ -447,8 +437,9 @@ export default defineFeature<Deps>({
         }
       }
 
-      // Hide buttons + sub-tab before adoption — tabs:adopt + activate will reposition
-      platform.hideSubTabButtons();
+      // Detach WCV from child window back to main window, then hide child window
+      platform.detachTabFromSubTabWindow(subTabId);
+      platform.hideSubTabWindowInstant();
       platform.hideTab(subTabId);
 
       const newTabId = await commands.send(TABS_ADOPT, { tabId: subTabId, activate: true });
@@ -463,13 +454,6 @@ export default defineFeature<Deps>({
       return [...(stacks.get(payload.parentTabId) ?? [])];
     });
 
-    // Keep SUB_TABS_REPORT_BOUNDS for backward compatibility (no-op if unused)
-    commands.handle(SUB_TABS_REPORT_BOUNDS, () => {});
-
-    commands.handle(SUB_TABS_OVERLAY_PASSTHROUGH, (payload) => {
-      platform.setSubTabOverlayPassthrough(payload.passthrough);
-    });
-
     // ── Cross-feature listeners ────────────────────────────────────
 
     // Track content area bounds to compute sub-tab frame position
@@ -480,33 +464,32 @@ export default defineFeature<Deps>({
         const top = topSubTab(activeTabId);
         if (top && contentBounds.width > 0) {
           const fb = computeFrameBounds(contentBounds);
-          platform.setTabBounds(top.id, fb);
-          platform.showSubTabButtons(fb, activeTabId);
-          platform.updateSubTabOverlayFrame(contentBounds, fb);
+          const cfb = computeChildFrameBounds(contentBounds);
+          platform.updateSubTabWindowBounds(contentBounds, fb);
+          platform.attachTabToSubTabWindow(top.id, cfb);
         }
       }
     });
 
-    // When a tab is activated, manage sub-tab + overlay visibility
+    // When a tab is activated, manage sub-tab + child window visibility
     events.on(TABS_ACTIVATED, ({ tabId, previousTabId }) => {
       if (previousTabId) {
         hideAllSubTabs(previousTabId);
-        platform.hideSubTabButtons();
         if (topSubTab(previousTabId)) {
-          platform.hideSubTabOverlay();
+          platform.hideSubTabWindowInstant();
         }
       }
 
       if (tabId) {
         const top = topSubTab(tabId);
         if (top) {
-          showTopSubTab(tabId);
           disableParentInput(tabId);
-          // Show overlay immediately (no animation) when switching back
+          // Show child window immediately (no animation) when switching back
           if (contentBounds.width > 0) {
             const fb = computeFrameBounds(contentBounds);
-            platform.showSubTabOverlay(contentBounds, fb, tabId);
+            platform.showSubTabWindowStatic(contentBounds, fb, tabId);
           }
+          showTopSubTab(tabId);
         }
       }
     });
@@ -516,8 +499,10 @@ export default defineFeature<Deps>({
       const stack = stacks.get(tabId);
       if (!stack || stack.length === 0) return;
 
+      platform.hideSubTabWindowInstant();
       for (const st of stack) {
         tabScope.cleanup(st.id);
+        platform.detachTabFromSubTabWindow(st.id);
         platform.closeTab(st.id).catch(logError("sub-tabs", "close sub-tab on parent close"));
       }
       stacks.delete(tabId);

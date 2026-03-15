@@ -109,7 +109,7 @@ export function SubTabFrame({
 
     const frameAnim = frame.animate(
       [
-        { opacity: 1, transform: "scale(1)" },
+        { opacity: 0.3, transform: "scale(1)" },
         { opacity: 0, transform: "scale(0.88)" },
       ],
       { duration: DURATION, easing: "ease-in", fill: "forwards" },
@@ -163,7 +163,7 @@ export function SubTabFrame({
           right: "4%",
           height: "85%",
           display: "flex",
-          alignItems: "center",
+          alignItems: "flex-start",
           gap: "0.75rem",
         }}
         onClick={(e) => e.stopPropagation()}
@@ -185,7 +185,9 @@ export function SubTabFrame({
         </div>
 
         {/* Buttons or spacer */}
-        {buttons ?? <div style={{ flexShrink: 0, width: buttonColumnWidth }} />}
+        <div style={{ flexShrink: 0, paddingTop: "0.75rem" }}>
+          {buttons ?? <div style={{ width: buttonColumnWidth }} />}
+        </div>
       </div>
     </div>
   );

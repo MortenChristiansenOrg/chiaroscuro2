@@ -85,24 +85,22 @@ export interface Platform {
   }): Promise<number>;
   hideContextMenu(): void;
 
-  // Sub-tab buttons overlay
-  initSubTabButtonsOverlay(windowId: WindowId): void;
-  showSubTabButtons(frameBounds: Bounds, parentTabId: string): void;
-  hideSubTabButtons(): void;
-
-  // Sub-tab backdrop overlay (persistent canvas with transparent hole at frame)
-  initSubTabAnimationOverlay(windowId: WindowId): void;
-  playSubTabEnterAnimation(
+  // Sub-tab child window (backdrop + buttons + hosts sub-tab WCV)
+  showSubTabWindow(
     contentBounds: Bounds,
     frameBounds: Bounds,
     parentTabId: string,
   ): Promise<{ originX: number; originY: number }>;
-  playSubTabExitAnimation(): Promise<void>;
-  showSubTabOverlay(contentBounds: Bounds, frameBounds: Bounds, parentTabId: string): void;
-  hideSubTabOverlay(): void;
-  updateSubTabOverlayFrame(contentBounds: Bounds, frameBounds: Bounds): void;
-  /** Toggle mouse passthrough on the sub-tab overlay (true = clicks pass through to WCV). */
-  setSubTabOverlayPassthrough(passthrough: boolean): void;
+  hideSubTabWindow(): Promise<void>;
+  showSubTabWindowStatic(contentBounds: Bounds, frameBounds: Bounds, parentTabId: string): void;
+  hideSubTabWindowInstant(): void;
+  updateSubTabWindowBounds(contentBounds: Bounds, frameBounds: Bounds): void;
+  /** Move a WCV from the main window into the sub-tab child window. */
+  attachTabToSubTabWindow(tabId: TabId, frameBounds: Bounds): void;
+  /** Move a WCV from the sub-tab child window back to the main window. */
+  detachTabFromSubTabWindow(tabId: TabId): void;
+  /** Animate a tab's bounds from `from` to `to` over `duration` ms (ease-out). */
+  animateTabBounds(tabId: TabId, from: Bounds, to: Bounds, duration: number): Promise<void>;
 
   // Command palette overlay
   initCommandPaletteOverlay(windowId: WindowId): void;

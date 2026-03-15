@@ -6,8 +6,6 @@ export const SUB_TABS_CLOSE = "sub-tabs:close" as const;
 export const SUB_TABS_CLOSE_ALL = "sub-tabs:close-all" as const;
 export const SUB_TABS_PROMOTE = "sub-tabs:promote" as const;
 export const SUB_TABS_GET_STACK = "sub-tabs:get-stack" as const;
-export const SUB_TABS_REPORT_BOUNDS = "sub-tabs:report-bounds" as const;
-export const SUB_TABS_OVERLAY_PASSTHROUGH = "sub-tabs:overlay-passthrough" as const;
 
 // ── Event names ──────────────────────────────────────────────────
 export const SUB_TABS_OPENED = "sub-tabs:opened" as const;
@@ -48,17 +46,6 @@ export interface SubTabsGetStackPayload {
   parentTabId: TabId;
 }
 
-export interface SubTabsReportBoundsPayload {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-export interface SubTabsOverlayPassthroughPayload {
-  passthrough: boolean;
-}
-
 // ── Event payloads ───────────────────────────────────────────────
 export interface SubTabsOpenedEvent {
   parentTabId: TabId;
@@ -93,11 +80,6 @@ export type SubTabsCommands = {
   [SUB_TABS_CLOSE_ALL]: { payload: SubTabsCloseAllPayload; response: undefined };
   [SUB_TABS_PROMOTE]: { payload: SubTabsPromotePayload; response: TabId };
   [SUB_TABS_GET_STACK]: { payload: SubTabsGetStackPayload; response: SubTab[] };
-  [SUB_TABS_REPORT_BOUNDS]: { payload: SubTabsReportBoundsPayload; response: undefined };
-  [SUB_TABS_OVERLAY_PASSTHROUGH]: {
-    payload: SubTabsOverlayPassthroughPayload;
-    response: undefined;
-  };
 };
 
 // ── Event registry ───────────────────────────────────────────────

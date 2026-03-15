@@ -42,84 +42,49 @@ function isAllowedExternalUrl(url: string): boolean {
   }
 }
 
-// HTML for the sub-tab action buttons overlay (close + promote)
-// Generated at init time to inject the resolved FA webfont path
-function buildSubTabButtonsHtml(faCssDir: string): string {
+// HTML for the sub-tab child window — full backdrop + close/promote buttons.
+// The sub-tab WCV is added as a child view and renders on top of this HTML,
+// so no hole/passthrough is needed — the backdrop covers everything and the
+// WCV naturally occludes the area it covers.
+function buildSubTabWindowHtml(faCssDir: string): string {
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
 <link rel="stylesheet" href="file://${faCssDir}/fontawesome.css">
 <link rel="stylesheet" href="file://${faCssDir}/solid.css">
 <style>
-*{margin:0;padding:0;box-sizing:border-box}html,body{background:transparent;overflow:hidden}
-body{display:flex;flex-direction:column;gap:12px;align-items:center;justify-content:center;height:100vh;padding:24px}
+*{margin:0;padding:0;box-sizing:border-box}html,body{background:transparent;overflow:hidden;width:100%;height:100%}
+#backdrop{position:fixed;inset:0;background:oklch(0 0 0/0.5);border-radius:8px;opacity:0;transition:none}
+#btns{position:absolute;display:flex;flex-direction:column;gap:12px;align-items:center;pointer-events:auto}
 button{width:48px;height:48px;border-radius:50%;border:none;background:white;
 color:oklch(0.35 0 0);font-size:1.125rem;
-box-shadow:0 4px 20px oklch(0 0 0 / 0.25),0 1px 3px oklch(0 0 0 / 0.15);
+box-shadow:0 4px 20px oklch(0 0 0/0.25),0 1px 3px oklch(0 0 0/0.15);
 cursor:pointer;display:flex;align-items:center;justify-content:center;
 transition:transform 200ms cubic-bezier(0.34,1.56,0.64,1);-webkit-font-smoothing:antialiased}
 button:hover{transform:scale(1.15)}button:active{transform:scale(0.95)}
 </style></head><body>
+<div id="backdrop"></div>
+<div id="btns" style="display:none">
 <button id="c" aria-label="Close sub-tab"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
 <button id="p" aria-label="Open as tab"><i class="fa-solid fa-up-right-from-square" aria-hidden="true"></i></button>
+</div>
 <script>
-let pid=null;
+var bd=document.getElementById('backdrop'),btns=document.getElementById('btns');
+var pid=null,animId=null,D=200;
 function setParentTabId(id){pid=id}
-document.getElementById('c').onclick=()=>{if(pid)window.chiaroscuro.sendCommand('sub-tabs:close',{parentTabId:pid})};
-document.getElementById('p').onclick=()=>{if(pid)window.chiaroscuro.sendCommand('sub-tabs:promote',{parentTabId:pid})};
-</script></body></html>`;
+function positionButtons(fx,fy,fw,fh){
+  var gap=12,btnH=108;
+  btns.style.left=(fx+fw+gap)+'px';
+  btns.style.top=(fy+gap)+'px';
+  btns.style.display='flex';
 }
-
-// HTML for the sub-tab backdrop overlay — canvas-based with transparent hole at frame.
-// Uses setIgnoreMouseEvents(true, {forward:true}) so clicks on the transparent hole
-// pass through to the sub-tab WCV underneath, while clicks on the dark backdrop
-// are caught and trigger sub-tabs:close.
-const SUB_TAB_ANIMATION_HTML = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
-*{margin:0;padding:0}html,body{background:transparent;overflow:hidden;width:100%;height:100%}
-canvas{position:fixed;inset:0;cursor:default}
-</style></head><body><canvas id="c"></canvas>
-<script>
-var c=document.getElementById('c'),ctx=c.getContext('2d');
-var pid=null,frame=null,opacity=0,animId=null,D=200,R=8;
-var inHole=true;
-function resize(){c.width=window.innerWidth;c.height=window.innerHeight;draw()}
-function draw(){
-  ctx.clearRect(0,0,c.width,c.height);
-  if(opacity<=0)return;
-  if(frame){
-    ctx.save();ctx.shadowColor='rgba(0,0,0,'+0.5*opacity+')';ctx.shadowBlur=24;ctx.shadowOffsetY=6;
-    ctx.fillStyle='rgba(0,0,0,1)';rr(ctx,frame.x,frame.y,frame.w,frame.h,R);ctx.fill();ctx.restore();
-    ctx.save();ctx.globalCompositeOperation='destination-out';ctx.fillStyle='rgba(0,0,0,1)';
-    rr(ctx,frame.x,frame.y,frame.w,frame.h,R);ctx.fill();ctx.restore();
-  }
-  ctx.save();ctx.globalCompositeOperation='source-over';
-  ctx.fillStyle='rgba(0,0,0,'+0.5*opacity+')';
-  rr(ctx,0,0,c.width,c.height,R);ctx.clip();ctx.fillRect(0,0,c.width,c.height);ctx.restore();
-  if(frame){
-    ctx.save();ctx.globalCompositeOperation='destination-out';
-    ctx.fillStyle='rgba(0,0,0,1)';
-    rr(ctx,frame.x,frame.y,frame.w,frame.h,R);
-    ctx.fill();ctx.restore();
-  }
-}
-function rr(c,x,y,w,h,r){
-  c.beginPath();c.moveTo(x+r,y);c.lineTo(x+w-r,y);c.quadraticCurveTo(x+w,y,x+w,y+r);
-  c.lineTo(x+w,y+h-r);c.quadraticCurveTo(x+w,y+h,x+w-r,y+h);c.lineTo(x+r,y+h);
-  c.quadraticCurveTo(x,y+h,x,y+h-r);c.lineTo(x,y+r);c.quadraticCurveTo(x,y,x+r,y);
-  c.closePath();
-}
-function setParentTabId(id){pid=id}
-function setFrame(x,y,w,h){frame={x:x,y:y,w:w,h:h};draw()}
-function showStatic(x,y,w,h){opacity=1;frame={x:x,y:y,w:w,h:h};inHole=true;draw()}
 function cancelAnim(){if(animId){cancelAnimationFrame(animId);animId=null}}
-function enterAnimation(fx,fy,fw,fh,ox,oy){
+function enterAnimation(fx,fy,fw,fh){
   return new Promise(function(resolve){
-    cancelAnim();inHole=true;
-    frame={x:fx,y:fy,w:fw,h:fh};
+    cancelAnim();
+    positionButtons(fx,fy,fw,fh);
     var start=performance.now();
     function tick(now){
       var t=Math.min((now-start)/D,1);
-      var e=1-(1-t)*(1-t);
-      opacity=e;
-      draw();
+      bd.style.opacity=1-(1-t)*(1-t);
       if(t<1){animId=requestAnimationFrame(tick)}else{animId=null;resolve()}
     }
     animId=requestAnimationFrame(tick);
@@ -128,36 +93,22 @@ function enterAnimation(fx,fy,fw,fh,ox,oy){
 function exitAnimation(){
   return new Promise(function(resolve){
     cancelAnim();var start=performance.now();
-    if(!frame){resolve();return}
     function tick(now){
       var t=Math.min((now-start)/D,1);
-      var e=t*t;
-      opacity=1-e;
-      draw();
-      if(t<1){animId=requestAnimationFrame(tick)}else{animId=null;opacity=0;frame=null;inHole=true;draw();resolve()}
+      bd.style.opacity=1-t*t;
+      if(t<1){animId=requestAnimationFrame(tick)}else{animId=null;bd.style.opacity=0;btns.style.display='none';resolve()}
     }
     animId=requestAnimationFrame(tick);
   });
 }
-function hide(){cancelAnim();opacity=0;frame=null;inHole=true;draw()}
-function ptInHole(x,y){
-  if(!frame)return false;
-  return x>=frame.x&&x<=frame.x+frame.w&&y>=frame.y&&y<=frame.y+frame.h;
-}
-window.addEventListener('resize',resize);resize();
-c.addEventListener('mousemove',function(e){
-  if(opacity<=0)return;
-  var h=ptInHole(e.clientX,e.clientY);
-  if(h!==inHole){inHole=h;window.chiaroscuro.sendCommand('sub-tabs:overlay-passthrough',{passthrough:h}).catch(function(){});}
-});
-c.addEventListener('mouseleave',function(){
-  if(opacity<=0)return;
-  if(!inHole){inHole=true;window.chiaroscuro.sendCommand('sub-tabs:overlay-passthrough',{passthrough:true}).catch(function(){});}
-});
-c.addEventListener('click',function(){
-  if(pid)window.chiaroscuro.sendCommand('sub-tabs:close',{parentTabId:pid});
-});
+function showStatic(fx,fy,fw,fh){cancelAnim();bd.style.opacity=1;positionButtons(fx,fy,fw,fh)}
+function hide(){cancelAnim();bd.style.opacity=0;btns.style.display='none'}
+function updateButtons(fx,fy,fw,fh){positionButtons(fx,fy,fw,fh)}
+bd.addEventListener('click',function(){if(pid)window.chiaroscuro.sendCommand('sub-tabs:close',{parentTabId:pid})});
+document.getElementById('c').onclick=function(){if(pid)window.chiaroscuro.sendCommand('sub-tabs:close',{parentTabId:pid})};
+document.getElementById('p').onclick=function(){if(pid)window.chiaroscuro.sendCommand('sub-tabs:promote',{parentTabId:pid})};
 </script></body></html>`;
+}
 
 // Minimal HTML for the tooltip popup — transparent bg, matching app styling
 const TOOLTIP_HTML = `<!DOCTYPE html><html><head><meta charset="utf-8"><style>
@@ -410,12 +361,11 @@ export class ElectronPlatform implements Platform {
   private ctxResolve: ((index: number) => void) | null = null;
   private ctxParentListenersSet = false;
   private paletteParentListenersSet = false;
-  private subTabBtnsWin: BrowserWindow | null = null;
-  private subTabBtnsParentListenersSet = false;
-  private subTabBtnsLastBounds: Bounds | null = null;
-  private subTabAnimWin: BrowserWindow | null = null;
-  private subTabAnimParentListenersSet = false;
-  private subTabAnimContentBounds: Bounds | null = null;
+  private subTabWin: BrowserWindow | null = null;
+  private subTabWinReady = false;
+  private subTabWinParentListenersSet = false;
+  private subTabWinContentBounds: Bounds | null = null;
+  private tabBoundsAnimations = new Map<string, () => void>();
   private pendingPaletteJs: string | null = null;
   private permissionHandlerSet = false;
   private zoomIpcHooked = false;
@@ -589,9 +539,21 @@ export class ElectronPlatform implements Platform {
     const view = this.views.get(tabId);
     if (!view) return;
 
+    // Remove from whichever window owns the view (main or sub-tab child window)
     const win = this.getWin();
     if (win) {
-      win.contentView.removeChildView(view);
+      try {
+        win.contentView.removeChildView(view);
+      } catch {
+        // may not be a child of main window
+      }
+    }
+    if (this.subTabWin && !this.subTabWin.isDestroyed()) {
+      try {
+        this.subTabWin.contentView.removeChildView(view);
+      } catch {
+        // may not be a child of sub-tab window
+      }
     }
 
     await view.webContents.close({ waitForBeforeUnload: true });
@@ -1052,22 +1014,21 @@ export class ElectronPlatform implements Platform {
     if (win && !win.isDestroyed()) win.webContents.focus();
   }
 
-  // ── Sub-tab buttons overlay ──────────────────────────────────
+  // ── Sub-tab child window ─────────────────────────────────────
 
-  initSubTabButtonsOverlay(windowId: WindowId): void {
-    const parent = this.getWin(windowId);
-    if (!parent) return;
-    if (this.subTabBtnsWin && !this.subTabBtnsWin.isDestroyed()) return;
-
-    // In test mode, defer to avoid crashes under --ozone-platform=headless
+  private ensureSubTabWindow(): void {
+    if (this.subTabWin && !this.subTabWin.isDestroyed()) return;
     if (process.env.NODE_ENV === "test") return;
+
+    const parent = this.getWin();
+    if (!parent) return;
 
     const rawCssDir = path
       .join(__dirname, "../../node_modules/@fortawesome/fontawesome-free/css")
       .replace(/\\/g, "/");
     const faCssDir = rawCssDir.startsWith("/") ? rawCssDir : `/${rawCssDir}`;
 
-    this.subTabBtnsWin = new BrowserWindow({
+    this.subTabWin = new BrowserWindow({
       parent,
       frame: false,
       transparent: true,
@@ -1083,132 +1044,52 @@ export class ElectronPlatform implements Platform {
       },
     });
 
-    const html = buildSubTabButtonsHtml(faCssDir);
-    const tmpPath = path.join(app.getPath("temp"), `chiaroscuro-subtab-btns-${process.pid}.html`);
+    const html = buildSubTabWindowHtml(faCssDir);
+    const tmpPath = path.join(app.getPath("temp"), `chiaroscuro-subtab-win-${process.pid}.html`);
     fs.writeFileSync(tmpPath, html, "utf-8");
-    this.subTabBtnsWin.loadFile(tmpPath);
+    this.subTabWin.loadFile(tmpPath);
 
-    if (!this.subTabBtnsParentListenersSet) {
-      parent.on("move", () => this.syncSubTabButtonsBounds());
-      parent.on("resize", () => this.syncSubTabButtonsBounds());
-      this.subTabBtnsParentListenersSet = true;
-    }
-  }
+    // Pass through all events until the sub-tab is actually shown
+    this.subTabWin.setIgnoreMouseEvents(true, { forward: true });
 
-  showSubTabButtons(frameBounds: Bounds, parentTabId: string): void {
-    this.subTabBtnsLastBounds = frameBounds;
-
-    if (!this.subTabBtnsWin || this.subTabBtnsWin.isDestroyed()) return;
-    const win = this.getWin();
-    if (!win || win.isDestroyed()) return;
-
-    const cb = win.getContentBounds();
-    const pad = 24; // padding for box-shadow overflow
-    const gap = 12; // gap between frame and buttons
-    const btnW = 48;
-    const btnH = 108; // 48 + 12 + 48
-
-    const x = cb.x + frameBounds.x + frameBounds.width + gap - pad;
-    const y = cb.y + frameBounds.y + (frameBounds.height - btnH) / 2 - pad;
-
-    this.subTabBtnsWin.setBounds({
-      x: Math.round(x),
-      y: Math.round(y),
-      width: btnW + 2 * pad,
-      height: btnH + 2 * pad,
-    });
-
-    this.subTabBtnsWin.webContents
-      .executeJavaScript(`setParentTabId(${JSON.stringify(parentTabId)})`)
-      .catch(() => {});
-
-    if (!this.subTabBtnsWin.isVisible()) {
-      this.subTabBtnsWin.showInactive();
-    }
-  }
-
-  hideSubTabButtons(): void {
-    this.subTabBtnsLastBounds = null;
-    if (this.subTabBtnsWin && !this.subTabBtnsWin.isDestroyed() && this.subTabBtnsWin.isVisible()) {
-      this.subTabBtnsWin.hide();
-    }
-  }
-
-  private syncSubTabButtonsBounds(): void {
-    if (!this.subTabBtnsLastBounds) return;
-    if (!this.subTabBtnsWin || this.subTabBtnsWin.isDestroyed() || !this.subTabBtnsWin.isVisible())
-      return;
-    // Re-apply with stored bounds (parent moved, so screen coords changed)
-    const win = this.getWin();
-    if (!win || win.isDestroyed()) return;
-    const cb = win.getContentBounds();
-    const pad = 24;
-    const gap = 12;
-    const btnW = 48;
-    const btnH = 108;
-    const fb = this.subTabBtnsLastBounds;
-
-    this.subTabBtnsWin.setBounds({
-      x: Math.round(cb.x + fb.x + fb.width + gap - pad),
-      y: Math.round(cb.y + fb.y + (fb.height - btnH) / 2 - pad),
-      width: btnW + 2 * pad,
-      height: btnH + 2 * pad,
-    });
-  }
-
-  // ── Sub-tab animation overlay ─────────────────────────────────
-
-  initSubTabAnimationOverlay(windowId: WindowId): void {
-    const parent = this.getWin(windowId);
-    if (!parent) return;
-    if (this.subTabAnimWin && !this.subTabAnimWin.isDestroyed()) return;
-    if (process.env.NODE_ENV === "test") return;
-
-    this.subTabAnimWin = new BrowserWindow({
-      parent,
-      frame: false,
-      transparent: true,
-      focusable: false,
-      skipTaskbar: true,
-      resizable: false,
-      show: false,
-      hasShadow: false,
-      webPreferences: {
-        sandbox: true,
-        contextIsolation: true,
-        preload: path.join(__dirname, "../preload/index.js"),
-      },
-    });
-
-    // Transparent pixels (the frame hole) pass events to the sub-tab WCV;
-    // non-transparent pixels (the dark backdrop) are caught for click-to-dismiss.
-    this.subTabAnimWin.setIgnoreMouseEvents(true, { forward: true });
-
-    const tmpPath = path.join(app.getPath("temp"), `chiaroscuro-subtab-anim-${process.pid}.html`);
-    fs.writeFileSync(tmpPath, SUB_TAB_ANIMATION_HTML, "utf-8");
-    this.subTabAnimWin.loadFile(tmpPath);
-
-    // Pre-show the window while the canvas is empty (transparent). This triggers
-    // the OS window-show animation now, when nothing is visible, so that later
-    // enterAnimation calls don't get an unwanted OS-level size animation.
-    this.subTabAnimWin.webContents.once("did-finish-load", () => {
-      if (this.subTabAnimWin && !this.subTabAnimWin.isDestroyed()) {
-        this.subTabAnimWin.showInactive();
+    this.subTabWinReady = false;
+    this.subTabWin.webContents.once("did-finish-load", () => {
+      this.subTabWinReady = true;
+      // Pre-show while backdrop is transparent to trigger OS window-show anim now
+      if (this.subTabWin && !this.subTabWin.isDestroyed()) {
+        this.subTabWin.showInactive();
       }
     });
 
-    if (!this.subTabAnimParentListenersSet) {
-      parent.on("move", () => this.syncSubTabAnimBounds());
-      parent.on("resize", () => this.syncSubTabAnimBounds());
-      this.subTabAnimParentListenersSet = true;
+    if (!this.subTabWinParentListenersSet) {
+      parent.on("move", () => this.syncSubTabWinBounds());
+      parent.on("resize", () => this.syncSubTabWinBounds());
+      this.subTabWinParentListenersSet = true;
     }
   }
 
-  async playSubTabEnterAnimation(
+  private positionSubTabWin(contentBounds: Bounds): void {
+    if (!this.subTabWin || this.subTabWin.isDestroyed()) return;
+    const win = this.getWin();
+    if (!win || win.isDestroyed()) return;
+
+    this.subTabWinContentBounds = contentBounds;
+    const cb = win.getContentBounds();
+    this.subTabWin.setBounds({
+      x: Math.round(cb.x + contentBounds.x),
+      y: Math.round(cb.y + contentBounds.y),
+      width: Math.round(contentBounds.width),
+      height: Math.round(contentBounds.height),
+    });
+  }
+
+  async showSubTabWindow(
     contentBounds: Bounds,
     frameBounds: Bounds,
     parentTabId: string,
   ): Promise<{ originX: number; originY: number }> {
+    this.ensureSubTabWindow();
+
     // Click origin relative to the sub-tab frame (for CSS transform-origin)
     const cursor = screen.getCursorScreenPoint();
     const win = this.getWin();
@@ -1217,148 +1098,183 @@ export class ElectronPlatform implements Platform {
     const originY = cursor.y - cb.y - frameBounds.y;
     const origin = { originX, originY };
 
-    if (!this.subTabAnimWin || this.subTabAnimWin.isDestroyed()) return origin;
-    if (!win || win.isDestroyed()) return origin;
+    if (!this.subTabWin || this.subTabWin.isDestroyed()) return origin;
 
-    this.subTabAnimContentBounds = contentBounds;
-    // Width -1 to avoid 1px bleed past content area right edge
-    this.subTabAnimWin.setBounds({
-      x: Math.round(cb.x + contentBounds.x),
-      y: Math.round(cb.y + contentBounds.y),
-      width: Math.round(contentBounds.width) - 1,
-      height: Math.round(contentBounds.height),
-    });
+    // Enable event capture on the child window (backdrop clicks, buttons)
+    this.subTabWin.setIgnoreMouseEvents(false);
+    this.positionSubTabWin(contentBounds);
 
-    // Frame position relative to overlay
+    // Frame position relative to child window
     const fx = frameBounds.x - contentBounds.x;
     const fy = frameBounds.y - contentBounds.y;
     const fw = frameBounds.width;
     const fh = frameBounds.height;
 
-    // Window is pre-shown during init — no showInactive() needed here,
-    // which avoids the OS window-show animation that caused unwanted size anim.
-
     try {
-      await this.subTabAnimWin.webContents.executeJavaScript(
+      await this.subTabWin.webContents.executeJavaScript(
         `setParentTabId(${JSON.stringify(parentTabId)})`,
       );
-      await this.subTabAnimWin.webContents.executeJavaScript(
-        `enterAnimation(${fx},${fy},${fw},${fh},${originX},${originY})`,
-      );
+      await this.subTabWin.webContents.executeJavaScript(`enterAnimation(${fx},${fy},${fw},${fh})`);
     } catch {
-      // overlay may be destroyed
+      // window may be destroyed
     }
-    // Keep overlay visible — it serves as the persistent clickable backdrop
+
     return origin;
   }
 
-  async playSubTabExitAnimation(): Promise<void> {
-    if (!this.subTabAnimWin || this.subTabAnimWin.isDestroyed()) return;
-    if (!this.subTabAnimContentBounds) return;
-    const win = this.getWin();
-    if (!win || win.isDestroyed()) return;
-
-    const contentBounds = this.subTabAnimContentBounds;
-    const cb = win.getContentBounds();
-    this.subTabAnimWin.setBounds({
-      x: Math.round(cb.x + contentBounds.x),
-      y: Math.round(cb.y + contentBounds.y),
-      width: Math.round(contentBounds.width) - 1,
-      height: Math.round(contentBounds.height),
-    });
+  async hideSubTabWindow(): Promise<void> {
+    if (!this.subTabWin || this.subTabWin.isDestroyed()) return;
 
     try {
-      await this.subTabAnimWin.webContents.executeJavaScript("exitAnimation()");
+      await this.subTabWin.webContents.executeJavaScript("exitAnimation()");
     } catch {
-      // overlay may be destroyed
+      // window may be destroyed
     }
-    // Don't hide() — window stays visible but transparent (canvas cleared by
-    // exitAnimation). This avoids OS window-show animation on the next enter.
-    if (this.subTabAnimWin && !this.subTabAnimWin.isDestroyed()) {
-      this.subTabAnimWin.setIgnoreMouseEvents(true, { forward: true });
-    }
-    this.subTabAnimContentBounds = null;
+    // Pass through all events so the main window is usable
+    this.subTabWin.setIgnoreMouseEvents(true, { forward: true });
+    this.subTabWinContentBounds = null;
   }
 
-  showSubTabOverlay(contentBounds: Bounds, frameBounds: Bounds, parentTabId: string): void {
-    if (!this.subTabAnimWin || this.subTabAnimWin.isDestroyed()) return;
-    const win = this.getWin();
-    if (!win || win.isDestroyed()) return;
+  showSubTabWindowStatic(contentBounds: Bounds, frameBounds: Bounds, parentTabId: string): void {
+    this.ensureSubTabWindow();
+    if (!this.subTabWin || this.subTabWin.isDestroyed()) return;
 
-    this.subTabAnimContentBounds = contentBounds;
-    const cb = win.getContentBounds();
-    this.subTabAnimWin.setBounds({
-      x: Math.round(cb.x + contentBounds.x),
-      y: Math.round(cb.y + contentBounds.y),
-      width: Math.round(contentBounds.width) - 1,
-      height: Math.round(contentBounds.height),
-    });
+    this.subTabWin.setIgnoreMouseEvents(false);
+    this.positionSubTabWin(contentBounds);
 
     const fx = frameBounds.x - contentBounds.x;
     const fy = frameBounds.y - contentBounds.y;
 
-    this.subTabAnimWin.webContents
+    this.subTabWin.webContents
       .executeJavaScript(`setParentTabId(${JSON.stringify(parentTabId)})`)
       .catch(() => {});
-    this.subTabAnimWin.webContents
+    this.subTabWin.webContents
       .executeJavaScript(`showStatic(${fx},${fy},${frameBounds.width},${frameBounds.height})`)
       .catch(() => {});
-    // Window is pre-shown during init — no showInactive() needed
   }
 
-  hideSubTabOverlay(): void {
-    if (!this.subTabAnimWin || this.subTabAnimWin.isDestroyed()) return;
-    this.subTabAnimWin.webContents.executeJavaScript("hide()").catch(() => {});
-    // Don't hide() — window stays visible but transparent
-    this.subTabAnimWin.setIgnoreMouseEvents(true, { forward: true });
-    this.subTabAnimContentBounds = null;
+  hideSubTabWindowInstant(): void {
+    if (!this.subTabWin || this.subTabWin.isDestroyed()) return;
+    this.subTabWin.webContents.executeJavaScript("hide()").catch(() => {});
+    this.subTabWin.setIgnoreMouseEvents(true, { forward: true });
+    this.subTabWinContentBounds = null;
   }
 
-  updateSubTabOverlayFrame(contentBounds: Bounds, frameBounds: Bounds): void {
-    if (!this.subTabAnimWin || this.subTabAnimWin.isDestroyed()) return;
-    if (!this.subTabAnimWin.isVisible()) return;
-    const win = this.getWin();
-    if (!win || win.isDestroyed()) return;
+  updateSubTabWindowBounds(contentBounds: Bounds, frameBounds: Bounds): void {
+    if (!this.subTabWin || this.subTabWin.isDestroyed()) return;
 
-    this.subTabAnimContentBounds = contentBounds;
-    const cb = win.getContentBounds();
-    this.subTabAnimWin.setBounds({
-      x: Math.round(cb.x + contentBounds.x),
-      y: Math.round(cb.y + contentBounds.y),
-      width: Math.round(contentBounds.width) - 1,
-      height: Math.round(contentBounds.height),
-    });
+    this.positionSubTabWin(contentBounds);
 
     const fx = frameBounds.x - contentBounds.x;
     const fy = frameBounds.y - contentBounds.y;
-    this.subTabAnimWin.webContents
-      .executeJavaScript(`setFrame(${fx},${fy},${frameBounds.width},${frameBounds.height})`)
+    this.subTabWin.webContents
+      .executeJavaScript(`updateButtons(${fx},${fy},${frameBounds.width},${frameBounds.height})`)
       .catch(() => {});
   }
 
-  private syncSubTabAnimBounds(): void {
-    if (!this.subTabAnimContentBounds) return;
-    if (!this.subTabAnimWin || this.subTabAnimWin.isDestroyed() || !this.subTabAnimWin.isVisible())
-      return;
-    const win = this.getWin();
-    if (!win || win.isDestroyed()) return;
-    const cb = win.getContentBounds();
-    const ab = this.subTabAnimContentBounds;
-    this.subTabAnimWin.setBounds({
-      x: Math.round(cb.x + ab.x),
-      y: Math.round(cb.y + ab.y),
-      width: Math.round(ab.width) - 1,
-      height: Math.round(ab.height),
+  attachTabToSubTabWindow(tabId: TabId, frameBounds: Bounds): void {
+    const view = this.views.get(tabId);
+    if (!view) return;
+    if (!this.subTabWin || this.subTabWin.isDestroyed()) return;
+
+    const mainWin = this.getWin();
+
+    // Remove from main window if currently attached there
+    if (mainWin && !mainWin.isDestroyed()) {
+      try {
+        mainWin.contentView.removeChildView(view);
+      } catch {
+        // may not be a child of main window
+      }
+    }
+
+    // Add to child window (may already be there — addChildView is idempotent for existing children)
+    try {
+      this.subTabWin.contentView.addChildView(view);
+    } catch {
+      // already a child
+    }
+
+    view.setBounds({
+      x: Math.round(frameBounds.x),
+      y: Math.round(frameBounds.y),
+      width: Math.round(frameBounds.width),
+      height: Math.round(frameBounds.height),
+    });
+    view.setBorderRadius(8);
+  }
+
+  detachTabFromSubTabWindow(tabId: TabId): void {
+    const view = this.views.get(tabId);
+    if (!view) return;
+
+    // Remove from child window
+    if (this.subTabWin && !this.subTabWin.isDestroyed()) {
+      try {
+        this.subTabWin.contentView.removeChildView(view);
+      } catch {
+        // may not be a child
+      }
+    }
+
+    // Add back to main window
+    const mainWin = this.getWin();
+    if (mainWin && !mainWin.isDestroyed()) {
+      mainWin.contentView.addChildView(view);
+      // Hide until caller repositions
+      view.setBounds({ x: 0, y: 0, width: 0, height: 0 });
+    }
+  }
+
+  animateTabBounds(tabId: TabId, from: Bounds, to: Bounds, duration: number): Promise<void> {
+    const view = this.views.get(tabId);
+    if (!view) return Promise.resolve();
+
+    // Cancel any existing animation on this tab
+    this.tabBoundsAnimations.get(tabId)?.();
+
+    return new Promise<void>((resolve) => {
+      let cancelled = false;
+      this.tabBoundsAnimations.set(tabId, () => {
+        cancelled = true;
+        resolve();
+      });
+
+      const startTime = performance.now();
+      const tick = () => {
+        if (cancelled) return;
+        const t = Math.min((performance.now() - startTime) / duration, 1);
+        const e = 1 - (1 - t) * (1 - t); // ease-out quadratic
+        view.setBounds({
+          x: Math.round(from.x + (to.x - from.x) * e),
+          y: Math.round(from.y + (to.y - from.y) * e),
+          width: Math.max(1, Math.round(from.width + (to.width - from.width) * e)),
+          height: Math.max(1, Math.round(from.height + (to.height - from.height) * e)),
+        });
+        if (t < 1) {
+          setTimeout(tick, 16);
+        } else {
+          this.tabBoundsAnimations.delete(tabId);
+          resolve();
+        }
+      };
+      tick();
     });
   }
 
-  setSubTabOverlayPassthrough(passthrough: boolean): void {
-    if (!this.subTabAnimWin || this.subTabAnimWin.isDestroyed()) return;
-    if (passthrough) {
-      this.subTabAnimWin.setIgnoreMouseEvents(true, { forward: true });
-    } else {
-      this.subTabAnimWin.setIgnoreMouseEvents(false);
-    }
+  private syncSubTabWinBounds(): void {
+    if (!this.subTabWinContentBounds) return;
+    if (!this.subTabWin || this.subTabWin.isDestroyed()) return;
+    const win = this.getWin();
+    if (!win || win.isDestroyed()) return;
+    const cb = win.getContentBounds();
+    const ab = this.subTabWinContentBounds;
+    this.subTabWin.setBounds({
+      x: Math.round(cb.x + ab.x),
+      y: Math.round(cb.y + ab.y),
+      width: Math.round(ab.width),
+      height: Math.round(ab.height),
+    });
   }
 
   // ── Command palette overlay ──────────────────────────────────

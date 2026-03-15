@@ -189,8 +189,6 @@ function initOverlays(): void {
     platform.initTooltipOverlay(activeWindowId);
     platform.initContextMenuOverlay(activeWindowId);
   }
-  platform.initSubTabButtonsOverlay(activeWindowId);
-  platform.initSubTabAnimationOverlay(activeWindowId);
   platform.initCommandPaletteOverlay(activeWindowId);
 }
 
