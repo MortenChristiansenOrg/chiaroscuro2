@@ -1,9 +1,11 @@
 import { useEffect, useRef } from "react";
+import { ErrorBoundary } from "react-error-boundary";
 // shell-composite: read-only cross-feature store access
 import { useTabCustomizationStore } from "../../../features/tab-customization/tab-customization.store";
 import { useTabsStore } from "../../../features/tabs/tabs.store";
 import { TerminalPanel } from "../../../features/terminal/terminal.renderer";
 import { useTerminalStore } from "../../../features/terminal/terminal.store";
+import { getContentOverlays } from "../Shell";
 import { BuiltInPage } from "./BuiltInPage";
 
 export function ContentArea() {
@@ -123,6 +125,13 @@ export function ContentArea() {
           </div>
         )}
       </div>
+
+      {/* Content overlays — positioned within content area */}
+      {getContentOverlays().map(({ name, Component }) => (
+        <ErrorBoundary key={`content-overlay-${name}`} fallback={null}>
+          <Component />
+        </ErrorBoundary>
+      ))}
 
       {/* Terminal panel — below content, shrinks WCV bounds */}
       {showTerminal && <TerminalPanel />}

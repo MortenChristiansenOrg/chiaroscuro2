@@ -115,11 +115,7 @@ To reconnect manually (e.g., after daemon dies):
 .claude/skills/browse-app/scripts/launch-docs.sh
 ```
 
-Then open in `playwright-cli`:
-
-```bash
-playwright-cli open http://localhost:5200
-```
+This starts Vite, swaps `.playwright/cli.config.json` to standalone browser mode (backing up any CDP config), and auto-opens the page in `playwright-cli`. No manual `playwright-cli open` needed.
 
 ### Stopping
 
@@ -134,11 +130,21 @@ playwright-cli close
 .claude/skills/browse-app/scripts/teardown-docs.sh
 ```
 
+`teardown-docs.sh` restores the CDP config backup if one exists, so subsequent `launch-app.sh` / `connect-app.sh` runs work correctly.
+
+## Config Management
+
+`playwright-cli` reads `.playwright/cli.config.json` from the project root to decide how to connect:
+- **App (CDP)**: `connect-app.sh` writes a config with `"cdpEndpoint"` pointing at Electron's debugging port.
+- **Design system (standalone)**: `launch-docs.sh` replaces the config with one that has no `cdpEndpoint`, so `playwright-cli` launches its own Chromium.
+
+The scripts handle backup/restore automatically. If you get a `connectOverCDP: Timeout` error when browsing the design system, the CDP config is active — run `launch-docs.sh` to fix it.
+
 ## Connect Workflow
 
 1. Run the appropriate launch script and wait for confirmation:
    - **App:** `launch-app.sh` — builds, launches Electron, and auto-connects `playwright-cli` via CDP
-   - **Design system:** `launch-docs.sh` then `playwright-cli open http://localhost:5200`
+   - **Design system:** `launch-docs.sh` — starts Vite and auto-opens in `playwright-cli`
 2. Run `playwright-cli snapshot` to confirm the page loaded
 3. Run `playwright-cli screenshot` and read the image to confirm visuals
 4. For app, use `playwright-cli tab-list` to see all Electron pages and `playwright-cli tab-select <n>` to switch

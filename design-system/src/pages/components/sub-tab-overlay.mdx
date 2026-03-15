@@ -1,0 +1,138 @@
+---
+title: Sub-Tab Overlay
+---
+
+import { ComponentPreview } from "../../components/ComponentPreview"
+import { SubTabOverlayDemo } from "../../components/SubTabOverlayDemo"
+
+# Sub-Tab Overlay
+
+Popup overlay for links opened from within a tab. Appears as a floating content card over a dimmed backdrop — just raw web content, no chrome. Part of the content area, below native overlays (command palette, tooltips).
+
+<ComponentPreview label="Sub-Tab Overlay">
+  <SubTabOverlayDemo />
+</ComponentPreview>
+
+## Anatomy
+
+1. **Backdrop** — full content-area dark overlay, dismisses on click
+2. **Frame card** — rounded container with elevated shadow, holds the WebContentsView
+3. **Action buttons** — white circular Close and Promote buttons, arranged vertically to the right of the frame
+
+---
+
+## Visual Specs
+
+### Backdrop
+
+| Property | Token/Value |
+|----------|-------------|
+| Background | `oklch(0 0 0 / 0.5)` |
+| Position | Absolute, fills entire content area |
+| Z-index | `var(--z-overlay)` (100) |
+| Cursor | Default (click dismisses) |
+
+### Frame Card
+
+| Property | Token/Value |
+|----------|-------------|
+| Position | Inside flex container: `top: 7.5%, left: 8%, right: 4%, height: 85%` |
+| Flex | `flex: 1` (fills available width minus button column) |
+| Border radius | `var(--radius)` (0.5rem) |
+| Box shadow | `var(--shadow-elevated)` |
+| Background | `var(--content-bg)` |
+
+### Action Buttons (Close / Promote)
+
+| Property | Token/Value |
+|----------|-------------|
+| Position | Vertical column to the right of the frame, centered vertically |
+| Layout | Column, `gap: 0.75rem` |
+| Size | `48px` × `48px` |
+| Border radius | `50%` (fully round) |
+| Border | None |
+| Background | `white` |
+| Icon color | `oklch(0.35 0 0)` (dark gray) |
+| Icon size | `1.125rem` |
+| Box shadow | `0 4px 20px oklch(0 0 0 / 0.25), 0 1px 3px oklch(0 0 0 / 0.15)` |
+| Order | Close (top), Promote (bottom) |
+
+---
+
+## States
+
+### Button States
+
+| State | Effect |
+|-------|--------|
+| Default | White background, dark gray icon |
+| Hover | `scale(1.15)` with springy easing |
+| Active/Pressed | `scale(0.95)` |
+
+Hover/active transitions use `200ms cubic-bezier(0.34, 1.56, 0.64, 1)` for a springy feel. No color change on hover for either button.
+
+---
+
+## Behavior
+
+- **Open trigger**: `target="_blank"` links and `window.open()` calls open a sub-tab instead of navigating the parent.
+- **Ctrl+Click / Middle-click**: Bypasses sub-tab, opens a new standalone tab.
+- **Backdrop click**: Dismisses the topmost sub-tab.
+- **Escape key**: Dismisses the topmost sub-tab (registered as a local shortcut).
+- **Stacking**: Opening a link from within a sub-tab pushes a new sub-tab onto the stack. Only the topmost is visible.
+- **Promote**: Converts the sub-tab's WebContentsView into a standalone tab without page reload.
+- **Parent close**: Closing the parent tab closes all its sub-tabs.
+- **Tab switching**: Sub-tab stacks are hidden when switching to a different parent tab and restored when switching back.
+
+---
+
+## Animation & Motion
+
+| Transition | Duration | Easing |
+|-----------|----------|--------|
+| Backdrop opacity | `var(--duration-normal)` | `var(--ease-out)` |
+| Button scale | `200ms` | `cubic-bezier(0.34, 1.56, 0.64, 1)` (springy) |
+
+`prefers-reduced-motion`: Backdrop transitions should be instant.
+
+---
+
+## Keyboard & Focus
+
+| Key | Action |
+|-----|--------|
+| Escape | Dismiss topmost sub-tab |
+
+Focus remains in the WebContentsView content. The overlay action buttons are mouse-only (keyboard users use Escape to dismiss).
+
+---
+
+## Accessibility
+
+- Backdrop and frame have `pointer-events: auto` to capture clicks.
+- Close button: `aria-label="Close sub-tab"`, `data-tip="Close"`.
+- Promote button: `aria-label="Open as tab"`, `data-tip="Open as tab"`.
+- Button size 48px exceeds `var(--click-target-min)` (24px) minimum.
+- Sub-tab overlay uses `var(--z-overlay)` (100), below command palette (native BrowserWindow, always on top).
+
+---
+
+## Layout & Composition
+
+| Property | Value |
+|----------|-------|
+| Parent | ContentArea (main content region) |
+| Position | Absolute overlay within content area |
+| Z-index | `var(--z-overlay)` (100) — below native overlays |
+| Container | Flex row: frame (flex-1) + button column (48px) |
+| Gap | `0.75rem` between frame and buttons |
+
+The sub-tab WebContentsView is positioned by the main process to fill the entire frame card area.
+
+---
+
+## Related
+
+- [Tabs](/components/tabs) — parent tab management, activation, close
+- [Web Content Host](/components/web-content-host) — WebContentsView positioning
+- [Command Palette](/components/command-palette) — native overlay (always above sub-tabs)

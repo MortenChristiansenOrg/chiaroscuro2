@@ -39,6 +39,7 @@ export interface Platform {
   getTabTitle(tabId: TabId): string | undefined;
   setTabBounds(tabId: TabId, bounds: Bounds): void;
   setTabBorderRadius(tabId: TabId, radius: number): void;
+  setTabBackgroundColor(tabId: TabId, color: string): void;
   hideTab(tabId: TabId): void;
   hideAllTabs(): void;
   onTabEvent(tabId: TabId, event: string, callback: (...args: unknown[]) => void): () => void;
@@ -84,6 +85,25 @@ export interface Platform {
   }): Promise<number>;
   hideContextMenu(): void;
 
+  // Sub-tab buttons overlay
+  initSubTabButtonsOverlay(windowId: WindowId): void;
+  showSubTabButtons(frameBounds: Bounds, parentTabId: string): void;
+  hideSubTabButtons(): void;
+
+  // Sub-tab backdrop overlay (persistent canvas with transparent hole at frame)
+  initSubTabAnimationOverlay(windowId: WindowId): void;
+  playSubTabEnterAnimation(
+    contentBounds: Bounds,
+    frameBounds: Bounds,
+    parentTabId: string,
+  ): Promise<{ originX: number; originY: number }>;
+  playSubTabExitAnimation(): Promise<void>;
+  showSubTabOverlay(contentBounds: Bounds, frameBounds: Bounds, parentTabId: string): void;
+  hideSubTabOverlay(): void;
+  updateSubTabOverlayFrame(contentBounds: Bounds, frameBounds: Bounds): void;
+  /** Toggle mouse passthrough on the sub-tab overlay (true = clicks pass through to WCV). */
+  setSubTabOverlayPassthrough(passthrough: boolean): void;
+
   // Command palette overlay
   initCommandPaletteOverlay(windowId: WindowId): void;
   showCommandPalette(): void;
@@ -107,6 +127,11 @@ export interface Platform {
 
   // Network
   fetchAsDataUrl(url: string): Promise<string | undefined>;
+
+  // Window-open interception (target="_blank", window.open)
+  onWindowOpen(
+    callback: (url: string, sourceTabId: TabId, disposition: string) => boolean,
+  ): () => void;
 
   // Protocol navigation
   onProtocolRequest(callback: (url: string, origin: string) => void): () => void;
