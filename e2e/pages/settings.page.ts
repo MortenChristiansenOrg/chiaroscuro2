@@ -39,4 +39,9 @@ export class SettingsPage {
   async isVisible(): Promise<boolean> {
     return this.content.locator("h2", { hasText: "Search" }).isVisible();
   }
+
+  /** Wait for settings page to render (heading visible). */
+  async waitForVisible(timeout = 3_000) {
+    await this.content.locator("h2", { hasText: "Search" }).waitFor({ state: "visible", timeout });
+  }
 }

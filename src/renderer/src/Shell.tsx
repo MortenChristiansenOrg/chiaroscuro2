@@ -11,6 +11,7 @@ interface FeatureRegistration {
   name: string;
   Chrome?: ComponentType;
   Sidebar?: ComponentType;
+  ContentOverlay?: ComponentType;
   Overlay?: ComponentType;
   subscribeToEvents?: EventSubscriber;
 }
@@ -28,6 +29,15 @@ export function registerFeature(reg: FeatureRegistration): void {
 /** Signal main process that all subscriptions are wired (triggers phase 2 start). */
 export function signalReady(): void {
   window.chiaroscuro.signalReady();
+}
+
+/** Get content overlay components registered by features. */
+export function getContentOverlays(): { name: string; Component: ComponentType }[] {
+  const result: { name: string; Component: ComponentType }[] = [];
+  for (const f of features) {
+    if (f.ContentOverlay) result.push({ name: f.name, Component: f.ContentOverlay });
+  }
+  return result;
 }
 
 function ZoneFallback({ error, resetErrorBoundary }: FallbackProps) {

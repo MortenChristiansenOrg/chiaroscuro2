@@ -39,6 +39,7 @@ export interface Platform {
   getTabTitle(tabId: TabId): string | undefined;
   setTabBounds(tabId: TabId, bounds: Bounds): void;
   setTabBorderRadius(tabId: TabId, radius: number): void;
+  setTabBackgroundColor(tabId: TabId, color: string): void;
   hideTab(tabId: TabId): void;
   hideAllTabs(): void;
   onTabEvent(tabId: TabId, event: string, callback: (...args: unknown[]) => void): () => void;
@@ -84,6 +85,23 @@ export interface Platform {
   }): Promise<number>;
   hideContextMenu(): void;
 
+  // Sub-tab child window (backdrop + buttons + hosts sub-tab WCV)
+  showSubTabWindow(
+    contentBounds: Bounds,
+    frameBounds: Bounds,
+    parentTabId: string,
+  ): Promise<{ originX: number; originY: number }>;
+  hideSubTabWindow(): Promise<void>;
+  showSubTabWindowStatic(contentBounds: Bounds, frameBounds: Bounds, parentTabId: string): void;
+  hideSubTabWindowInstant(): void;
+  updateSubTabWindowBounds(contentBounds: Bounds, frameBounds: Bounds): void;
+  /** Move a WCV from the main window into the sub-tab child window. */
+  attachTabToSubTabWindow(tabId: TabId, frameBounds: Bounds): void;
+  /** Move a WCV from the sub-tab child window back to the main window. */
+  detachTabFromSubTabWindow(tabId: TabId): void;
+  /** Animate a tab's bounds from `from` to `to` over `duration` ms (ease-out). */
+  animateTabBounds(tabId: TabId, from: Bounds, to: Bounds, duration: number): Promise<void>;
+
   // Command palette overlay
   initCommandPaletteOverlay(windowId: WindowId): void;
   showCommandPalette(): void;
@@ -107,6 +125,11 @@ export interface Platform {
 
   // Network
   fetchAsDataUrl(url: string): Promise<string | undefined>;
+
+  // Window-open interception (target="_blank", window.open)
+  onWindowOpen(
+    callback: (url: string, sourceTabId: TabId, disposition: string) => boolean,
+  ): () => void;
 
   // Protocol navigation
   onProtocolRequest(callback: (url: string, origin: string) => void): () => void;

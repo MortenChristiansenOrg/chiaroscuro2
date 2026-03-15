@@ -23,9 +23,7 @@ test.describe("settings page", () => {
     await openSettings(commandPalettePage);
 
     // Settings page should render in main content area
-    await expect(async () => {
-      expect(await settingsPage.isVisible()).toBe(true);
-    }).toPass({ timeout: 5_000 });
+    await settingsPage.waitForVisible();
   });
 
   test("settings page renders with search providers section", async ({
@@ -34,9 +32,7 @@ test.describe("settings page", () => {
   }) => {
     await openSettings(commandPalettePage);
 
-    await expect(async () => {
-      expect(await settingsPage.isVisible()).toBe(true);
-    }).toPass({ timeout: 5_000 });
+    await settingsPage.waitForVisible();
 
     // Should have default search providers
     const count = await settingsPage.getProviderCount();
@@ -46,9 +42,7 @@ test.describe("settings page", () => {
   test("add and remove search provider", async ({ commandPalettePage, settingsPage }) => {
     await openSettings(commandPalettePage);
 
-    await expect(async () => {
-      expect(await settingsPage.isVisible()).toBe(true);
-    }).toPass({ timeout: 5_000 });
+    await settingsPage.waitForVisible();
 
     const countBefore = await settingsPage.getProviderCount();
 

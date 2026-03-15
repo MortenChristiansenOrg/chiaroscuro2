@@ -39,6 +39,7 @@
     "../src/features/sidebar/SidebarContext.tsx",
     "../src/features/**/*.store.ts",
     "../src/features/**/*.shared.ts",
+    "../src/features/sub-tabs/SubTabFrame.tsx",
     "../src/features/command-palette/resolve-input.ts",
     "../src/bus/types.ts"
   ]

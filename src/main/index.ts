@@ -63,6 +63,8 @@ import {
 } from "../features/settings/settings.shared";
 import sidebar from "../features/sidebar/sidebar.main";
 import type { SidebarCommands, SidebarEvents } from "../features/sidebar/sidebar.shared";
+import subTabs from "../features/sub-tabs/sub-tabs.main";
+import type { SubTabsCommands, SubTabsEvents } from "../features/sub-tabs/sub-tabs.shared";
 import tabCustomization from "../features/tab-customization/tab-customization.main";
 import {
   getCustomization,
@@ -136,6 +138,7 @@ type AllCommands = MergeRegistries<
     TerminalCommands,
     LocalWebAppCommands,
     InstallerCommands,
+    SubTabsCommands,
     DebugServerCommands,
   ]
 >;
@@ -162,6 +165,7 @@ type AllEvents = MergeRegistries<
     TerminalEvents,
     LocalWebAppEvents,
     InstallerEvents,
+    SubTabsEvents,
     DebugServerEvents,
   ]
 >;
@@ -288,6 +292,7 @@ app.whenReady().then(async () => {
   terminal.register(deps);
   localWebApp.register(deps);
   installer.register(deps);
+  subTabs.register(deps);
 
   // Register debug state providers
   registerDebugState("tabs", () => {

@@ -14,6 +14,7 @@ export const TABS_GET_FOR_WORKSPACE = "tabs:get-for-workspace" as const;
 export const TABS_SET_FOLDER_ID = "tabs:set-folder-id" as const;
 export const TABS_SET_ORDER = "tabs:set-order" as const;
 export const TABS_SET_WORKSPACE = "tabs:set-workspace" as const;
+export const TABS_ADOPT = "tabs:adopt" as const;
 
 // ── Event names ──────────────────────────────────────────────────
 export const TABS_CREATED = "tabs:created" as const;
@@ -21,6 +22,7 @@ export const TABS_CLOSED = "tabs:closed" as const;
 export const TABS_ACTIVATED = "tabs:activated" as const;
 export const TABS_UPDATED = "tabs:updated" as const;
 export const TABS_LIST_CHANGED = "tabs:list-changed" as const;
+export const TABS_CONTENT_BOUNDS_CHANGED = "tabs:content-bounds-changed" as const;
 
 // ── Data types ───────────────────────────────────────────────────
 export interface Tab {
@@ -82,6 +84,13 @@ export interface TabsClearEphemeralPayload {
   workspaceId?: WorkspaceId;
 }
 
+export interface TabsAdoptPayload {
+  /** Existing tabId with a live WebContentsView (e.g. from sub-tab promotion). */
+  tabId: TabId;
+  workspaceId?: WorkspaceId;
+  activate?: boolean;
+}
+
 export interface TabsReorderPayload {
   tabId: TabId;
   targetBookmarked: boolean;
@@ -136,6 +145,7 @@ export type TabsCommands = {
     payload: { tabId: TabId; workspaceId: WorkspaceId };
     response: undefined;
   };
+  [TABS_ADOPT]: { payload: TabsAdoptPayload; response: TabId };
 };
 
 // ── Event registry ───────────────────────────────────────────────
@@ -145,4 +155,5 @@ export type TabsEvents = {
   [TABS_ACTIVATED]: TabsActivatedEvent;
   [TABS_UPDATED]: TabsUpdatedEvent;
   [TABS_LIST_CHANGED]: TabsListChangedEvent;
+  [TABS_CONTENT_BOUNDS_CHANGED]: Bounds;
 };

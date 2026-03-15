@@ -15,9 +15,11 @@ import {
   type PersistedTab,
   TABS_ACTIVATE,
   TABS_ACTIVATED,
+  TABS_ADOPT,
   TABS_CLEAR_EPHEMERAL,
   TABS_CLOSE,
   TABS_CLOSED,
+  TABS_CONTENT_BOUNDS_CHANGED,
   TABS_CREATE,
   TABS_CREATED,
   TABS_GET,
@@ -101,6 +103,9 @@ const _state = featureState<{
   attachTabListeners: (tabId: TabId) => void;
   persistTab: (tab: Tab) => void;
 }>("tabs");
+
+// Module-level content bounds for cross-feature access
+let _contentBounds: Bounds = { x: 0, y: 0, width: 0, height: 0 };
 
 // Tracks the "fixed" URL for bookmarked tabs (URL at time of bookmarking).
 // Used to restore bookmarked tabs to their original address unless
@@ -535,6 +540,8 @@ export default defineFeature<Deps>({
 
     commands.handle(TABS_REPORT_CONTENT_BOUNDS, async (payload) => {
       contentBounds = payload;
+      _contentBounds = { ...contentBounds };
+      events.emit(TABS_CONTENT_BOUNDS_CHANGED, { ...contentBounds });
       const activeTabId = getActiveTabId();
       if (activeTabId) {
         const activeTab = tabs.get(activeTabId);
@@ -567,6 +574,44 @@ export default defineFeature<Deps>({
       events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
       scheduleListChanged();
       persistTab(tab);
+    });
+
+    // Adopt an existing WebContentsView as a tab (used by sub-tab promotion)
+    commands.handle(TABS_ADOPT, async (payload) => {
+      const { tabId, activate } = payload;
+      const workspaceId = payload.workspaceId ?? getActiveWorkspaceId();
+      if (!workspaceId) throw new Error("No active workspace");
+
+      const url = platform.getTabUrl(tabId) ?? "";
+      const title = platform.getTabTitle(tabId) ?? url;
+      const now = Date.now();
+
+      const tab: Tab = {
+        id: tabId,
+        workspaceId,
+        url,
+        title,
+        favicon: "",
+        loading: false,
+        bookmarked: false,
+        lastAccessedAt: now,
+        createdAt: now,
+        order: tabs.size,
+        folderId: null,
+      };
+
+      tabs.set(tabId, tab);
+      attachTabListeners(tabId);
+      persistTab(tab);
+
+      events.emit(TABS_CREATED, { tab });
+      scheduleListChanged();
+
+      if (activate !== false) {
+        await commands.send(TABS_ACTIVATE, { tabId });
+      }
+
+      return tabId;
     });
 
     const toggleBookmark = () => {
@@ -688,4 +733,8 @@ export function setTabOrder(tabId: TabId, order: number): void {
   if (!tab) return;
   tab.order = order;
   persistTab(tab);
+}
+
+export function getContentBounds(): Bounds {
+  return { ..._contentBounds };
 }

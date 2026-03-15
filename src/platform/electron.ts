@@ -10,6 +10,7 @@ import {
   dialog,
   globalShortcut,
   ipcMain,
+  screen,
   session,
   shell,
   webContents,
@@ -39,6 +40,74 @@ function isAllowedExternalUrl(url: string): boolean {
   } catch {
     return false;
   }
+}
+
+// HTML for the sub-tab child window — full backdrop + close/promote buttons.
+// The sub-tab WCV is added as a child view and renders on top of this HTML,
+// so no hole/passthrough is needed — the backdrop covers everything and the
+// WCV naturally occludes the area it covers.
+function buildSubTabWindowHtml(faCssDir: string): string {
+  return `<!DOCTYPE html><html><head><meta charset="utf-8">
+<link rel="stylesheet" href="file://${faCssDir}/fontawesome.css">
+<link rel="stylesheet" href="file://${faCssDir}/solid.css">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}html,body{background:transparent;overflow:hidden;width:100%;height:100%}
+#backdrop{position:fixed;inset:0;background:oklch(0 0 0/0.5);border-radius:8px;opacity:0;transition:none}
+#btns{position:absolute;display:flex;flex-direction:column;gap:12px;align-items:center;pointer-events:auto}
+button{width:48px;height:48px;border-radius:50%;border:none;background:white;
+color:oklch(0.35 0 0);font-size:1.125rem;
+box-shadow:0 4px 20px oklch(0 0 0/0.25),0 1px 3px oklch(0 0 0/0.15);
+cursor:pointer;display:flex;align-items:center;justify-content:center;
+transition:transform 200ms cubic-bezier(0.34,1.56,0.64,1);-webkit-font-smoothing:antialiased}
+button:hover{transform:scale(1.15)}button:active{transform:scale(0.95)}
+</style></head><body>
+<div id="backdrop"></div>
+<div id="btns" style="display:none">
+<button id="c" aria-label="Close sub-tab"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+<button id="p" aria-label="Open as tab"><i class="fa-solid fa-up-right-from-square" aria-hidden="true"></i></button>
+</div>
+<script>
+var bd=document.getElementById('backdrop'),btns=document.getElementById('btns');
+var pid=null,animId=null,D=200;
+function setParentTabId(id){pid=id}
+function positionButtons(fx,fy,fw,fh){
+  var gap=12,btnH=108;
+  btns.style.left=(fx+fw+gap)+'px';
+  btns.style.top=(fy+gap)+'px';
+  btns.style.display='flex';
+}
+function cancelAnim(){if(animId){cancelAnimationFrame(animId);animId=null}}
+function enterAnimation(fx,fy,fw,fh){
+  return new Promise(function(resolve){
+    cancelAnim();
+    positionButtons(fx,fy,fw,fh);
+    var start=performance.now();
+    function tick(now){
+      var t=Math.min((now-start)/D,1);
+      bd.style.opacity=1-(1-t)*(1-t);
+      if(t<1){animId=requestAnimationFrame(tick)}else{animId=null;resolve()}
+    }
+    animId=requestAnimationFrame(tick);
+  });
+}
+function exitAnimation(){
+  return new Promise(function(resolve){
+    cancelAnim();var start=performance.now();
+    function tick(now){
+      var t=Math.min((now-start)/D,1);
+      bd.style.opacity=1-t*t;
+      if(t<1){animId=requestAnimationFrame(tick)}else{animId=null;bd.style.opacity=0;btns.style.display='none';resolve()}
+    }
+    animId=requestAnimationFrame(tick);
+  });
+}
+function showStatic(fx,fy,fw,fh){cancelAnim();bd.style.opacity=1;positionButtons(fx,fy,fw,fh)}
+function hide(){cancelAnim();bd.style.opacity=0;btns.style.display='none'}
+function updateButtons(fx,fy,fw,fh){positionButtons(fx,fy,fw,fh)}
+bd.addEventListener('click',function(){if(pid)window.chiaroscuro.sendCommand('sub-tabs:close',{parentTabId:pid})});
+document.getElementById('c').onclick=function(){if(pid)window.chiaroscuro.sendCommand('sub-tabs:close',{parentTabId:pid})};
+document.getElementById('p').onclick=function(){if(pid)window.chiaroscuro.sendCommand('sub-tabs:promote',{parentTabId:pid})};
+</script></body></html>`;
 }
 
 // Minimal HTML for the tooltip popup — transparent bg, matching app styling
@@ -292,10 +361,18 @@ export class ElectronPlatform implements Platform {
   private ctxResolve: ((index: number) => void) | null = null;
   private ctxParentListenersSet = false;
   private paletteParentListenersSet = false;
+  private subTabWin: BrowserWindow | null = null;
+  private subTabWinReady = false;
+  private subTabWinParentListenersSet = false;
+  private subTabWinContentBounds: Bounds | null = null;
+  private tabBoundsAnimations = new Map<string, () => void>();
   private pendingPaletteJs: string | null = null;
   private permissionHandlerSet = false;
   private zoomIpcHooked = false;
   private protocolRequestCallback: ((url: string, origin: string) => void) | undefined;
+  private windowOpenCallback:
+    | ((url: string, sourceTabId: TabId, disposition: string) => boolean)
+    | undefined;
 
   constructor(private getActiveWindowId: () => WindowId | undefined) {}
 
@@ -387,10 +464,13 @@ export class ElectronPlatform implements Platform {
       this.permissionHandlerSet = true;
     }
 
-    view.webContents.setWindowOpenHandler(({ url }) => {
-      // Don't open new windows — navigate the current tab instead.
-      // This handles target="_blank" links, including download URLs.
+    view.webContents.setWindowOpenHandler(({ url, disposition }) => {
       if (isAllowedUrl(url)) {
+        // Let registered callback handle it (sub-tabs, etc.)
+        if (this.windowOpenCallback?.(url, tabId, disposition)) {
+          return { action: "deny" as const };
+        }
+        // Fallback: navigate the current tab
         view.webContents.loadURL(url);
       } else if (this.protocolRequestCallback) {
         try {
@@ -409,7 +489,7 @@ export class ElectronPlatform implements Platform {
           // Invalid URL — ignore
         }
       }
-      return { action: "deny" };
+      return { action: "deny" as const };
     });
 
     view.webContents.on("will-navigate", (event, navUrl) => {
@@ -459,9 +539,21 @@ export class ElectronPlatform implements Platform {
     const view = this.views.get(tabId);
     if (!view) return;
 
+    // Remove from whichever window owns the view (main or sub-tab child window)
     const win = this.getWin();
     if (win) {
-      win.contentView.removeChildView(view);
+      try {
+        win.contentView.removeChildView(view);
+      } catch {
+        // may not be a child of main window
+      }
+    }
+    if (this.subTabWin && !this.subTabWin.isDestroyed()) {
+      try {
+        this.subTabWin.contentView.removeChildView(view);
+      } catch {
+        // may not be a child of sub-tab window
+      }
     }
 
     await view.webContents.close({ waitForBeforeUnload: true });
@@ -498,6 +590,12 @@ export class ElectronPlatform implements Platform {
     const view = this.views.get(tabId);
     if (!view) return;
     view.setBorderRadius(Math.round(radius));
+  }
+
+  setTabBackgroundColor(tabId: TabId, color: string): void {
+    const view = this.views.get(tabId);
+    if (!view) return;
+    view.setBackgroundColor(color);
   }
 
   hideTab(tabId: TabId): void {
@@ -916,6 +1014,269 @@ export class ElectronPlatform implements Platform {
     if (win && !win.isDestroyed()) win.webContents.focus();
   }
 
+  // ── Sub-tab child window ─────────────────────────────────────
+
+  private ensureSubTabWindow(): void {
+    if (this.subTabWin && !this.subTabWin.isDestroyed()) return;
+    if (process.env.NODE_ENV === "test") return;
+
+    const parent = this.getWin();
+    if (!parent) return;
+
+    const rawCssDir = path
+      .join(__dirname, "../../node_modules/@fortawesome/fontawesome-free/css")
+      .replace(/\\/g, "/");
+    const faCssDir = rawCssDir.startsWith("/") ? rawCssDir : `/${rawCssDir}`;
+
+    this.subTabWin = new BrowserWindow({
+      parent,
+      frame: false,
+      transparent: true,
+      focusable: false,
+      skipTaskbar: true,
+      resizable: false,
+      show: false,
+      hasShadow: false,
+      webPreferences: {
+        sandbox: true,
+        contextIsolation: true,
+        preload: path.join(__dirname, "../preload/index.js"),
+      },
+    });
+
+    const html = buildSubTabWindowHtml(faCssDir);
+    const tmpPath = path.join(app.getPath("temp"), `chiaroscuro-subtab-win-${process.pid}.html`);
+    fs.writeFileSync(tmpPath, html, "utf-8");
+    this.subTabWin.loadFile(tmpPath);
+
+    // Pass through all events until the sub-tab is actually shown
+    this.subTabWin.setIgnoreMouseEvents(true, { forward: true });
+
+    this.subTabWinReady = false;
+    this.subTabWin.webContents.once("did-finish-load", () => {
+      this.subTabWinReady = true;
+      // Pre-show while backdrop is transparent to trigger OS window-show anim now
+      if (this.subTabWin && !this.subTabWin.isDestroyed()) {
+        this.subTabWin.showInactive();
+      }
+    });
+
+    if (!this.subTabWinParentListenersSet) {
+      parent.on("move", () => this.syncSubTabWinBounds());
+      parent.on("resize", () => this.syncSubTabWinBounds());
+      this.subTabWinParentListenersSet = true;
+    }
+  }
+
+  private positionSubTabWin(contentBounds: Bounds): void {
+    if (!this.subTabWin || this.subTabWin.isDestroyed()) return;
+    const win = this.getWin();
+    if (!win || win.isDestroyed()) return;
+
+    this.subTabWinContentBounds = contentBounds;
+    const cb = win.getContentBounds();
+    this.subTabWin.setBounds({
+      x: Math.round(cb.x + contentBounds.x),
+      y: Math.round(cb.y + contentBounds.y),
+      width: Math.round(contentBounds.width),
+      height: Math.round(contentBounds.height),
+    });
+  }
+
+  async showSubTabWindow(
+    contentBounds: Bounds,
+    frameBounds: Bounds,
+    parentTabId: string,
+  ): Promise<{ originX: number; originY: number }> {
+    this.ensureSubTabWindow();
+
+    // Click origin relative to the sub-tab frame (for CSS transform-origin)
+    const cursor = screen.getCursorScreenPoint();
+    const win = this.getWin();
+    const cb = win && !win.isDestroyed() ? win.getContentBounds() : { x: 0, y: 0 };
+    const originX = cursor.x - cb.x - frameBounds.x;
+    const originY = cursor.y - cb.y - frameBounds.y;
+    const origin = { originX, originY };
+
+    if (!this.subTabWin || this.subTabWin.isDestroyed()) return origin;
+
+    // Enable event capture on the child window (backdrop clicks, buttons)
+    this.subTabWin.setIgnoreMouseEvents(false);
+    this.positionSubTabWin(contentBounds);
+
+    // Frame position relative to child window
+    const fx = frameBounds.x - contentBounds.x;
+    const fy = frameBounds.y - contentBounds.y;
+    const fw = frameBounds.width;
+    const fh = frameBounds.height;
+
+    try {
+      await this.subTabWin.webContents.executeJavaScript(
+        `setParentTabId(${JSON.stringify(parentTabId)})`,
+      );
+      await this.subTabWin.webContents.executeJavaScript(`enterAnimation(${fx},${fy},${fw},${fh})`);
+    } catch {
+      // window may be destroyed
+    }
+
+    return origin;
+  }
+
+  async hideSubTabWindow(): Promise<void> {
+    if (!this.subTabWin || this.subTabWin.isDestroyed()) return;
+
+    try {
+      await this.subTabWin.webContents.executeJavaScript("exitAnimation()");
+    } catch {
+      // window may be destroyed
+    }
+    // Pass through all events so the main window is usable
+    this.subTabWin.setIgnoreMouseEvents(true, { forward: true });
+    this.subTabWinContentBounds = null;
+  }
+
+  showSubTabWindowStatic(contentBounds: Bounds, frameBounds: Bounds, parentTabId: string): void {
+    this.ensureSubTabWindow();
+    if (!this.subTabWin || this.subTabWin.isDestroyed()) return;
+
+    this.subTabWin.setIgnoreMouseEvents(false);
+    this.positionSubTabWin(contentBounds);
+
+    const fx = frameBounds.x - contentBounds.x;
+    const fy = frameBounds.y - contentBounds.y;
+
+    this.subTabWin.webContents
+      .executeJavaScript(`setParentTabId(${JSON.stringify(parentTabId)})`)
+      .catch(() => {});
+    this.subTabWin.webContents
+      .executeJavaScript(`showStatic(${fx},${fy},${frameBounds.width},${frameBounds.height})`)
+      .catch(() => {});
+  }
+
+  hideSubTabWindowInstant(): void {
+    if (!this.subTabWin || this.subTabWin.isDestroyed()) return;
+    this.subTabWin.webContents.executeJavaScript("hide()").catch(() => {});
+    this.subTabWin.setIgnoreMouseEvents(true, { forward: true });
+    this.subTabWinContentBounds = null;
+  }
+
+  updateSubTabWindowBounds(contentBounds: Bounds, frameBounds: Bounds): void {
+    if (!this.subTabWin || this.subTabWin.isDestroyed()) return;
+
+    this.positionSubTabWin(contentBounds);
+
+    const fx = frameBounds.x - contentBounds.x;
+    const fy = frameBounds.y - contentBounds.y;
+    this.subTabWin.webContents
+      .executeJavaScript(`updateButtons(${fx},${fy},${frameBounds.width},${frameBounds.height})`)
+      .catch(() => {});
+  }
+
+  attachTabToSubTabWindow(tabId: TabId, frameBounds: Bounds): void {
+    const view = this.views.get(tabId);
+    if (!view) return;
+    if (!this.subTabWin || this.subTabWin.isDestroyed()) return;
+
+    const mainWin = this.getWin();
+
+    // Remove from main window if currently attached there
+    if (mainWin && !mainWin.isDestroyed()) {
+      try {
+        mainWin.contentView.removeChildView(view);
+      } catch {
+        // may not be a child of main window
+      }
+    }
+
+    // Add to child window (may already be there — addChildView is idempotent for existing children)
+    try {
+      this.subTabWin.contentView.addChildView(view);
+    } catch {
+      // already a child
+    }
+
+    view.setBounds({
+      x: Math.round(frameBounds.x),
+      y: Math.round(frameBounds.y),
+      width: Math.round(frameBounds.width),
+      height: Math.round(frameBounds.height),
+    });
+    view.setBorderRadius(8);
+  }
+
+  detachTabFromSubTabWindow(tabId: TabId): void {
+    const view = this.views.get(tabId);
+    if (!view) return;
+
+    // Remove from child window
+    if (this.subTabWin && !this.subTabWin.isDestroyed()) {
+      try {
+        this.subTabWin.contentView.removeChildView(view);
+      } catch {
+        // may not be a child
+      }
+    }
+
+    // Add back to main window
+    const mainWin = this.getWin();
+    if (mainWin && !mainWin.isDestroyed()) {
+      mainWin.contentView.addChildView(view);
+      // Hide until caller repositions
+      view.setBounds({ x: 0, y: 0, width: 0, height: 0 });
+    }
+  }
+
+  animateTabBounds(tabId: TabId, from: Bounds, to: Bounds, duration: number): Promise<void> {
+    const view = this.views.get(tabId);
+    if (!view) return Promise.resolve();
+
+    // Cancel any existing animation on this tab
+    this.tabBoundsAnimations.get(tabId)?.();
+
+    return new Promise<void>((resolve) => {
+      let cancelled = false;
+      this.tabBoundsAnimations.set(tabId, () => {
+        cancelled = true;
+        resolve();
+      });
+
+      const startTime = performance.now();
+      const tick = () => {
+        if (cancelled) return;
+        const t = Math.min((performance.now() - startTime) / duration, 1);
+        const e = 1 - (1 - t) * (1 - t); // ease-out quadratic
+        view.setBounds({
+          x: Math.round(from.x + (to.x - from.x) * e),
+          y: Math.round(from.y + (to.y - from.y) * e),
+          width: Math.max(1, Math.round(from.width + (to.width - from.width) * e)),
+          height: Math.max(1, Math.round(from.height + (to.height - from.height) * e)),
+        });
+        if (t < 1) {
+          setTimeout(tick, 16);
+        } else {
+          this.tabBoundsAnimations.delete(tabId);
+          resolve();
+        }
+      };
+      tick();
+    });
+  }
+
+  private syncSubTabWinBounds(): void {
+    if (!this.subTabWinContentBounds) return;
+    if (!this.subTabWin || this.subTabWin.isDestroyed()) return;
+    const win = this.getWin();
+    if (!win || win.isDestroyed()) return;
+    const cb = win.getContentBounds();
+    const ab = this.subTabWinContentBounds;
+    this.subTabWin.setBounds({
+      x: Math.round(cb.x + ab.x),
+      y: Math.round(cb.y + ab.y),
+      width: Math.round(ab.width),
+      height: Math.round(ab.height),
+    });
+  }
+
   // ── Command palette overlay ──────────────────────────────────
 
   initCommandPaletteOverlay(windowId: WindowId): void {
@@ -1169,6 +1530,17 @@ export class ElectronPlatform implements Platform {
   }
 
   // ── Protocol navigation ─────────────────────────────────────────
+
+  onWindowOpen(
+    callback: (url: string, sourceTabId: TabId, disposition: string) => boolean,
+  ): () => void {
+    this.windowOpenCallback = callback;
+    return () => {
+      if (this.windowOpenCallback === callback) {
+        this.windowOpenCallback = undefined;
+      }
+    };
+  }
 
   onProtocolRequest(callback: (url: string, origin: string) => void): () => void {
     this.protocolRequestCallback = callback;

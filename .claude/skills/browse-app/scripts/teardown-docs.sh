@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
-# Stop the design system dev server and playwright-cli browser.
+# Stop the design system dev server, close playwright-cli browser,
+# and restore the CDP config if it was backed up by launch-docs.sh.
 # Safe to run multiple times.
 set -e
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
+PW_CONFIG="$PROJECT_DIR/.playwright/cli.config.json"
+PW_CONFIG_BAK="$PROJECT_DIR/.playwright/cli.config.cdp.bak"
 
 echo "Tearing down design system dev session..."
 
@@ -23,6 +29,12 @@ else
   else
     echo "  No Vite dev server running"
   fi
+fi
+
+# 3. Restore CDP config if backed up
+if [ -f "$PW_CONFIG_BAK" ]; then
+  mv "$PW_CONFIG_BAK" "$PW_CONFIG"
+  echo "  Restored CDP config from backup"
 fi
 
 echo "Done."

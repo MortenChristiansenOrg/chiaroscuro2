@@ -180,4 +180,10 @@ export const routes: Route[] = [
     group: "Components",
     component: lazy(() => import("./pages/components/app-update.mdx")),
   },
+  {
+    path: "/components/sub-tab-overlay",
+    title: "Sub-Tab Overlay",
+    group: "Components",
+    component: lazy(() => import("./pages/components/sub-tab-overlay.mdx")),
+  },
 ];
