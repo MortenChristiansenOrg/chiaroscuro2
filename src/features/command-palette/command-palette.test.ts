@@ -126,16 +126,13 @@ describe("command-palette commands", () => {
   });
 
   describe("EXECUTE", () => {
-    it("creates new tab for search input, auto-hides", async () => {
-      const { commands, events } = setup();
+    it("creates new tab for search input", async () => {
+      const { commands } = setup();
       await commands.send(COMMAND_PALETTE_SHOW, undefined);
-
-      const hidden = vi.fn();
-      events.on(COMMAND_PALETTE_HIDDEN, hidden);
 
       await commands.send(COMMAND_PALETTE_EXECUTE, { command: "hello world" });
 
-      expect(hidden).toHaveBeenCalled();
+      expect(tabCounter).toBe(1);
     });
 
     it("navigates current tab when inCurrentTab=true", async () => {

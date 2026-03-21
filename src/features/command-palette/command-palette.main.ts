@@ -108,8 +108,8 @@ export default defineFeature<Deps>({
         await commands.send("tabs:create", { url });
       }
 
-      // Auto-hide palette after execution
-      await commands.send(COMMAND_PALETTE_HIDE, undefined);
+      // Palette HTML sends command-palette:hide immediately after execute —
+      // doing it here too would race with a subsequent re-open.
     });
 
     commands.handle(COMMAND_PALETTE_SEARCH_VISITS, async (payload) => {

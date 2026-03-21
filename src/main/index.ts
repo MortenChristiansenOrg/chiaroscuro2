@@ -179,6 +179,7 @@ let activeTabId: TabId | undefined;
 let activeWorkspaceId: WorkspaceId | undefined;
 
 const isDev = !!process.env.ELECTRON_RENDERER_URL;
+if (isDev) app.setPath("userData", path.join(app.getPath("userData"), "..", "chiaroscuro-dev"));
 const platform = new ElectronPlatform(() => activeWindowId);
 const dataDir = process.env.DATA_DIR ?? path.join(app.getPath("userData"), "data");
 const dataStore: DataStore = createDataStore(dataDir);
