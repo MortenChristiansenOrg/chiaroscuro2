@@ -16,7 +16,11 @@ Also renames the existing `app:domain-css` built-in page to `app:domain-settings
 ## Requirements
 
 - Intercept all Electron permission requests via `session.setPermissionRequestHandler`.
-- Intercept permission checks via `session.setPermissionCheckHandler`.
+- Intercept permission checks via `session.setPermissionCheckHandler`. Check handlers are synchronous and must not prompt — they return stored decisions or deny.
+- Normalize Electron `media` permission into `camera` and/or `microphone` using `mediaTypes` (request handler) / `mediaType` (check handler).
+- For combined camera + microphone requests: check stored decisions for each sub-permission. If all decided, use them (grant only if all are "allow"). If any explicitly denied, deny the overall request. If some undecided, prompt only for the undecided keys.
+- Install device permission handlers for USB, Serial, HID, and Bluetooth via `setDevicePermissionHandler` and native picker dialogs (`select-usb-device`, etc.).
+- Install permission handlers per Electron `Session`, tracked via `WeakSet<Session>` to ensure idempotent installation and cleanup when sessions are GC'd.
 - If a stored decision exists for the domain + permission type, use it immediately (no prompt).
 - When a permission is requested and no decision exists, show a native prompt dialog with the requesting domain, the permission type (human-readable), and Allow/Deny buttons.
 - Allow/Deny decisions are persisted per-domain via DataStore.
@@ -87,6 +91,5 @@ Also renames the existing `app:domain-css` built-in page to `app:domain-settings
 
 ## Unresolved Issues
 
-- Should `setPermissionCheckHandler` also trigger prompts, or only `setPermissionRequestHandler`? Check handlers are synchronous and cannot await user input — likely just use stored decisions or deny.
 - Should permission decisions apply to all tabs on a domain, or per-tab? Per-domain is simpler and matches browser conventions.
 - Should there be a way to bulk-revoke all permissions for a domain?
