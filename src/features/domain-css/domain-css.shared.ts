@@ -1,7 +1,7 @@
 import type { TabId } from "../../shared/types";
 
 // ── Command names ────────────────────────────────────────────────
-export const DOMAIN_CSS_OPEN = "domain-css:open" as const;
+export const DOMAIN_SETTINGS_OPEN = "domain-settings:open" as const;
 export const DOMAIN_CSS_TOGGLE = "domain-css:toggle" as const;
 export const DOMAIN_CSS_EDIT = "domain-css:edit" as const;
 export const DOMAIN_CSS_REMOVE = "domain-css:remove" as const;
@@ -18,7 +18,7 @@ export interface DomainCssState {
 }
 
 // ── Payload types ────────────────────────────────────────────────
-export interface DomainCssOpenPayload {
+export interface DomainSettingsOpenPayload {
   domain: string;
 }
 
@@ -46,7 +46,7 @@ export interface DomainCssChangedEvent {
 
 // ── Command registry ─────────────────────────────────────────────
 export type DomainCssCommands = {
-  [DOMAIN_CSS_OPEN]: { payload: DomainCssOpenPayload; response: TabId };
+  [DOMAIN_SETTINGS_OPEN]: { payload: DomainSettingsOpenPayload; response: TabId };
   [DOMAIN_CSS_TOGGLE]: { payload: DomainCssTogglePayload; response: undefined };
   [DOMAIN_CSS_EDIT]: { payload: DomainCssEditPayload; response: undefined };
   [DOMAIN_CSS_REMOVE]: { payload: DomainCssRemovePayload; response: undefined };

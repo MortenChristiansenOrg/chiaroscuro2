@@ -3,6 +3,8 @@ import type { Download } from "@features/downloads/downloads.shared";
 import { useDownloadsStore } from "@features/downloads/downloads.store";
 import type { ProtocolLaunchRequestedEvent } from "@features/installer/installer.shared";
 import { useInstallerStore } from "@features/installer/installer.store";
+import type { PermissionDecision } from "@features/permissions/permissions.shared";
+import { usePermissionsStore } from "@features/permissions/permissions.store";
 import type { PinnedTab } from "@features/pinned-tabs/pinned-tabs.shared";
 import { usePinnedTabsStore } from "@features/pinned-tabs/pinned-tabs.store";
 import { useSidebarStore } from "@features/sidebar/sidebar.store";
@@ -28,6 +30,9 @@ interface StoreOverrides {
     updateDismissed: boolean;
     protocolRequest: ProtocolLaunchRequestedEvent | null;
   };
+  permissions?: {
+    domainPermissions: Map<string, Record<string, PermissionDecision>>;
+  };
 }
 
 export function LivePreview({
@@ -49,6 +54,7 @@ export function LivePreview({
     if (stores?.pinnedTabs) usePinnedTabsStore.setState(stores.pinnedTabs);
     if (stores?.downloads) useDownloadsStore.setState(stores.downloads);
     if (stores?.installer) useInstallerStore.setState(stores.installer);
+    if (stores?.permissions) usePermissionsStore.setState(stores.permissions);
 
     return () => {
       if (stores?.tabs) useTabsStore.setState({ tabs: new Map(), activeTabId: null });
@@ -67,6 +73,7 @@ export function LivePreview({
           updateDismissed: false,
           protocolRequest: null,
         });
+      if (stores?.permissions) usePermissionsStore.setState({ domainPermissions: new Map() });
     };
   }, []);
 

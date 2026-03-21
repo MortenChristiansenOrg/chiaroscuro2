@@ -14,9 +14,9 @@ import {
   DOMAIN_CSS_CHANGED,
   DOMAIN_CSS_EDIT,
   DOMAIN_CSS_GET_STATE,
-  DOMAIN_CSS_OPEN,
   DOMAIN_CSS_REMOVE,
   DOMAIN_CSS_TOGGLE,
+  DOMAIN_SETTINGS_OPEN,
   type DomainCssChangedEvent,
   type DomainCssCommands,
   type DomainCssEvents,
@@ -222,23 +222,23 @@ describe("domain-css commands", () => {
     });
   });
 
-  describe("DOMAIN_CSS_OPEN", () => {
+  describe("DOMAIN_SETTINGS_OPEN", () => {
     it("creates a built-in tab for the domain", async () => {
       const { commands } = setup();
       commands.unhandle("tabs:create");
       const createSpy = vi.fn(async () => "builtin-1" as TabId);
       commands.handle("tabs:create", createSpy);
 
-      await commands.send(DOMAIN_CSS_OPEN, { domain: "example.com" });
+      await commands.send(DOMAIN_SETTINGS_OPEN, { domain: "example.com" });
 
       expect(createSpy).toHaveBeenCalledWith({
-        url: "app:domain-css?domain=example.com",
+        url: "app:domain-settings?domain=example.com",
       });
     });
 
     it("reactivates existing tab (singleton per domain)", async () => {
       const { commands } = setup();
-      await commands.send(DOMAIN_CSS_OPEN, { domain: "example.com" });
+      await commands.send(DOMAIN_SETTINGS_OPEN, { domain: "example.com" });
 
       // Second open should activate, not create
       commands.unhandle("tabs:create");
@@ -248,18 +248,18 @@ describe("domain-css commands", () => {
       const activateSpy = vi.fn(async () => {});
       commands.handle("tabs:activate", activateSpy);
 
-      await commands.send(DOMAIN_CSS_OPEN, { domain: "example.com" });
+      await commands.send(DOMAIN_SETTINGS_OPEN, { domain: "example.com" });
       expect(activateSpy).toHaveBeenCalled();
       expect(createSpy).not.toHaveBeenCalled();
     });
 
     it("creates new tab if singleton was closed", async () => {
       const { commands, events } = setup();
-      await commands.send(DOMAIN_CSS_OPEN, { domain: "example.com" });
+      await commands.send(DOMAIN_SETTINGS_OPEN, { domain: "example.com" });
 
       // Simulate tab close
       events.emit("tabs:closed", {
-        tabId: "mock-tab-app:domain-css?domain=example.com" as TabId,
+        tabId: "mock-tab-app:domain-settings?domain=example.com" as TabId,
         activatedTabId: null,
       });
 
@@ -268,7 +268,7 @@ describe("domain-css commands", () => {
       const createSpy = vi.fn(async () => "builtin-2" as TabId);
       commands.handle("tabs:create", createSpy);
 
-      await commands.send(DOMAIN_CSS_OPEN, { domain: "example.com" });
+      await commands.send(DOMAIN_SETTINGS_OPEN, { domain: "example.com" });
       expect(createSpy).toHaveBeenCalled();
     });
   });

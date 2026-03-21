@@ -186,4 +186,10 @@ export const routes: Route[] = [
     group: "Components",
     component: lazy(() => import("./pages/components/sub-tab-overlay.mdx")),
   },
+  {
+    path: "/components/permission-prompt",
+    title: "Permission Prompt",
+    group: "Components",
+    component: lazy(() => import("./pages/components/permission-prompt.mdx")),
+  },
 ];

@@ -82,11 +82,11 @@ function resolveBuiltInTitle(url: string): string {
     "app:tab-customization": "Tab Customization",
   };
   if (titles[url]) return titles[url];
-  // Handle parameterized URLs like app:domain-css?domain=github.com
+  // Handle parameterized URLs like app:domain-settings?domain=github.com
   const qIndex = url.indexOf("?");
   if (qIndex !== -1) {
     const base = url.slice(0, qIndex);
-    if (base === "app:domain-css") {
+    if (base === "app:domain-settings") {
       const params = new URLSearchParams(url.slice(qIndex + 1));
       const domain = params.get("domain");
       return domain ? `Customization: ${domain}` : "Customization";
