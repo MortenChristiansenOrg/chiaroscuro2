@@ -121,7 +121,9 @@ const iconFile = process.platform === "win32" ? "icon.ico" : "icon.png";
 const iconPath = path.join(__dirname, "../../resources", iconFile);
 
 // ── Single-instance lock (must run before whenReady) ─────────────
-const gotLock = setupExternalLink(app);
+// Skip in test mode: parallel Playwright workers each launch their own
+// Electron instance, and the OS-level lock would reject all but the first.
+const gotLock = process.env.NODE_ENV === "test" || setupExternalLink(app);
 if (!gotLock) {
   // Second instance — argv forwarded to running instance, quit immediately.
   // app.quit() already called inside setupExternalLink.
