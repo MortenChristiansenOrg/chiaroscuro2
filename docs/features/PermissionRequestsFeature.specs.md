@@ -2,7 +2,7 @@
 
 ## Overview
 
-Handles browser permission requests from websites (geolocation, camera, microphone, notifications, etc.). When a site requests a permission, a modal dialog appears above the tab content. Decisions persist per-domain via DataStore and are reviewable/revocable in the domain settings page. Default policy: deny all unless explicitly allowed.
+Handles browser permission requests from websites (geolocation, camera, microphone, notifications, etc.). When a site requests a permission, a native prompt dialog is shown. Decisions persist per-domain via DataStore and are reviewable/revocable in the domain settings page. Default policy: deny all unless explicitly allowed.
 
 Also renames the existing `app:domain-css` built-in page to `app:domain-settings`, making it a general-purpose domain customization page with sections for CSS and permissions.
 
@@ -10,7 +10,7 @@ Also renames the existing `app:domain-css` built-in page to `app:domain-settings
 
 - **Permission**: A browser capability a website can request (geolocation, media, notifications, etc.).
 - **Permission decision**: A stored allow/deny choice for a specific domain + permission type pair.
-- **Permission prompt**: The modal dialog shown when a site requests an undecided permission.
+- **Permission prompt**: The native prompt dialog shown when a site requests an undecided permission.
 - **Domain settings page**: The built-in page (formerly domain-css) for per-domain customization.
 
 ## Requirements
@@ -89,7 +89,10 @@ Also renames the existing `app:domain-css` built-in page to `app:domain-settings
 
 - `permissions:changed` — Permission decisions changed for a domain. Payload: `{ domain: string, permissions: Record<string, 'allow' | 'deny'> }`.
 
+## Design Decisions
+
+- **Permission scope**: Decisions apply per-domain rather than per-tab. Per-domain is simpler and matches browser conventions.
+
 ## Unresolved Issues
 
-- Should permission decisions apply to all tabs on a domain, or per-tab? Per-domain is simpler and matches browser conventions.
 - Should there be a way to bulk-revoke all permissions for a domain?
