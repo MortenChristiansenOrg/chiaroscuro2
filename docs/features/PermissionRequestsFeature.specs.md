@@ -18,9 +18,7 @@ Also renames the existing `app:domain-css` built-in page to `app:domain-settings
 - Intercept all Electron permission requests via `session.setPermissionRequestHandler`.
 - Intercept permission checks via `session.setPermissionCheckHandler`.
 - If a stored decision exists for the domain + permission type, use it immediately (no prompt).
-- If no stored decision exists, deny silently (default policy: deny).
-- When a permission is requested and no decision exists, show a modal prompt above the tab content.
-- The prompt shows: the requesting domain, the permission type (human-readable), and Allow/Deny buttons.
+- When a permission is requested and no decision exists, show a native prompt dialog with the requesting domain, the permission type (human-readable), and Allow/Deny buttons.
 - Allow/Deny decisions are persisted per-domain via DataStore.
 - The domain settings page shows a "Permissions" section listing all stored decisions for that domain.
 - Each permission in the list can be toggled (allow↔deny) or revoked (removed, returning to default deny).
@@ -36,11 +34,9 @@ Also renames the existing `app:domain-css` built-in page to `app:domain-settings
 2. Electron fires `setPermissionRequestHandler` in main process.
 3. Main checks DataStore for existing decision for this domain + permission.
 4. If stored → callback with stored decision (allow=true, deny=false). Done.
-5. If not stored → emit `permissions:prompt-requested` event to renderer.
-6. Renderer shows modal dialog above tab content: "[domain] wants to [permission description]" with Allow/Deny.
-7. User clicks Allow or Deny.
-8. Renderer sends `permissions:respond` command with the decision.
-9. Main stores decision, calls Electron callback, emits `permissions:changed` event.
+5. If not stored → main shows a native prompt dialog via `showPermissionPrompt(domain, label)`.
+6. User clicks Allow or Deny in the native dialog.
+7. Main stores decision, calls Electron callback, emits `permissions:changed` event.
 
 ### Review permissions in domain settings
 
@@ -80,7 +76,6 @@ Also renames the existing `app:domain-css` built-in page to `app:domain-settings
 
 ### Commands
 
-- `permissions:respond` — Respond to a pending permission prompt. Payload: `{ requestId: string, allowed: boolean }`.
 - `permissions:set` — Set a permission decision for a domain. Payload: `{ domain: string, permission: string, decision: 'allow' | 'deny' }`.
 - `permissions:revoke` — Remove a stored permission decision. Payload: `{ domain: string, permission: string }`.
 - `permissions:get-domain-permissions` — Get all stored decisions for a domain. Payload: `{ domain: string }`. Response: `{ domain: string, permissions: Record<string, 'allow' | 'deny'> }`.
@@ -88,8 +83,6 @@ Also renames the existing `app:domain-css` built-in page to `app:domain-settings
 
 ### Events
 
-- `permissions:prompt-requested` — A new permission prompt should be shown. Payload: `{ requestId: string, domain: string, permission: string }`.
-- `permissions:prompt-dismissed` — A pending prompt was resolved. Payload: `{ requestId: string }`.
 - `permissions:changed` — Permission decisions changed for a domain. Payload: `{ domain: string, permissions: Record<string, 'allow' | 'deny'> }`.
 
 ## Unresolved Issues

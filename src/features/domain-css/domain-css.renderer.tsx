@@ -1,12 +1,9 @@
 import { useEffect } from "react";
-import type { BuiltInPageProps } from "../../renderer/src/components/BuiltInPage";
 import { Icon } from "../../renderer/src/components/Icon";
 import {
   SettingItem,
-  SettingsLayout,
   settingsAddButtonStyle,
   settingsCategoryHeadingStyle,
-  useScrollSpy,
 } from "../../renderer/src/components/SettingsLayout";
 import {
   DOMAIN_CSS_EDIT,
@@ -19,8 +16,6 @@ import { useDomainCssStore } from "./domain-css.store";
 function sendCommand(name: string, payload: unknown) {
   void window.chiaroscuro.sendCommand(name, payload).catch(console.error);
 }
-
-const categories = [{ id: "css", label: "Custom CSS" }];
 
 export function CssControls({ domain }: { domain: string }) {
   const state = useDomainCssStore((s) => s.states.get(domain));
@@ -56,7 +51,7 @@ export function CssControls({ domain }: { domain: string }) {
   };
 
   return (
-    <section id="domain-customization-css">
+    <section id="domain-settings-css">
       <h2 style={settingsCategoryHeadingStyle}>Custom CSS</h2>
 
       <SettingItem
@@ -124,39 +119,5 @@ export function CssControls({ domain }: { domain: string }) {
         </SettingItem>
       )}
     </section>
-  );
-}
-
-export default function DomainCssPage({ params }: BuiltInPageProps) {
-  const domain = params.domain ?? "";
-  const { scrollRef, activeCategory } = useScrollSpy("domain-customization");
-
-  if (!domain) {
-    return (
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          height: "100%",
-          color: "var(--muted-foreground)",
-          fontSize: "var(--text-sm)",
-        }}
-      >
-        No domain specified.
-      </div>
-    );
-  }
-
-  return (
-    <SettingsLayout
-      icon="sliders"
-      title={domain}
-      categories={categories}
-      scrollRef={scrollRef}
-      activeCategory={activeCategory}
-    >
-      <CssControls domain={domain} />
-    </SettingsLayout>
   );
 }
