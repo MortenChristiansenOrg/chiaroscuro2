@@ -357,7 +357,7 @@ if (gotLock) {
       await startTabCustomization({ ...deps, getTab, isPinned });
       terminal.start?.(deps);
       await startLocalWebApp(deps);
-      externalLink.start?.(deps);
+      await externalLink.start?.(deps);
     });
 
     const win = createWindow(appStateData.windowBounds);

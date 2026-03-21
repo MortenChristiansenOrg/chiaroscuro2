@@ -17,6 +17,9 @@ import {
 
 const ALLOWED_SCHEMES = new Set(["http:", "https:", "file:"]);
 
+/** File extensions the browser can open (from spec). */
+const BROWSER_FILE_EXTENSIONS = new Set([".html", ".htm", ".mhtml", ".svg", ".pdf"]);
+
 /** Validate a URL string; returns normalized URL or null. */
 export function validateUrl(raw: string): string | null {
   try {
@@ -32,23 +35,34 @@ export function filePathToUrl(filePath: string): string {
   return pathToFileURL(filePath).href;
 }
 
-/** Extract valid URLs from an argv array. Skips binary/script args and flags. */
+/**
+ * Extract valid URLs from an argv array.
+ *
+ * Skips argv[0] (the executable) and all flags (starting with `-`).
+ * Uses slice(1) so it works in both dev mode (`electron . url`) and packaged
+ * mode (`app.exe url`). The script path "." and JS entry points are filtered
+ * out by the browser-file-extension allowlist.
+ */
 export function extractUrls(argv: readonly string[]): string[] {
   const urls: string[] = [];
-  // argv[0] = electron binary, argv[1] = script path / "."
-  for (const arg of argv.slice(2)) {
+  // argv[0] = executable path — skip it
+  for (const arg of argv.slice(1)) {
     if (arg.startsWith("-")) continue;
 
-    // Try as URL first
+    // Try as URL first (http/https/file)
     const asUrl = validateUrl(arg);
     if (asUrl) {
       urls.push(asUrl);
       continue;
     }
 
-    // Treat as file path
-    const asFile = validateUrl(filePathToUrl(arg));
-    if (asFile) urls.push(asFile);
+    // Treat as file path — only accept browser-relevant extensions
+    const dotIdx = arg.lastIndexOf(".");
+    const ext = dotIdx >= 0 ? arg.slice(dotIdx).toLowerCase() : "";
+    if (BROWSER_FILE_EXTENSIONS.has(ext)) {
+      const asFile = validateUrl(filePathToUrl(arg));
+      if (asFile) urls.push(asFile);
+    }
   }
   return urls;
 }
@@ -135,7 +149,7 @@ export default defineFeature<Deps>({
     });
   },
 
-  start({ commands, events }) {
+  async start({ commands, events }) {
     flushCallback = (urls) => {
       if (!urls.length) return;
       events.emit(EXTERNAL_LINK_RECEIVED, { urls });
@@ -144,10 +158,16 @@ export default defineFeature<Deps>({
       }
     };
 
-    // Drain URLs queued before renderer was ready
+    // Drain URLs queued before renderer was ready.
+    // Await each open so tabs are fully created before startup completes.
     if (urlQueue.length) {
       const queued = urlQueue.splice(0);
-      flushCallback(queued);
+      events.emit(EXTERNAL_LINK_RECEIVED, { urls: queued });
+      for (const url of queued) {
+        await commands
+          .send(EXTERNAL_LINK_OPEN, { url })
+          .catch(logError("external-link", "open url"));
+      }
     }
   },
 

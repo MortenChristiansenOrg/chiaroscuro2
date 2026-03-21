@@ -137,6 +137,24 @@ describe("extractUrls", () => {
     const argv = ["/usr/bin/electron", "/path/to/main.js"];
     expect(extractUrls(argv)).toEqual([]);
   });
+
+  it("extracts URL from packaged-app argv (no script path)", () => {
+    const argv = ["C:\\path\\to\\chiaroscuro.exe", "https://example.com"];
+    expect(extractUrls(argv)).toEqual(["https://example.com/"]);
+  });
+
+  it("rejects file paths with non-browser extensions", () => {
+    const argv = ["/usr/bin/electron", ".", "/tmp/script.js", "/tmp/data.json"];
+    expect(extractUrls(argv)).toEqual([]);
+  });
+
+  it("accepts browser file extensions (.pdf, .svg, .mhtml, .htm)", () => {
+    const argv = ["/usr/bin/electron", ".", "/tmp/doc.pdf", "/tmp/img.svg"];
+    const result = extractUrls(argv);
+    expect(result).toHaveLength(2);
+    expect(result[0]).toMatch(/^file:.*doc\.pdf$/);
+    expect(result[1]).toMatch(/^file:.*img\.svg$/);
+  });
 });
 
 // ── filePathToUrl ────────────────────────────────────────────────
@@ -217,10 +235,7 @@ describe("start() queue drain", () => {
     const received: unknown[] = [];
     events.on(EXTERNAL_LINK_RECEIVED, (payload) => received.push(payload));
 
-    feature.start?.({ commands, events, platform, getActiveWindowId: () => WINDOW_ID });
-
-    // Allow async command sends to settle
-    await new Promise((r) => setTimeout(r, 10));
+    await feature.start?.({ commands, events, platform, getActiveWindowId: () => WINDOW_ID });
 
     expect(received).toHaveLength(1);
     expect(received[0]).toEqual({ urls: ["https://queued.com/"] });
