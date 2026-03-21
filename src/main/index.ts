@@ -32,6 +32,11 @@ import domainCss from "../features/domain-css/domain-css.main";
 import type { DomainCssCommands, DomainCssEvents } from "../features/domain-css/domain-css.shared";
 import downloads from "../features/downloads/downloads.main";
 import type { DownloadsCommands, DownloadsEvents } from "../features/downloads/downloads.shared";
+import externalLink, { setupExternalLink } from "../features/external-link/external-link.main";
+import type {
+  ExternalLinkCommands,
+  ExternalLinkEvents,
+} from "../features/external-link/external-link.shared";
 import findText from "../features/find-text/find-text.main";
 import type { FindTextCommands, FindTextEvents } from "../features/find-text/find-text.shared";
 import folders from "../features/folders/folders.main";
@@ -120,6 +125,15 @@ process.on("unhandledRejection", (reason) => {
 const iconFile = process.platform === "win32" ? "icon.ico" : "icon.png";
 const iconPath = path.join(__dirname, "../../resources", iconFile);
 
+// ── Single-instance lock (must run before whenReady) ─────────────
+// Skip in test mode: parallel Playwright workers each launch their own
+// Electron instance, and the OS-level lock would reject all but the first.
+const gotLock = process.env.NODE_ENV === "test" || setupExternalLink(app);
+if (!gotLock) {
+  // Second instance — argv forwarded to running instance, quit immediately.
+  // app.quit() already called inside setupExternalLink.
+}
+
 // ── Merged bus types ──────────────────────────────────────────────
 type AllCommands = MergeRegistries<
   [
@@ -145,6 +159,7 @@ type AllCommands = MergeRegistries<
     InstallerCommands,
     SubTabsCommands,
     DebugServerCommands,
+    ExternalLinkCommands,
     PermissionsCommands,
   ]
 >;
@@ -173,6 +188,7 @@ type AllEvents = MergeRegistries<
     InstallerEvents,
     SubTabsEvents,
     DebugServerEvents,
+    ExternalLinkEvents,
     PermissionsEvents,
   ]
 >;
@@ -269,126 +285,131 @@ const deps = {
   },
 };
 
-app.whenReady().then(async () => {
-  await dataStore.initialize();
+if (gotLock) {
+  app.whenReady().then(async () => {
+    await dataStore.initialize();
 
-  // Phase 1: register all command handlers
-  // Debug server first — recorder patches capture all subsequent registrations
-  debugServer.register({
-    ...deps,
-    commandBus: commands as unknown as CommandBus<CommandRegistry>,
-    eventBus: events as unknown as EventBus<EventRegistry>,
+    // Phase 1: register all command handlers
+    // Debug server first — recorder patches capture all subsequent registrations
+    debugServer.register({
+      ...deps,
+      commandBus: commands as unknown as CommandBus<CommandRegistry>,
+      eventBus: events as unknown as EventBus<EventRegistry>,
+    });
+
+    appState.register(deps);
+    windowChrome.register(deps);
+    tabs.register({ ...deps, isPinned, getCustomization, getFoldersForLevel, setFolderOrder });
+    workspaces.register({ ...deps, getTabsForWorkspace });
+    pinnedTabs.register({ ...deps, getCustomization });
+    sidebar.register(deps);
+    commandPalette.register(deps);
+    settings.register(deps);
+    tooltip.register(deps);
+    contextMenu.register(deps);
+    folders.register({ ...deps, getTab, getTabsForWorkspace, setTabFolderId, setTabOrder });
+    zoom.register(deps);
+    devTools.register(deps);
+    domainCss.register({ ...deps, dataDir, getTabsSnapshot: getAllTabs });
+    downloads.register(deps);
+    findText.register(deps);
+    tabCustomization.register({ ...deps, getTab, isPinned });
+    terminal.register(deps);
+    localWebApp.register(deps);
+    installer.register(deps);
+    subTabs.register(deps);
+    externalLink.register(deps);
+    permissions.register(deps);
+
+    // Register debug state providers
+    registerDebugState("tabs", () => {
+      const all: Record<string, unknown> = {};
+      for (const [id, tab] of getAllTabs()) all[id] = tab;
+      return { all, activeTabId };
+    });
+    registerDebugState("workspaces", () => ({ activeWorkspaceId }));
+    registerDebugState("settings", () => commands.send(SETTINGS_GET, undefined).catch(() => null));
+    registerDebugState("window", () => {
+      const win =
+        (activeWindowId ? BrowserWindow.fromId(Number(activeWindowId)) : null) ??
+        BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && !w.getParentWindow()) ??
+        null;
+      return {
+        activeWindowId,
+        bounds: win && !win.isDestroyed() ? win.getBounds() : null,
+        maximized: win && !win.isDestroyed() ? win.isMaximized() : null,
+      };
+    });
+    registerDebugState("debug-server", () => ({ actualPort: getActualPort() }));
+
+    // Load persisted layout state before creating the window
+    const getDisplayBounds = () => screen.getAllDisplays().map((d) => d.workArea);
+    const appStateData = await loadPersistedState(dataStore, getDisplayBounds);
+
+    // Bridge bus to IPC (once, before any window creation)
+    bridgeBusToIpc(commands, events, () => BrowserWindow.getAllWindows());
+
+    // Phase 2: wait for renderer subscriptions, then emit initial state.
+    // Register BEFORE createWindow — the renderer sends "renderer:ready" at
+    // module-import time, so registering after risks losing the signal.
+    ipcMain.once("renderer:ready", async () => {
+      appState.start?.(deps);
+      await workspaces.start?.({ ...deps, getTabsForWorkspace });
+      windowChrome.start?.(deps);
+      await installer.start?.(deps);
+      await startTabs({ ...deps, isPinned, getCustomization, getFoldersForLevel, setFolderOrder });
+      await startPinnedTabs({ ...deps, getCustomization });
+      sidebar.start?.(deps);
+      await startFolders({ ...deps, getTab, getTabsForWorkspace, setTabFolderId, setTabOrder });
+      await settings.start?.(deps);
+      await domainCss.start?.({ ...deps, dataDir, getTabsSnapshot: getAllTabs });
+      downloads.start?.(deps);
+      await startTabCustomization({ ...deps, getTab, isPinned });
+      terminal.start?.(deps);
+      await startLocalWebApp(deps);
+      await externalLink.start?.(deps);
+      await permissions.start?.(deps);
+    });
+
+    const win = createWindow(appStateData.windowBounds);
+    initOverlays();
+
+    // Activate keyboard shortcuts immediately (window is focused on creation)
+    // and toggle on focus/blur so they don't intercept keys from other apps.
+    platform.activateShortcuts();
+
+    app.on("browser-window-focus", () => platform.activateShortcuts());
+    app.on("browser-window-blur", () => {
+      // Small delay: focus may transfer between app windows (e.g. context menu)
+      setTimeout(() => {
+        if (!BrowserWindow.getFocusedWindow()) platform.deactivateShortcuts();
+      }, 100);
+    });
+
+    app.on("activate", () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow();
+        initOverlays();
+      }
+    });
   });
 
-  appState.register(deps);
-  windowChrome.register(deps);
-  tabs.register({ ...deps, isPinned, getCustomization, getFoldersForLevel, setFolderOrder });
-  workspaces.register({ ...deps, getTabsForWorkspace });
-  pinnedTabs.register({ ...deps, getCustomization });
-  sidebar.register(deps);
-  commandPalette.register(deps);
-  settings.register(deps);
-  tooltip.register(deps);
-  contextMenu.register(deps);
-  folders.register({ ...deps, getTab, getTabsForWorkspace, setTabFolderId, setTabOrder });
-  zoom.register(deps);
-  devTools.register(deps);
-  domainCss.register({ ...deps, dataDir, getTabsSnapshot: getAllTabs });
-  downloads.register(deps);
-  findText.register(deps);
-  tabCustomization.register({ ...deps, getTab, isPinned });
-  terminal.register(deps);
-  localWebApp.register(deps);
-  installer.register(deps);
-  subTabs.register(deps);
-  permissions.register(deps);
-
-  // Register debug state providers
-  registerDebugState("tabs", () => {
-    const all: Record<string, unknown> = {};
-    for (const [id, tab] of getAllTabs()) all[id] = tab;
-    return { all, activeTabId };
-  });
-  registerDebugState("workspaces", () => ({ activeWorkspaceId }));
-  registerDebugState("settings", () => commands.send(SETTINGS_GET, undefined).catch(() => null));
-  registerDebugState("window", () => {
-    const win =
-      (activeWindowId ? BrowserWindow.fromId(Number(activeWindowId)) : null) ??
-      BrowserWindow.getAllWindows().find((w) => !w.isDestroyed() && !w.getParentWindow()) ??
-      null;
-    return {
-      activeWindowId,
-      bounds: win && !win.isDestroyed() ? win.getBounds() : null,
-      maximized: win && !win.isDestroyed() ? win.isMaximized() : null,
-    };
-  });
-  registerDebugState("debug-server", () => ({ actualPort: getActualPort() }));
-
-  // Load persisted layout state before creating the window
-  const getDisplayBounds = () => screen.getAllDisplays().map((d) => d.workArea);
-  const appStateData = await loadPersistedState(dataStore, getDisplayBounds);
-
-  // Bridge bus to IPC (once, before any window creation)
-  bridgeBusToIpc(commands, events, () => BrowserWindow.getAllWindows());
-
-  // Phase 2: wait for renderer subscriptions, then emit initial state.
-  // Register BEFORE createWindow — the renderer sends "renderer:ready" at
-  // module-import time, so registering after risks losing the signal.
-  ipcMain.once("renderer:ready", async () => {
-    appState.start?.(deps);
-    await workspaces.start?.({ ...deps, getTabsForWorkspace });
-    windowChrome.start?.(deps);
-    await installer.start?.(deps);
-    await startTabs({ ...deps, isPinned, getCustomization, getFoldersForLevel, setFolderOrder });
-    await startPinnedTabs({ ...deps, getCustomization });
-    sidebar.start?.(deps);
-    await startFolders({ ...deps, getTab, getTabsForWorkspace, setTabFolderId, setTabOrder });
-    await settings.start?.(deps);
-    await domainCss.start?.({ ...deps, dataDir, getTabsSnapshot: getAllTabs });
-    downloads.start?.(deps);
-    await startTabCustomization({ ...deps, getTab, isPinned });
-    terminal.start?.(deps);
-    await startLocalWebApp(deps);
-    await permissions.start?.(deps);
+  app.on("before-quit", () => {
+    platform.deactivateShortcuts();
+    debugServer.teardown?.();
+    localWebApp.teardown?.();
+    installer.teardown?.();
+    externalLink.teardown?.();
+    // Flush app-state immediately before data store teardown
+    commands
+      .send("app-state:save", undefined)
+      .catch(logError("main", "flush app-state"))
+      .finally(() => dataStore.destroy().catch(logError("main", "destroy datastore")));
   });
 
-  const win = createWindow(appStateData.windowBounds);
-  initOverlays();
-
-  // Activate keyboard shortcuts immediately (window is focused on creation)
-  // and toggle on focus/blur so they don't intercept keys from other apps.
-  platform.activateShortcuts();
-
-  app.on("browser-window-focus", () => platform.activateShortcuts());
-  app.on("browser-window-blur", () => {
-    // Small delay: focus may transfer between app windows (e.g. context menu)
-    setTimeout(() => {
-      if (!BrowserWindow.getFocusedWindow()) platform.deactivateShortcuts();
-    }, 100);
-  });
-
-  app.on("activate", () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow();
-      initOverlays();
+  app.on("window-all-closed", () => {
+    if (process.platform !== "darwin") {
+      app.quit();
     }
   });
-});
-
-app.on("before-quit", () => {
-  platform.deactivateShortcuts();
-  debugServer.teardown?.();
-  localWebApp.teardown?.();
-  installer.teardown?.();
-  // Flush app-state immediately before data store teardown
-  commands
-    .send("app-state:save", undefined)
-    .catch(logError("main", "flush app-state"))
-    .finally(() => dataStore.destroy().catch(logError("main", "destroy datastore")));
-});
-
-app.on("window-all-closed", () => {
-  if (process.platform !== "darwin") {
-    app.quit();
-  }
-});
+}

@@ -14,7 +14,9 @@ export const test = base.extend<ElectronFixtures>({
   electronApp: async ({}, use) => {
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "chiaroscuro-test-"));
     const args = [
-      ...(process.platform === "linux" ? ["--ozone-platform=headless"] : []),
+      ...(process.platform === "linux"
+        ? ["--ozone-platform=headless", "--disable-gpu", "--no-sandbox"]
+        : []),
       "./out/main/index.js",
     ];
     const app = await electron.launch({
@@ -22,7 +24,6 @@ export const test = base.extend<ElectronFixtures>({
       env: {
         ...process.env,
         NODE_ENV: "test",
-        ELECTRON_DISABLE_GPU: "1",
         DATA_DIR: tmpDir,
       },
     });
