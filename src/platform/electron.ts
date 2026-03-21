@@ -367,7 +367,25 @@ export class ElectronPlatform implements Platform {
   private subTabWinContentBounds: Bounds | null = null;
   private tabBoundsAnimations = new Map<string, () => void>();
   private pendingPaletteJs: string | null = null;
-  private permissionHandlerSet = false;
+  private permissionRequestHandler:
+    | ((
+        tabId: TabId,
+        permission: string,
+        details: { requestingUrl: string; isMainFrame: boolean; mediaTypes?: string[] },
+      ) => Promise<boolean>)
+    | undefined;
+  private permissionCheckHandler:
+    | ((
+        tabId: TabId,
+        permission: string,
+        requestingOrigin: string,
+        details: { mediaType?: string },
+      ) => boolean)
+    | undefined;
+  private sessionsWithHandlers = new WeakSet<Electron.Session>();
+  private deviceSelectedCallback: ((deviceType: string, origin: string) => void) | undefined;
+  // origin → Array<{deviceType, device}> for setDevicePermissionHandler
+  private grantedDevices = new Map<string, Array<{ deviceType: string; device: unknown }>>();
   private zoomIpcHooked = false;
   private protocolRequestCallback: ((url: string, origin: string) => void) | undefined;
   private windowOpenCallback:
@@ -455,13 +473,11 @@ export class ElectronPlatform implements Platform {
     // Hide initially — caller will activate
     view.setBounds({ x: 0, y: 0, width: 0, height: 0 });
 
-    if (!this.permissionHandlerSet) {
-      const ses = view.webContents.session;
-      ses.setPermissionRequestHandler((_wc, _permission, callback) => {
-        callback(false);
-      });
-      ses.setPermissionCheckHandler(() => false);
-      this.permissionHandlerSet = true;
+    const ses = view.webContents.session;
+    if (!this.sessionsWithHandlers.has(ses)) {
+      this.installPermissionHandlers(ses);
+      this.installDevicePermissionHandlers(ses);
+      this.sessionsWithHandlers.add(ses);
     }
 
     view.webContents.setWindowOpenHandler(({ url, disposition }) => {
@@ -1575,5 +1591,232 @@ export class ElectronPlatform implements Platform {
 
   writeClipboard(text: string): void {
     clipboard.writeText(text);
+  }
+
+  // ── Permissions ────────────────────────────────────────────────
+
+  private findTabIdByWebContents(wc: Electron.WebContents): TabId | undefined {
+    for (const [tabId, view] of this.views) {
+      if (view.webContents === wc || view.webContents.id === wc.id) {
+        return tabId;
+      }
+    }
+    return undefined;
+  }
+
+  private installPermissionHandlers(ses: Electron.Session): void {
+    ses.setPermissionRequestHandler((wc, permission, callback, details) => {
+      if (!this.permissionRequestHandler) {
+        callback(false);
+        return;
+      }
+      const tabId = this.findTabIdByWebContents(wc);
+      if (!tabId) {
+        callback(false);
+        return;
+      }
+      const d = details as {
+        requestingUrl?: string;
+        isMainFrame?: boolean;
+        mediaTypes?: string[];
+      };
+      const requestingUrl = d.requestingUrl ?? wc.getURL();
+      const isMainFrame = d.isMainFrame ?? true;
+      const mediaTypes = d.mediaTypes;
+      this.permissionRequestHandler(tabId, permission, {
+        requestingUrl,
+        isMainFrame,
+        mediaTypes,
+      })
+        .then((allowed) => callback(allowed))
+        .catch(() => callback(false));
+    });
+
+    ses.setPermissionCheckHandler((wc, permission, requestingOrigin, details) => {
+      if (!this.permissionCheckHandler) return false;
+      if (!wc) return false;
+      const tabId = this.findTabIdByWebContents(wc);
+      if (!tabId) return false;
+      const mediaType = (details as { mediaType?: string })?.mediaType;
+      return this.permissionCheckHandler(tabId, permission, requestingOrigin, { mediaType });
+    });
+  }
+
+  private installDevicePermissionHandlers(ses: Electron.Session): void {
+    // Device permission check — allows access to previously-selected devices
+    ses.setDevicePermissionHandler((details) => {
+      const origin = (details as { origin?: string }).origin;
+      if (!origin) return false;
+      const granted = this.grantedDevices.get(origin);
+      if (!granted) return false;
+      const deviceType = (details as { deviceType?: string }).deviceType;
+      return granted.some((g) => g.deviceType === deviceType);
+    });
+
+    // Device selection events — show native picker dialogs
+    const handleDeviceSelection = (
+      type: string,
+      listKey: string,
+      ev: Electron.Event,
+      details: Record<string, unknown>,
+      callback: (id: string) => void,
+    ) => {
+      ev.preventDefault();
+      const devices = (details[listKey] ?? []) as Array<Record<string, unknown>>;
+      const origin = ((details.frame as { origin?: string })?.origin ??
+        (details.frame as { url?: string })?.url) as string | undefined;
+
+      if (!devices.length || !origin) {
+        callback("");
+        return;
+      }
+
+      this.showDeviceSelectionPrompt(origin, type, devices)
+        .then((selectedId) => {
+          if (selectedId) {
+            const list = this.grantedDevices.get(origin) ?? [];
+            const device = devices.find(
+              (d) => d.deviceId === selectedId || d.portId === selectedId,
+            );
+            list.push({ deviceType: type, device });
+            this.grantedDevices.set(origin, list);
+            this.deviceSelectedCallback?.(type, origin);
+          }
+          callback(selectedId ?? "");
+        })
+        .catch(() => callback(""));
+    };
+
+    // biome-ignore lint/suspicious/noExplicitAny: Electron session device events have varying signatures
+    const s = ses as any;
+    s.on(
+      "select-usb-device",
+      (ev: Electron.Event, d: Record<string, unknown>, cb: (id: string) => void) =>
+        handleDeviceSelection("usb", "deviceList", ev, d, cb),
+    );
+    s.on(
+      "select-hid-device",
+      (ev: Electron.Event, d: Record<string, unknown>, cb: (id: string) => void) =>
+        handleDeviceSelection("hid", "deviceList", ev, d, cb),
+    );
+    s.on(
+      "select-serial-port",
+      (ev: Electron.Event, d: Record<string, unknown>, cb: (id: string) => void) =>
+        handleDeviceSelection("serial", "portList", ev, d, cb),
+    );
+    s.on(
+      "select-bluetooth-device",
+      (ev: Electron.Event, d: Record<string, unknown>, cb: (id: string) => void) =>
+        handleDeviceSelection("bluetooth", "deviceList", ev, d, cb),
+    );
+  }
+
+  private async showDeviceSelectionPrompt(
+    origin: string,
+    deviceType: string,
+    devices: Array<Record<string, unknown>>,
+  ): Promise<string | null> {
+    let domain: string;
+    try {
+      domain = new URL(origin).hostname;
+    } catch {
+      domain = origin;
+    }
+
+    const typeLabels: Record<string, string> = {
+      usb: "USB device",
+      hid: "HID device",
+      serial: "serial port",
+      bluetooth: "Bluetooth device",
+    };
+    const typeLabel = typeLabels[deviceType] ?? "device";
+
+    // Build button labels from device names
+    const labels = devices.map((d, i) => {
+      const name =
+        (d.productName as string) ??
+        (d.deviceName as string) ??
+        (d.displayName as string) ??
+        `${typeLabel} ${i + 1}`;
+      return name;
+    });
+
+    const opts: Electron.MessageBoxOptions = {
+      type: "question",
+      title: `Select ${typeLabel}`,
+      message: `${domain} wants to connect to a ${typeLabel}`,
+      buttons: ["Cancel", ...labels],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    };
+
+    const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed());
+    const result = win ? await dialog.showMessageBox(win, opts) : await dialog.showMessageBox(opts);
+
+    if (result.response === 0) return null; // Cancel
+    const selected = devices[result.response - 1];
+    return ((selected?.deviceId ?? selected?.portId) as string) ?? null;
+  }
+
+  onPermissionRequest(
+    handler: (
+      tabId: TabId,
+      permission: string,
+      details: { requestingUrl: string; isMainFrame: boolean; mediaTypes?: string[] },
+    ) => Promise<boolean>,
+  ): void {
+    this.permissionRequestHandler = handler;
+  }
+
+  onPermissionCheck(
+    handler: (
+      tabId: TabId,
+      permission: string,
+      requestingOrigin: string,
+      details: { mediaType?: string },
+    ) => boolean,
+  ): void {
+    this.permissionCheckHandler = handler;
+  }
+
+  onDeviceSelected(callback: (deviceType: string, origin: string) => void): void {
+    this.deviceSelectedCallback = callback;
+  }
+
+  clearDevicePermissions(origin: string, deviceType?: string): void {
+    // origin is a domain name — match against stored origins
+    for (const [storedOrigin, devices] of this.grantedDevices) {
+      let matchesDomain = false;
+      try {
+        matchesDomain = new URL(storedOrigin).hostname === origin;
+      } catch {
+        matchesDomain = storedOrigin === origin;
+      }
+      if (!matchesDomain) continue;
+
+      if (deviceType) {
+        const filtered = devices.filter((d) => d.deviceType !== deviceType);
+        if (filtered.length === 0) this.grantedDevices.delete(storedOrigin);
+        else this.grantedDevices.set(storedOrigin, filtered);
+      } else {
+        this.grantedDevices.delete(storedOrigin);
+      }
+    }
+  }
+
+  async showPermissionPrompt(domain: string, permissionLabel: string): Promise<boolean> {
+    const opts: Electron.MessageBoxOptions = {
+      type: "question",
+      title: "Permission Request",
+      message: `${domain} wants to access ${permissionLabel}`,
+      buttons: ["Deny", "Allow"],
+      defaultId: 0,
+      cancelId: 0,
+      noLink: true,
+    };
+    const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed());
+    const result = win ? await dialog.showMessageBox(win, opts) : await dialog.showMessageBox(opts);
+    return result.response === 1;
   }
 }

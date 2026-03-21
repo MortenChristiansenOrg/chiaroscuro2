@@ -22,7 +22,7 @@ function sendCommand(name: string, payload: unknown) {
 
 const categories = [{ id: "css", label: "Custom CSS" }];
 
-function CssControls({ domain }: { domain: string }) {
+export function CssControls({ domain }: { domain: string }) {
   const state = useDomainCssStore((s) => s.states.get(domain));
 
   // Fetch initial state from main process

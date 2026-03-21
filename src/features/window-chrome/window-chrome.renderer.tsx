@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "../../renderer/src/components/Icon";
-import { DOMAIN_CSS_OPEN } from "../domain-css/domain-css.shared";
+import { DOMAIN_SETTINGS_OPEN } from "../domain-css/domain-css.shared";
 import { FindBar } from "../find-text/find-text.renderer";
 import { useFindTextStore } from "../find-text/find-text.store";
 import { useTabsStore } from "../tabs/tabs.store";
@@ -116,7 +116,7 @@ export function UrlPill({ hidden }: { hidden?: boolean }) {
   let displayUrl = url;
   let hostname = "";
   let isWebUrl = false;
-  if (url.startsWith("app:domain-css")) {
+  if (url.startsWith("app:domain-settings")) {
     const qIdx = url.indexOf("?");
     if (qIdx !== -1) {
       const params = new URLSearchParams(url.slice(qIdx + 1));
@@ -148,7 +148,7 @@ export function UrlPill({ hidden }: { hidden?: boolean }) {
 
   const handleDomainCss = () => {
     if (hostname) {
-      window.chiaroscuro.sendCommand(DOMAIN_CSS_OPEN, { domain: hostname });
+      window.chiaroscuro.sendCommand(DOMAIN_SETTINGS_OPEN, { domain: hostname });
     }
   };
 

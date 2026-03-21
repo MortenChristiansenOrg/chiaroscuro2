@@ -49,6 +49,11 @@ import type {
   LocalWebAppCommands,
   LocalWebAppEvents,
 } from "../features/local-web-app/local-web-app.shared";
+import permissions from "../features/permissions/permissions.main";
+import type {
+  PermissionsCommands,
+  PermissionsEvents,
+} from "../features/permissions/permissions.shared";
 import pinnedTabs from "../features/pinned-tabs/pinned-tabs.main";
 import { isPinned, start as startPinnedTabs } from "../features/pinned-tabs/pinned-tabs.main";
 import type {
@@ -140,6 +145,7 @@ type AllCommands = MergeRegistries<
     InstallerCommands,
     SubTabsCommands,
     DebugServerCommands,
+    PermissionsCommands,
   ]
 >;
 
@@ -167,6 +173,7 @@ type AllEvents = MergeRegistries<
     InstallerEvents,
     SubTabsEvents,
     DebugServerEvents,
+    PermissionsEvents,
   ]
 >;
 
@@ -294,6 +301,7 @@ app.whenReady().then(async () => {
   localWebApp.register(deps);
   installer.register(deps);
   subTabs.register(deps);
+  permissions.register(deps);
 
   // Register debug state providers
   registerDebugState("tabs", () => {
@@ -341,6 +349,7 @@ app.whenReady().then(async () => {
     await startTabCustomization({ ...deps, getTab, isPinned });
     terminal.start?.(deps);
     await startLocalWebApp(deps);
+    await permissions.start?.(deps);
   });
 
   const win = createWindow(appStateData.windowBounds);

@@ -14,9 +14,9 @@ import {
   DOMAIN_CSS_CHANGED,
   DOMAIN_CSS_EDIT,
   DOMAIN_CSS_GET_STATE,
-  DOMAIN_CSS_OPEN,
   DOMAIN_CSS_REMOVE,
   DOMAIN_CSS_TOGGLE,
+  DOMAIN_SETTINGS_OPEN,
   type DomainCssCommands,
   type DomainCssEvents,
 } from "./domain-css.shared";
@@ -237,11 +237,11 @@ export default defineFeature<DomainCssDeps>({
 
     // ── Commands ──────────────────────────────────────────────────
 
-    commands.handle(DOMAIN_CSS_OPEN, async (payload) => {
+    commands.handle(DOMAIN_SETTINGS_OPEN, async (payload) => {
       const { domain } = payload;
       return domainTabs.openOrActivate(
         domain,
-        `app:domain-css?domain=${encodeURIComponent(domain)}`,
+        `app:domain-settings?domain=${encodeURIComponent(domain)}`,
       );
     });
 

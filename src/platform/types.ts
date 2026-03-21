@@ -134,6 +134,29 @@ export interface Platform {
   // Protocol navigation
   onProtocolRequest(callback: (url: string, origin: string) => void): () => void;
 
+  // Permissions
+  onPermissionRequest(
+    handler: (
+      tabId: TabId,
+      permission: string,
+      details: { requestingUrl: string; isMainFrame: boolean; mediaTypes?: string[] },
+    ) => Promise<boolean>,
+  ): void;
+  onPermissionCheck(
+    handler: (
+      tabId: TabId,
+      permission: string,
+      requestingOrigin: string,
+      details: { mediaType?: string },
+    ) => boolean,
+  ): void;
+  /** Show a native dialog asking the user to allow/deny a permission. Returns true if allowed. */
+  showPermissionPrompt(domain: string, permissionLabel: string): Promise<boolean>;
+
+  // Device permissions (USB, Serial, HID, Bluetooth)
+  onDeviceSelected(callback: (deviceType: string, origin: string) => void): void;
+  clearDevicePermissions(origin: string, deviceType?: string): void;
+
   // Shell / clipboard
   openExternal(url: string): Promise<void>;
   /** Open URL without scheme filtering. Only for user-approved protocol launches. */

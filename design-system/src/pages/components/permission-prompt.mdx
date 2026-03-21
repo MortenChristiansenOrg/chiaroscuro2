@@ -1,0 +1,85 @@
+---
+title: Permission Prompt
+---
+
+import { LivePreview } from "../../components/LivePreview"
+import { PermissionsSection } from "@features/permissions/permissions.renderer"
+
+# Permission Prompt
+
+When a website requests a browser permission (geolocation, camera, etc.), a native OS dialog appears asking the user to Allow or Deny. Decisions persist per-domain and are reviewable in the domain settings page.
+
+---
+
+## Native Dialog
+
+The permission prompt uses Electron's `dialog.showMessageBox` to appear above the tab's native WebContentsView. It shows the domain name and human-readable permission label with Deny/Allow buttons. Escape dismisses as Deny.
+
+The dialog is modal to the app window — no interaction with the browser is possible until the user responds.
+
+## Domain Settings — Permissions Section
+
+Stored permission decisions appear in the domain settings page (`app:domain-settings`), alongside the Custom CSS section. Each permission shows its current state and can be toggled or revoked.
+
+### Preview
+
+<LivePreview label="Permissions for example.com" stores={{ permissions: { domainPermissions: new Map([["example.com", { geolocation: "allow", notifications: "deny", camera: "allow", microphone: "allow" }]]) } }}>
+  <div style={{ padding: "1rem", background: "var(--content-bg)", borderRadius: "var(--radius-lg)" }}>
+    <PermissionsSection domain="example.com" />
+  </div>
+</LivePreview>
+
+<LivePreview label="No stored permissions" stores={{ permissions: { domainPermissions: new Map() } }}>
+  <div style={{ padding: "1rem", background: "var(--content-bg)", borderRadius: "var(--radius-lg)" }}>
+    <PermissionsSection domain="new-site.com" />
+  </div>
+</LivePreview>
+
+### Specs
+
+| Property | Token/Value |
+|----------|-------------|
+| Section heading | `settingsCategoryHeadingStyle` (shared with CSS section) |
+| Empty state font size | `--text-sm` |
+| Empty state color | `--muted-foreground` |
+| Toggle button padding | `px-3 py-1.5` |
+| Toggle button radius | `--radius-sm` |
+| Toggle allowed bg | `oklch(accent / 0.12)` |
+| Toggle allowed border | `oklch(accent / 0.3)` |
+| Toggle denied bg | `--background` |
+| Toggle denied border | `--input` |
+| Revoke button color | `--destructive` |
+| Button gap | `0.375rem` |
+
+### States
+
+| State | Toggle | Revoke |
+|-------|--------|--------|
+| Allowed | Accent bg, `--foreground` text, toggle-on icon | Visible |
+| Denied | `--background` bg, `--muted-foreground` text, toggle-off icon | Visible |
+| No decisions | — | — (empty state message shown) |
+
+### Button States
+
+| State | Toggle | Revoke |
+|-------|--------|--------|
+| Default | Per allowed/denied styling above | `--destructive` text+border |
+| Hover | `brightness-110` | `brightness-125` |
+| Active | `brightness-90` | `brightness-90` |
+
+### Behavior
+
+- **Toggle** sends `permissions:set` command, switching between allow/deny
+- **Revoke** sends `permissions:revoke` command, removing the stored decision
+- After revoking, the next permission request from that site will show the native dialog again
+- Permission list updates in real-time via `permissions:changed` event
+
+### Accessibility
+
+- All buttons have `data-tip` and `aria-label`
+- Toggle buttons communicate current state: "Allowed" / "Denied"
+- Revoke buttons include permission name in aria-label
+
+## Related
+
+- [Settings Page](/components/settings-page) — shared SettingsLayout scaffold
