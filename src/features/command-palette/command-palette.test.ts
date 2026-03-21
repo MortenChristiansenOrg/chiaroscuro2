@@ -130,8 +130,9 @@ describe("command-palette commands", () => {
       const { commands } = setup();
       await commands.send(COMMAND_PALETTE_SHOW, undefined);
 
-      // Should not throw — palette HTML handles hide separately
       await commands.send(COMMAND_PALETTE_EXECUTE, { command: "hello world" });
+
+      expect(tabCounter).toBe(1);
     });
 
     it("navigates current tab when inCurrentTab=true", async () => {
