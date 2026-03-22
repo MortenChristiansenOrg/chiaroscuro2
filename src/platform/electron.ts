@@ -309,7 +309,8 @@ color:rgba(235,235,245,.5);transition:color 80ms ease-out;
 <script>
 const ICONS={
 'bookmark':'\\uf02e','thumbtack':'\\uf08d','thumbtack-slash':'\\ue68f',
-'xmark':'\\uf00d','sliders':'\\uf1de','arrow-rotate-left':'\\uf0e2','folder-plus':'\\uf65e'
+'xmark':'\\uf00d','sliders':'\\uf1de','arrow-rotate-left':'\\uf0e2','folder-plus':'\\uf65e',
+'copy':'\\uf0c5','download':'\\uf019','magnifying-glass':'\\uf002'
 };
 let _resolve=null;
 function _dismiss(){if(_resolve){_resolve(-1);_resolve=null}}
@@ -1598,6 +1599,26 @@ export class ElectronPlatform implements Platform {
 
   writeClipboard(text: string): void {
     clipboard.writeText(text);
+  }
+
+  // ── Tab content actions ──────────────────────────────────────
+
+  copyImageAt(tabId: TabId, x: number, y: number): void {
+    const view = this.views.get(tabId);
+    if (!view) return;
+    view.webContents.copyImageAt(x, y);
+  }
+
+  downloadUrl(tabId: TabId, url: string): void {
+    const view = this.views.get(tabId);
+    if (!view) return;
+    view.webContents.downloadURL(url);
+  }
+
+  async executeJavaScript(tabId: TabId, code: string): Promise<unknown> {
+    const view = this.views.get(tabId);
+    if (!view) return undefined;
+    return view.webContents.executeJavaScript(code);
   }
 
   // ── Permissions ────────────────────────────────────────────────

@@ -169,4 +169,12 @@ export interface Platform {
   openPath(filePath: string): Promise<void>;
   readClipboard(): string;
   writeClipboard(text: string): void;
+
+  // Tab content actions
+  /** Copy the image at (x, y) in the tab to the system clipboard. */
+  copyImageAt(tabId: TabId, x: number, y: number): void;
+  /** Trigger a download of the given URL in the tab's session. */
+  downloadUrl(tabId: TabId, url: string): void;
+  /** Execute JavaScript in the tab's webContents and return the result. */
+  executeJavaScript(tabId: TabId, code: string): Promise<unknown>;
 }

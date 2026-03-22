@@ -77,6 +77,9 @@ export function createMockPlatform(overrides: Partial<Platform> = {}): Platform 
     openPath: vi.fn(),
     readClipboard: vi.fn(() => ""),
     writeClipboard: vi.fn(),
+    copyImageAt: vi.fn(),
+    downloadUrl: vi.fn(),
+    executeJavaScript: vi.fn(async () => undefined),
     ...overrides,
   } as Platform;
 }
