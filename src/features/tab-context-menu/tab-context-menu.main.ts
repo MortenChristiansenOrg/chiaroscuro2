@@ -42,9 +42,11 @@ const CONTEXT_MENU_DETECT_SCRIPT = `
     if (window.__chiaroscuroCtxMenuPatched) return;
     window.__chiaroscuroCtxMenuPatched = true;
     window.__chiaroscuroCtxMenuPrevented = false;
-    document.addEventListener('contextmenu', (e) => {
-      window.__chiaroscuroCtxMenuPrevented = e.defaultPrevented;
-    }, { capture: false });
+    window.addEventListener('contextmenu', (e) => {
+      queueMicrotask(() => {
+        window.__chiaroscuroCtxMenuPrevented = e.defaultPrevented;
+      });
+    }, { capture: true });
   })();
 `;
 
