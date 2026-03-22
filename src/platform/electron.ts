@@ -309,7 +309,8 @@ color:rgba(235,235,245,.5);transition:color 80ms ease-out;
 <script>
 const ICONS={
 'bookmark':'\\uf02e','thumbtack':'\\uf08d','thumbtack-slash':'\\ue68f',
-'xmark':'\\uf00d','sliders':'\\uf1de','arrow-rotate-left':'\\uf0e2','folder-plus':'\\uf65e'
+'xmark':'\\uf00d','sliders':'\\uf1de','arrow-rotate-left':'\\uf0e2','folder-plus':'\\uf65e',
+'copy':'\\uf0c5','download':'\\uf019','magnifying-glass':'\\uf002'
 };
 let _resolve=null;
 function _dismiss(){if(_resolve){_resolve(-1);_resolve=null}}

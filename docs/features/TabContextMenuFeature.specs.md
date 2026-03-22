@@ -74,7 +74,7 @@ Custom context menu for right-clicking content within tab web pages. Shows conte
 ### Commands
 
 - `tab-context-menu:copy-text` — Copy text to clipboard. Payload: `{ text: string }`.
-- `tab-context-menu:copy-image` — Copy image to clipboard from URL. Payload: `{ url: string; tabId: TabId }`.
+- `tab-context-menu:copy-image` — Copy image to clipboard at coordinates. Payload: `{ tabId: TabId; x: number; y: number }`.
 - `tab-context-menu:download-image` — Download image. Payload: `{ url: string; tabId: TabId }`.
 - `tab-context-menu:search-text` — Search selected text with default provider. Payload: `{ text: string }`.
 

@@ -1,17 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
 import { CommandBus } from "../../bus/command-bus";
 import { EventBus } from "../../bus/event-bus";
-import type { TabId } from "../../shared/types";
+import type { Bounds, TabId } from "../../shared/types";
 import { createMockPlatform, makeTab } from "../../test-utils";
 import { CONTEXT_MENU_SHOW, type ContextMenuCommands } from "../context-menu/context-menu.shared";
 import { SETTINGS_GET, type Settings, type SettingsCommands } from "../settings/settings.shared";
 import {
   TABS_CLOSED,
+  TABS_CONTENT_BOUNDS_CHANGED,
   TABS_CREATE,
   TABS_CREATED,
+  TABS_LIST_CHANGED,
   type TabsClosedEvent,
   type TabsCommands,
   type TabsCreatedEvent,
+  type TabsListChangedEvent,
 } from "../tabs/tabs.shared";
 import feature from "./tab-context-menu.main";
 import {
@@ -27,6 +30,8 @@ const TAB_ID = "tab-1" as TabId;
 type AllCommands = TabContextMenuCommands & ContextMenuCommands & SettingsCommands & TabsCommands;
 type AllEvents = { [K in typeof TABS_CREATED]: TabsCreatedEvent } & {
   [K in typeof TABS_CLOSED]: TabsClosedEvent;
+} & { [K in typeof TABS_CONTENT_BOUNDS_CHANGED]: Bounds } & {
+  [K in typeof TABS_LIST_CHANGED]: TabsListChangedEvent;
 };
 
 const DEFAULT_SETTINGS: Settings = {
@@ -66,7 +71,7 @@ function setup() {
   commands.handle(TABS_CREATE, async () => TAB_ID);
   // Register context menu show handler
   commands.handle(CONTEXT_MENU_SHOW, async (payload) => {
-    return (platform.showContextMenu as ReturnType<typeof vi.fn>).mock.results.length > 0 ? -1 : -1;
+    return platform.showContextMenu(payload);
   });
 
   feature.register({ commands, events, platform });
@@ -190,11 +195,11 @@ describe("tab-context-menu", () => {
       commands.handle(CONTEXT_MENU_SHOW, async () => 0); // select first item (Copy)
 
       emitTabCreated(events);
-      await triggerContextMenu(tabEventCallbacks, { selectionText: "hello" });
+      await triggerContextMenu(tabEventCallbacks, { selectionText: "  hello  " });
 
       // Wait for action callback
       await new Promise((r) => setTimeout(r, 10));
-      expect(platform.writeClipboard).toHaveBeenCalledWith("hello");
+      expect(platform.writeClipboard).toHaveBeenCalledWith("  hello  ");
     });
 
     it("executes search when second item selected", async () => {
@@ -318,6 +323,61 @@ describe("tab-context-menu", () => {
         mediaType: "image",
         srcURL: "https://example.com/img.png",
       });
+    });
+  });
+
+  describe("content bounds offset", () => {
+    it("offsets menu coordinates by content bounds", async () => {
+      const { events, commands, tabEventCallbacks } = setup();
+      commands.unhandle?.(CONTEXT_MENU_SHOW);
+      commands.handle(CONTEXT_MENU_SHOW, async (payload) => {
+        expect(payload.x).toBe(100 + 50);
+        expect(payload.y).toBe(200 + 80);
+        return -1;
+      });
+
+      events.emit(TABS_CONTENT_BOUNDS_CHANGED, { x: 50, y: 80, width: 800, height: 600 });
+      emitTabCreated(events);
+      await triggerContextMenu(tabEventCallbacks, { selectionText: "text" });
+    });
+  });
+
+  describe("restored tab attachment", () => {
+    it("attaches listeners to restored tabs via TABS_LIST_CHANGED", () => {
+      const { events, platform } = setup();
+      const restoredTab = makeTab({ id: "restored-1" as TabId });
+
+      events.emit(TABS_LIST_CHANGED, { tabs: [restoredTab] });
+
+      expect(platform.onTabEvent).toHaveBeenCalledWith(
+        "restored-1",
+        "context-menu",
+        expect.any(Function),
+      );
+    });
+
+    it("skips already-tracked tabs in TABS_LIST_CHANGED", () => {
+      const { events, platform } = setup();
+      emitTabCreated(events);
+
+      (platform.onTabEvent as ReturnType<typeof vi.fn>).mockClear();
+      events.emit(TABS_LIST_CHANGED, { tabs: [makeTab({ id: TAB_ID })] });
+
+      expect(platform.onTabEvent).not.toHaveBeenCalled();
+    });
+
+    it("skips built-in tabs in TABS_LIST_CHANGED", () => {
+      const { events, platform } = setup();
+
+      events.emit(TABS_LIST_CHANGED, {
+        tabs: [makeTab({ id: "builtin-1" as TabId, builtIn: true })],
+      });
+
+      expect(platform.onTabEvent).not.toHaveBeenCalledWith(
+        "builtin-1",
+        "context-menu",
+        expect.any(Function),
+      );
     });
   });
 

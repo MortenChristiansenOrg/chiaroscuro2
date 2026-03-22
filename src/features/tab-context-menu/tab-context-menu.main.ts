@@ -113,14 +113,15 @@ export default defineFeature<Deps>({
       const items: { label: string; icon: string; action: () => void }[] = [];
 
       // Selected text context
-      const selection = params.selectionText?.trim();
+      const rawSelection = params.selectionText ?? "";
+      const selection = rawSelection.trim();
       if (selection) {
         items.push({
           label: "Copy",
           icon: "copy",
           action: () => {
             commands
-              .send(TAB_CONTEXT_MENU_COPY_TEXT, { text: selection })
+              .send(TAB_CONTEXT_MENU_COPY_TEXT, { text: rawSelection })
               .catch(logError("tab-context-menu", "copy text"));
           },
         });
