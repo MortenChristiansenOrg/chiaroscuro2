@@ -449,7 +449,12 @@ export class ElectronPlatform implements Platform {
 
   // ── Tab/WebContentsView management ──────────────────────────────
 
-  async createTab(windowId: WindowId, url: string, existingTabId?: TabId): Promise<TabId> {
+  async createTab(
+    windowId: WindowId,
+    url: string,
+    existingTabId?: TabId,
+    options?: { lazy?: boolean },
+  ): Promise<TabId> {
     const win = this.getWin(windowId);
     if (!win) throw new Error("No window found");
 
@@ -545,8 +550,10 @@ export class ElectronPlatform implements Platform {
       this.zoomIpcHooked = true;
     }
 
-    if (!isAllowedUrl(url, "internal")) throw new Error(`Blocked URL scheme: ${url}`);
-    view.webContents.loadURL(url);
+    if (!options?.lazy) {
+      if (!isAllowedUrl(url, "internal")) throw new Error(`Blocked URL scheme: ${url}`);
+      view.webContents.loadURL(url);
+    }
 
     return tabId;
   }

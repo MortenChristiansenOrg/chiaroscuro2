@@ -112,6 +112,9 @@ let _contentBounds: Bounds = { x: 0, y: 0, width: 0, height: 0 };
 // fixedAddressDisabled is set.
 const fixedUrls = new Map<TabId, string>();
 
+// Tabs restored at startup that haven't loaded their URL yet (lazy loading).
+const unloadedTabs = new Set<TabId>();
+
 /** Spread a tab with its fixedUrl for event emission. */
 function tabSnapshot(tab: Tab): Tab {
   const fixedUrl = fixedUrls.get(tab.id);
@@ -353,6 +356,7 @@ export default defineFeature<Deps>({
       }
       tabs.delete(tabId);
       fixedUrls.delete(tabId);
+      unloadedTabs.delete(tabId);
 
       let activatedTabId: TabId | null = null;
       if (wasActive) {
@@ -385,6 +389,14 @@ export default defineFeature<Deps>({
         if (!prevTab?.builtIn) {
           platform.hideTab(previousTabId);
         }
+      }
+
+      // Load URL if this tab was restored lazily and hasn't loaded yet
+      if (unloadedTabs.has(tabId)) {
+        unloadedTabs.delete(tabId);
+        tab.loading = true;
+        await platform.navigateTab(tabId, tab.url);
+        events.emit("tab:loading-changed", { tabId, loading: true });
       }
 
       // Show new tab (skip platform calls for built-in tabs)
@@ -623,6 +635,7 @@ export default defineFeature<Deps>({
   teardown() {
     _state.reset();
     fixedUrls.clear();
+    unloadedTabs.clear();
   },
 });
 
@@ -662,14 +675,14 @@ export async function start(deps: Deps): Promise<void> {
   for (const pt of toRestore) {
     try {
       const tabId = pt.id as TabId;
-      await platform.createTab(windowId, pt.url, tabId);
+      await platform.createTab(windowId, pt.url, tabId, { lazy: true });
       const tab: Tab = {
         id: tabId,
         workspaceId: pt.workspaceId as WorkspaceId,
         url: pt.url,
         title: pt.title,
         favicon: pt.favicon,
-        loading: true,
+        loading: false,
         bookmarked: pt.bookmarked,
         lastAccessedAt: pt.lastAccessedAt,
         createdAt: pt.createdAt,
@@ -679,6 +692,7 @@ export async function start(deps: Deps): Promise<void> {
 
       tabs.set(tabId, tab);
       attachTabListeners(tabId);
+      unloadedTabs.add(tabId);
       if (pt.bookmarked) fixedUrls.set(tabId, pt.url);
 
       // Track first tab in active workspace for activation
