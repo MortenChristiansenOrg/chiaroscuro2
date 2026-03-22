@@ -137,7 +137,7 @@ export function resolveInputDetailed(
   }
 
   // Has explicit protocol
-  if (/^https?:\/\//i.test(trimmed)) {
+  if (/^(?:https?|file):\/\//i.test(trimmed)) {
     return { type: "url", url: trimmed };
   }
 
