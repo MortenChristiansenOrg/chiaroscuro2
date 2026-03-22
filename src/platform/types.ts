@@ -32,7 +32,12 @@ export interface Platform {
   setWindowBounds(windowId: WindowId, bounds: Bounds): void;
 
   // Tab/WebContentsView management
-  createTab(windowId: WindowId, url: string, tabId?: TabId): Promise<TabId>;
+  createTab(
+    windowId: WindowId,
+    url: string,
+    tabId?: TabId,
+    options?: { lazy?: boolean },
+  ): Promise<TabId>;
   closeTab(tabId: TabId): Promise<void>;
   navigateTab(tabId: TabId, url: string): Promise<void>;
   getTabUrl(tabId: TabId): string | undefined;

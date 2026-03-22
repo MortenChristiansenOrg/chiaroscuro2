@@ -401,9 +401,84 @@ describe("start()", () => {
     feature.register(deps);
     await start(deps);
 
-    // Only 1 tab restored (bookmarked one), keeps its persisted ID
+    // Only 1 tab restored (bookmarked one), keeps its persisted ID, created lazily
     expect(platform.createTab).toHaveBeenCalledTimes(1);
-    expect(platform.createTab).toHaveBeenCalledWith(WIN_ID, "https://bookmarked.com", "old-1");
+    expect(platform.createTab).toHaveBeenCalledWith(WIN_ID, "https://bookmarked.com", "old-1", {
+      lazy: true,
+    });
+  });
+
+  it("loads tab URL on first activation (lazy loading)", async () => {
+    const dataStore = new MemoryDataStore();
+    const tabsColl = dataStore.collection("tabs");
+    const now = Date.now();
+
+    await tabsColl.insert({
+      id: "lazy-1",
+      workspaceId: WS_ID,
+      url: "https://lazy.com",
+      title: "Lazy",
+      favicon: "",
+      bookmarked: true,
+      lastAccessedAt: now,
+      createdAt: now,
+      order: 0,
+    });
+    await tabsColl.insert({
+      id: "lazy-2",
+      workspaceId: WS_ID,
+      url: "https://lazy2.com",
+      title: "Lazy2",
+      favicon: "",
+      bookmarked: true,
+      lastAccessedAt: now - 1000,
+      createdAt: now - 1000,
+      order: 1,
+    });
+
+    let newTabCounter = 0;
+    const commands = new CommandBus<AllCommands>();
+    const events = new EventBus<AllEvents>();
+    const platform = createMockPlatform({
+      createTab: vi.fn(
+        async (_wId: WindowId, _url: string, tabId?: TabId) =>
+          tabId ?? (`new-${++newTabCounter}` as TabId),
+      ),
+    });
+    let activeTabId: TabId | undefined;
+    const deps = {
+      commands,
+      events,
+      platform,
+      dataStore,
+      getActiveWindowId: () => WIN_ID as WindowId | undefined,
+      getActiveTabId: () => activeTabId,
+      setActiveTabId: (id: TabId | undefined) => {
+        activeTabId = id;
+      },
+      getActiveWorkspaceId: () => WS_ID as WorkspaceId | undefined,
+      isPinned: (id: TabId) => isPinned(id),
+      getCustomization: () => undefined as { fixedAddressDisabled: boolean } | undefined,
+      getFoldersForLevel: () =>
+        [] as { id: import("../../shared/types").FolderId; order: number }[],
+      setFolderOrder: () => {},
+    };
+    feature.register(deps);
+    await start(deps);
+
+    // First tab (lazy-1, MRU) was activated and navigated
+    expect(platform.navigateTab).toHaveBeenCalledWith("lazy-1", "https://lazy.com");
+    // Second tab was NOT navigated (still lazy)
+    expect(platform.navigateTab).not.toHaveBeenCalledWith("lazy-2", "https://lazy2.com");
+
+    // Now activate the second tab — should trigger navigation
+    await commands.send(TABS_ACTIVATE, { tabId: "lazy-2" as TabId });
+    expect(platform.navigateTab).toHaveBeenCalledWith("lazy-2", "https://lazy2.com");
+
+    // Re-activating should NOT navigate again
+    (platform.navigateTab as ReturnType<typeof vi.fn>).mockClear();
+    await commands.send(TABS_ACTIVATE, { tabId: "lazy-1" as TabId });
+    expect(platform.navigateTab).not.toHaveBeenCalled();
   });
 
   it("does nothing when no persisted tabs", async () => {
