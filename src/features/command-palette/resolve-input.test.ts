@@ -43,6 +43,16 @@ describe("resolveInputDetailed", () => {
     expect(result).toEqual({ type: "url", url: "http://localhost:3000" });
   });
 
+  it("explicit file:// → type:url", () => {
+    const result = resolveInputDetailed(
+      "file:///C:/Users/morten/Documents/Vampire/Kronstadt%20PC%20version.pdf",
+    );
+    expect(result).toEqual({
+      type: "url",
+      url: "file:///C:/Users/morten/Documents/Vampire/Kronstadt%20PC%20version.pdf",
+    });
+  });
+
   it("text with spaces → default provider search", () => {
     const result = resolveInputDetailed("hello world");
     expect(result).toMatchObject({
