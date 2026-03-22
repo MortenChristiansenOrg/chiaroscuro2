@@ -75,6 +75,11 @@ import sidebar from "../features/sidebar/sidebar.main";
 import type { SidebarCommands, SidebarEvents } from "../features/sidebar/sidebar.shared";
 import subTabs from "../features/sub-tabs/sub-tabs.main";
 import type { SubTabsCommands, SubTabsEvents } from "../features/sub-tabs/sub-tabs.shared";
+import tabContextMenu from "../features/tab-context-menu/tab-context-menu.main";
+import type {
+  TabContextMenuCommands,
+  TabContextMenuEvents,
+} from "../features/tab-context-menu/tab-context-menu.shared";
 import tabCustomization from "../features/tab-customization/tab-customization.main";
 import {
   getCustomization,
@@ -158,6 +163,7 @@ type AllCommands = MergeRegistries<
     LocalWebAppCommands,
     InstallerCommands,
     SubTabsCommands,
+    TabContextMenuCommands,
     DebugServerCommands,
     ExternalLinkCommands,
     PermissionsCommands,
@@ -187,6 +193,7 @@ type AllEvents = MergeRegistries<
     LocalWebAppEvents,
     InstallerEvents,
     SubTabsEvents,
+    TabContextMenuEvents,
     DebugServerEvents,
     ExternalLinkEvents,
     PermissionsEvents,
@@ -318,6 +325,7 @@ if (gotLock) {
     localWebApp.register(deps);
     installer.register(deps);
     subTabs.register(deps);
+    tabContextMenu.register(deps);
     externalLink.register(deps);
     permissions.register(deps);
 

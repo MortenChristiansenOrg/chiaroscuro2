@@ -1593,6 +1593,26 @@ export class ElectronPlatform implements Platform {
     clipboard.writeText(text);
   }
 
+  // ── Tab content actions ──────────────────────────────────────
+
+  copyImageAt(tabId: TabId, x: number, y: number): void {
+    const view = this.views.get(tabId);
+    if (!view) return;
+    view.webContents.copyImageAt(x, y);
+  }
+
+  downloadUrl(tabId: TabId, url: string): void {
+    const view = this.views.get(tabId);
+    if (!view) return;
+    view.webContents.downloadURL(url);
+  }
+
+  async executeJavaScript(tabId: TabId, code: string): Promise<unknown> {
+    const view = this.views.get(tabId);
+    if (!view) return undefined;
+    return view.webContents.executeJavaScript(code);
+  }
+
   // ── Permissions ────────────────────────────────────────────────
 
   private findTabIdByWebContents(wc: Electron.WebContents): TabId | undefined {
