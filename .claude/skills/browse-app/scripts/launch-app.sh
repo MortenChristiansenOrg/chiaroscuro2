@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Build in WSL, launch Electron on Windows with remote debugging enabled.
-# Only kills the Electron process listening on the target CDP port.
+# Dev workflow: Vite HMR server on WSL + Electron on Windows with CDP.
+# Renderer changes hot-reload instantly. Main/preload changes need relaunch.
 #
 # Usage: ./launch-app.sh [--rebuild] [--cdp-port PORT]
 #   --rebuild         Force rebuild even if out/ exists
-#   --cdp-port PORT   CDP port (default: 9333)
+#   --cdp-port PORT   CDP port (default from .env.local)
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -38,14 +38,14 @@ WIN_PATH="C:\\Users\\${WIN_USER}\\.chiaroscuro-dev"
 
 mkdir -p "$WIN_DIR"
 
-# Build unless skipped
+# Build main + preload (renderer served live by Vite)
 if [ "$REBUILD" = true ] || [ ! -d "out" ]; then
   echo "Building..."
   bunx electron-vite build
 fi
 
-echo "Syncing to Windows..."
-rsync -a --delete out/ "$WIN_DIR/out/"
+echo "Syncing main + preload to Windows..."
+rsync -a --delete out/main out/preload "$WIN_DIR/out/"
 rsync -a --delete resources/ "$WIN_DIR/resources/" 2>/dev/null || true
 cp package.json "$WIN_DIR/"
 
@@ -72,10 +72,50 @@ powershell.exe -NoProfile -Command "
   }
 " 2>/dev/null || true
 
+# Pick a free port for the Vite renderer dev server
+RENDERER_PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("",0)); print(s.getsockname()[1]); s.close()')
+
+# Kill any leftover dev server from a previous launch
+if [ -f "$PROJECT_DIR/.dev-server-pid" ]; then
+  kill "$(cat "$PROJECT_DIR/.dev-server-pid")" 2>/dev/null || true
+  rm -f "$PROJECT_DIR/.dev-server-pid"
+fi
+
+echo "Starting renderer dev server on port $RENDERER_PORT..."
+cd "$PROJECT_DIR"
+ELECTRON_VITE_DEV_SERVER_PORT=$RENDERER_PORT bun run scripts/dev-renderer-server.ts &
+DEV_PID=$!
+echo "$DEV_PID" > "$PROJECT_DIR/.dev-server-pid"
+
+# Wait for Vite to be ready
+echo -n "Waiting for dev server..."
+for i in $(seq 1 30); do
+  if curl -s "http://localhost:$RENDERER_PORT/" >/dev/null 2>&1; then
+    echo " ready."
+    break
+  fi
+  if ! kill -0 "$DEV_PID" 2>/dev/null; then
+    echo " failed (server exited)."
+    rm -f "$PROJECT_DIR/.dev-server-pid"
+    exit 1
+  fi
+  echo -n "."
+  sleep 1
+done
+
+if ! curl -s "http://localhost:$RENDERER_PORT/" >/dev/null 2>&1; then
+  echo " failed (timed out)."
+  kill "$DEV_PID" 2>/dev/null || true
+  rm -f "$PROJECT_DIR/.dev-server-pid"
+  exit 1
+fi
+
 sleep 1
 
-echo "Launching Electron..."
+echo "Launching Electron (renderer at port $RENDERER_PORT, CDP on port $CDP_PORT)..."
 powershell.exe -NoProfile -Command "
+  \$env:ELECTRON_RENDERER_URL = 'http://localhost:$RENDERER_PORT'
+  \$env:NODE_ENV_ELECTRON_VITE = 'development'
   Start-Process -FilePath '$WIN_ELECTRON' -ArgumentList '.','--remote-debugging-port=$CDP_PORT' -WorkingDirectory '$WIN_PATH'
 "
 
@@ -95,4 +135,6 @@ for i in $(seq 1 30); do
 done
 
 echo " timeout. Check that Electron launched correctly on Windows."
+kill "$DEV_PID" 2>/dev/null || true
+rm -f "$PROJECT_DIR/.dev-server-pid"
 exit 1

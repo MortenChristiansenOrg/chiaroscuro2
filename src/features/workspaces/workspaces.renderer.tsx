@@ -96,12 +96,18 @@ export function WorkspaceBubble({
 }
 
 export const WORKSPACE_COLORS = [
-  "oklch(0.6 0.12 230)",
-  "oklch(0.6 0.15 350)",
-  "oklch(0.6 0.15 140)",
+  "oklch(0.6 0.15 20)",
   "oklch(0.6 0.15 50)",
-  "oklch(0.6 0.15 280)",
+  "oklch(0.6 0.12 80)",
+  "oklch(0.6 0.15 110)",
+  "oklch(0.6 0.15 140)",
   "oklch(0.6 0.12 180)",
+  "oklch(0.6 0.12 205)",
+  "oklch(0.6 0.12 230)",
+  "oklch(0.6 0.15 255)",
+  "oklch(0.6 0.15 280)",
+  "oklch(0.6 0.15 315)",
+  "oklch(0.6 0.15 350)",
 ];
 
 // ── Icon search ─────────────────────────────────────────────────

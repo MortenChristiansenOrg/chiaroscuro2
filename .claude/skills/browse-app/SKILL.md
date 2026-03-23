@@ -155,3 +155,9 @@ The scripts handle backup/restore automatically. If you get a `connectOverCDP: T
 - Always `snapshot` before interacting to get fresh element refs
 - When something looks wrong, take a snapshot too to understand the DOM structure
 - Use `--full-page` on screenshots to capture scrollable content
+
+## Failure handling
+
+- The launch scripts already poll for readiness and exit on timeout — **do not manually probe CDP or Vite ports**. If the script fails, read its output and act on it directly.
+- If `launch-app.sh` fails (CDP timeout, Electron didn't start), **fall back to the design system** (`launch-docs.sh`) for UI verification. Run `teardown-app.sh` first to clean up.
+- Always set an explicit `timeout` on launch script Bash calls (≥60s) to avoid the command being auto-backgrounded and generating late notifications.

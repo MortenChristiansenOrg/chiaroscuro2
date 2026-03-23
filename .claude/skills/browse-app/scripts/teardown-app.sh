@@ -35,7 +35,14 @@ echo "Tearing down Chiaroscuro dev session (port $CDP_PORT)..."
 # 0. Close playwright-cli daemon
 playwright-cli close 2>/dev/null || true
 
-# 1. Kill the process listening on the CDP port
+# 1. Kill the dev server if running
+if [ -n "$PROJECT_DIR" ] && [ -f "$PROJECT_DIR/.dev-server-pid" ]; then
+  DEV_PID=$(cat "$PROJECT_DIR/.dev-server-pid")
+  kill "$DEV_PID" 2>/dev/null && echo "  Killed dev server (PID $DEV_PID)" || true
+  rm -f "$PROJECT_DIR/.dev-server-pid"
+fi
+
+# 2. Kill the process listening on the CDP port
 powershell.exe -NoProfile -Command "
   \$conn = Get-NetTCPConnection -LocalPort $CDP_PORT -State Listen -ErrorAction SilentlyContinue
   if (\$conn) {
