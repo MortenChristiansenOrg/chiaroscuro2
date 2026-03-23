@@ -32,19 +32,13 @@ fi
 
 CDP_URL="http://127.0.0.1:$CDP_PORT"
 
-# --- Version check ---
+# --- Version check (local only, no network) ---
 INSTALLED_VERSION=$(playwright-cli --version 2>/dev/null | grep -oP '[\d.]+' | head -1) || true
 if [ -z "$INSTALLED_VERSION" ]; then
   echo "Error: playwright-cli not found on PATH"
   exit 1
 fi
 echo "playwright-cli version: $INSTALLED_VERSION"
-
-LATEST_VERSION=$(npm view @playwright/cli version 2>/dev/null) || true
-if [ -n "$LATEST_VERSION" ] && [ "$INSTALLED_VERSION" != "$LATEST_VERSION" ]; then
-  echo "Warning: installed $INSTALLED_VERSION, latest is $LATEST_VERSION"
-  echo "  Update with: npm install -g @playwright/cli@latest"
-fi
 
 # --- Verify CDP endpoint ---
 echo -n "Checking CDP at $CDP_URL..."
@@ -139,9 +133,13 @@ EOF2
 
 echo "$TAB_OUTPUT"
 
-# --- Find and select renderer page (file:// URL with index.html) ---
-# Tab list format: "- N: [Title](url)" — extract N from the line matching file://...index.html
+# --- Find and select renderer page ---
+# Tab list format: "- N: [Title](url)"
+# Try file://...index.html first (packaged), then [Chiaroscuro] title (dev server)
 TAB_INDEX=$(echo "$TAB_OUTPUT" | grep 'file://' | grep -i 'index\.html' | head -1 | sed -n 's/.*- \([0-9]*\):.*/\1/p')
+if [ -z "$TAB_INDEX" ]; then
+  TAB_INDEX=$(echo "$TAB_OUTPUT" | grep '\[Chiaroscuro\]' | head -1 | sed -n 's/.*- \([0-9]*\):.*/\1/p')
+fi
 
 if [ -n "$TAB_INDEX" ]; then
   echo ""
@@ -149,8 +147,7 @@ if [ -n "$TAB_INDEX" ]; then
   playwright-cli tab-select "$TAB_INDEX" 2>&1 || true
 else
   echo ""
-  echo "Warning: could not find renderer page (file://...index.html)"
-  echo "You may need to manually select a tab with: playwright-cli tab-select <index>"
+  echo "Warning: could not find renderer page. Select manually: playwright-cli tab-select <index>"
 fi
 
 # --- Confirm with snapshot ---

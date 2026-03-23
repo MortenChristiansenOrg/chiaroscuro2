@@ -142,12 +142,16 @@ The scripts handle backup/restore automatically. If you get a `connectOverCDP: T
 
 ## Connect Workflow
 
-1. Run the appropriate launch script and wait for confirmation:
+1. Run the appropriate launch script (foreground, not background — these complete in seconds):
    - **App:** `launch-app.sh` — builds, launches Electron, and auto-connects `playwright-cli` via CDP
    - **Design system:** `launch-docs.sh` — starts Vite and auto-opens in `playwright-cli`
 2. Run `playwright-cli snapshot` to confirm the page loaded
 3. Run `playwright-cli screenshot` and read the image to confirm visuals
 4. For app, use `playwright-cli tab-list` to see all Electron pages and `playwright-cli tab-select <n>` to switch
+
+## Timeouts
+
+All scripts should complete in a few seconds. Use `timeout: 10000` (10s) max for any of them. Never run them in the background — they're fast and you need the output immediately. If a script takes longer than 10s, something is wrong — read the output and fix the root cause.
 
 ## Tips
 
@@ -158,6 +162,5 @@ The scripts handle backup/restore automatically. If you get a `connectOverCDP: T
 
 ## Failure handling
 
-- The launch scripts already poll for readiness and exit on timeout — **do not manually probe CDP or Vite ports**. If the script fails, read its output and act on it directly.
+- The launch scripts poll for readiness internally and exit on timeout — **do not manually probe CDP or Vite ports**. If the script fails, read its output and act on it directly.
 - If `launch-app.sh` fails (CDP timeout, Electron didn't start), **fall back to the design system** (`launch-docs.sh`) for UI verification. Run `teardown-app.sh` first to clean up.
-- Always set an explicit `timeout` on launch script Bash calls (≥60s) to avoid the command being auto-backgrounded and generating late notifications.
