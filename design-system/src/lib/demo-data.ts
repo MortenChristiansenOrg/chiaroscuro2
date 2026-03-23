@@ -9,6 +9,9 @@ export const workspaceId = (s: string) => s as WorkspaceId;
 
 const WS_WORK = workspaceId("ws-work");
 const WS_PERSONAL = workspaceId("ws-personal");
+const WS_RESEARCH = workspaceId("ws-research");
+const WS_SOCIAL = workspaceId("ws-social");
+const WS_MUSIC = workspaceId("ws-music");
 
 export const DEMO_TABS: Tab[] = [
   {
@@ -65,6 +68,27 @@ export const DEMO_WORKSPACES: Workspace[] = [
     name: "Personal",
     color: "oklch(0.65 0.15 350)",
     icon: "P",
+    activeTabId: null,
+  },
+  {
+    id: WS_RESEARCH,
+    name: "Research",
+    color: "oklch(0.6 0.15 140)",
+    icon: "fa:flask",
+    activeTabId: null,
+  },
+  {
+    id: WS_SOCIAL,
+    name: "Social",
+    color: "oklch(0.6 0.15 280)",
+    icon: "fa:users",
+    activeTabId: null,
+  },
+  {
+    id: WS_MUSIC,
+    name: "Music",
+    color: "oklch(0.6 0.15 50)",
+    icon: "fa:music",
     activeTabId: null,
   },
 ];

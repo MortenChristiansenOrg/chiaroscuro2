@@ -496,15 +496,27 @@ export function WorkspaceSwitcher({
       </FadePresence>
 
       <div className="flex items-center" style={{ gap: "0.375rem", padding: "0.625rem 0.75rem" }}>
-        <div className="flex items-center" style={{ gap: "0.375rem" }}>
-          {workspaces.map((ws) => (
-            <WorkspaceBubble
-              key={ws.id}
-              workspace={ws}
-              isActive={ws.id === activeWorkspaceId}
-              onEdit={() => onEditorModeChange(ws.id)}
-            />
-          ))}
+        <div className="flex items-center">
+          {workspaces.map((ws, i) => {
+            const isActive = ws.id === activeWorkspaceId;
+            const prevActive = i > 0 && workspaces[i - 1]?.id === activeWorkspaceId;
+            const gap = i === 0 ? 0 : isActive || prevActive ? "0.375rem" : "0.1875rem";
+            return (
+              <div
+                key={ws.id}
+                style={{
+                  marginLeft: gap,
+                  transition: "margin var(--duration-normal) var(--ease-in-out)",
+                }}
+              >
+                <WorkspaceBubble
+                  workspace={ws}
+                  isActive={isActive}
+                  onEdit={() => onEditorModeChange(ws.id)}
+                />
+              </div>
+            );
+          })}
         </div>
         <button
           type="button"
