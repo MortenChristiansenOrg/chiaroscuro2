@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useContextMenu } from "../../renderer/src/components/ContextMenu";
 import { Icon } from "../../renderer/src/components/Icon";
 import { FA_SOLID_SEARCH } from "../../shared/fa-icon-search.generated";
 import type { FaSolidIcon } from "../../shared/fa-icons.generated";
@@ -45,10 +46,12 @@ export function WorkspaceBubble({
   workspace,
   isActive,
   onEdit,
+  onContextMenu,
 }: {
   workspace: { id: WorkspaceId; name: string; color: string; icon: string };
   isActive: boolean;
   onEdit?: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
 }) {
   const handleClick = () => {
     sendCommand(WORKSPACES_SWITCH, { workspaceId: workspace.id });
@@ -88,6 +91,7 @@ export function WorkspaceBubble({
       }}
       onClick={handleClick}
       onDoubleClick={onEdit}
+      onContextMenu={onContextMenu}
       data-tip={workspace.name}
     >
       {hasFaIcon ? <Icon name={faIconName(workspace.icon)} /> : workspace.icon}
@@ -485,6 +489,41 @@ export function WorkspaceSwitcher({
   editorMode,
   onEditorModeChange,
 }: WorkspaceSwitcherProps) {
+  const { open: openContextMenu } = useContextMenu();
+
+  const handleBubbleContextMenu = (ws: Workspace, e: React.MouseEvent) => {
+    openContextMenu(
+      [
+        {
+          label: "Edit workspace",
+          icon: "pencil",
+          onSelect: () => onEditorModeChange(ws.id),
+        },
+        {
+          label: "Add workspace",
+          icon: "plus",
+          onSelect: () => onEditorModeChange("new"),
+        },
+      ],
+      e,
+    );
+  };
+
+  const handleSwitcherContextMenu = (e: React.MouseEvent) => {
+    // Only on empty area, not on a workspace bubble
+    if ((e.target as HTMLElement).closest("[data-workspace-id]")) return;
+    openContextMenu(
+      [
+        {
+          label: "Add workspace",
+          icon: "plus",
+          onSelect: () => onEditorModeChange("new"),
+        },
+      ],
+      e,
+    );
+  };
+
   return (
     <>
       {/* Workspace editor */}
@@ -495,8 +534,12 @@ export function WorkspaceSwitcher({
         />
       </FadePresence>
 
-      <div className="flex items-center" style={{ gap: "0.375rem", padding: "0.625rem 0.75rem" }}>
-        <div className="flex items-center">
+      <div
+        className="flex items-center justify-center"
+        style={{ padding: "0.625rem 0.75rem" }}
+        onContextMenu={handleSwitcherContextMenu}
+      >
+        <div className="flex items-center flex-wrap justify-center">
           {workspaces.map((ws, i) => {
             const isActive = ws.id === activeWorkspaceId;
             const prevActive = i > 0 && workspaces[i - 1]?.id === activeWorkspaceId;
@@ -513,47 +556,12 @@ export function WorkspaceSwitcher({
                   workspace={ws}
                   isActive={isActive}
                   onEdit={() => onEditorModeChange(ws.id)}
+                  onContextMenu={(e) => handleBubbleContextMenu(ws, e)}
                 />
               </div>
             );
           })}
         </div>
-        <button
-          type="button"
-          className="flex items-center justify-center cursor-pointer text-glass-text-hint hover:text-glass-text-default hover:bg-glass-hover"
-          style={{
-            width: 24,
-            height: 24,
-            borderRadius: "var(--radius-full)",
-            border: "none",
-            background: "transparent",
-            fontSize: "var(--text-sm)",
-          }}
-          tabIndex={-1}
-          onClick={() => onEditorModeChange(activeWorkspaceId ?? "none")}
-          aria-label="Edit workspace"
-          data-tip="Edit workspace"
-        >
-          <Icon name="pencil" css={{ fontSize: 10 }} />
-        </button>
-        <button
-          type="button"
-          className="flex items-center justify-center cursor-pointer text-glass-text-hint hover:text-glass-text-default hover:bg-glass-hover"
-          style={{
-            width: 24,
-            height: 24,
-            borderRadius: "var(--radius-full)",
-            border: "none",
-            background: "transparent",
-            fontSize: "var(--text-sm)",
-          }}
-          tabIndex={-1}
-          onClick={() => onEditorModeChange("new")}
-          aria-label="Add workspace"
-          data-tip="Add workspace"
-        >
-          <Icon name="plus" css={{ fontSize: 10 }} />
-        </button>
       </div>
     </>
   );

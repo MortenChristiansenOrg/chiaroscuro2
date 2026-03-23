@@ -264,8 +264,12 @@ export function SidebarPanel() {
   const resize = useSidebarResize(sidebarWidth);
 
   const handleSidebarContextMenu = (e: React.MouseEvent) => {
-    // Only fire if right-clicking empty sidebar area (not a tab/folder)
-    if ((e.target as HTMLElement).closest("[data-tab-id], [data-folder-id], [data-pinned-tab]")) {
+    // Only fire if right-clicking empty sidebar area (not a tab/folder/workspace)
+    if (
+      (e.target as HTMLElement).closest(
+        "[data-tab-id], [data-folder-id], [data-pinned-tab], [data-workspace-id]",
+      )
+    ) {
       return;
     }
     openContextMenu(

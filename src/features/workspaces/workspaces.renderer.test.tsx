@@ -237,59 +237,47 @@ describe("WorkspaceSwitcher", () => {
     expect(screen.getByText("P")).toBeDefined();
   });
 
-  it("renders add button", () => {
+  it("right-click bubble shows edit context menu", () => {
+    const ws1 = makeWorkspace({ id: "ws-1" as WorkspaceId, name: "Work" });
     render(
       <WorkspaceSwitcher
-        workspaces={[]}
-        activeWorkspaceId={null}
-        editorMode="none"
-        onEditorModeChange={vi.fn()}
-      />,
-    );
-
-    expect(screen.getByRole("button", { name: "Add workspace" })).toBeDefined();
-  });
-
-  it("renders edit button", () => {
-    render(
-      <WorkspaceSwitcher
-        workspaces={[]}
-        activeWorkspaceId={null}
-        editorMode="none"
-        onEditorModeChange={vi.fn()}
-      />,
-    );
-
-    expect(screen.getByRole("button", { name: "Edit workspace" })).toBeDefined();
-  });
-
-  it("add button triggers new editor mode", () => {
-    const onChange = vi.fn();
-    render(
-      <WorkspaceSwitcher
-        workspaces={[]}
-        activeWorkspaceId={null}
-        editorMode="none"
-        onEditorModeChange={onChange}
-      />,
-    );
-
-    fireEvent.click(screen.getByRole("button", { name: "Add workspace" }));
-    expect(onChange).toHaveBeenCalledWith("new");
-  });
-
-  it("edit button triggers edit mode with active workspace", () => {
-    const onChange = vi.fn();
-    render(
-      <WorkspaceSwitcher
-        workspaces={[makeWorkspace({ id: "ws-1" as WorkspaceId })]}
+        workspaces={[ws1]}
         activeWorkspaceId={"ws-1" as WorkspaceId}
         editorMode="none"
-        onEditorModeChange={onChange}
+        onEditorModeChange={vi.fn()}
       />,
     );
 
-    fireEvent.click(screen.getByRole("button", { name: "Edit workspace" }));
-    expect(onChange).toHaveBeenCalledWith("ws-1");
+    fireEvent.contextMenu(screen.getByRole("button", { name: "Work" }));
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      "context-menu:show",
+      expect.objectContaining({
+        items: [
+          expect.objectContaining({ label: "Edit workspace", icon: "pencil" }),
+          expect.objectContaining({ label: "Add workspace", icon: "plus" }),
+        ],
+      }),
+    );
+  });
+
+  it("right-click empty area shows add context menu", () => {
+    render(
+      <WorkspaceSwitcher
+        workspaces={[]}
+        activeWorkspaceId={null}
+        editorMode="none"
+        onEditorModeChange={vi.fn()}
+      />,
+    );
+
+    // Right-click the outer container (empty area)
+    const container = document.querySelector(".flex.items-center") as HTMLElement;
+    fireEvent.contextMenu(container);
+    expect(mockSendCommand).toHaveBeenCalledWith(
+      "context-menu:show",
+      expect.objectContaining({
+        items: [expect.objectContaining({ label: "Add workspace", icon: "plus" })],
+      }),
+    );
   });
 });
