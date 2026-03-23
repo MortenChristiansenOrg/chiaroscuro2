@@ -56,7 +56,7 @@ export function WorkspaceBubble({
 
   // Build the ring shadow using oklch with proper syntax
   const activeRing = workspace.color.startsWith("oklch(")
-    ? `0 0 0 2px oklch(${workspace.color.slice(5, -1)} / 0.4)`
+    ? `0 0 0 2px oklch(${workspace.color.slice(6, -1)} / 0.4)`
     : `0 0 0 2px ${workspace.color}66`;
 
   const hasFaIcon = isFaIcon(workspace.icon);
@@ -76,7 +76,11 @@ export function WorkspaceBubble({
         border: "none",
         fontSize: hasFaIcon ? 14 : "var(--text-sm)",
         fontWeight: hasFaIcon ? undefined : 600,
-        background: workspace.color,
+        background: isActive
+          ? workspace.color
+          : workspace.color.startsWith("oklch(")
+            ? `oklch(${workspace.color.slice(6, -1)} / 0.2)`
+            : `${workspace.color}80`,
         color: "var(--glass-text-primary)",
         boxShadow: isActive ? activeRing : undefined,
         transform: isActive ? "scale(1)" : "scale(0.75)",
@@ -149,7 +153,11 @@ export function WorkspaceEditor({
     e.preventDefault();
     if (!name.trim()) return;
     if (isNew) {
-      sendCommand(WORKSPACES_CREATE, { name: name.trim(), color, icon: resolvedIcon });
+      sendCommand(WORKSPACES_CREATE, {
+        name: name.trim(),
+        color,
+        icon: resolvedIcon,
+      });
     } else {
       sendCommand(WORKSPACES_UPDATE, {
         workspaceId: workspace.id,
@@ -325,7 +333,7 @@ export function WorkspaceEditor({
                       : "1.5px solid transparent",
                   background:
                     iconName === selectedFaIcon
-                      ? `oklch(${color.slice(5, -1)} / 0.15)`
+                      ? `oklch(${color.slice(6, -1)} / 0.15)`
                       : "var(--glass-subtle)",
                   color: iconName === selectedFaIcon ? color : "var(--glass-text-default)",
                   fontSize: 13,
@@ -415,7 +423,13 @@ export function WorkspaceEditor({
 }
 
 /** Fades children in/out, unmounting after exit transition. */
-function FadePresence({ visible, children }: { visible: boolean; children: React.ReactNode }) {
+function FadePresence({
+  visible,
+  children,
+}: {
+  visible: boolean;
+  children: React.ReactNode;
+}) {
   const [mounted, setMounted] = useState(visible);
   const [show, setShow] = useState(false);
   const rafRef = useRef(0);
