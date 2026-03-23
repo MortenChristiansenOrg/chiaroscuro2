@@ -38,5 +38,5 @@ For each logically distinct part of the UI, separate it into a React component. 
 
 Always verify your work compiles and passes checks. Run `bun run verify` for a full check (typecheck, lint, tests). The pre-commit hook runs this automatically, so don't run it redundantly right before committing.
 
-Always browse the application to verify changes affecting the UI.
+Always browse the application to verify changes affecting the UI. Exceptions are things that cannot be verified with the tooling you have access to, notably animations, drag-n-drop and all user interactions that you cannot simulate.
 Do not assume that CSS changes are correct without verifying.
