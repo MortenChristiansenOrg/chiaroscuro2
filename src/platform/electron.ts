@@ -279,11 +279,11 @@ function buildContextMenuHtml(faFontPath: string): string {
 @font-face{font-family:"FA";font-style:normal;font-weight:900;font-display:block;src:url("file://${faFontPath}")}
 *{margin:0;padding:0;box-sizing:border-box}
 html,body{background:transparent;overflow:hidden;font-family:"Plus Jakarta Sans",-apple-system,system-ui,sans-serif}
-body{padding:24px}
+body{padding:16px}
 #m{display:inline-flex;flex-direction:column;gap:4px;min-width:180px;padding:5px;border-radius:10px;
 background:rgba(22,22,26,.96);backdrop-filter:blur(24px) saturate(1.4);
 -webkit-backdrop-filter:blur(24px) saturate(1.4);
-box-shadow:0 8px 32px rgba(0,0,0,.4),0 2px 8px rgba(0,0,0,.2),
+box-shadow:0 3px 12px rgba(0,0,0,.35),0 1px 3px rgba(0,0,0,.18),
 inset 0 0.5px 0 rgba(255,255,255,.1),inset 0 0 0 0.5px rgba(255,255,255,.06);
 transform-origin:top left;visibility:hidden}
 .i{display:flex;align-items:center;gap:9px;padding:7px 12px 7px 10px;border-radius:7px;
@@ -960,8 +960,8 @@ export class ElectronPlatform implements Platform {
     }
 
     // Body padding offsets the menu element from the window edge (for shadow space)
-    const padLeft = 24;
-    const padTop = 24;
+    const padLeft = 16;
+    const padTop = 16;
 
     // Edge detection — keep menu within parent window bounds
     let x = cb.x + opts.x - padLeft;
