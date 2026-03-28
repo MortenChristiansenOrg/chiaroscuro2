@@ -4,83 +4,13 @@ title: Context Menu
 
 # Context Menu
 
-Right-click overlay for contextual actions on tabs, folders, and sidebar empty space. Rendered in a native BrowserWindow overlay (above WebContentsViews).
-
-## Anatomy
-
-1. **Overlay window** — frameless, transparent child BrowserWindow
-2. **Menu container** — glassmorphism-styled `div` inside the overlay
-3. **Menu items** — icon + label rows with hover highlight and staggered entrance animation
+Right-click menus for contextual actions on tabs, folders, workspaces, and web content. Uses Electron's native `Menu.popup()` — renders as an OS-level menu above all views including WebContentsViews.
 
 ---
 
-## Visual Specs
+## Context-Dependent Items
 
-### Menu Container
-
-| Property | Token/Value |
-|----------|-------------|
-| Background | `rgba(22, 22, 26, 0.88)` |
-| Backdrop filter | `blur(24px) saturate(1.4)` |
-| Border | `inset 0 0.5px 0 rgba(255,255,255,0.1)`, `inset 0 0 0 0.5px rgba(255,255,255,0.06)` |
-| Border radius | `10px` |
-| Box shadow | `0 8px 32px rgba(0,0,0,0.4), 0 2px 8px rgba(0,0,0,0.2)` |
-| Min width | `180px` |
-| Padding | `5px` |
-| Body padding | `8px 8px 16px 8px` (shadow bleed space) |
-
-### Menu Item
-
-| Property | Token/Value |
-|----------|-------------|
-| Layout | flex, align-items: center, gap: `9px`, vertical gap between items: `4px` |
-| Padding | `7px 12px 7px 10px` |
-| Border radius | `7px` |
-| Font family | Plus Jakarta Sans (system-ui fallback) |
-| Font size | `12px` |
-| Font weight | 500 |
-| Letter spacing | `0.01em` |
-| Color | `rgba(235, 235, 245, 0.85)` |
-
-### Menu Item Icon
-
-| Property | Token/Value |
-|----------|-------------|
-| Font | Font Awesome 7 Free (solid, weight 900) |
-| Size | `11px` |
-| Container | `16px × 16px` flex centered |
-| Color | `rgba(235, 235, 245, 0.5)` |
-| Hover color | `rgba(235, 235, 245, 0.8)` |
-
----
-
-## States
-
-### Menu Item States
-
-| State | Background | Text | Icon | Trigger |
-|-------|-----------|------|------|---------|
-| Default | transparent | `rgba(235,235,245,0.85)` | `rgba(235,235,245,0.5)` | — |
-| Hover | `rgba(255,255,255,0.1)` | `rgba(255,255,255,0.95)` | `rgba(235,235,245,0.8)` | pointer hover |
-| Active | `rgba(255,255,255,0.16)` | `#fff` | — | mousedown |
-| Disabled | transparent | `rgba(235,235,245,0.25)` | opacity `0.3` | `disabled: true` |
-
-Active state also applies `transform: scale(0.98)` for tactile feedback.
-
-Disabled items ignore clicks via `pointer-events: none`.
-
----
-
-## Behavior
-
-- **Open:** right-click (`contextmenu` event) on a supported element
-- **Close:** click outside (blur), Escape key, parent window move/resize
-- **Position:** appears at cursor (renderer `clientX/Y` → main process screen coords), offset for body padding
-- **Edge clamping:** repositions if menu overflows parent window bounds (6px margin)
-- **Measured before shown:** items rendered via `executeJavaScript`, size measured including body padding, then window positioned and shown
-- **No nesting:** only one context menu open at a time
-
-### Context-Dependent Items
+### Sidebar
 
 | Target | Items |
 |--------|-------|
@@ -90,64 +20,30 @@ Disabled items ignore clicks via `pointer-events: none`.
 | Folder header | Add subfolder |
 | Sidebar empty area | Add folder |
 
-### Icons
+### Workspace Bubbles
 
-| Item | Icon (FA solid) |
-|------|----------------|
-| Bookmark / Remove bookmark | `bookmark` |
-| Pin tab | `thumbtack` |
-| Unpin tab | `thumbtack-slash` |
-| Close tab | `xmark` |
-| Customize tab | `sliders` |
-| Restore original URL | `arrow-rotate-left` |
-| Add folder / Add subfolder | `folder-plus` |
+| Target | Items |
+|--------|-------|
+| Workspace bubble | Edit workspace, Delete workspace |
+| Empty area below bubbles | Add workspace |
 
----
+### Web Content (Tab Context Menu)
 
-## Animation
+| Context | Items |
+|---------|-------|
+| Selected text | Copy, Search with [provider] |
+| Link | Copy link |
+| Image | Copy image, Download image |
 
-### Menu Container
-- **Enter:** `menu-in` — `160ms cubic-bezier(0,0,0.2,1)`, scale `0.92 → 1`, translateY `-4px → 0`, opacity `0 → 1`
-- **Exit:** window hidden instantly
-
-### Menu Items
-- **Enter:** `item-in` — `120ms cubic-bezier(0,0,0.2,1)`, translateX `-4px → 0`, opacity `0 → 1`
-- **Stagger:** each item delayed by `30ms × index`
-- **Hover transition:** `80ms ease-out` on background and color
-
----
-
-## Keyboard & Focus
-
-- **Escape:** dismisses menu
-- **Blur:** closes the context menu (click anywhere outside)
-
-No keyboard focus — items are mouse-only.
-
----
-
-## Architecture
-
-The context menu uses a native overlay pattern (same as tooltips) to render above WebContentsViews:
-
-1. Renderer calls `sendCommand("context-menu:show", { items, x, y })`
-2. Main process renders items (with icons) in overlay BrowserWindow via `executeJavaScript`
-3. Overlay shown, awaits click selection or blur dismiss
-4. Command response returns selected index (`-1` for dismiss)
-5. Renderer invokes the stored callback at that index
-
-### Font Loading
-
-The overlay HTML is written to a temp file (`app.getPath("temp")`) and loaded via `loadFile()`. This allows the `@font-face` rule to reference the Font Awesome woff2 file via `file://` URL, resolved from `__dirname` at init time.
+Web content menus respect page-handled `contextmenu` events — if the page calls `preventDefault()`, the browser menu is suppressed.
 
 ---
 
 ## API
 
 ```tsx
-const { open, portal } = useContextMenu();
+const { open } = useContextMenu();
 
-// In a handler:
 const handleContextMenu = (e: React.MouseEvent) => {
   open([
     { label: "Pin tab", icon: "thumbtack", onSelect: () => { ... } },
@@ -155,9 +51,7 @@ const handleContextMenu = (e: React.MouseEvent) => {
   ], e);
 };
 
-// In JSX (portal is null, kept for API compat):
 <div onContextMenu={handleContextMenu}>...</div>
-{portal}
 ```
 
 ### `ContextMenuItem`
@@ -165,14 +59,6 @@ const handleContextMenu = (e: React.MouseEvent) => {
 | Prop | Type | Description |
 |------|------|-------------|
 | `label` | `string` | Display text |
-| `icon` | `string?` | FA solid icon name (rendered in overlay) |
+| `icon` | `string?` | Icon name (reserved for future use — not rendered in native menus) |
 | `disabled` | `boolean?` | Grayed out, non-interactive |
 | `onSelect` | `() => void` | Callback when clicked |
-
----
-
-## Related
-
-- [Tooltips](/components/tooltips) — shares native overlay pattern
-- [Sidebar](/components/sidebar) — primary consumer of context menus
-- [Tabs](/components/tabs) — tab items have contextual actions

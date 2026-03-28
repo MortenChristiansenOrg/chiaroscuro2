@@ -218,7 +218,6 @@ function initOverlays(): void {
   if (!activeWindowId) return;
   if (process.env.NODE_ENV !== "test") {
     platform.initTooltipOverlay(activeWindowId);
-    platform.initContextMenuOverlay(activeWindowId);
   }
   platform.initCommandPaletteOverlay(activeWindowId);
 }

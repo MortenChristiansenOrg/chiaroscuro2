@@ -259,7 +259,7 @@ export function SidebarPanel() {
   };
 
   // Context menu
-  const { open: openContextMenu, portal: contextMenuPortal } = useContextMenu();
+  const { open: openContextMenu } = useContextMenu();
 
   const resize = useSidebarResize(sidebarWidth);
 
@@ -319,8 +319,6 @@ export function SidebarPanel() {
                 onContextMenu={openContextMenu}
               />
             )}
-            {contextMenuPortal}
-
             <div className="flex-1 overflow-y-auto">
               <div style={{ position: "relative", overflow: "hidden" }}>
                 {/* Exiting workspace tabs (slide out) */}

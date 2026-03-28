@@ -81,14 +81,12 @@ export interface Platform {
   showTooltip(opts: { text: string; x: number; y: number; width: number; height: number }): void;
   hideTooltip(): void;
 
-  // Context menu overlay
-  initContextMenuOverlay(windowId: WindowId): void;
+  // Context menu (native)
   showContextMenu(opts: {
     items: { label: string; icon?: string; disabled?: boolean }[];
     x: number;
     y: number;
   }): Promise<number>;
-  hideContextMenu(): void;
 
   // Sub-tab child window (backdrop + buttons + hosts sub-tab WCV)
   showSubTabWindow(
