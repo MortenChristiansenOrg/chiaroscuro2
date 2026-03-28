@@ -74,7 +74,7 @@ export function FolderGroup({
             transition: "opacity var(--duration-fast) var(--ease-out)",
           }}
         >
-          <div style={{ paddingLeft: "0.5rem" }}>
+          <div style={{ paddingLeft: "1rem" }}>
             {items.map((item) =>
               item.type === "tab" ? (
                 <TabItem
