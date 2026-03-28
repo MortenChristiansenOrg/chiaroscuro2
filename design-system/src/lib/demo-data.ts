@@ -1,17 +1,40 @@
 import type { Download } from "@features/downloads/downloads.shared";
+import type { Folder } from "@features/folders/folders.shared";
 import type { PinnedTab } from "@features/pinned-tabs/pinned-tabs.shared";
 import type { Tab } from "@features/tabs/tabs.shared";
 import type { Workspace } from "@features/workspaces/workspaces.shared";
-import type { TabId, WorkspaceId } from "../../../src/shared/types";
+import type { FolderId, TabId, WorkspaceId } from "../../../src/shared/types";
 
 export const tabId = (s: string) => s as TabId;
 export const workspaceId = (s: string) => s as WorkspaceId;
+export const folderId = (s: string) => s as FolderId;
 
 const WS_WORK = workspaceId("ws-work");
 const WS_PERSONAL = workspaceId("ws-personal");
 const WS_RESEARCH = workspaceId("ws-research");
 const WS_SOCIAL = workspaceId("ws-social");
 const WS_MUSIC = workspaceId("ws-music");
+
+const FOLDER_DEV = folderId("folder-dev");
+
+export const DEMO_FOLDERS: Folder[] = [
+  {
+    id: FOLDER_DEV,
+    workspaceId: WS_WORK,
+    name: "Dev",
+    parentFolderId: null,
+    collapsed: false,
+    order: 0,
+  },
+];
+
+export function makeDemoFolderMap(): Map<FolderId, Folder> {
+  const map = new Map<FolderId, Folder>();
+  for (const folder of DEMO_FOLDERS) {
+    map.set(folder.id, folder);
+  }
+  return map;
+}
 
 export const DEMO_TABS: Tab[] = [
   {
@@ -25,7 +48,7 @@ export const DEMO_TABS: Tab[] = [
     lastAccessedAt: Date.now(),
     createdAt: Date.now(),
     order: 0,
-    folderId: null,
+    folderId: FOLDER_DEV,
   },
   {
     id: tabId("tab-figma"),
@@ -38,7 +61,7 @@ export const DEMO_TABS: Tab[] = [
     lastAccessedAt: Date.now() - 60_000,
     createdAt: Date.now() - 60_000,
     order: 1,
-    folderId: null,
+    folderId: FOLDER_DEV,
   },
   {
     id: tabId("tab-reddit"),
