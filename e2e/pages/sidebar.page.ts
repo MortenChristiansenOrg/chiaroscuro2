@@ -147,12 +147,18 @@ export class SidebarPage {
 
   // ── Workspace editor methods ───────────────────────────────────
 
+  /** Open workspace editor by double-clicking the active workspace bubble. */
   async openWorkspaceEditor() {
-    await this.sidebar.locator("..").locator("button[aria-label='Edit workspace']").click();
+    await this.sidebar.locator("[data-workspace-id][aria-current='true']").dblclick();
   }
 
-  async openAddWorkspace() {
-    await this.sidebar.locator("..").locator("button[aria-label='Add workspace']").click();
+  /** Create a workspace via command (native context menu not automatable). */
+  async createWorkspace(name: string, color = "oklch(0.6 0.15 250)", icon = "W") {
+    await this.page.evaluate(
+      ({ name, color, icon }) =>
+        window.chiaroscuro.sendCommand("workspaces:create", { name, color, icon }),
+      { name, color, icon },
+    );
   }
 
   /** Fill workspace editor name field and submit. */
@@ -223,9 +229,7 @@ export class SidebarPage {
   /** Check if a folder is collapsed (children hidden). */
   async isFolderCollapsed(name: string): Promise<boolean> {
     const folder = this.folder(name);
-    // Collapsed folders don't render child tabs
-    const childTabs = folder.locator("[data-tab-id]");
-    return (await childTabs.count()) === 0;
+    return (await folder.getAttribute("data-collapsed")) !== null;
   }
 
   /** Remove folder via the X button. */

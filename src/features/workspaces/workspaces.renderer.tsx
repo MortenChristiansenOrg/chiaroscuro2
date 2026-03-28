@@ -63,6 +63,9 @@ export function WorkspaceBubble({
     : `0 0 0 2px ${workspace.color}66`;
 
   const hasFaIcon = isFaIcon(workspace.icon);
+  const [hovered, setHovered] = useState(false);
+
+  const scale = hovered ? 1.12 : isActive ? 1 : 0.75;
 
   return (
     <button
@@ -86,12 +89,14 @@ export function WorkspaceBubble({
             : `${workspace.color}80`,
         color: "var(--glass-text-primary)",
         boxShadow: isActive ? activeRing : undefined,
-        transform: isActive ? "scale(1)" : "scale(0.75)",
+        transform: `scale(${scale})`,
         transition: "all var(--duration-normal) var(--ease-in-out)",
       }}
       onClick={handleClick}
       onDoubleClick={onEdit}
       onContextMenu={onContextMenu}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       data-tip={workspace.name}
     >
       {hasFaIcon ? <Icon name={faIconName(workspace.icon)} /> : workspace.icon}
@@ -456,6 +461,10 @@ function FadePresence({
       };
     }
     setShow(false);
+    // Immediately unmount under reduced motion (no transition fires)
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      setMounted(false);
+    }
     return undefined;
   }, [visible]);
 
@@ -467,8 +476,10 @@ function FadePresence({
         opacity: show ? 1 : 0,
         transition: "opacity var(--duration-normal) var(--ease-in-out)",
       }}
-      onTransitionEnd={() => {
-        if (!visible) setMounted(false);
+      onTransitionEnd={(e) => {
+        // Only unmount on our own opacity transition, not descendant bubbles
+        if (e.target !== e.currentTarget || e.propertyName !== "opacity" || visible) return;
+        setMounted(false);
       }}
     >
       {children}
@@ -536,6 +547,7 @@ export function WorkspaceSwitcher({
 
       <div
         className="flex items-center justify-center"
+        data-testid="workspace-switcher"
         style={{ padding: "0.625rem 0.75rem" }}
         onContextMenu={handleSwitcherContextMenu}
       >

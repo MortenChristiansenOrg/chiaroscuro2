@@ -109,8 +109,8 @@ See [Colors](/colors) for the full palette. Available hues: Flame (20), Amber (5
 
 - **Click:** switches to the clicked workspace immediately.
 - **Tooltip:** each bubble shows workspace name on hover. Delay: 400ms.
-- **Edit button:** opens workspace management panel.
-- **Add button:** creates a new workspace with a default accent color.
+- **Double-click:** opens workspace editor for the clicked workspace.
+- **Right-click:** context menu with edit/add actions.
 - **No drag:** bubbles are not draggable (reorder via edit mode only).
 
 ---
@@ -123,8 +123,8 @@ Scale transform on hover and active states:
 transition: transform var(--duration-normal) var(--ease-in-out);
 ```
 
-- **Inactive → Active:** scale `0.75 → 1`, background opacity `0.5 → 1`, ring shadow fade-in.
-- **Active → Inactive:** scale `1 → 0.75`, background opacity `1 → 0.5`, ring shadow fade-out.
+- **Inactive → Active:** scale `0.75 → 1`, background opacity `0.2 → 1`, ring shadow fade-in.
+- **Active → Inactive:** scale `1 → 0.75`, background opacity `1 → 0.2`, ring shadow fade-out.
 - **Hover:** scale up to `1.12`.
 - **`prefers-reduced-motion`:** transitions degrade to instant (`duration: 0`).
 
@@ -152,7 +152,6 @@ transition: transform var(--duration-normal) var(--ease-in-out);
 | --------- | -------------------------------------------------- |
 | Position  | `margin-top: auto` (anchored to bottom of sidebar) |
 | Gap       | `0.375rem` active↔neighbor, `0.1875rem` inactive↔inactive (animated) |
-| Controls  | Edit + Add buttons, `margin-left: auto`            |
 | Direction | horizontal, `display: flex`, `align-items: center` |
 
 - Sidebar collapse hides the workspace bar entirely.

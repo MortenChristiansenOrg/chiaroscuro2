@@ -78,7 +78,7 @@ export function LivePreview({
           protocolRequest: null,
         });
       if (stores?.permissions) usePermissionsStore.setState({ domainPermissions: new Map() });
-      if (stores?.folders) useFoldersStore.setState({ folders: new Map() });
+      if (stores?.folders) useFoldersStore.setState({ folders: new Map(), renamingFolderId: null });
     };
   }, []);
 

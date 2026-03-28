@@ -52,7 +52,7 @@ export function FolderGroup({
   const lastTab = findLastTabId(items);
 
   return (
-    <div data-folder-id={folder.id}>
+    <div data-folder-id={folder.id} data-collapsed={folder.collapsed || undefined}>
       <FolderHeader
         folder={folder}
         isRenaming={renamingFolderId === folder.id}

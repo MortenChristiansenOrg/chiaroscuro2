@@ -8,6 +8,8 @@
 set -e
 
 CDP_PORT=""
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -18,8 +20,6 @@ done
 
 # Read from .env.local if --cdp-port not provided
 if [ -z "$CDP_PORT" ]; then
-  SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-  PROJECT_DIR="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
   if [ -f "$PROJECT_DIR/.env.local" ]; then
     CDP_PORT=$(grep -oP '^ELECTRON_APP_PORT=\K.*' "$PROJECT_DIR/.env.local" | tr -d '[:space:]')
   fi

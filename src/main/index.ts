@@ -407,6 +407,8 @@ if (gotLock) {
     localWebApp.teardown?.();
     installer.teardown?.();
     externalLink.teardown?.();
+    // Skip expensive persistence in test mode — speeds up Playwright teardown
+    if (process.env.NODE_ENV === "test") return;
     // Flush app-state immediately before data store teardown
     commands
       .send("app-state:save", undefined)

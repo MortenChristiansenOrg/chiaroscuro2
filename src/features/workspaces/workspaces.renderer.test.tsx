@@ -271,7 +271,7 @@ describe("WorkspaceSwitcher", () => {
     );
 
     // Right-click the outer container (empty area)
-    const container = document.querySelector(".flex.items-center") as HTMLElement;
+    const container = screen.getByTestId("workspace-switcher");
     fireEvent.contextMenu(container);
     expect(mockSendCommand).toHaveBeenCalledWith(
       "context-menu:show",
