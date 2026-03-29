@@ -112,8 +112,7 @@ test.describe("pinned tabs", () => {
     }).toPass({ timeout: 5_000 });
 
     // Create and switch to new workspace
-    await sidebarPage.openAddWorkspace();
-    await sidebarPage.submitWorkspaceForm("PinTest WS");
+    await sidebarPage.createWorkspace("PinTest WS");
 
     await expect(async () => {
       expect(await sidebarPage.getWorkspaceNames()).toContain("PinTest WS");

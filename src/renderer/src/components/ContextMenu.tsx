@@ -15,11 +15,9 @@ export interface ContextMenuItem {
 /**
  * Returns a trigger function for native context menus.
  * Call `open(items, e)` inside an onContextMenu handler.
- * The menu renders in a native overlay window (above WebContentsViews).
  */
 export function useContextMenu(): {
   open: (items: ContextMenuItem[], e: React.MouseEvent) => void;
-  portal: React.ReactNode;
 } {
   const callbacksRef = useRef<(() => void)[]>([]);
 
@@ -44,6 +42,5 @@ export function useContextMenu(): {
       .catch(() => {});
   };
 
-  // portal kept for API compatibility — no longer renders anything
-  return { open, portal: null };
+  return { open };
 }

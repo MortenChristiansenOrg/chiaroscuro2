@@ -12,8 +12,7 @@ test.describe("workspace management", () => {
     const ws1Tabs = await sidebarPage.getTabCount();
 
     // Create a second workspace
-    await sidebarPage.openAddWorkspace();
-    await sidebarPage.submitWorkspaceForm("Test WS");
+    await sidebarPage.createWorkspace("Test WS");
 
     await expect(async () => {
       expect(await sidebarPage.getWorkspaceNames()).toContain("Test WS");
@@ -38,11 +37,10 @@ test.describe("workspace management", () => {
     }).toPass({ timeout: 3_000 });
   });
 
-  test("creates workspace via add button", async ({ sidebarPage }) => {
+  test("creates workspace via command", async ({ sidebarPage }) => {
     const namesBefore = await sidebarPage.getWorkspaceNames();
 
-    await sidebarPage.openAddWorkspace();
-    await sidebarPage.submitWorkspaceForm("New WS");
+    await sidebarPage.createWorkspace("New WS");
 
     await expect(async () => {
       const names = await sidebarPage.getWorkspaceNames();
@@ -52,7 +50,7 @@ test.describe("workspace management", () => {
   });
 
   test("edits workspace name", async ({ sidebarPage }) => {
-    // Open editor for current workspace
+    // Open editor for current workspace via double-click
     await sidebarPage.openWorkspaceEditor();
 
     // Change name
@@ -69,8 +67,7 @@ test.describe("workspace management", () => {
 
   test("deletes workspace when more than one exists", async ({ sidebarPage, shellPage }) => {
     // Create a second workspace
-    await sidebarPage.openAddWorkspace();
-    await sidebarPage.submitWorkspaceForm("ToDelete");
+    await sidebarPage.createWorkspace("ToDelete");
 
     await expect(async () => {
       expect(await sidebarPage.getWorkspaceNames()).toContain("ToDelete");
@@ -107,8 +104,7 @@ test.describe("workspace management", () => {
     const originalTabs = await sidebarPage.getTabIds();
 
     // Create and switch to new workspace
-    await sidebarPage.openAddWorkspace();
-    await sidebarPage.submitWorkspaceForm("Other WS");
+    await sidebarPage.createWorkspace("Other WS");
 
     await expect(async () => {
       expect(await sidebarPage.getWorkspaceNames()).toContain("Other WS");

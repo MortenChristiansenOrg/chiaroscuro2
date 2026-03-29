@@ -1,6 +1,8 @@
 import { useCommandPaletteStore } from "@features/command-palette/command-palette.store";
 import type { Download } from "@features/downloads/downloads.shared";
 import { useDownloadsStore } from "@features/downloads/downloads.store";
+import type { Folder } from "@features/folders/folders.shared";
+import { useFoldersStore } from "@features/folders/folders.store";
 import type { ProtocolLaunchRequestedEvent } from "@features/installer/installer.shared";
 import { useInstallerStore } from "@features/installer/installer.store";
 import type { PermissionDecision } from "@features/permissions/permissions.shared";
@@ -14,7 +16,7 @@ import { useWindowChromeStore } from "@features/window-chrome/window-chrome.stor
 import type { Workspace } from "@features/workspaces/workspaces.shared";
 import { useWorkspacesStore } from "@features/workspaces/workspaces.store";
 import { type ReactNode, useEffect } from "react";
-import type { TabId, WorkspaceId } from "../../../src/shared/types";
+import type { FolderId, TabId, WorkspaceId } from "../../../src/shared/types";
 import { ComponentPreview } from "./ComponentPreview";
 
 interface StoreOverrides {
@@ -33,6 +35,7 @@ interface StoreOverrides {
   permissions?: {
     domainPermissions: Map<string, Record<string, PermissionDecision>>;
   };
+  folders?: { folders: Map<FolderId, Folder> };
 }
 
 export function LivePreview({
@@ -55,6 +58,7 @@ export function LivePreview({
     if (stores?.downloads) useDownloadsStore.setState(stores.downloads);
     if (stores?.installer) useInstallerStore.setState(stores.installer);
     if (stores?.permissions) usePermissionsStore.setState(stores.permissions);
+    if (stores?.folders) useFoldersStore.setState({ ...stores.folders, renamingFolderId: null });
 
     return () => {
       if (stores?.tabs) useTabsStore.setState({ tabs: new Map(), activeTabId: null });
@@ -74,6 +78,7 @@ export function LivePreview({
           protocolRequest: null,
         });
       if (stores?.permissions) usePermissionsStore.setState({ domainPermissions: new Map() });
+      if (stores?.folders) useFoldersStore.setState({ folders: new Map(), renamingFolderId: null });
     };
   }, []);
 

@@ -285,16 +285,21 @@ describe("SidebarPanel", () => {
       expect(screen.getByRole("button", { name: "Personal" })).toBeTruthy();
     });
 
-    it("renders add workspace button", () => {
-      setStores();
+    it("workspace bubble supports context menu", () => {
+      setStores({
+        workspaces: [makeWorkspace({ id: "ws-1" as WorkspaceId, name: "Work" })],
+      });
       render(<SidebarPanel />);
-      expect(screen.getByRole("button", { name: "Add workspace" })).toBeTruthy();
-    });
-
-    it("renders edit workspace button", () => {
-      setStores();
-      render(<SidebarPanel />);
-      expect(screen.getByRole("button", { name: "Edit workspace" })).toBeTruthy();
+      fireEvent.contextMenu(screen.getByRole("button", { name: "Work" }));
+      expect(mockSendCommand).toHaveBeenCalledWith(
+        "context-menu:show",
+        expect.objectContaining({
+          items: [
+            expect.objectContaining({ label: "Edit workspace" }),
+            expect.objectContaining({ label: "Add workspace" }),
+          ],
+        }),
+      );
     });
   });
 

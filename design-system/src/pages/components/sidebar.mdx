@@ -4,7 +4,7 @@ title: Sidebar
 
 import { LivePreview } from "../../components/LivePreview"
 import { SidebarPanel } from "@features/sidebar/sidebar.renderer"
-import { DEMO_TABS, DEMO_WORKSPACES, makeDemoTabMap, tabId, workspaceId } from "../../lib/demo-data"
+import { DEMO_TABS, DEMO_WORKSPACES, makeDemoTabMap, makeDemoFolderMap, tabId, workspaceId } from "../../lib/demo-data"
 
 # Sidebar
 
@@ -27,6 +27,7 @@ The sidebar is the primary navigation surface. It contains pinned tabs (icon str
     tabs: { tabs: makeDemoTabMap(), activeTabId: tabId("tab-github") },
     workspaces: { workspaces: DEMO_WORKSPACES, activeWorkspaceId: workspaceId("ws-work") },
     sidebar: { visible: true },
+    folders: { folders: makeDemoFolderMap() },
   }}
 >
   <div style={{ width: 230, height: 380, overflow: "hidden", display: "flex" }}>

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useContextMenu } from "../../renderer/src/components/ContextMenu";
 import { Icon } from "../../renderer/src/components/Icon";
 import { FA_SOLID_SEARCH } from "../../shared/fa-icon-search.generated";
 import type { FaSolidIcon } from "../../shared/fa-icons.generated";
@@ -45,10 +46,12 @@ export function WorkspaceBubble({
   workspace,
   isActive,
   onEdit,
+  onContextMenu,
 }: {
   workspace: { id: WorkspaceId; name: string; color: string; icon: string };
   isActive: boolean;
   onEdit?: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
 }) {
   const handleClick = () => {
     sendCommand(WORKSPACES_SWITCH, { workspaceId: workspace.id });
@@ -56,10 +59,13 @@ export function WorkspaceBubble({
 
   // Build the ring shadow using oklch with proper syntax
   const activeRing = workspace.color.startsWith("oklch(")
-    ? `0 0 0 2px oklch(${workspace.color.slice(5, -1)} / 0.4)`
+    ? `0 0 0 2px oklch(${workspace.color.slice(6, -1)} / 0.4)`
     : `0 0 0 2px ${workspace.color}66`;
 
   const hasFaIcon = isFaIcon(workspace.icon);
+  const [hovered, setHovered] = useState(false);
+
+  const scale = hovered ? 1.12 : isActive ? 1 : 0.75;
 
   return (
     <button
@@ -76,14 +82,21 @@ export function WorkspaceBubble({
         border: "none",
         fontSize: hasFaIcon ? 14 : "var(--text-sm)",
         fontWeight: hasFaIcon ? undefined : 600,
-        background: workspace.color,
+        background: isActive
+          ? workspace.color
+          : workspace.color.startsWith("oklch(")
+            ? `oklch(${workspace.color.slice(6, -1)} / 0.2)`
+            : `${workspace.color}80`,
         color: "var(--glass-text-primary)",
         boxShadow: isActive ? activeRing : undefined,
-        transform: isActive ? "scale(1)" : "scale(0.75)",
+        transform: `scale(${scale})`,
         transition: "all var(--duration-normal) var(--ease-in-out)",
       }}
       onClick={handleClick}
       onDoubleClick={onEdit}
+      onContextMenu={onContextMenu}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
       data-tip={workspace.name}
     >
       {hasFaIcon ? <Icon name={faIconName(workspace.icon)} /> : workspace.icon}
@@ -92,12 +105,18 @@ export function WorkspaceBubble({
 }
 
 export const WORKSPACE_COLORS = [
-  "oklch(0.6 0.12 230)",
-  "oklch(0.6 0.15 350)",
-  "oklch(0.6 0.15 140)",
+  "oklch(0.6 0.15 20)",
   "oklch(0.6 0.15 50)",
-  "oklch(0.6 0.15 280)",
+  "oklch(0.6 0.12 80)",
+  "oklch(0.6 0.15 110)",
+  "oklch(0.6 0.15 140)",
   "oklch(0.6 0.12 180)",
+  "oklch(0.6 0.12 205)",
+  "oklch(0.6 0.12 230)",
+  "oklch(0.6 0.15 255)",
+  "oklch(0.6 0.15 280)",
+  "oklch(0.6 0.15 315)",
+  "oklch(0.6 0.15 350)",
 ];
 
 // ── Icon search ─────────────────────────────────────────────────
@@ -149,7 +168,11 @@ export function WorkspaceEditor({
     e.preventDefault();
     if (!name.trim()) return;
     if (isNew) {
-      sendCommand(WORKSPACES_CREATE, { name: name.trim(), color, icon: resolvedIcon });
+      sendCommand(WORKSPACES_CREATE, {
+        name: name.trim(),
+        color,
+        icon: resolvedIcon,
+      });
     } else {
       sendCommand(WORKSPACES_UPDATE, {
         workspaceId: workspace.id,
@@ -325,7 +348,7 @@ export function WorkspaceEditor({
                       : "1.5px solid transparent",
                   background:
                     iconName === selectedFaIcon
-                      ? `oklch(${color.slice(5, -1)} / 0.15)`
+                      ? `oklch(${color.slice(6, -1)} / 0.15)`
                       : "var(--glass-subtle)",
                   color: iconName === selectedFaIcon ? color : "var(--glass-text-default)",
                   fontSize: 13,
@@ -415,7 +438,13 @@ export function WorkspaceEditor({
 }
 
 /** Fades children in/out, unmounting after exit transition. */
-function FadePresence({ visible, children }: { visible: boolean; children: React.ReactNode }) {
+function FadePresence({
+  visible,
+  children,
+}: {
+  visible: boolean;
+  children: React.ReactNode;
+}) {
   const [mounted, setMounted] = useState(visible);
   const [show, setShow] = useState(false);
   const rafRef = useRef(0);
@@ -432,6 +461,10 @@ function FadePresence({ visible, children }: { visible: boolean; children: React
       };
     }
     setShow(false);
+    // Immediately unmount under reduced motion (no transition fires)
+    if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
+      setMounted(false);
+    }
     return undefined;
   }, [visible]);
 
@@ -443,8 +476,10 @@ function FadePresence({ visible, children }: { visible: boolean; children: React
         opacity: show ? 1 : 0,
         transition: "opacity var(--duration-normal) var(--ease-in-out)",
       }}
-      onTransitionEnd={() => {
-        if (!visible) setMounted(false);
+      onTransitionEnd={(e) => {
+        // Only unmount on our own opacity transition, not descendant bubbles
+        if (e.target !== e.currentTarget || e.propertyName !== "opacity" || visible) return;
+        setMounted(false);
       }}
     >
       {children}
@@ -465,6 +500,41 @@ export function WorkspaceSwitcher({
   editorMode,
   onEditorModeChange,
 }: WorkspaceSwitcherProps) {
+  const { open: openContextMenu } = useContextMenu();
+
+  const handleBubbleContextMenu = (ws: Workspace, e: React.MouseEvent) => {
+    openContextMenu(
+      [
+        {
+          label: "Edit workspace",
+          icon: "pencil",
+          onSelect: () => onEditorModeChange(ws.id),
+        },
+        {
+          label: "Add workspace",
+          icon: "plus",
+          onSelect: () => onEditorModeChange("new"),
+        },
+      ],
+      e,
+    );
+  };
+
+  const handleSwitcherContextMenu = (e: React.MouseEvent) => {
+    // Only on empty area, not on a workspace bubble
+    if ((e.target as HTMLElement).closest("[data-workspace-id]")) return;
+    openContextMenu(
+      [
+        {
+          label: "Add workspace",
+          icon: "plus",
+          onSelect: () => onEditorModeChange("new"),
+        },
+      ],
+      e,
+    );
+  };
+
   return (
     <>
       {/* Workspace editor */}
@@ -475,53 +545,35 @@ export function WorkspaceSwitcher({
         />
       </FadePresence>
 
-      <div className="flex items-center" style={{ gap: "0.375rem", padding: "0.625rem 0.75rem" }}>
-        <div className="flex items-center" style={{ gap: "0.375rem" }}>
-          {workspaces.map((ws) => (
-            <WorkspaceBubble
-              key={ws.id}
-              workspace={ws}
-              isActive={ws.id === activeWorkspaceId}
-              onEdit={() => onEditorModeChange(ws.id)}
-            />
-          ))}
+      <div
+        className="flex items-center justify-center"
+        data-testid="workspace-switcher"
+        style={{ padding: "0.625rem 0.75rem" }}
+        onContextMenu={handleSwitcherContextMenu}
+      >
+        <div className="flex items-center flex-wrap justify-center">
+          {workspaces.map((ws, i) => {
+            const isActive = ws.id === activeWorkspaceId;
+            const prevActive = i > 0 && workspaces[i - 1]?.id === activeWorkspaceId;
+            const gap = i === 0 ? 0 : isActive || prevActive ? "0.375rem" : "0.1875rem";
+            return (
+              <div
+                key={ws.id}
+                style={{
+                  marginLeft: gap,
+                  transition: "margin var(--duration-normal) var(--ease-in-out)",
+                }}
+              >
+                <WorkspaceBubble
+                  workspace={ws}
+                  isActive={isActive}
+                  onEdit={() => onEditorModeChange(ws.id)}
+                  onContextMenu={(e) => handleBubbleContextMenu(ws, e)}
+                />
+              </div>
+            );
+          })}
         </div>
-        <button
-          type="button"
-          className="flex items-center justify-center cursor-pointer text-glass-text-hint hover:text-glass-text-default hover:bg-glass-hover"
-          style={{
-            width: 24,
-            height: 24,
-            borderRadius: "var(--radius-full)",
-            border: "none",
-            background: "transparent",
-            fontSize: "var(--text-sm)",
-          }}
-          tabIndex={-1}
-          onClick={() => onEditorModeChange(activeWorkspaceId ?? "none")}
-          aria-label="Edit workspace"
-          data-tip="Edit workspace"
-        >
-          <Icon name="pencil" css={{ fontSize: 10 }} />
-        </button>
-        <button
-          type="button"
-          className="flex items-center justify-center cursor-pointer text-glass-text-hint hover:text-glass-text-default hover:bg-glass-hover"
-          style={{
-            width: 24,
-            height: 24,
-            borderRadius: "var(--radius-full)",
-            border: "none",
-            background: "transparent",
-            fontSize: "var(--text-sm)",
-          }}
-          tabIndex={-1}
-          onClick={() => onEditorModeChange("new")}
-          aria-label="Add workspace"
-          data-tip="Add workspace"
-        >
-          <Icon name="plus" css={{ fontSize: 10 }} />
-        </button>
       </div>
     </>
   );

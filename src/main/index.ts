@@ -218,7 +218,6 @@ function initOverlays(): void {
   if (!activeWindowId) return;
   if (process.env.NODE_ENV !== "test") {
     platform.initTooltipOverlay(activeWindowId);
-    platform.initContextMenuOverlay(activeWindowId);
   }
   platform.initCommandPaletteOverlay(activeWindowId);
 }
@@ -408,6 +407,8 @@ if (gotLock) {
     localWebApp.teardown?.();
     installer.teardown?.();
     externalLink.teardown?.();
+    // Skip expensive persistence in test mode — speeds up Playwright teardown
+    if (process.env.NODE_ENV === "test") return;
     // Flush app-state immediately before data store teardown
     commands
       .send("app-state:save", undefined)

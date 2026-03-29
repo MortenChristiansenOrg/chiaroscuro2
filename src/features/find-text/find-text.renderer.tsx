@@ -106,7 +106,7 @@ export function FindBar() {
             padding: "0.1875rem 0.25rem",
             borderRadius: "var(--radius-lg)",
             background: "var(--glass-subtle)",
-            WebkitAppRegion: "no-drag",
+            WebkitAppRegion: active ? "no-drag" : undefined,
           } as React.CSSProperties
         }
       >

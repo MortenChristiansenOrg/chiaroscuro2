@@ -52,7 +52,7 @@ export function FolderGroup({
   const lastTab = findLastTabId(items);
 
   return (
-    <div data-folder-id={folder.id}>
+    <div data-folder-id={folder.id} data-collapsed={folder.collapsed || undefined}>
       <FolderHeader
         folder={folder}
         isRenaming={renamingFolderId === folder.id}
@@ -60,36 +60,50 @@ export function FolderGroup({
         firstSubtreeTabId={firstTab}
         lastSubtreeTabId={lastTab}
       />
-      {!folder.collapsed && (
-        <div style={{ paddingLeft: "0.5rem" }}>
-          {items.map((item) =>
-            item.type === "tab" ? (
-              <TabItem
-                key={item.tab.id}
-                tab={item.tab}
-                isActive={item.tab.id === activeTabId}
-                isEphemeral={false}
-                exiting={exitingIds.has(item.tab.id)}
-                isBookmarkedSection={true}
-                folderId={folder.id}
-                isDragged={item.tab.id === (isDragging ? dragTabIdRef.current : null)}
-                disableEntryAnimation={disableEntryAnimation}
-              />
-            ) : (
-              <FolderGroup
-                key={item.folder.id}
-                folder={item.folder}
-                items={item.children}
-                activeTabId={activeTabId}
-                exitingIds={exitingIds}
-                disableEntryAnimation={disableEntryAnimation}
-                renamingFolderId={renamingFolderId}
-                depth={depth + 1}
-              />
-            ),
-          )}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateRows: folder.collapsed ? "0fr" : "1fr",
+          transition: "grid-template-rows var(--duration-fast) var(--ease-out)",
+        }}
+      >
+        <div
+          style={{
+            overflow: "hidden",
+            opacity: folder.collapsed ? 0 : 1,
+            transition: "opacity var(--duration-fast) var(--ease-out)",
+          }}
+        >
+          <div style={{ paddingLeft: "1rem" }}>
+            {items.map((item) =>
+              item.type === "tab" ? (
+                <TabItem
+                  key={item.tab.id}
+                  tab={item.tab}
+                  isActive={item.tab.id === activeTabId}
+                  isEphemeral={false}
+                  exiting={exitingIds.has(item.tab.id)}
+                  isBookmarkedSection={true}
+                  folderId={folder.id}
+                  isDragged={item.tab.id === (isDragging ? dragTabIdRef.current : null)}
+                  disableEntryAnimation={disableEntryAnimation}
+                />
+              ) : (
+                <FolderGroup
+                  key={item.folder.id}
+                  folder={item.folder}
+                  items={item.children}
+                  activeTabId={activeTabId}
+                  exitingIds={exitingIds}
+                  disableEntryAnimation={disableEntryAnimation}
+                  renamingFolderId={renamingFolderId}
+                  depth={depth + 1}
+                />
+              ),
+            )}
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

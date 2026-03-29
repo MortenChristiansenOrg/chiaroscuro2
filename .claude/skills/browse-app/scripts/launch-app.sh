@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Build in WSL, launch Electron on Windows with remote debugging enabled.
-# Only kills the Electron process listening on the target CDP port.
+# Dev workflow: Vite HMR server on WSL + Electron on Windows with CDP.
+# Renderer changes hot-reload instantly. Main/preload changes need relaunch.
 #
 # Usage: ./launch-app.sh [--rebuild] [--cdp-port PORT]
 #   --rebuild         Force rebuild even if out/ exists
-#   --cdp-port PORT   CDP port (default: 9333)
+#   --cdp-port PORT   CDP port (default from .env.local)
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -38,14 +38,14 @@ WIN_PATH="C:\\Users\\${WIN_USER}\\.chiaroscuro-dev"
 
 mkdir -p "$WIN_DIR"
 
-# Build unless skipped
+# Build main + preload (renderer served live by Vite)
 if [ "$REBUILD" = true ] || [ ! -d "out" ]; then
   echo "Building..."
   bunx electron-vite build
 fi
 
-echo "Syncing to Windows..."
-rsync -a --delete out/ "$WIN_DIR/out/"
+echo "Syncing main + preload to Windows..."
+rsync -a --delete out/main out/preload "$WIN_DIR/out/"
 rsync -a --delete resources/ "$WIN_DIR/resources/" 2>/dev/null || true
 cp package.json "$WIN_DIR/"
 
@@ -63,36 +63,64 @@ if [ ! -f "$ELECTRON_EXE" ]; then
 fi
 WIN_ELECTRON="$WIN_PATH\\node_modules\\electron\\dist\\electron.exe"
 
-# Kill any existing process listening on the CDP port
+# Kill all chiaroscuro-dev Electron processes (not just the one on the CDP port —
+# stale processes from failed launches may not have bound to the port)
 powershell.exe -NoProfile -Command "
-  \$conn = Get-NetTCPConnection -LocalPort $CDP_PORT -State Listen -ErrorAction SilentlyContinue
-  if (\$conn) {
-    Stop-Process -Id \$conn.OwningProcess -Force -ErrorAction SilentlyContinue
-    Write-Host 'Killed process on port $CDP_PORT'
-  }
+  Get-Process -Name electron -ErrorAction SilentlyContinue |
+    Where-Object { \$_.Path -like '*chiaroscuro-dev*' } |
+    ForEach-Object { Stop-Process -Id \$_.Id -Force -ErrorAction SilentlyContinue; Write-Host \"Killed Electron PID \$(\$_.Id)\" }
 " 2>/dev/null || true
 
-sleep 1
+# Pick a free port for the Vite renderer dev server
+RENDERER_PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("",0)); print(s.getsockname()[1]); s.close()')
 
-echo "Launching Electron..."
+# Kill any leftover dev server from a previous launch
+if [ -f "$PROJECT_DIR/.dev-server-pid" ]; then
+  kill "$(cat "$PROJECT_DIR/.dev-server-pid")" 2>/dev/null || true
+  rm -f "$PROJECT_DIR/.dev-server-pid"
+fi
+
+echo "Starting renderer dev server on port $RENDERER_PORT..."
+cd "$PROJECT_DIR"
+ELECTRON_VITE_DEV_SERVER_PORT=$RENDERER_PORT bun run scripts/dev-renderer-server.ts &
+DEV_PID=$!
+echo "$DEV_PID" > "$PROJECT_DIR/.dev-server-pid"
+
+# Wait for Vite to be ready (should start in ~2s, fail fast if not)
+echo "Waiting for dev server..."
+sleep 2
+if ! kill -0 "$DEV_PID" 2>/dev/null; then
+  echo "Error: dev server exited."
+  rm -f "$PROJECT_DIR/.dev-server-pid"
+  exit 1
+fi
+if ! curl -s --max-time 3 "http://localhost:$RENDERER_PORT/" >/dev/null 2>&1; then
+  echo "Error: dev server not responding on port $RENDERER_PORT after 5s."
+  kill "$DEV_PID" 2>/dev/null || true
+  rm -f "$PROJECT_DIR/.dev-server-pid"
+  exit 1
+fi
+echo "Dev server ready."
+
+echo "Launching Electron (renderer at port $RENDERER_PORT, CDP on port $CDP_PORT)..."
 powershell.exe -NoProfile -Command "
+  \$env:ELECTRON_RENDERER_URL = 'http://localhost:$RENDERER_PORT'
+  \$env:NODE_ENV_ELECTRON_VITE = 'development'
   Start-Process -FilePath '$WIN_ELECTRON' -ArgumentList '.','--remote-debugging-port=$CDP_PORT' -WorkingDirectory '$WIN_PATH'
 "
 
 # Wait for CDP endpoint (mirrored networking — direct access, no proxy needed)
-echo -n "Waiting for CDP endpoint on port $CDP_PORT..."
-for i in $(seq 1 30); do
-  if curl -s "http://127.0.0.1:$CDP_PORT/json/version" >/dev/null 2>&1; then
-    echo " ready."
-    curl -s "http://127.0.0.1:$CDP_PORT/json/version" | python3 -m json.tool 2>/dev/null || true
-    echo ""
-    echo "Connecting playwright-cli via CDP..."
-    "$SCRIPT_DIR/connect-app.sh" --cdp-port "$CDP_PORT"
-    exit 0
-  fi
-  echo -n "."
-  sleep 1
-done
-
-echo " timeout. Check that Electron launched correctly on Windows."
-exit 1
+echo "Waiting for CDP endpoint on port $CDP_PORT..."
+sleep 5
+if ! curl -s --max-time 3 "http://127.0.0.1:$CDP_PORT/json/version" >/dev/null 2>&1; then
+  echo "Error: CDP endpoint not responding on port $CDP_PORT after 8s."
+  echo "Check that Electron launched correctly on Windows."
+  kill "$DEV_PID" 2>/dev/null || true
+  rm -f "$PROJECT_DIR/.dev-server-pid"
+  exit 1
+fi
+echo "CDP ready."
+curl -s "http://127.0.0.1:$CDP_PORT/json/version" | python3 -m json.tool 2>/dev/null || true
+echo ""
+echo "Connecting playwright-cli via CDP..."
+"$SCRIPT_DIR/connect-app.sh" --cdp-port "$CDP_PORT"
