@@ -97,6 +97,12 @@ class PdfjsDocument implements PdfDocument {
     if (!ctx) return;
     ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
 
+    // Fill with white background to prevent transparency artifacts — matches
+    // mupdf's alpha=false rendering and avoids wrong-colored font outlines
+    // when the page sits on a dark container background.
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, viewport.width, viewport.height);
+
     await page.render({ canvas, canvasContext: ctx, viewport }).promise;
   }
 
@@ -175,10 +181,12 @@ class PdfjsDocument implements PdfDocument {
       const tx = transform[4] ?? 0;
       const ty = transform[5] ?? 0;
       const height = startItem.height;
+      const itemLen = Math.max(1, startItem.str.length);
       // Convert from PDF coordinate system (bottom-left origin) to canvas (top-left)
-      const x = tx;
+      const charOffset = startMap.charIdx / itemLen;
+      const x = tx + startItem.width * charOffset;
       const y = viewport.height - ty;
-      const width = startItem.width * (term.length / Math.max(1, startItem.str.length));
+      const width = startItem.width * (term.length / itemLen);
 
       matches.push({
         rects: [{ x, y: y - height, width, height }],
