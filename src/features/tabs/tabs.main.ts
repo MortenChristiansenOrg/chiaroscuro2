@@ -122,6 +122,8 @@ const _state = featureState<{
 // Module-level content bounds for cross-feature access
 let _contentBounds: Bounds = { x: 0, y: 0, width: 0, height: 0 };
 
+let builtInCounter = 0;
+
 // Tracks the "fixed" URL for bookmarked tabs (URL at time of bookmarking).
 // Used to restore bookmarked tabs to their original address unless
 // fixedAddressDisabled is set.
@@ -158,12 +160,12 @@ export default defineFeature<Deps>({
     let contentBounds: Bounds = { x: 0, y: 0, width: 0, height: 0 };
     const tabScope = new TabScope();
     const tabsCollection: Collection<PersistedTab> = dataStore.collection("tabs");
-    let builtInCounter = 0;
+    builtInCounter = 0;
 
     // ── Persistence helpers ──────────────────────────────────────────
 
     function persistTab(tab: Tab): void {
-      if (tab.builtIn) return;
+      if (tab.builtIn && !tab.url.startsWith("app:pdf-reader")) return;
       const { loading, builtIn, fixedUrl: _fixedUrl, ...persisted } = tab;
       // Bookmarked tabs with fixed address: persist the original URL
       const fixedUrl = fixedUrls.get(tab.id);
@@ -341,9 +343,9 @@ export default defineFeature<Deps>({
       tabs.set(tabId, tab);
       if (!isBuiltIn) {
         attachTabListeners(tabId);
-        persistTab(tab);
         events.emit("tab:loading-changed", { tabId, loading: true });
       }
+      persistTab(tab);
 
       events.emit(TABS_CREATED, { tab });
       scheduleListChanged();
@@ -367,8 +369,8 @@ export default defineFeature<Deps>({
       const wasActive = getActiveTabId() === tabId;
       if (!tab.builtIn) {
         await platform.closeTab(tabId);
-        removePersistedTab(tabId);
       }
+      removePersistedTab(tabId);
       tabs.delete(tabId);
       fixedUrls.delete(tabId);
       unloadedTabs.delete(tabId);
@@ -690,15 +692,25 @@ export async function start(deps: Deps): Promise<void> {
   for (const pt of toRestore) {
     try {
       const tabId = pt.id as TabId;
-      await platform.createTab(windowId, pt.url, tabId, { lazy: true });
+      const isBuiltIn = pt.url.startsWith("app:");
+
+      if (!isBuiltIn) {
+        await platform.createTab(windowId, pt.url, tabId, { lazy: true });
+      } else {
+        // Update counter to avoid ID collisions with restored built-in tabs
+        const match = tabId.match(/^builtin-(\d+)$/);
+        if (match) builtInCounter = Math.max(builtInCounter, Number(match[1]));
+      }
+
       const tab: Tab = {
         id: tabId,
         workspaceId: pt.workspaceId as WorkspaceId,
         url: pt.url,
-        title: pt.title,
+        title: isBuiltIn ? resolveBuiltInTitle(pt.url) : pt.title,
         favicon: pt.favicon,
         loading: false,
         bookmarked: pt.bookmarked,
+        ...(isBuiltIn && { builtIn: true }),
         lastAccessedAt: pt.lastAccessedAt,
         createdAt: pt.createdAt,
         order: pt.order,
@@ -706,17 +718,17 @@ export async function start(deps: Deps): Promise<void> {
       };
 
       tabs.set(tabId, tab);
-      attachTabListeners(tabId);
-      unloadedTabs.add(tabId);
+      if (!isBuiltIn) {
+        attachTabListeners(tabId);
+        unloadedTabs.add(tabId);
+        platform.hideTab(tabId);
+      }
       if (pt.bookmarked) fixedUrls.set(tabId, pt.url);
 
       // Track first tab in active workspace for activation
       if (tab.workspaceId === activeWsId && !firstTabInActiveWs) {
         firstTabInActiveWs = tabId;
       }
-
-      // Hide until activated
-      platform.hideTab(tabId);
     } catch {
       // Skip tabs that fail to restore (e.g., invalid URLs)
     }

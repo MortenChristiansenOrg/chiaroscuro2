@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { PdfDocument, SearchMatch } from "../backends/types";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { PdfDocument, SearchMatch, TextItem } from "../backends/types";
 
 const PAGE_GAP = 12;
 
@@ -17,6 +17,67 @@ interface PdfViewportProps {
   currentSearchMatch: { page: number; matchIndex: number } | null;
   onCurrentPageChange: (page: number) => void;
   onGoToPageComplete: () => void;
+}
+
+/** Transparent text layer for selection/copy support */
+function TextLayer({ items, zoom }: { items: TextItem[]; zoom: number }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Measure each span's natural width and apply scaleX to match PDF layout
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const children = container.children;
+    for (let i = 0; i < children.length; i++) {
+      const span = children[i] as HTMLElement;
+      const item = items[i];
+      if (!item || !span) continue;
+      // Reset transform before measuring
+      span.style.transform = "";
+      const actualWidth = span.offsetWidth;
+      const expectedWidth = item.width * zoom;
+      if (actualWidth > 0 && expectedWidth > 0) {
+        span.style.transform = `scaleX(${expectedWidth / actualWidth})`;
+      }
+    }
+  }, [items, zoom]);
+
+  return (
+    <div
+      ref={containerRef}
+      className="pdf-text-layer"
+      style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        overflow: "hidden",
+        pointerEvents: "none",
+        borderRadius: "var(--radius-sm)",
+      }}
+    >
+      {items.map((item) => (
+        <span
+          key={`${item.x}:${item.y}:${item.width}`}
+          style={{
+            position: "absolute",
+            left: item.x * zoom,
+            top: item.y * zoom,
+            fontSize: item.height * zoom,
+            fontFamily: "sans-serif",
+            lineHeight: 1,
+            whiteSpace: "pre",
+            color: "transparent",
+            transformOrigin: "left top",
+            pointerEvents: "auto",
+          }}
+        >
+          {item.text}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 function PdfPage({
@@ -37,6 +98,18 @@ function PdfPage({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
   const renderedRef = useRef<{ pageIndex: number; zoom: number } | null>(null);
+  const [textItems, setTextItems] = useState<TextItem[]>([]);
+
+  // Load text items for selection layer
+  useEffect(() => {
+    let cancelled = false;
+    document.getPageTextItems(pageIndex).then((items) => {
+      if (!cancelled) setTextItems(items);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [document, pageIndex]);
 
   // Render the page when it becomes visible or zoom changes
   useEffect(() => {
@@ -114,6 +187,7 @@ function PdfPage({
             pointerEvents: "none",
           }}
         />
+        {textItems.length > 0 && <TextLayer items={textItems} zoom={zoom} />}
       </div>
     </div>
   );
@@ -230,7 +304,7 @@ export function PdfViewport({
     const pageIdx = goToPage - 1; // 0-based
     const pos = pagePositions[pageIdx];
     if (!pos) return;
-    containerRef.current.scrollTo({ top: pos.y - PAGE_GAP, behavior: "smooth" });
+    containerRef.current.scrollTo({ top: pos.y - PAGE_GAP, behavior: "instant" });
     onGoToPageComplete();
   }, [goToPage, pagePositions, onGoToPageComplete]);
 

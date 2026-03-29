@@ -1,7 +1,14 @@
 import "./map-polyfill"; // Must precede pdfjs-dist — see file for details
 import * as pdfjsLib from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import type { OutlineEntry, PageDimensions, PdfBackend, PdfDocument, SearchMatch } from "./types";
+import type {
+  OutlineEntry,
+  PageDimensions,
+  PdfBackend,
+  PdfDocument,
+  SearchMatch,
+  TextItem,
+} from "./types";
 
 // pdfjs-dist v5.5+ uses Map.getOrInsertComputed which Electron 40 doesn't
 // support. Wrap the worker in a Blob that injects the polyfill before loading.
@@ -97,6 +104,28 @@ class PdfjsDocument implements PdfDocument {
     const page = await this.doc.getPage(pageIndex + 1);
     const content = await page.getTextContent();
     return content.items.map((item) => ("str" in item ? item.str : "")).join(" ");
+  }
+
+  async getPageTextItems(pageIndex: number): Promise<TextItem[]> {
+    const page = await this.doc.getPage(pageIndex + 1);
+    const content = await page.getTextContent();
+    const viewport = page.getViewport({ scale: 1 });
+
+    const items: TextItem[] = [];
+    for (const item of content.items) {
+      if (!("str" in item) || !item.str) continue;
+      const transform = item.transform as number[];
+      const tx = transform[4] ?? 0;
+      const ty = transform[5] ?? 0;
+      items.push({
+        text: item.str,
+        x: tx,
+        y: viewport.height - ty - item.height,
+        width: item.width,
+        height: item.height,
+      });
+    }
+    return items;
   }
 
   async searchPage(pageIndex: number, term: string): Promise<SearchMatch[]> {

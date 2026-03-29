@@ -185,7 +185,8 @@ function closePalette(){
 
 function resolveInput(v){
   v=v.trim();if(!v)return null;
-  if(/^https?:\\/\\//i.test(v))return{type:'url',url:v};
+  if(/^(?:https?|file):\\/\\//i.test(v))return{type:'url',url:v};
+  if(/^[A-Za-z]:[/\\\\]/.test(v))return{type:'url',url:'file:///'+v.replace(/\\\\/g,'/')};
   if(/^[^\\s]+\\.[^\\s]+$/.test(v)&&v.length>2)return{type:'url',url:'https://'+v};
   if(v.startsWith('!')){
     var parts=v.slice(1).split(/\\s+/,2),bang=parts[0]||'';

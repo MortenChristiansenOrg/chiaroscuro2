@@ -1,5 +1,13 @@
+import "./mupdf-wasm-config"; // Must precede mupdf — see file for details
 import * as mupdf from "mupdf";
-import type { OutlineEntry, PageDimensions, PdfBackend, PdfDocument, SearchMatch } from "./types";
+import type {
+  OutlineEntry,
+  PageDimensions,
+  PdfBackend,
+  PdfDocument,
+  SearchMatch,
+  TextItem,
+} from "./types";
 
 interface MupdfOutlineItem {
   title: string | undefined;
@@ -56,8 +64,6 @@ class MupdfDocument implements PdfDocument {
   async renderPage(pageIndex: number, scale: number, canvas: HTMLCanvasElement): Promise<void> {
     const page = this.doc.loadPage(pageIndex);
     const bounds = page.getBounds();
-    const width = (bounds[2] - bounds[0]) * scale;
-    const height = (bounds[3] - bounds[1]) * scale;
 
     // Store unscaled dims
     this.pageDimsCache.set(pageIndex, {
@@ -65,24 +71,35 @@ class MupdfDocument implements PdfDocument {
       height: bounds[3] - bounds[1],
     });
 
-    const pixelWidth = Math.floor(width * devicePixelRatio);
-    const pixelHeight = Math.floor(height * devicePixelRatio);
-
-    canvas.width = pixelWidth;
-    canvas.height = pixelHeight;
-    canvas.style.width = `${width}px`;
-    canvas.style.height = `${height}px`;
-
     const matrix = mupdf.Matrix.scale(scale * devicePixelRatio, scale * devicePixelRatio);
-    const pixmap = page.toPixmap(matrix, mupdf.ColorSpace.DeviceRGB, true);
-    const pixels = pixmap.getPixels();
+    // alpha=false renders onto white background; produces RGB (3 bytes/pixel)
+    const pixmap = page.toPixmap(matrix, mupdf.ColorSpace.DeviceRGB, false);
+
+    // Use pixmap's actual dimensions to avoid rounding mismatches
+    const pw = pixmap.getWidth();
+    const ph = pixmap.getHeight();
+
+    canvas.width = pw;
+    canvas.height = ph;
+    canvas.style.width = `${(bounds[2] - bounds[0]) * scale}px`;
+    canvas.style.height = `${(bounds[3] - bounds[1]) * scale}px`;
 
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
-    // Copy pixel data to a fresh ArrayBuffer to satisfy ImageData's type constraints
-    const pixelData = new Uint8ClampedArray(pixelWidth * pixelHeight * 4);
-    pixelData.set(new Uint8Array(pixels.buffer, pixels.byteOffset, pixels.byteLength));
-    const imageData = new ImageData(pixelData, pixelWidth, pixelHeight);
+
+    // Convert RGB (3 bytes/pixel) → RGBA (4 bytes/pixel) for ImageData
+    const pixels = pixmap.getPixels();
+    const total = pw * ph;
+    const pixelData = new Uint8ClampedArray(total * 4);
+    for (let i = 0; i < total; i++) {
+      const src = i * 3;
+      const dst = i * 4;
+      pixelData[dst] = pixels[src] ?? 0;
+      pixelData[dst + 1] = pixels[src + 1] ?? 0;
+      pixelData[dst + 2] = pixels[src + 2] ?? 0;
+      pixelData[dst + 3] = 255;
+    }
+    const imageData = new ImageData(pixelData, pw, ph);
     ctx.putImageData(imageData, 0, 0);
   }
 
@@ -90,6 +107,38 @@ class MupdfDocument implements PdfDocument {
     const page = this.doc.loadPage(pageIndex);
     const stext = page.toStructuredText("preserve-whitespace");
     return stext.asText();
+  }
+
+  async getPageTextItems(pageIndex: number): Promise<TextItem[]> {
+    const page = this.doc.loadPage(pageIndex);
+    const stext = page.toStructuredText("preserve-whitespace");
+    const items: TextItem[] = [];
+
+    let lineChars = "";
+    let lineBbox: [number, number, number, number] = [0, 0, 0, 0];
+
+    stext.walk({
+      beginLine(bbox: [number, number, number, number]) {
+        lineChars = "";
+        lineBbox = bbox;
+      },
+      onChar(c: string) {
+        lineChars += c;
+      },
+      endLine() {
+        if (lineChars.trim()) {
+          items.push({
+            text: lineChars,
+            x: lineBbox[0],
+            y: lineBbox[1],
+            width: lineBbox[2] - lineBbox[0],
+            height: lineBbox[3] - lineBbox[1],
+          });
+        }
+      },
+    });
+
+    return items;
   }
 
   async searchPage(pageIndex: number, term: string): Promise<SearchMatch[]> {
