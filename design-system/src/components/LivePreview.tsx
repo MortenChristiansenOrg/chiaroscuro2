@@ -58,7 +58,7 @@ export function LivePreview({
     if (stores?.downloads) useDownloadsStore.setState(stores.downloads);
     if (stores?.installer) useInstallerStore.setState(stores.installer);
     if (stores?.permissions) usePermissionsStore.setState(stores.permissions);
-    if (stores?.folders) useFoldersStore.setState(stores.folders);
+    if (stores?.folders) useFoldersStore.setState({ ...stores.folders, renamingFolderId: null });
 
     return () => {
       if (stores?.tabs) useTabsStore.setState({ tabs: new Map(), activeTabId: null });
