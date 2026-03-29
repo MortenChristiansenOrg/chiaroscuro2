@@ -97,7 +97,11 @@ function PdfPage({
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
-  const renderedRef = useRef<{ pageIndex: number; zoom: number } | null>(null);
+  const renderedRef = useRef<{
+    document: PdfDocument;
+    pageIndex: number;
+    zoom: number;
+  } | null>(null);
   const [textItems, setTextItems] = useState<TextItem[]>([]);
 
   // Load text items for selection layer
@@ -115,14 +119,19 @@ function PdfPage({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    if (renderedRef.current?.pageIndex === pageIndex && renderedRef.current?.zoom === zoom) return;
+    if (
+      renderedRef.current?.document === document &&
+      renderedRef.current?.pageIndex === pageIndex &&
+      renderedRef.current?.zoom === zoom
+    )
+      return;
 
     let cancelled = false;
     document
       .renderPage(pageIndex, zoom, canvas)
       .then(() => {
         if (!cancelled) {
-          renderedRef.current = { pageIndex, zoom };
+          renderedRef.current = { document, pageIndex, zoom };
         }
       })
       .catch((err) => {
