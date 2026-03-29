@@ -54,6 +54,8 @@ import type {
   LocalWebAppCommands,
   LocalWebAppEvents,
 } from "../features/local-web-app/local-web-app.shared";
+import pdfReader, { getPdfSourceUrl } from "../features/pdf-reader/pdf-reader.main";
+import type { PdfReaderCommands, PdfReaderEvents } from "../features/pdf-reader/pdf-reader.shared";
 import permissions from "../features/permissions/permissions.main";
 import type {
   PermissionsCommands,
@@ -167,6 +169,7 @@ type AllCommands = MergeRegistries<
     DebugServerCommands,
     ExternalLinkCommands,
     PermissionsCommands,
+    PdfReaderCommands,
   ]
 >;
 
@@ -197,6 +200,7 @@ type AllEvents = MergeRegistries<
     DebugServerEvents,
     ExternalLinkEvents,
     PermissionsEvents,
+    PdfReaderEvents,
   ]
 >;
 
@@ -304,7 +308,22 @@ if (gotLock) {
     });
 
     appState.register(deps);
-    windowChrome.register(deps);
+    windowChrome.register({
+      ...deps,
+      handlePdfBack: (tabId) => {
+        const sourceUrl = getPdfSourceUrl(tabId);
+        if (!sourceUrl) return false;
+        const tab = getTab(tabId);
+        const workspaceId = tab?.workspaceId as WorkspaceId | undefined;
+        commands
+          .send("tabs:close", { tabId })
+          .then(() =>
+            commands.send("tabs:create", { url: sourceUrl, ...(workspaceId && { workspaceId }) }),
+          )
+          .catch(logError("main", "pdf back navigation"));
+        return true;
+      },
+    });
     tabs.register({ ...deps, isPinned, getCustomization, getFoldersForLevel, setFolderOrder });
     workspaces.register({ ...deps, getTabsForWorkspace });
     pinnedTabs.register({ ...deps, getCustomization });
@@ -327,6 +346,7 @@ if (gotLock) {
     tabContextMenu.register(deps);
     externalLink.register(deps);
     permissions.register(deps);
+    pdfReader.register(deps);
 
     // Register debug state providers
     registerDebugState("tabs", () => {

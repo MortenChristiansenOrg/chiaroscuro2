@@ -34,6 +34,7 @@ function getDefaultSettings(): Settings {
     searchProviders: [...DEFAULT_PROVIDERS],
     defaultSearchProviderId: "!g",
     debugServer: { enabled: false, port: 19400 },
+    pdfBackend: "pdfjs",
   };
 }
 
@@ -71,6 +72,9 @@ export default defineFeature<Deps>({
         dataStore
           .setSetting("debug-server", payload.debugServer)
           .catch(logError("settings", "persist debug server")),
+        dataStore
+          .setSetting("pdf-backend", payload.pdfBackend)
+          .catch(logError("settings", "persist pdf backend")),
       ]);
     });
   },
@@ -88,6 +92,9 @@ export default defineFeature<Deps>({
 
     const debugServer = await dataStore.getSetting<Settings["debugServer"]>("debug-server");
     if (debugServer) currentSettings.debugServer = debugServer;
+
+    const pdfBackend = await dataStore.getSetting<Settings["pdfBackend"]>("pdf-backend");
+    if (pdfBackend) currentSettings.pdfBackend = pdfBackend;
 
     events.emit(SETTINGS_CHANGED, { settings: { ...currentSettings } });
   },

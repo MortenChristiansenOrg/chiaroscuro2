@@ -41,6 +41,8 @@
     "../src/features/**/*.shared.ts",
     "../src/features/sub-tabs/SubTabFrame.tsx",
     "../src/features/command-palette/resolve-input.ts",
+    "../src/features/pdf-reader/backends/**/*",
+    "../src/features/pdf-reader/components/**/*",
     "../src/bus/types.ts"
   ]
 }

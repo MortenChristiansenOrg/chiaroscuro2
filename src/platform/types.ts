@@ -55,6 +55,8 @@ export interface Platform {
   reload(tabId: TabId): void;
   canGoBack(tabId: TabId): boolean;
   canGoForward(tabId: TabId): boolean;
+  /** Get a navigation history entry relative to the current index (e.g. -1 for previous page). */
+  getNavigationEntry(tabId: TabId, offset: number): { url: string; title: string } | undefined;
 
   // Zoom
   setTabZoomLevel(tabId: TabId, level: number): void;

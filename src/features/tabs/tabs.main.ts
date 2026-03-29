@@ -94,6 +94,21 @@ function resolveBuiltInTitle(url: string): string {
     if (base === "app:tab-customization") {
       return "Tab Customization";
     }
+    if (base === "app:pdf-reader") {
+      const params = new URLSearchParams(url.slice(qIndex + 1));
+      const pdfUrl = params.get("url");
+      if (pdfUrl) {
+        try {
+          const pathname = new URL(pdfUrl).pathname;
+          const filename = decodeURIComponent(pathname.split("/").pop() || "");
+          // Strip .pdf extension and replace underscores with spaces
+          return filename.replace(/\.pdf$/i, "").replace(/_/g, " ") || "PDF";
+        } catch {
+          return "PDF";
+        }
+      }
+      return "PDF";
+    }
   }
   return url;
 }

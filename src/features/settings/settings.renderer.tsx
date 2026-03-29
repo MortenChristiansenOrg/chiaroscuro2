@@ -212,6 +212,54 @@ function SearchSettings({
   );
 }
 
+// ── PdfSettings ──────────────────────────────────────────────────
+
+function PdfSettings({
+  settings,
+  onSettingsChange,
+}: {
+  settings: Settings;
+  onSettingsChange: (settings: Settings) => void;
+}) {
+  const searchQuery = useSettingsStore((s) => s.searchQuery);
+  const lowerQuery = searchQuery.toLowerCase();
+
+  const showPdf =
+    !searchQuery ||
+    "pdf".includes(lowerQuery) ||
+    "pdf reader".includes(lowerQuery) ||
+    "pdf backend".includes(lowerQuery) ||
+    "mupdf".includes(lowerQuery) ||
+    "pdfjs".includes(lowerQuery);
+
+  if (searchQuery && !showPdf) return null;
+
+  return (
+    <section id="settings-pdf">
+      <h2 style={settingsCategoryHeadingStyle}>PDF</h2>
+
+      <SettingItem
+        label="PDF Rendering Backend"
+        description="Choose between pdf.js (Mozilla, mature) and mupdf (WASM, fast for complex graphics). Change takes effect on next PDF open."
+      >
+        <select
+          value={settings.pdfBackend}
+          onChange={(e) =>
+            onSettingsChange({
+              ...settings,
+              pdfBackend: e.target.value as Settings["pdfBackend"],
+            })
+          }
+          style={settingsSelectStyle}
+        >
+          <option value="pdfjs">pdf.js</option>
+          <option value="mupdf">mupdf</option>
+        </select>
+      </SettingItem>
+    </section>
+  );
+}
+
 // ── DeveloperSettings ────────────────────────────────────────────
 
 function DeveloperSettings({
@@ -298,6 +346,7 @@ function DeveloperSettings({
 
 const categories = [
   { id: "search", label: "Search" },
+  { id: "pdf", label: "PDF" },
   { id: "developer", label: "Developer" },
 ];
 
@@ -339,6 +388,7 @@ export default function SettingsPage(_props: { params: Record<string, string> })
       activeCategory={activeCategory}
     >
       <SearchSettings settings={settings} onSettingsChange={handleSettingsChange} />
+      <PdfSettings settings={settings} onSettingsChange={handleSettingsChange} />
       <DeveloperSettings settings={settings} onSettingsChange={handleSettingsChange} />
     </SettingsLayout>
   );

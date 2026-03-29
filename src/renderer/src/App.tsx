@@ -17,6 +17,7 @@ import "../../features/local-web-app/local-web-app.feature";
 import "../../features/installer/installer.feature";
 import "../../features/sub-tabs/sub-tabs.feature";
 import "../../features/permissions/permissions.feature";
+import "../../features/pdf-reader/pdf-reader.feature";
 
 // All subscriptions wired — tell main process to start emitting events (phase 2)
 import { Shell, signalReady } from "./Shell";

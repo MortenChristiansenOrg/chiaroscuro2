@@ -192,4 +192,10 @@ export const routes: Route[] = [
     group: "Components",
     component: lazy(() => import("./pages/components/permission-prompt.mdx")),
   },
+  {
+    path: "/components/pdf-viewer",
+    title: "PDF Viewer",
+    group: "Components",
+    component: lazy(() => import("./pages/components/pdf-viewer.mdx")),
+  },
 ];

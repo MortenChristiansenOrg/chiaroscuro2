@@ -28,6 +28,7 @@ export function createMockPlatform(overrides: Partial<Platform> = {}): Platform 
     reload: vi.fn(),
     canGoBack: vi.fn(() => false),
     canGoForward: vi.fn(() => false),
+    getNavigationEntry: vi.fn(() => undefined),
     setTabZoomLevel: vi.fn(),
     getTabZoomLevel: vi.fn(() => 0),
     openTabDevTools: vi.fn(),

@@ -586,6 +586,15 @@ export class ElectronPlatform implements Platform {
     return this.views.get(tabId)?.webContents.canGoForward() ?? false;
   }
 
+  getNavigationEntry(tabId: TabId, offset: number): { url: string; title: string } | undefined {
+    const wc = this.views.get(tabId)?.webContents;
+    if (!wc) return undefined;
+    const history = wc.navigationHistory;
+    const idx = history.getActiveIndex() + offset;
+    if (idx < 0 || idx >= history.length()) return undefined;
+    return history.getEntryAtIndex(idx);
+  }
+
   // ── Zoom ──────────────────────────────────────────────────────
 
   setTabZoomLevel(tabId: TabId, level: number): void {
