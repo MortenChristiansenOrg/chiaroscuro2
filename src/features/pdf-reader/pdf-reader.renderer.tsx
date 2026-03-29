@@ -12,6 +12,9 @@ const ZOOM_MIN = 0.25;
 const ZOOM_MAX = 5;
 const DEFAULT_ZOOM = 1;
 
+// Cache loaded PDF documents so tab switches don't re-fetch/re-parse
+const documentCache = new Map<string, { document: PdfDocument; pdfKey: string }>();
+
 async function loadBackend(type: PdfBackendType): Promise<PdfBackend> {
   if (type === "mupdf") {
     const { mupdfBackend } = await import("./backends/mupdf-backend");
@@ -49,10 +52,22 @@ export default function PdfReaderPage({ params }: BuiltInPageProps) {
   // Get index entries from store
   const entries = usePdfReaderStore((s) => (pdfKey ? s.indexes.get(pdfKey) : undefined)) ?? [];
 
-  // Load PDF
+  // Load PDF (reuses cached document on tab re-activation)
   useEffect(() => {
     if (!pdfUrl) {
       setError("No PDF URL provided");
+      setLoading(false);
+      return;
+    }
+
+    const url = pdfUrl;
+
+    // Check cache first
+    const cached = documentCache.get(url);
+    if (cached) {
+      documentRef.current = cached.document;
+      setDocument(cached.document);
+      setPdfKey(cached.pdfKey);
       setLoading(false);
       return;
     }
@@ -65,7 +80,7 @@ export default function PdfReaderPage({ params }: BuiltInPageProps) {
         setError(null);
 
         // Fetch PDF data from main process
-        const response = await window.chiaroscuro.sendCommand("pdf-reader:fetch", { url: pdfUrl });
+        const response = await window.chiaroscuro.sendCommand("pdf-reader:fetch", { url });
         if (cancelled) return;
 
         const { dataBase64, hash, filename } = response as {
@@ -96,6 +111,7 @@ export default function PdfReaderPage({ params }: BuiltInPageProps) {
 
         documentRef.current = doc;
         setDocument(doc);
+        documentCache.set(url, { document: doc, pdfKey: key });
 
         // Load existing index or populate from outline
         const existingIndex = (await window.chiaroscuro.sendCommand("pdf-reader:get-index", {
@@ -114,6 +130,13 @@ export default function PdfReaderPage({ params }: BuiltInPageProps) {
               page: entry.page,
             });
           }
+        } else {
+          // Seed the store with persisted entries (events only fire on mutations)
+          usePdfReaderStore.setState((state) => {
+            const indexes = new Map(state.indexes);
+            indexes.set(key, existingIndex);
+            return { indexes };
+          });
         }
 
         setLoading(false);
@@ -129,10 +152,8 @@ export default function PdfReaderPage({ params }: BuiltInPageProps) {
 
     return () => {
       cancelled = true;
-      if (documentRef.current) {
-        documentRef.current.destroy();
-        documentRef.current = null;
-      }
+      // Don't destroy — document stays in cache for tab re-activation
+      documentRef.current = null;
     };
   }, [pdfUrl]);
 
