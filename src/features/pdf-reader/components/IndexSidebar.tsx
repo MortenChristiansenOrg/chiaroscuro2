@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Icon } from "../../../renderer/src/components/Icon";
 import type { IndexEntry } from "../pdf-reader.shared";
 
@@ -60,6 +60,7 @@ export function IndexSidebar({
   const [newLabel, setNewLabel] = useState("");
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
+  const addInputRef = useCallback((el: HTMLInputElement | null) => el?.focus(), []);
 
   const sorted = [...entries].sort((a, b) => a.order - b.order);
 
@@ -147,6 +148,7 @@ export function IndexSidebar({
         {sorted.map((entry) => (
           <div
             key={entry.id}
+            tabIndex={editingId !== entry.id ? 0 : undefined}
             draggable={editingId !== entry.id}
             onDragStart={(e) => handleDragStart(e, entry.id)}
             onDragOver={handleDragOver}
@@ -240,6 +242,7 @@ export function IndexSidebar({
         {addingNew && (
           <div className={entryClass} style={{ gap: "0.375rem" }}>
             <input
+              ref={addInputRef}
               value={newLabel}
               onChange={(e) => setNewLabel(e.target.value)}
               onBlur={commitAdd}

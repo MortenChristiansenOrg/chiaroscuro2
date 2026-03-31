@@ -193,7 +193,13 @@ export default defineFeature<Deps>({
         if (entry) {
           entry.order = reordered.length;
           reordered.push(entry);
+          byId.delete(id);
         }
+      }
+      // Append any entries not in entryIds (stale caller state)
+      for (const entry of byId.values()) {
+        entry.order = reordered.length;
+        reordered.push(entry);
       }
       await saveIndex(pdfKey, reordered);
     });

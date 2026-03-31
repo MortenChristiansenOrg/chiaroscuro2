@@ -1,5 +1,3 @@
-import type { TabId } from "../../shared/types";
-
 // ── Command names ────────────────────────────────────────────────
 export const PDF_READER_FETCH = "pdf-reader:fetch" as const;
 export const PDF_READER_GET_INDEX = "pdf-reader:get-index" as const;
