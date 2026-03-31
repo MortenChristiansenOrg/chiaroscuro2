@@ -63,11 +63,7 @@ function extractFilename(url: string): string {
 
 function computeHash(data: Buffer | Uint8Array): string {
   const bytes = data instanceof Uint8Array ? data : new Uint8Array(data);
-  const chunk = bytes.slice(0, 65536); // First 64KB
-  const hash = createHash("sha256");
-  hash.update(chunk);
-  hash.update(String(bytes.byteLength));
-  return hash.digest("hex").slice(0, 16);
+  return createHash("sha256").update(bytes).digest("hex").slice(0, 16);
 }
 
 async function fetchPdfData(url: string): Promise<Buffer> {
@@ -109,10 +105,10 @@ export default defineFeature<Deps>({
       const previousUrl = prevEntry?.url;
 
       commands
-        .send("tabs:close", { tabId: tab.id })
-        .then(() => commands.send("tabs:create", { url: pdfUrl, workspaceId }))
+        .send("tabs:create", { url: pdfUrl, workspaceId })
         .then((pdfTabId) => {
           if (previousUrl) sourceUrlMap.set(pdfTabId, previousUrl);
+          return commands.send("tabs:close", { tabId: tab.id });
         })
         .catch(logError("pdf-reader", "intercept pdf tab"))
         .finally(() => processing.delete(tab.id));

@@ -58,6 +58,7 @@ export function IndexSidebar({
   const [editLabel, setEditLabel] = useState("");
   const [addingNew, setAddingNew] = useState(false);
   const [newLabel, setNewLabel] = useState("");
+  const [newPage, setNewPage] = useState<number | null>(null);
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
   const addInputRef = useCallback((el: HTMLInputElement | null) => el?.focus(), []);
@@ -79,16 +80,19 @@ export function IndexSidebar({
   };
 
   const startAdd = () => {
+    const page = currentPage;
     setAddingNew(true);
-    setNewLabel(`Page ${currentPage}`);
+    setNewPage(page);
+    setNewLabel(`Page ${page}`);
   };
 
   const commitAdd = () => {
-    if (newLabel.trim()) {
-      onAdd(newLabel.trim(), currentPage);
+    if (newLabel.trim() && newPage !== null) {
+      onAdd(newLabel.trim(), newPage);
     }
     setAddingNew(false);
     setNewLabel("");
+    setNewPage(null);
   };
 
   const handleDragStart = (e: React.DragEvent, entryId: string) => {
@@ -156,7 +160,9 @@ export function IndexSidebar({
             onDragEnd={handleDragEnd}
             onClick={() => editingId !== entry.id && onNavigate(entry.page)}
             onKeyDown={(e) => {
-              if (e.key === "Enter") onNavigate(entry.page);
+              if (e.key === "Enter" && editingId !== entry.id && e.currentTarget === e.target) {
+                onNavigate(entry.page);
+              }
             }}
             onDoubleClick={() => startEdit(entry)}
             className={entryClass}
@@ -251,6 +257,7 @@ export function IndexSidebar({
                 if (e.key === "Escape") {
                   setAddingNew(false);
                   setNewLabel("");
+                  setNewPage(null);
                 }
               }}
               placeholder="Entry label"
@@ -263,7 +270,7 @@ export function IndexSidebar({
                 fontFamily: "var(--font-mono)",
               }}
             >
-              p.{currentPage}
+              p.{newPage ?? currentPage}
             </span>
           </div>
         )}
