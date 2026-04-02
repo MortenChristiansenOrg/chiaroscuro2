@@ -116,7 +116,34 @@ export function UrlPill({ hidden }: { hidden?: boolean }) {
   let displayUrl = url;
   let hostname = "";
   let isWebUrl = false;
-  if (url.startsWith("app:domain-settings")) {
+  if (url.startsWith("app:pdf-reader")) {
+    const qIdx = url.indexOf("?");
+    if (qIdx !== -1) {
+      const params = new URLSearchParams(url.slice(qIdx + 1));
+      const pdfUrl = params.get("url");
+      if (pdfUrl) {
+        try {
+          const parsed = new URL(pdfUrl);
+          hostname = parsed.hostname;
+          const path = parsed.pathname !== "/" ? parsed.pathname : "";
+          displayUrl = parsed.hostname + path;
+          if (parsed.protocol === "file:") {
+            const decodedPath = decodeURIComponent(path);
+            if (/^\/[A-Za-z]:/.test(decodedPath)) {
+              displayUrl = decodedPath.slice(1);
+            } else if (parsed.hostname) {
+              displayUrl = `//${parsed.hostname}${decodedPath}`;
+            } else {
+              displayUrl = decodedPath;
+            }
+          }
+          isWebUrl = parsed.protocol === "http:" || parsed.protocol === "https:";
+        } catch {
+          displayUrl = pdfUrl;
+        }
+      }
+    }
+  } else if (url.startsWith("app:domain-settings")) {
     const qIdx = url.indexOf("?");
     if (qIdx !== -1) {
       const params = new URLSearchParams(url.slice(qIdx + 1));

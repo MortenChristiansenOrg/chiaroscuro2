@@ -53,6 +53,24 @@ describe("resolveInputDetailed", () => {
     });
   });
 
+  it("Windows drive path → file:// URL", () => {
+    const result = resolveInputDetailed(
+      "C:\\Users\\morten\\Documents\\Ars Characters\\Ars Magica Definitive.pdf",
+    );
+    expect(result).toEqual({
+      type: "url",
+      url: "file:///C:/Users/morten/Documents/Ars%20Characters/Ars%20Magica%20Definitive.pdf",
+    });
+  });
+
+  it("Windows drive path with forward slashes → file:// URL", () => {
+    const result = resolveInputDetailed("D:/Projects/readme.html");
+    expect(result).toEqual({
+      type: "url",
+      url: "file:///D:/Projects/readme.html",
+    });
+  });
+
   it("text with spaces → default provider search", () => {
     const result = resolveInputDetailed("hello world");
     expect(result).toMatchObject({

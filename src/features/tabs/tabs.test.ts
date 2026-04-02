@@ -481,6 +481,111 @@ describe("start()", () => {
     expect(platform.navigateTab).not.toHaveBeenCalled();
   });
 
+  it("restores PDF reader tabs as built-in (no WebContentsView)", async () => {
+    const dataStore = new MemoryDataStore();
+    const tabsColl = dataStore.collection("tabs");
+    const now = Date.now();
+
+    await tabsColl.insert({
+      id: "builtin-1",
+      workspaceId: WS_ID,
+      url: "app:pdf-reader?url=file%3A%2F%2F%2Fhome%2Fuser%2Fdoc.pdf",
+      title: "doc",
+      favicon: "",
+      bookmarked: false,
+      lastAccessedAt: now - 1000,
+      createdAt: now - 2000,
+      order: 0,
+      folderId: null,
+    });
+    await tabsColl.insert({
+      id: "old-web",
+      workspaceId: WS_ID,
+      url: "https://example.com",
+      title: "Example",
+      favicon: "",
+      bookmarked: true,
+      lastAccessedAt: now,
+      createdAt: now,
+      order: 1,
+      folderId: null,
+    });
+
+    let newTabCounter = 0;
+    const commands = new CommandBus<AllCommands>();
+    const events = new EventBus<AllEvents>();
+    const platform = createMockPlatform({
+      createTab: vi.fn(
+        async (_wId: WindowId, _url: string, tabId?: TabId) =>
+          tabId ?? (`new-${++newTabCounter}` as TabId),
+      ),
+    });
+    let activeTabId: TabId | undefined;
+    const deps = {
+      commands,
+      events,
+      platform,
+      dataStore,
+      getActiveWindowId: () => WIN_ID as WindowId | undefined,
+      getActiveTabId: () => activeTabId,
+      setActiveTabId: (id: TabId | undefined) => {
+        activeTabId = id;
+      },
+      getActiveWorkspaceId: () => WS_ID as WorkspaceId | undefined,
+      isPinned: (id: TabId) => isPinned(id),
+      getCustomization: () => undefined as { fixedAddressDisabled: boolean } | undefined,
+      getFoldersForLevel: () =>
+        [] as { id: import("../../shared/types").FolderId; order: number }[],
+      setFolderOrder: () => {},
+    };
+    feature.register(deps);
+
+    const listChanged = vi.fn();
+    events.on(TABS_LIST_CHANGED, listChanged);
+    await start(deps);
+
+    // Only 1 platform.createTab call (the web tab), PDF tab skipped
+    expect(platform.createTab).toHaveBeenCalledTimes(1);
+    expect(platform.createTab).toHaveBeenCalledWith(WIN_ID, "https://example.com", "old-web", {
+      lazy: true,
+    });
+
+    // PDF tab should be in the tab list as built-in
+    const emitted = listChanged.mock.calls.at(-1)?.[0] as { tabs: Tab[] } | undefined;
+    const pdfTab = emitted?.tabs.find((t: Tab) => t.id === ("builtin-1" as TabId));
+    expect(pdfTab).toBeDefined();
+    expect(pdfTab?.builtIn).toBe(true);
+    expect(pdfTab?.url).toContain("app:pdf-reader");
+  });
+
+  it("persists PDF reader tabs", async () => {
+    const { commands, events, dataStore } = setup();
+    const tabsColl = dataStore.collection("tabs");
+
+    // Create a PDF reader tab (app: URL → built-in)
+    await commands.send(TABS_CREATE, {
+      url: "app:pdf-reader?url=file%3A%2F%2F%2Fhome%2Fuser%2Fdoc.pdf",
+    });
+
+    // Should be persisted despite being built-in
+    const persisted = await tabsColl.findMany({});
+    expect(persisted).toHaveLength(1);
+    expect(persisted[0]?.url).toContain("app:pdf-reader");
+  });
+
+  it("removes persisted PDF reader tab on close", async () => {
+    const { commands, dataStore } = setup();
+    const tabsColl = dataStore.collection("tabs");
+
+    const tabId = await commands.send(TABS_CREATE, {
+      url: "app:pdf-reader?url=file%3A%2F%2F%2Fhome%2Fuser%2Fdoc.pdf",
+    });
+    expect(await tabsColl.findMany({})).toHaveLength(1);
+
+    await commands.send(TABS_CLOSE, { tabId });
+    expect(await tabsColl.findMany({})).toHaveLength(0);
+  });
+
   it("does nothing when no persisted tabs", async () => {
     const dataStore = new MemoryDataStore();
     const commands = new CommandBus<AllCommands>();

@@ -78,10 +78,12 @@ interface Deps {
   platform: Platform;
   getActiveWindowId: () => WindowId | undefined;
   getActiveTabId: () => TabId | undefined;
+  /** Optional handler for back navigation on special tabs (e.g. PDF). Returns true if handled. */
+  handlePdfBack?: (tabId: TabId) => boolean;
 }
 
 export default defineFeature<Deps>({
-  register({ commands, events, platform, getActiveWindowId, getActiveTabId }) {
+  register({ commands, events, platform, getActiveWindowId, getActiveTabId, handlePdfBack }) {
     commands.handle(WINDOW_MINIMIZE, async () => {
       const windowId = getActiveWindowId();
       if (windowId) await platform.minimizeWindow(windowId);
@@ -107,7 +109,14 @@ export default defineFeature<Deps>({
     commands.handle(WINDOW_COPY_ADDRESS, () => {
       const tabId = getActiveTabId();
       if (!tabId) return;
-      const url = platform.getTabUrl(tabId);
+      let url = platform.getTabUrl(tabId);
+      if (url?.startsWith("app:pdf-reader")) {
+        const qIdx = url.indexOf("?");
+        if (qIdx !== -1) {
+          const params = new URLSearchParams(url.slice(qIdx + 1));
+          url = params.get("url") ?? url;
+        }
+      }
       if (url) {
         platform.writeClipboard(stripTrackingParams(url));
       }
@@ -115,7 +124,9 @@ export default defineFeature<Deps>({
 
     commands.handle(WINDOW_GO_BACK, () => {
       const tabId = getActiveTabId();
-      if (tabId) platform.goBack(tabId);
+      if (!tabId) return;
+      if (handlePdfBack?.(tabId)) return;
+      platform.goBack(tabId);
     });
 
     commands.handle(WINDOW_GO_FORWARD, () => {

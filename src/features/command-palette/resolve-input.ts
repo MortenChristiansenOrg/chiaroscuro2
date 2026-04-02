@@ -141,6 +141,14 @@ export function resolveInputDetailed(
     return { type: "url", url: trimmed };
   }
 
+  // Windows drive path: C:\path or C:/path → file:///C:/path
+  if (/^[A-Za-z]:[/\\]/.test(trimmed)) {
+    const normalized = trimmed.replace(/\\/g, "/");
+    const [drive, ...segments] = normalized.split("/");
+    const encoded = [drive, ...segments.map(encodeURIComponent)].join("/");
+    return { type: "url", url: `file:///${encoded}` };
+  }
+
   // Contains a space → search (unless matched by bang above)
   if (trimmed.includes(" ")) {
     const dp = getDefault();

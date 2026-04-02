@@ -1,4 +1,5 @@
 import type { SearchProvider } from "../command-palette/resolve-input";
+import type { PdfBackendType } from "../pdf-reader/pdf-reader.shared";
 
 // ── Command names ────────────────────────────────────────────────
 export const SETTINGS_OPEN = "settings:open" as const;
@@ -18,6 +19,7 @@ export interface Settings {
   searchProviders: SearchProvider[];
   defaultSearchProviderId: string;
   debugServer: DebugServerSettings;
+  pdfBackend: PdfBackendType;
 }
 
 // ── Payload types ────────────────────────────────────────────────

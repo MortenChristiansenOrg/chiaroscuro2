@@ -1,0 +1,121 @@
+---
+title: PDF Viewer
+---
+
+# PDF Viewer
+
+A custom PDF reader that replaces Chromium's built-in viewer. Supports two rendering backends (pdf.js, mupdf) selectable in settings. Includes a user-editable index sidebar, search, zoom, and virtual scrolling for large documents.
+
+---
+
+## Anatomy
+
+- **Toolbar** -- index toggle, page navigation (up/down + input), zoom controls (minus/percent/plus), search (input + match count + prev/next)
+- **Index sidebar** -- header with "Index" label and add button, scrollable list of draggable entries (grip icon, label, page number, delete button)
+- **Page viewport** -- scrollable area with canvas-rendered PDF pages, search highlight overlay
+
+---
+
+## Specs
+
+| Property | Token/Value |
+|----------|-------------|
+| Toolbar height | auto, single row |
+| Toolbar bg | `var(--content-bg)` |
+| Toolbar border | `1px solid var(--border)` bottom |
+| Toolbar padding | `0.375rem 0.75rem` |
+| Toolbar gap | `0.75rem` |
+| Sidebar width | `15rem` |
+| Sidebar bg | `var(--content-bg)` |
+| Sidebar border | `1px solid var(--border)` right |
+| Entry padding | `0.375rem 0.5rem` |
+| Entry min height | `--click-target-min` |
+| Entry font | `--text-sm`, `--font-sans` |
+| Page number font | `--text-xs`, `--font-mono` |
+| Viewport bg | `var(--muted)` |
+| Page gap | `12px` |
+| Page shadow | `var(--shadow-subtle)` |
+| Page radius | `var(--radius-sm)` |
+| Button min size | `--click-target-min` (24px) |
+| Input radius | `var(--radius-sm)` |
+| Input border | `1px solid var(--border)` |
+| Search input width | `10rem` |
+| Separator | `1px wide, 1rem tall, var(--border)` |
+
+---
+
+## States
+
+### Index Entry States
+
+| State | Background | Text Color |
+|-------|-----------|------------|
+| Default | transparent | `var(--foreground)` |
+| Current page | `var(--accent)` | `var(--accent-foreground)` |
+| Dragging | `var(--muted)`, opacity 0.5 | -- |
+| Editing | input field replaces label | -- |
+
+### Search States
+
+| State | Display |
+|-------|---------|
+| No search | Search input only |
+| Searching with matches | Input + "N / M" count + prev/next buttons |
+| Searching no matches | Input + "No matches" |
+
+### Toolbar Button States
+
+| State | Style |
+|-------|-------|
+| Default | transparent bg, `var(--foreground)` text |
+| Disabled | reduced opacity (native) |
+
+---
+
+## Behavior
+
+- **PDF interception** -- any navigation to a `.pdf` URL is intercepted and opened in this viewer as a built-in page.
+- **Backend selection** -- settings toggle chooses between pdf.js and mupdf. Change applies to next PDF opened.
+- **Virtual scrolling** -- only visible pages + 1-viewport buffer are rendered. Canvases are created/destroyed as pages enter/leave the viewport.
+- **HiDPI rendering** -- canvas pixel dimensions scaled by `devicePixelRatio` for crisp rendering.
+- **Index persistence** -- custom index stored by `{filename}:{hash}` key. Moving/copying a PDF preserves the index.
+- **Index auto-populate** -- on first open, the PDF's built-in outline is imported as index entries.
+- **Search highlighting** -- matches shown as semi-transparent overlays on a separate canvas layer. Current match page uses orange, others yellow.
+
+---
+
+## Keyboard & Focus
+
+| Key | Action |
+|-----|--------|
+| Enter (in search) | Next match |
+| Shift+Enter (in search) | Previous match |
+| Escape (in search) | Clear search |
+| Enter (in page input) | Go to page |
+| Enter (on index entry) | Navigate to entry's page |
+
+---
+
+## Accessibility
+
+- All icon-only buttons have `data-tip` and `aria-label`.
+- Search input, page input have `aria-label`.
+- Index entries are focusable (`tabIndex={0}`) with keyboard navigation.
+- Buttons meet `--click-target-min` (24px) minimum size.
+
+---
+
+## Layout & Composition
+
+- Renders as a built-in page (`app:pdf-reader?url=...`) inside the content area.
+- Full-height flex column: toolbar (flex-shrink 0) + body (flex row: sidebar + viewport).
+- Sidebar is conditionally rendered based on toggle state.
+- Z-index: content level (`--z-base`).
+- Parent: [Web Content Host](/components/web-content-host) via BuiltInPage system.
+
+---
+
+## Related
+
+- [Settings Page](/components/settings-page) -- PDF backend toggle in settings
+- [Web Content Host](/components/web-content-host) -- parent container for built-in pages
