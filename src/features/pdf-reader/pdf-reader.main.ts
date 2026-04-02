@@ -79,7 +79,7 @@ async function fetchPdfData(url: string): Promise<Buffer> {
 }
 
 export default defineFeature<Deps>({
-  register({ commands, events, platform, dataStore, getActiveWorkspaceId }) {
+  register({ commands, events, platform, dataStore, getActiveTabId, getActiveWorkspaceId }) {
     const indexCollection: Collection<PersistedPdfIndex> = dataStore.collection("pdf-indexes");
     const sourceUrlMap = new Map<TabId, string>();
     _state.init({ sourceUrlMap });
@@ -99,13 +99,14 @@ export default defineFeature<Deps>({
       processing.add(tab.id);
       const pdfUrl = `app:pdf-reader?url=${encodeURIComponent(tab.url)}`;
       const workspaceId = tab.workspaceId;
+      const activate = getActiveTabId() === tab.id;
 
       // Capture previous URL before closing (for back navigation)
       const prevEntry = platform.getNavigationEntry(tab.id, -1);
       const previousUrl = prevEntry?.url;
 
       commands
-        .send("tabs:create", { url: pdfUrl, workspaceId })
+        .send("tabs:create", { url: pdfUrl, workspaceId, activate })
         .then((pdfTabId) => {
           if (previousUrl) sourceUrlMap.set(pdfTabId, previousUrl);
           return commands.send("tabs:close", { tabId: tab.id });
@@ -137,7 +138,7 @@ export default defineFeature<Deps>({
 
     async function getIndex(pdfKey: string): Promise<IndexEntry[]> {
       const doc = await indexCollection.findOne(pdfKey);
-      return doc?.entries ?? [];
+      return doc?.entries.map((e) => ({ ...e })) ?? [];
     }
 
     async function saveIndex(pdfKey: string, entries: IndexEntry[]): Promise<void> {
