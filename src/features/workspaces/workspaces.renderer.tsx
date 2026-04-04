@@ -353,27 +353,7 @@ export function WorkspaceEditor({
         )}
       </div>
 
-      {/* Row 3: Color swatches */}
-      <div className="flex items-center" style={{ gap: "0.25rem" }}>
-        {WORKSPACE_COLORS.map((c) => (
-          <button
-            key={c}
-            type="button"
-            className="cursor-pointer"
-            onClick={() => setColor(c)}
-            style={{
-              width: 16,
-              height: 16,
-              borderRadius: "var(--radius-full)",
-              background: c,
-              border: c === color ? "2px solid var(--glass-text-primary)" : "2px solid transparent",
-            }}
-            aria-label={`Color ${c}`}
-          />
-        ))}
-      </div>
-
-      {/* Row 4: Privacy mode */}
+      {/* Row 3: Privacy mode */}
       <label
         className="flex items-center cursor-pointer"
         style={{
