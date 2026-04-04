@@ -4,7 +4,6 @@
 
 set -euo pipefail
 
-source "$(dirname "${BASH_SOURCE[0]}")/load-env.sh"
 
 if [[ $# -lt 5 ]]; then
   echo "Usage: $0 <owner> <repo> <pr_number> <comment_id> <body>" >&2
