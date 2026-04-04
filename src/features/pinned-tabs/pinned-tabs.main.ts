@@ -13,6 +13,8 @@ import {
   TABS_CLOSE,
   TABS_CLOSED,
   TABS_CREATE,
+  TABS_GET,
+  TABS_TOGGLE_BOOKMARK,
   TABS_UPDATED,
 } from "../tabs/tabs.shared";
 import {
@@ -123,7 +125,13 @@ export default defineFeature<Deps>({
         pinnedTabs.delete(tabId);
         emitChanged();
       } else {
-        // Pin — get current tab data from platform
+        // Pin — ensure the tab is bookmarked before pinning so it can never be ephemeral
+        const tab = await commands.send(TABS_GET, { tabId });
+        if (!tab) return;
+        if (!tab.bookmarked) {
+          await commands.send(TABS_TOGGLE_BOOKMARK, { tabId });
+        }
+
         const url = platform.getTabUrl(tabId) ?? "";
         const title = platform.getTabTitle(tabId) ?? url;
         const pt: PinnedTab = {
@@ -163,6 +171,15 @@ export default defineFeature<Deps>({
 export async function start(deps: Deps): Promise<void> {
   const { pinnedTabs } = _state.get();
   await pinnedTabs.load({ sort: [{ field: "order", direction: "asc" }] });
+
+  // Ensure all pinned tabs are bookmarked (migration for pre-existing pinned-but-ephemeral tabs)
+  for (const pt of pinnedTabs.values()) {
+    const tab = await deps.commands.send(TABS_GET, { tabId: pt.id });
+    if (tab && !tab.bookmarked) {
+      await deps.commands.send(TABS_TOGGLE_BOOKMARK, { tabId: pt.id });
+    }
+  }
+
   if (pinnedTabs.size > 0) {
     deps.events.emit(PINNED_TABS_CHANGED, {
       pinnedTabs: pinnedTabs.values().sort((a, b) => a.order - b.order),

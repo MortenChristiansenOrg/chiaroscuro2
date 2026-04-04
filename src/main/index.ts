@@ -132,6 +132,14 @@ process.on("unhandledRejection", (reason) => {
 const iconFile = process.platform === "win32" ? "icon.ico" : "icon.png";
 const iconPath = path.join(__dirname, "../../resources", iconFile);
 
+// ── Dev-mode isolation ───────────────────────────────────────────
+// Use a separate app identity so dev instances don't conflict with
+// the production single-instance lock or userData.
+const isDev = !!process.env.ELECTRON_RENDERER_URL;
+if (isDev) {
+  app.setName("Chiaroscuro Dev");
+}
+
 // ── Single-instance lock (must run before whenReady) ─────────────
 // Skip in test mode: parallel Playwright workers each launch their own
 // Electron instance, and the OS-level lock would reject all but the first.
@@ -212,7 +220,6 @@ let activeWindowId: WindowId | undefined;
 let activeTabId: TabId | undefined;
 let activeWorkspaceId: WorkspaceId | undefined;
 
-const isDev = !!process.env.ELECTRON_RENDERER_URL;
 if (isDev) app.setPath("userData", path.join(app.getPath("userData"), "..", "chiaroscuro-dev"));
 const platform = new ElectronPlatform(() => activeWindowId);
 const dataDir = process.env.DATA_DIR ?? path.join(app.getPath("userData"), "data");

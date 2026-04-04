@@ -9,6 +9,8 @@ import {
   TABS_CLOSE,
   TABS_CLOSED,
   TABS_CREATE,
+  TABS_GET,
+  TABS_TOGGLE_BOOKMARK,
   TABS_UPDATED,
 } from "../tabs/tabs.shared";
 import feature from "./pinned-tabs.main";
@@ -45,6 +47,20 @@ function setup(overrides: { activeTabId?: TabId | null } = {}) {
   commands.handle(TABS_ACTIVATE, async () => {});
   commands.handle(TABS_CLOSE, async () => {});
   commands.handle(TABS_CREATE, async () => "new-tab" as TabId);
+  commands.handle(TABS_GET, async ({ tabId }) => ({
+    id: tabId,
+    url: "https://example.com",
+    title: "Example",
+    workspaceId: "ws-1" as WorkspaceId,
+    bookmarked: false,
+    loading: false,
+    lastAccessedAt: 0,
+    createdAt: 0,
+    order: 0,
+    favicon: "",
+    folderId: null,
+  }));
+  commands.handle(TABS_TOGGLE_BOOKMARK, async () => {});
 
   const deps = {
     commands,
@@ -88,6 +104,43 @@ describe("pinned-tabs commands", () => {
       await commands.send(PINNED_TABS_TOGGLE_PIN, {}); // unpin
 
       expect(changed).toHaveBeenCalledWith({ pinnedTabs: [] });
+    });
+
+    it("bookmarks the tab when pinning an ephemeral tab", async () => {
+      const { commands } = setup();
+      const toggleBookmark = vi.fn();
+      // Re-register with spy
+      commands.unhandle(TABS_TOGGLE_BOOKMARK);
+      commands.handle(TABS_TOGGLE_BOOKMARK, toggleBookmark);
+
+      await commands.send(PINNED_TABS_TOGGLE_PIN, {});
+
+      expect(toggleBookmark).toHaveBeenCalledWith({ tabId: TAB_ID });
+    });
+
+    it("does not toggle bookmark when pinning an already-bookmarked tab", async () => {
+      const { commands } = setup();
+      commands.unhandle(TABS_GET);
+      commands.handle(TABS_GET, async ({ tabId }) => ({
+        id: tabId,
+        url: "https://example.com",
+        title: "Example",
+        workspaceId: "ws-1" as WorkspaceId,
+        bookmarked: true,
+        loading: false,
+        lastAccessedAt: 0,
+        createdAt: 0,
+        order: 0,
+        favicon: "",
+        folderId: null,
+      }));
+      const toggleBookmark = vi.fn();
+      commands.unhandle(TABS_TOGGLE_BOOKMARK);
+      commands.handle(TABS_TOGGLE_BOOKMARK, toggleBookmark);
+
+      await commands.send(PINNED_TABS_TOGGLE_PIN, {});
+
+      expect(toggleBookmark).not.toHaveBeenCalled();
     });
 
     it("no-ops when no active tab", async () => {
@@ -146,6 +199,7 @@ describe("pinned-tabs commands", () => {
           lastAccessedAt: 0,
           createdAt: 0,
           order: 0,
+          folderId: null,
         },
       });
 
@@ -190,6 +244,21 @@ describe("start()", () => {
     commands.handle(TABS_ACTIVATE, async () => {});
     commands.handle(TABS_CLOSE, async () => {});
     commands.handle(TABS_CREATE, async () => "new-tab" as TabId);
+    commands.handle(TABS_GET, async ({ tabId }) => ({
+      id: tabId,
+      url: "https://example.com",
+      title: "Example",
+      workspaceId: "ws-1" as WorkspaceId,
+      bookmarked: false,
+      loading: false,
+      lastAccessedAt: 0,
+      createdAt: 0,
+      order: 0,
+      favicon: "",
+      folderId: null,
+    }));
+    const toggleBookmark = vi.fn();
+    commands.handle(TABS_TOGGLE_BOOKMARK, toggleBookmark);
 
     const deps = {
       commands,
@@ -214,5 +283,6 @@ describe("start()", () => {
         pinnedTabs: expect.arrayContaining([expect.objectContaining({ id: "tab-pinned" })]),
       }),
     );
+    expect(toggleBookmark).toHaveBeenCalledWith({ tabId: "tab-pinned" });
   });
 });
