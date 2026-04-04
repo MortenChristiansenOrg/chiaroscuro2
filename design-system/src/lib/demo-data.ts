@@ -84,6 +84,7 @@ export const DEMO_WORKSPACES: Workspace[] = [
     name: "Work",
     color: "oklch(0.65 0.15 230)",
     icon: "fa:briefcase",
+    privacyMode: false,
     activeTabId: tabId("tab-github"),
   },
   {
@@ -91,6 +92,7 @@ export const DEMO_WORKSPACES: Workspace[] = [
     name: "Personal",
     color: "oklch(0.65 0.15 350)",
     icon: "P",
+    privacyMode: false,
     activeTabId: null,
   },
   {
@@ -98,6 +100,7 @@ export const DEMO_WORKSPACES: Workspace[] = [
     name: "Research",
     color: "oklch(0.6 0.15 140)",
     icon: "fa:flask",
+    privacyMode: false,
     activeTabId: null,
   },
   {
@@ -105,6 +108,7 @@ export const DEMO_WORKSPACES: Workspace[] = [
     name: "Social",
     color: "oklch(0.6 0.15 280)",
     icon: "fa:users",
+    privacyMode: false,
     activeTabId: null,
   },
   {
@@ -112,6 +116,7 @@ export const DEMO_WORKSPACES: Workspace[] = [
     name: "Music",
     color: "oklch(0.6 0.15 50)",
     icon: "fa:music",
+    privacyMode: false,
     activeTabId: null,
   },
 ];

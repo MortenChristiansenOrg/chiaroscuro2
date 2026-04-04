@@ -97,6 +97,7 @@ function setup(platformOverrides = {}) {
     getCustomization: () => undefined as { fixedAddressDisabled: boolean } | undefined,
     getFoldersForLevel: () => [] as { id: import("../../shared/types").FolderId; order: number }[],
     setFolderOrder: () => {},
+    isPrivacyWorkspace: () => false,
   });
 
   // Register sub-tabs

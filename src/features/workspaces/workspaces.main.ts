@@ -62,6 +62,10 @@ export function getAllWorkspaces(): Workspace[] {
   return _state.initialized ? [..._state.get().workspaces.values()] : [];
 }
 
+export function isPrivacyWorkspace(id: WorkspaceId): boolean {
+  return _state.initialized ? (_state.get().workspaces.get(id)?.privacyMode ?? false) : false;
+}
+
 export default defineFeature<Deps>({
   register(deps) {
     const {
@@ -91,6 +95,7 @@ export default defineFeature<Deps>({
         name: ws.name,
         color: ws.color,
         icon: ws.icon,
+        ...(ws.privacyMode && { privacyMode: true }),
         order,
       };
       wsCollection.update(ws.id, persisted).catch(() => {
@@ -151,6 +156,7 @@ export default defineFeature<Deps>({
         name: payload.name,
         color: payload.color,
         icon: payload.icon,
+        privacyMode: payload.privacyMode,
         activeTabId: null,
       };
       workspaces.set(id, ws);
@@ -168,6 +174,7 @@ export default defineFeature<Deps>({
       if (payload.changes.name !== undefined) ws.name = payload.changes.name;
       if (payload.changes.color !== undefined) ws.color = payload.changes.color;
       if (payload.changes.icon !== undefined) ws.icon = payload.changes.icon;
+      if (payload.changes.privacyMode !== undefined) ws.privacyMode = payload.changes.privacyMode;
 
       // Find index for persistence
       const allWs = [...workspaces.values()];
@@ -326,6 +333,7 @@ export default defineFeature<Deps>({
           name: pw.name,
           color: pw.color,
           icon: pw.icon,
+          privacyMode: pw.privacyMode ?? false,
           activeTabId: null,
         };
         workspaces.set(ws.id, ws);
@@ -348,6 +356,7 @@ export default defineFeature<Deps>({
       const defaultWs: Workspace = {
         id: defaultId,
         ...defaultProps,
+        privacyMode: false,
         activeTabId: null,
       };
       workspaces.set(defaultId, defaultWs);

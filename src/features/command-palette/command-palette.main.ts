@@ -4,7 +4,7 @@ import type { DataStore } from "../../data/types";
 import type { Platform } from "../../platform/types";
 import { defineFeature } from "../../shared/define-feature";
 import { logError, logWarn } from "../../shared/log";
-import type { TabId, WindowId } from "../../shared/types";
+import type { TabId, WindowId, WorkspaceId } from "../../shared/types";
 import type { SettingsChangedEvent, SettingsEvents } from "../settings/settings.shared";
 import { SETTINGS_CHANGED } from "../settings/settings.shared";
 import type { TabsCommands, TabsEvents } from "../tabs/tabs.shared";
@@ -35,10 +35,19 @@ interface Deps {
   dataStore: DataStore;
   getActiveWindowId: () => WindowId | undefined;
   getActiveTabId: () => TabId | undefined;
+  isPrivacyWorkspace: (workspaceId: WorkspaceId) => boolean;
 }
 
 export default defineFeature<Deps>({
-  register({ commands, events, platform, dataStore, getActiveWindowId, getActiveTabId }) {
+  register({
+    commands,
+    events,
+    platform,
+    dataStore,
+    getActiveWindowId,
+    getActiveTabId,
+    isPrivacyWorkspace,
+  }) {
     let isOpen = false;
     let providerConfig: ProviderConfig | undefined;
 
@@ -54,10 +63,10 @@ export default defineFeature<Deps>({
       };
     });
 
-    // Track tab navigations for visit history
+    // Track tab navigations for visit history (skip privacy-mode workspaces)
     events.on(TABS_UPDATED, (payload) => {
       const { tab } = payload;
-      if (!tab.loading && tab.url && tab.title) {
+      if (!tab.loading && tab.url && tab.title && !isPrivacyWorkspace(tab.workspaceId)) {
         recordVisit(tab.url, tab.title).catch(logWarn("command-palette", "record visit"));
       }
     });
