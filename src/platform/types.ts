@@ -136,6 +136,16 @@ export interface Platform {
     callback: (url: string, sourceTabId: TabId, disposition: string) => boolean,
   ): () => void;
 
+  // Navigation blocking (per-tab)
+  onNavigationBlock(
+    callback: (
+      tabId: TabId,
+      targetUrl: string,
+      currentUrl: string,
+      type: "navigate" | "redirect" | "frame-navigate" | "new-tab" | "new-window",
+    ) => boolean,
+  ): () => void;
+
   // Protocol navigation
   onProtocolRequest(callback: (url: string, origin: string) => void): () => void;
 

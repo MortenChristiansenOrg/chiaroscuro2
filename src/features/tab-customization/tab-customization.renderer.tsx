@@ -12,10 +12,14 @@ import type { TabId } from "../../shared/types";
 import { LocalWebAppSettings } from "../local-web-app/local-web-app.renderer";
 import { useTabsStore } from "../tabs/tabs.store";
 import {
+  DEFAULT_NAVIGATION_BLOCK_RULE,
+  type NavigationBlockRule,
   TAB_CUSTOMIZATION_CLOSE,
   TAB_CUSTOMIZATION_GET_STATE,
   TAB_CUSTOMIZATION_SET_FIXED_ADDRESS_DISABLED,
+  TAB_CUSTOMIZATION_SET_NAVIGATION,
   TAB_CUSTOMIZATION_SET_TITLE,
+  type TabCustomization,
   type TabCustomizationCommands,
 } from "./tab-customization.shared";
 import { useTabCustomizationStore } from "./tab-customization.store";
@@ -25,6 +29,7 @@ type UsedCommands = Pick<
   | typeof TAB_CUSTOMIZATION_CLOSE
   | typeof TAB_CUSTOMIZATION_SET_TITLE
   | typeof TAB_CUSTOMIZATION_SET_FIXED_ADDRESS_DISABLED
+  | typeof TAB_CUSTOMIZATION_SET_NAVIGATION
 >;
 
 function sendCommand<K extends keyof UsedCommands>(name: K, payload: UsedCommands[K]["payload"]) {
@@ -33,8 +38,68 @@ function sendCommand<K extends keyof UsedCommands>(name: K, payload: UsedCommand
 
 const categories = [
   { id: "appearance", label: "Appearance" },
+  { id: "navigation", label: "Navigation" },
   { id: "local-web-app", label: "Local Web App" },
 ];
+
+function ToggleButton({
+  enabled,
+  onClick,
+  label,
+}: {
+  enabled: boolean;
+  onClick: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-2 cursor-pointer rounded-[var(--radius-sm)] px-3 py-1.5 font-[inherit] text-[length:var(--text-sm)] transition-all duration-[var(--duration-fast)] ease-[var(--ease-out)] hover:brightness-110 active:brightness-90"
+      style={{
+        color: enabled ? "var(--foreground)" : "var(--muted-foreground)",
+        background: enabled
+          ? "oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250) / 0.12)"
+          : "var(--background)",
+        border: `1px solid ${enabled ? "oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250) / 0.3)" : "var(--input)"}`,
+      }}
+    >
+      <Icon
+        name={enabled ? "toggle-on" : "toggle-off"}
+        style="solid"
+        css={{ fontSize: "var(--text-base)" }}
+      />
+      {label}
+    </button>
+  );
+}
+
+function NavigationRuleControl({
+  rule,
+  onToggle,
+  onToggleCrossOrigin,
+}: {
+  rule: NavigationBlockRule;
+  onToggle: () => void;
+  onToggleCrossOrigin: () => void;
+}) {
+  return (
+    <div className="flex items-center flex-wrap" style={{ gap: "0.5rem" }}>
+      <ToggleButton
+        enabled={rule.enabled}
+        onClick={onToggle}
+        label={rule.enabled ? "Blocking" : "Allowed"}
+      />
+      {rule.enabled && (
+        <ToggleButton
+          enabled={rule.crossOriginOnly}
+          onClick={onToggleCrossOrigin}
+          label={rule.crossOriginOnly ? "Cross-origin only" : "All navigation"}
+        />
+      )}
+    </div>
+  );
+}
 
 function AppearanceSettings({ tabId }: { tabId: TabId }) {
   const customization = useTabCustomizationStore((s) => s.customizations.get(tabId));
@@ -105,25 +170,120 @@ function AppearanceSettings({ tabId }: { tabId: TabId }) {
         label="Allow Address Updates"
         description="When enabled, pinned tabs update their saved address as you browse. Normally pinned tabs keep a fixed address."
       >
-        <button
-          type="button"
+        <ToggleButton
+          enabled={fixedAddressDisabled}
           onClick={handleFixedAddressToggle}
-          className="inline-flex items-center gap-2 cursor-pointer rounded-[var(--radius-sm)] px-3 py-1.5 font-[inherit] text-[length:var(--text-sm)] transition-all duration-[var(--duration-fast)] ease-[var(--ease-out)] hover:brightness-110 active:brightness-90"
-          style={{
-            color: fixedAddressDisabled ? "var(--foreground)" : "var(--muted-foreground)",
-            background: fixedAddressDisabled
-              ? "oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250) / 0.12)"
-              : "var(--background)",
-            border: `1px solid ${fixedAddressDisabled ? "oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250) / 0.3)" : "var(--input)"}`,
-          }}
-        >
-          <Icon
-            name={fixedAddressDisabled ? "toggle-on" : "toggle-off"}
-            style="solid"
-            css={{ fontSize: "var(--text-base)" }}
-          />
-          {fixedAddressDisabled ? "Enabled" : "Disabled"}
-        </button>
+          label={fixedAddressDisabled ? "Enabled" : "Disabled"}
+        />
+      </SettingItem>
+    </section>
+  );
+}
+
+function NavigationSettings({ tabId }: { tabId: TabId }) {
+  const customization = useTabCustomizationStore((s) => s.customizations.get(tabId));
+
+  const blockNavigate = customization?.blockNavigate ?? DEFAULT_NAVIGATION_BLOCK_RULE;
+  const blockRedirect = customization?.blockRedirect ?? DEFAULT_NAVIGATION_BLOCK_RULE;
+  const blockFrameNavigate = customization?.blockFrameNavigate ?? DEFAULT_NAVIGATION_BLOCK_RULE;
+  const blockNewTabs = customization?.blockNewTabs ?? false;
+  const blockNewWindows = customization?.blockNewWindows ?? false;
+
+  function sendNav(updates: Partial<TabCustomization>) {
+    sendCommand(TAB_CUSTOMIZATION_SET_NAVIGATION, {
+      tabId,
+      blockNavigate: updates.blockNavigate ?? blockNavigate,
+      blockRedirect: updates.blockRedirect ?? blockRedirect,
+      blockFrameNavigate: updates.blockFrameNavigate ?? blockFrameNavigate,
+      blockNewTabs: updates.blockNewTabs ?? blockNewTabs,
+      blockNewWindows: updates.blockNewWindows ?? blockNewWindows,
+    });
+  }
+
+  return (
+    <section id="tab-customization-navigation">
+      <h2 style={settingsCategoryHeadingStyle}>Navigation</h2>
+
+      <SettingItem
+        label="Block Page Navigation"
+        description="Prevent the page from navigating away via JavaScript or links (will-navigate)."
+      >
+        <NavigationRuleControl
+          rule={blockNavigate}
+          onToggle={() =>
+            sendNav({
+              blockNavigate: { ...blockNavigate, enabled: !blockNavigate.enabled },
+            })
+          }
+          onToggleCrossOrigin={() =>
+            sendNav({
+              blockNavigate: { ...blockNavigate, crossOriginOnly: !blockNavigate.crossOriginOnly },
+            })
+          }
+        />
+      </SettingItem>
+
+      <SettingItem
+        label="Block Redirects"
+        description="Prevent server-side redirects from changing the page URL (will-redirect)."
+      >
+        <NavigationRuleControl
+          rule={blockRedirect}
+          onToggle={() =>
+            sendNav({
+              blockRedirect: { ...blockRedirect, enabled: !blockRedirect.enabled },
+            })
+          }
+          onToggleCrossOrigin={() =>
+            sendNav({
+              blockRedirect: { ...blockRedirect, crossOriginOnly: !blockRedirect.crossOriginOnly },
+            })
+          }
+        />
+      </SettingItem>
+
+      <SettingItem
+        label="Block Frame Navigation"
+        description="Prevent iframes from navigating to new URLs (will-frame-navigate)."
+      >
+        <NavigationRuleControl
+          rule={blockFrameNavigate}
+          onToggle={() =>
+            sendNav({
+              blockFrameNavigate: { ...blockFrameNavigate, enabled: !blockFrameNavigate.enabled },
+            })
+          }
+          onToggleCrossOrigin={() =>
+            sendNav({
+              blockFrameNavigate: {
+                ...blockFrameNavigate,
+                crossOriginOnly: !blockFrameNavigate.crossOriginOnly,
+              },
+            })
+          }
+        />
+      </SettingItem>
+
+      <SettingItem
+        label="Block New Tabs"
+        description="Prevent the page from opening new tabs (e.g. target=&quot;_blank&quot; links)."
+      >
+        <ToggleButton
+          enabled={blockNewTabs}
+          onClick={() => sendNav({ blockNewTabs: !blockNewTabs })}
+          label={blockNewTabs ? "Blocking" : "Allowed"}
+        />
+      </SettingItem>
+
+      <SettingItem
+        label="Block New Windows"
+        description="Prevent the page from opening new windows (e.g. window.open)."
+      >
+        <ToggleButton
+          enabled={blockNewWindows}
+          onClick={() => sendNav({ blockNewWindows: !blockNewWindows })}
+          label={blockNewWindows ? "Blocking" : "Allowed"}
+        />
       </SettingItem>
     </section>
   );
@@ -171,6 +331,7 @@ export default function TabCustomizationPage({ params }: BuiltInPageProps) {
       activeCategory={activeCategory}
     >
       <AppearanceSettings tabId={tabId} />
+      <NavigationSettings tabId={tabId} />
       <LocalWebAppSettings tabId={tabId} />
 
       <div style={{ paddingTop: "1rem" }}>

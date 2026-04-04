@@ -310,6 +310,14 @@ export class ElectronPlatform implements Platform {
   private windowOpenCallback:
     | ((url: string, sourceTabId: TabId, disposition: string) => boolean)
     | undefined;
+  private navigationBlockCallback:
+    | ((
+        tabId: TabId,
+        targetUrl: string,
+        currentUrl: string,
+        type: "navigate" | "redirect" | "frame-navigate" | "new-tab" | "new-window",
+      ) => boolean)
+    | undefined;
 
   constructor(private getActiveWindowId: () => WindowId | undefined) {}
 
@@ -405,6 +413,18 @@ export class ElectronPlatform implements Platform {
     }
 
     view.webContents.setWindowOpenHandler(({ url, disposition }) => {
+      // Check per-tab navigation blocking for new tabs/windows
+      if (this.navigationBlockCallback) {
+        const currentUrl = view.webContents.getURL();
+        const blockType =
+          disposition === "foreground-tab" || disposition === "background-tab"
+            ? ("new-tab" as const)
+            : ("new-window" as const);
+        if (this.navigationBlockCallback(tabId, url, currentUrl, blockType)) {
+          return { action: "deny" as const };
+        }
+      }
+
       if (isAllowedUrl(url)) {
         // Let registered callback handle it (sub-tabs, etc.)
         if (this.windowOpenCallback?.(url, tabId, disposition)) {
@@ -451,6 +471,34 @@ export class ElectronPlatform implements Platform {
           }
         } catch {
           // Invalid URL — ignore
+        }
+        return;
+      }
+
+      // Per-tab navigation blocking
+      if (this.navigationBlockCallback) {
+        const currentUrl = view.webContents.getURL();
+        if (this.navigationBlockCallback(tabId, navUrl, currentUrl, "navigate")) {
+          event.preventDefault();
+        }
+      }
+    });
+
+    view.webContents.on("will-redirect", (event, navUrl) => {
+      if (this.navigationBlockCallback) {
+        const currentUrl = view.webContents.getURL();
+        if (this.navigationBlockCallback(tabId, navUrl, currentUrl, "redirect")) {
+          event.preventDefault();
+        }
+      }
+    });
+
+    view.webContents.on("will-frame-navigate", (details) => {
+      // Only handle sub-frame navigation; main-frame is covered by will-navigate
+      if (!details.isMainFrame && this.navigationBlockCallback) {
+        const currentUrl = view.webContents.getURL();
+        if (this.navigationBlockCallback(tabId, details.url, currentUrl, "frame-navigate")) {
+          details.preventDefault();
         }
       }
     });
@@ -1373,6 +1421,22 @@ export class ElectronPlatform implements Platform {
     return () => {
       if (this.windowOpenCallback === callback) {
         this.windowOpenCallback = undefined;
+      }
+    };
+  }
+
+  onNavigationBlock(
+    callback: (
+      tabId: TabId,
+      targetUrl: string,
+      currentUrl: string,
+      type: "navigate" | "redirect" | "frame-navigate" | "new-tab" | "new-window",
+    ) => boolean,
+  ): () => void {
+    this.navigationBlockCallback = callback;
+    return () => {
+      if (this.navigationBlockCallback === callback) {
+        this.navigationBlockCallback = undefined;
       }
     };
   }
