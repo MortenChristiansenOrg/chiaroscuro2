@@ -4,7 +4,6 @@
 
 set -euo pipefail
 
-source "$(dirname "${BASH_SOURCE[0]}")/load-env.sh"
 
 if [[ $# -lt 1 ]]; then
   echo "Usage: $0 <thread_id>" >&2

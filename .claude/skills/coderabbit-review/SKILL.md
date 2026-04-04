@@ -70,7 +70,7 @@ After user pushes, add reactions:
 | `add-reaction.sh`         | Add reaction        | `<owner> <repo> <comment_id> <reaction>`  |
 | `resolve-thread.sh`       | Resolve thread      | `<thread_id>`                             |
 
-All scripts auto-load `GH_TOKEN` from `.env.local`.
+All scripts use the `gh` CLI's built-in auth (no PAT or `.env.local` needed).
 
 ## Output Format
 
