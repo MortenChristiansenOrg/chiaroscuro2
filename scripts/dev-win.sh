@@ -21,7 +21,13 @@ cp package.json "$WIN_DIR/"
 # One-time: install electron on Windows side
 if [ ! -d "$WIN_DIR/node_modules/electron" ]; then
   echo "First run: installing Electron on Windows (one-time)..."
-  powershell.exe -NoProfile -Command "cd '$WIN_PATH'; npm install --ignore-scripts --save-dev electron; node node_modules/electron/install.js"
+  powershell.exe -NoProfile -Command "
+    Set-Location '$WIN_PATH'
+    npm install --ignore-scripts --save-dev electron
+    if (\$LASTEXITCODE -ne 0) { exit \$LASTEXITCODE }
+    node node_modules/electron/install.js
+    if (\$LASTEXITCODE -ne 0) { exit \$LASTEXITCODE }
+  "
 fi
 
 # Resolve electron.exe path
