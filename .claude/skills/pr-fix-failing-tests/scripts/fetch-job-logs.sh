@@ -5,8 +5,6 @@
 
 set -euo pipefail
 
-source "$(dirname "${BASH_SOURCE[0]}")/load-env.sh"
-
 if [[ $# -lt 3 || $# -gt 4 ]]; then
   echo "Usage: fetch-job-logs.sh <owner> <repo> <job_id> [tail_lines]" >&2
   exit 1

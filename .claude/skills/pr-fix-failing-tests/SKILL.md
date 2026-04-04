@@ -15,14 +15,7 @@ Identify failing CI test jobs on a PR, fetch their logs, analyze the failures, a
 
 ## Prerequisites
 
-Requires `gh` CLI with a token that has PR read access.
-
-**Setup:** Add fine-grained PAT to `.env.local`:
-1. Create token at <https://github.com/settings/personal-access-tokens/new>
-2. Select repository access
-3. Permissions: **Pull requests → Read**, **Actions → Read**
-4. Add to `.env.local`: `GH_TOKEN=ghp_xxx`
-5. Verify `.env.local` is in `.gitignore` to prevent token exposure
+Requires `gh` CLI authenticated with access to the repository (PR read + Actions read).
 
 ## Workflow
 
@@ -111,7 +104,7 @@ git push
 | `fetch-failed-jobs.sh` | Get failed CI jobs | `<owner> <repo> <pr>` |
 | `fetch-job-logs.sh` | Get job log output | `<owner> <repo> <job_id> [tail_lines]` |
 
-All scripts auto-load `GH_TOKEN` from `.env.local`.
+All scripts rely on `gh` CLI authentication.
 
 ## Output Format
 
@@ -147,7 +140,7 @@ User to run `git push` to trigger CI re-run.
 
 ## Error Handling
 
-- If `gh` not authenticated: prompt to add `GH_TOKEN=ghp_xxx` to `.env.local`
+- If `gh` not authenticated: prompt user to run `gh auth login`
 - If PR not found: show error with branch name
 - If no failed checks: report success and exit
 - If logs unavailable: note and continue with available info
