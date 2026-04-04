@@ -5,7 +5,6 @@
 
 set -euo pipefail
 
-source "$(dirname "${BASH_SOURCE[0]}")/load-env.sh"
 
 if [[ $# -lt 3 ]]; then
   echo "Usage: $0 <owner> <repo> <pr_number>" >&2

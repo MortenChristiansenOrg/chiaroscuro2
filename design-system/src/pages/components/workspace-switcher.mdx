@@ -12,21 +12,21 @@ import { DEMO_WORKSPACES, workspaceId } from "../../lib/demo-data";
 
 # Workspace Switcher
 
-The workspace bar sits at the bottom of the sidebar. Contains colored bubble buttons for each workspace, plus edit and add controls.
+The workspace bar sits at the bottom of the sidebar. Contains icon buttons for each workspace, plus edit and add controls.
 
 ---
 
 ## Anatomy
 
-- **Bubble row** — horizontal list of colored circle buttons, one per workspace
+- **Icon row** — horizontal list of icon buttons, one per workspace
 - **Edit button** — icon button to enter workspace management mode
 - **Add button** — icon button to create a new workspace
 
 ---
 
-## Workspace Bubbles
+## Workspace Icons
 
-Each bubble uses the workspace's accent color derived from `var(--accent-hue)`. All accent colors share `L=var(--accent-L), C=var(--accent-C)` for consistent vibrancy.
+Each workspace displays its icon (Font Awesome or text) without a background circle. Icons use a drop-shadow filter for depth against the sidebar background. The active icon is displayed at full size while inactive icons are scaled down.
 
 <LivePreview label="Workspace Bubbles (dark bg)">
   <div
@@ -39,7 +39,7 @@ Each bubble uses the workspace's accent color derived from `var(--accent-hue)`. 
     {DEMO_WORKSPACES.map((ws, i) => {
       const isActive = ws.id === workspaceId("ws-work");
       const prevActive = i > 0 && DEMO_WORKSPACES[i - 1]?.id === workspaceId("ws-work");
-      const gap = i === 0 ? 0 : isActive || prevActive ? "0.375rem" : "0.1875rem";
+      const gap = i === 0 ? 0 : isActive || prevActive ? "0.125rem" : "0.0625rem";
       return (
         <div key={ws.id} style={{ marginLeft: gap, transition: "margin var(--duration-normal) var(--ease-in-out)" }}>
           <WorkspaceBubble workspace={ws} isActive={isActive} />
@@ -78,30 +78,27 @@ Each bubble uses the workspace's accent color derived from `var(--accent-hue)`. 
 
 ---
 
-## Bubble Specs
+## Icon Specs
 
 | Property      | Token/Value                                           |
 | ------------- | ----------------------------------------------------- |
-| Size          | `var(--click-target-min)`                             |
-| Border radius | `--radius-full`                                       |
-| Font size     | `--text-xs`-equivalent (10px), weight 600             |
-| Background    | `oklch(var(--accent-L) var(--accent-C) <hue>)`        |
-| Transition    | `transform var(--duration-normal) var(--ease-in-out)` |
-
-## Curated Accent Palette
-
-See [Colors](/colors) for the full palette. Available hues: Flame (20), Amber (50), Gold (80), Lime (110), Green (140), Teal (180), Sky (205), Ocean (230), Indigo (255), Iris (280), Berry (315), Rose (350).
+| Size          | 32px                                                  |
+| Font size     | 16px (FA icons), `--text-sm` (text icons, weight 600) |
+| Background    | transparent                                           |
+| Color         | `var(--glass-text-primary)`                           |
+| Shadow        | `filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5))`     |
+| Transition    | `all var(--duration-normal) var(--ease-in-out)`       |
 
 ---
 
 ## States
 
-| State                      | Effect                                                                                    |
-| -------------------------- | ----------------------------------------------------------------------------------------- |
-| Default (inactive)         | `transform: scale(0.75)`, semi-transparent background (`oklch(... / 0.2)`)                |
-| Hover                      | `transform: scale(1.12)`                                                                  |
-| Active (current workspace) | `transform: scale(1)`, full-opacity background, ring shadow: `0 0 0 2px oklch(... / 0.4)` |
-| Disabled                   | `opacity: 0.4`, `cursor: default`                                                         |
+| State                      | Effect                                               |
+| -------------------------- | ---------------------------------------------------- |
+| Default (inactive)         | `transform: scale(0.75)`, `opacity: 0.7`             |
+| Hover                      | `transform: scale(1.2)`, `opacity: 1`                |
+| Active (current workspace) | `transform: scale(1.1)`, `opacity: 1`                |
+| Disabled                   | `opacity: 0.4`, `cursor: default`                    |
 
 ---
 
@@ -120,12 +117,12 @@ See [Colors](/colors) for the full palette. Available hues: Flame (20), Amber (5
 Scale transform on hover and active states:
 
 ```css
-transition: transform var(--duration-normal) var(--ease-in-out);
+transition: all var(--duration-normal) var(--ease-in-out);
 ```
 
-- **Inactive → Active:** scale `0.75 → 1`, background opacity `0.2 → 1`, ring shadow fade-in.
-- **Active → Inactive:** scale `1 → 0.75`, background opacity `1 → 0.2`, ring shadow fade-out.
-- **Hover:** scale up to `1.12`.
+- **Inactive → Active:** scale `0.75 → 1.1`, opacity `0.7 → 1`.
+- **Active → Inactive:** scale `1.1 → 0.75`, opacity `1 → 0.7`.
+- **Hover:** scale up to `1.2`, opacity `1`.
 - **`prefers-reduced-motion`:** transitions degrade to instant (`duration: 0`).
 
 ---
@@ -138,11 +135,10 @@ transition: transform var(--duration-normal) var(--ease-in-out);
 
 ## Accessibility
 
-- **`aria-label`:** required on each bubble (e.g., `aria-label="Work workspace"`).
-- **`aria-current="true"`:** set on the active workspace bubble.
+- **`aria-label`:** required on each icon (e.g., `aria-label="Work workspace"`).
+- **`aria-current="true"`:** set on the active workspace icon.
 - **Semantic HTML:** use `<button type="button">`, never `<div>`.
-- **Touch target:** minimum `var(--click-target-min)` (24px) in both dimensions.
-- **Contrast:** accent backgrounds against white text must meet 3:1 minimum. The curated palette ensures this.
+- **Touch target:** minimum 32px in both dimensions.
 
 ---
 
@@ -151,7 +147,7 @@ transition: transform var(--duration-normal) var(--ease-in-out);
 | Property  | Token/Value                                        |
 | --------- | -------------------------------------------------- |
 | Position  | `margin-top: auto` (anchored to bottom of sidebar) |
-| Gap       | `0.375rem` active↔neighbor, `0.1875rem` inactive↔inactive (animated) |
+| Gap       | `0.125rem` active↔neighbor, `0.0625rem` inactive↔inactive (animated) |
 | Direction | horizontal, `display: flex`, `align-items: center` |
 
 - Sidebar collapse hides the workspace bar entirely.
