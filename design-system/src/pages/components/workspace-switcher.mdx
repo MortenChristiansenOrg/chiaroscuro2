@@ -26,7 +26,7 @@ The workspace bar sits at the bottom of the sidebar. Contains icon buttons for e
 
 ## Workspace Icons
 
-Each workspace displays its icon (Font Awesome or text) without a background circle. Icons use a text shadow for depth against the sidebar background. The active icon is displayed at full size while inactive icons are scaled down.
+Each workspace displays its icon (Font Awesome or text) without a background circle. Icons use a drop-shadow filter for depth against the sidebar background. The active icon is displayed at full size while inactive icons are scaled down.
 
 <LivePreview label="Workspace Bubbles (dark bg)">
   <div
@@ -39,7 +39,7 @@ Each workspace displays its icon (Font Awesome or text) without a background cir
     {DEMO_WORKSPACES.map((ws, i) => {
       const isActive = ws.id === workspaceId("ws-work");
       const prevActive = i > 0 && DEMO_WORKSPACES[i - 1]?.id === workspaceId("ws-work");
-      const gap = i === 0 ? 0 : isActive || prevActive ? "0.25rem" : "0.125rem";
+      const gap = i === 0 ? 0 : isActive || prevActive ? "0.125rem" : "0.0625rem";
       return (
         <div key={ws.id} style={{ marginLeft: gap, transition: "margin var(--duration-normal) var(--ease-in-out)" }}>
           <WorkspaceBubble workspace={ws} isActive={isActive} />

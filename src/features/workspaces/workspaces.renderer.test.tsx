@@ -87,6 +87,20 @@ describe("WorkspaceBubble", () => {
     expect(screen.getByRole("button").style.filter).toContain("drop-shadow");
   });
 
+  it("hover scales to 1.2 and sets full opacity", () => {
+    const ws = makeWorkspace();
+    render(<WorkspaceBubble workspace={ws} isActive={false} />);
+    const bubble = screen.getByRole("button");
+
+    fireEvent.mouseEnter(bubble);
+    expect(bubble.style.transform).toBe("scale(1.2)");
+    expect(bubble.style.opacity).toBe("1");
+
+    fireEvent.mouseLeave(bubble);
+    expect(bubble.style.transform).toBe("scale(0.75)");
+    expect(bubble.style.opacity).toBe("0.7");
+  });
+
   it("has transparent background", () => {
     const ws = makeWorkspace({ color: "oklch(0.6 0.12 230)" });
     render(<WorkspaceBubble workspace={ws} isActive={true} />);
