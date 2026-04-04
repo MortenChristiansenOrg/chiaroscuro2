@@ -5,8 +5,6 @@
 
 set -euo pipefail
 
-source "$(dirname "${BASH_SOURCE[0]}")/load-env.sh"
-
 OWNER="$1"
 REPO="$2"
 PR="$3"

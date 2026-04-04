@@ -110,7 +110,7 @@ import type {
   WindowChromeCommands,
   WindowChromeEvents,
 } from "../features/window-chrome/window-chrome.shared";
-import workspaces from "../features/workspaces/workspaces.main";
+import workspaces, { isPrivacyWorkspace } from "../features/workspaces/workspaces.main";
 import type {
   WorkspacesCommands,
   WorkspacesEvents,
@@ -331,11 +331,18 @@ if (gotLock) {
         return true;
       },
     });
-    tabs.register({ ...deps, isPinned, getCustomization, getFoldersForLevel, setFolderOrder });
+    tabs.register({
+      ...deps,
+      isPinned,
+      getCustomization,
+      getFoldersForLevel,
+      setFolderOrder,
+      isPrivacyWorkspace,
+    });
     workspaces.register({ ...deps, getTabsForWorkspace });
     pinnedTabs.register({ ...deps, getCustomization });
     sidebar.register(deps);
-    commandPalette.register(deps);
+    commandPalette.register({ ...deps, isPrivacyWorkspace });
     settings.register(deps);
     tooltip.register(deps);
     contextMenu.register(deps);
@@ -391,7 +398,14 @@ if (gotLock) {
       await workspaces.start?.({ ...deps, getTabsForWorkspace });
       windowChrome.start?.(deps);
       await installer.start?.(deps);
-      await startTabs({ ...deps, isPinned, getCustomization, getFoldersForLevel, setFolderOrder });
+      await startTabs({
+        ...deps,
+        isPinned,
+        getCustomization,
+        getFoldersForLevel,
+        setFolderOrder,
+        isPrivacyWorkspace,
+      });
       await startPinnedTabs({ ...deps, getCustomization });
       sidebar.start?.(deps);
       await startFolders({ ...deps, getTab, getTabsForWorkspace, setTabFolderId, setTabOrder });

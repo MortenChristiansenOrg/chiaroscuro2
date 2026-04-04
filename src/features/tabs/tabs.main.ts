@@ -74,6 +74,7 @@ interface Deps {
     parentFolderId: FolderId | null,
   ) => { id: FolderId; order: number }[];
   setFolderOrder: (folderId: FolderId, order: number) => void;
+  isPrivacyWorkspace: (id: WorkspaceId) => boolean;
 }
 
 function resolveBuiltInTitle(url: string): string {
@@ -154,6 +155,7 @@ export default defineFeature<Deps>({
       getCustomization,
       getFoldersForLevel,
       setFolderOrder,
+      isPrivacyWorkspace,
     } = deps;
 
     const tabs = new Map<TabId, Tab>();
@@ -166,6 +168,11 @@ export default defineFeature<Deps>({
 
     function persistTab(tab: Tab): void {
       if (tab.builtIn && !tab.url.startsWith("app:pdf-reader")) return;
+      // Ephemeral tabs in privacy-mode workspaces are never persisted
+      if (!tab.bookmarked && isPrivacyWorkspace(tab.workspaceId)) {
+        removePersistedTab(tab.id);
+        return;
+      }
       const { loading, builtIn, fixedUrl: _fixedUrl, ...persisted } = tab;
       // Bookmarked tabs with fixed address: persist the original URL
       const fixedUrl = fixedUrls.get(tab.id);
@@ -657,7 +664,7 @@ export default defineFeature<Deps>({
 });
 
 export async function start(deps: Deps): Promise<void> {
-  const { dataStore, platform, getActiveWindowId, getActiveWorkspaceId } = deps;
+  const { dataStore, platform, getActiveWindowId, getActiveWorkspaceId, isPrivacyWorkspace } = deps;
   const tabsCollection: Collection<PersistedTab> = dataStore.collection("tabs");
 
   const persisted = await tabsCollection.findMany({});
@@ -668,10 +675,11 @@ export async function start(deps: Deps): Promise<void> {
 
   const now = Date.now();
 
-  // Ephemeral cleanup: remove tabs older than 8 hours
+  // Ephemeral cleanup: remove tabs older than 8 hours or in privacy workspaces
   const toRestore: PersistedTab[] = [];
   for (const pt of persisted) {
-    if (!pt.bookmarked && now - pt.lastAccessedAt > EPHEMERAL_TTL_MS) {
+    const inPrivacyWs = isPrivacyWorkspace(pt.workspaceId as WorkspaceId);
+    if (!pt.bookmarked && (now - pt.lastAccessedAt > EPHEMERAL_TTL_MS || inPrivacyWs)) {
       tabsCollection.remove(pt.id).catch(logWarn("tabs", "remove expired ephemeral"));
     } else {
       toRestore.push(pt);

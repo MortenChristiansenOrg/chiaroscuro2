@@ -48,6 +48,7 @@ function setup(overrides: { activeTabId?: TabId | undefined } = {}) {
     dataStore,
     getActiveWindowId: () => WIN_ID as WindowId | undefined,
     getActiveTabId: () => activeTabId as TabId | undefined,
+    isPrivacyWorkspace: () => false,
   };
   feature.register(deps);
   return { commands, events, platform, dataStore, deps };

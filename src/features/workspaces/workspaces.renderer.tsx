@@ -131,7 +131,7 @@ export function WorkspaceEditor({
   workspace,
   onClose,
 }: {
-  workspace?: { id: WorkspaceId; name: string; color: string; icon: string };
+  workspace?: { id: WorkspaceId; name: string; color: string; icon: string; privacyMode: boolean };
   onClose: () => void;
 }) {
   const isNew = !workspace;
@@ -144,6 +144,7 @@ export function WorkspaceEditor({
   const [selectedFaIcon, setSelectedFaIcon] = useState<FaSolidIcon | null>(existingFaIcon);
   const [iconQuery, setIconQuery] = useState("");
   const [color, setColor] = useState(workspace?.color ?? (WORKSPACE_COLORS[0] as string));
+  const [privacyMode, setPrivacyMode] = useState(workspace?.privacyMode ?? false);
   const searchRef = useRef<HTMLInputElement>(null);
 
   // Auto-derive text icon from name unless customized
@@ -163,11 +164,12 @@ export function WorkspaceEditor({
         name: name.trim(),
         color,
         icon: resolvedIcon,
+        privacyMode,
       });
     } else {
       sendCommand(WORKSPACES_UPDATE, {
         workspaceId: workspace.id,
-        changes: { name: name.trim(), color, icon: resolvedIcon },
+        changes: { name: name.trim(), color, icon: resolvedIcon, privacyMode },
       });
     }
     onClose();
@@ -351,7 +353,25 @@ export function WorkspaceEditor({
         )}
       </div>
 
-      {/* Row 3: Action buttons */}
+      {/* Row 3: Privacy mode */}
+      <label
+        className="flex items-center cursor-pointer"
+        style={{
+          gap: "0.375rem",
+          fontSize: "var(--text-xs)",
+          color: "var(--glass-text-muted)",
+        }}
+      >
+        <input
+          type="checkbox"
+          checked={privacyMode}
+          onChange={(e) => setPrivacyMode(e.target.checked)}
+          style={{ accentColor: color }}
+        />
+        Privacy mode
+      </label>
+
+      {/* Row 5: Action buttons */}
       <div className="flex items-center" style={{ gap: "0.375rem" }}>
         <button
           type="submit"

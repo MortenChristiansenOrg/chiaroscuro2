@@ -21,6 +21,7 @@ export interface Workspace {
   name: string;
   color: string;
   icon: string;
+  privacyMode: boolean;
   activeTabId: TabId | null;
 }
 
@@ -30,6 +31,7 @@ export interface PersistedWorkspace {
   name: string;
   color: string;
   icon: string;
+  privacyMode?: boolean;
   order: number;
 }
 
@@ -42,11 +44,12 @@ export interface WorkspacesCreatePayload {
   name: string;
   color: string;
   icon: string;
+  privacyMode: boolean;
 }
 
 export interface WorkspacesUpdatePayload {
   workspaceId: WorkspaceId;
-  changes: Partial<Pick<Workspace, "name" | "color" | "icon">>;
+  changes: Partial<Pick<Workspace, "name" | "color" | "icon" | "privacyMode">>;
 }
 
 export interface WorkspacesDeletePayload {

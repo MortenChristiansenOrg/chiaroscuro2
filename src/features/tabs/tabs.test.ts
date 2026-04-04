@@ -70,6 +70,7 @@ function setup(platformOverrides = {}) {
     getCustomization: () => undefined as { fixedAddressDisabled: boolean } | undefined,
     getFoldersForLevel: () => [] as { id: import("../../shared/types").FolderId; order: number }[],
     setFolderOrder: () => {},
+    isPrivacyWorkspace: () => false,
   };
   feature.register(deps);
   return { commands, events, platform, dataStore, deps, getActiveTabId: () => activeTabId };
@@ -125,6 +126,55 @@ describe("tabs commands", () => {
       await commands.send(TABS_CREATE, { url: "https://example.com", activate: false });
 
       expect(activated).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("privacy mode persistence", () => {
+    it("does not persist ephemeral tabs in privacy-mode workspaces", async () => {
+      const PRIVACY_WS = "ws-private" as WorkspaceId;
+      const { commands, dataStore } = setup({
+        createTab: vi.fn(async () => `tab-${++tabCounter}` as TabId),
+      });
+      // Override isPrivacyWorkspace on the already-registered feature
+      // We need a fresh setup that knows about privacy
+      feature.teardown?.();
+      const commands2 = new CommandBus<AllCommands>();
+      const events2 = new EventBus<AllEvents>();
+      const platform2 = createMockPlatform({
+        createTab: vi.fn(async () => `tab-${++tabCounter}` as TabId),
+      });
+      const dataStore2 = new MemoryDataStore();
+      let activeTabId2: TabId | undefined;
+      const deps2 = {
+        commands: commands2,
+        events: events2,
+        platform: platform2,
+        dataStore: dataStore2,
+        getActiveWindowId: () => WIN_ID as WindowId | undefined,
+        getActiveTabId: () => activeTabId2,
+        setActiveTabId: (id: TabId | undefined) => {
+          activeTabId2 = id;
+        },
+        getActiveWorkspaceId: () => WS_ID as WorkspaceId | undefined,
+        isPinned: (id: TabId) => isPinned(id),
+        getCustomization: () => undefined as { fixedAddressDisabled: boolean } | undefined,
+        getFoldersForLevel: () =>
+          [] as { id: import("../../shared/types").FolderId; order: number }[],
+        setFolderOrder: () => {},
+        isPrivacyWorkspace: (id: WorkspaceId) => id === PRIVACY_WS,
+      };
+      feature.register(deps2);
+
+      // Create tab in privacy workspace — should not be persisted
+      await commands2.send(TABS_CREATE, { url: "https://secret.com", workspaceId: PRIVACY_WS });
+
+      // Create tab in normal workspace — should be persisted
+      await commands2.send(TABS_CREATE, { url: "https://normal.com" });
+
+      const tabsColl = dataStore2.collection("tabs");
+      const persisted = await tabsColl.findMany({});
+      expect(persisted).toHaveLength(1);
+      expect(persisted[0]).toMatchObject({ url: "https://normal.com" });
     });
   });
 
@@ -397,6 +447,7 @@ describe("start()", () => {
       getFoldersForLevel: () =>
         [] as { id: import("../../shared/types").FolderId; order: number }[],
       setFolderOrder: () => {},
+      isPrivacyWorkspace: () => false,
     };
     feature.register(deps);
     await start(deps);
@@ -462,6 +513,7 @@ describe("start()", () => {
       getFoldersForLevel: () =>
         [] as { id: import("../../shared/types").FolderId; order: number }[],
       setFolderOrder: () => {},
+      isPrivacyWorkspace: () => false,
     };
     feature.register(deps);
     await start(deps);
@@ -537,6 +589,7 @@ describe("start()", () => {
       getFoldersForLevel: () =>
         [] as { id: import("../../shared/types").FolderId; order: number }[],
       setFolderOrder: () => {},
+      isPrivacyWorkspace: () => false,
     };
     feature.register(deps);
 
@@ -608,10 +661,106 @@ describe("start()", () => {
       getFoldersForLevel: () =>
         [] as { id: import("../../shared/types").FolderId; order: number }[],
       setFolderOrder: () => {},
+      isPrivacyWorkspace: () => false,
     };
     feature.register(deps);
     await start(deps);
 
     expect(platform.createTab).not.toHaveBeenCalled();
+  });
+
+  it("does not restore ephemeral tabs from privacy-mode workspaces", async () => {
+    const PRIVACY_WS = "ws-private" as WorkspaceId;
+    const dataStore = new MemoryDataStore();
+    const tabsColl = dataStore.collection("tabs");
+    const now = Date.now();
+
+    // Bookmarked tab in privacy workspace — should survive
+    await tabsColl.insert({
+      id: "priv-bm",
+      workspaceId: PRIVACY_WS,
+      url: "https://bookmarked-private.com",
+      title: "Bookmarked Private",
+      favicon: "",
+      bookmarked: true,
+      lastAccessedAt: now,
+      createdAt: now,
+      order: 0,
+      folderId: null,
+    });
+
+    // Ephemeral tab in privacy workspace — should be removed
+    await tabsColl.insert({
+      id: "priv-eph",
+      workspaceId: PRIVACY_WS,
+      url: "https://ephemeral-private.com",
+      title: "Ephemeral Private",
+      favicon: "",
+      bookmarked: false,
+      lastAccessedAt: now, // recent, would normally survive
+      createdAt: now,
+      order: 1,
+      folderId: null,
+    });
+
+    // Ephemeral tab in normal workspace — should survive
+    await tabsColl.insert({
+      id: "normal-eph",
+      workspaceId: WS_ID,
+      url: "https://ephemeral-normal.com",
+      title: "Ephemeral Normal",
+      favicon: "",
+      bookmarked: false,
+      lastAccessedAt: now,
+      createdAt: now,
+      order: 2,
+      folderId: null,
+    });
+
+    let newTabCounter = 0;
+    const commands = new CommandBus<AllCommands>();
+    const events = new EventBus<AllEvents>();
+    const platform = createMockPlatform({
+      createTab: vi.fn(
+        async (_wId: WindowId, _url: string, tabId?: TabId) =>
+          tabId ?? (`new-${++newTabCounter}` as TabId),
+      ),
+    });
+    let activeTabId: TabId | undefined;
+    const deps = {
+      commands,
+      events,
+      platform,
+      dataStore,
+      getActiveWindowId: () => WIN_ID as WindowId | undefined,
+      getActiveTabId: () => activeTabId,
+      setActiveTabId: (id: TabId | undefined) => {
+        activeTabId = id;
+      },
+      getActiveWorkspaceId: () => WS_ID as WorkspaceId | undefined,
+      isPinned: (id: TabId) => isPinned(id),
+      getCustomization: () => undefined as { fixedAddressDisabled: boolean } | undefined,
+      getFoldersForLevel: () =>
+        [] as { id: import("../../shared/types").FolderId; order: number }[],
+      setFolderOrder: () => {},
+      isPrivacyWorkspace: (id: WorkspaceId) => id === PRIVACY_WS,
+    };
+    feature.register(deps);
+    await start(deps);
+
+    // 2 tabs restored: bookmarked private + ephemeral normal (not ephemeral private)
+    expect(platform.createTab).toHaveBeenCalledTimes(2);
+    expect(platform.createTab).toHaveBeenCalledWith(
+      WIN_ID,
+      "https://bookmarked-private.com",
+      "priv-bm",
+      { lazy: true },
+    );
+    expect(platform.createTab).toHaveBeenCalledWith(
+      WIN_ID,
+      "https://ephemeral-normal.com",
+      "normal-eph",
+      { lazy: true },
+    );
   });
 });
