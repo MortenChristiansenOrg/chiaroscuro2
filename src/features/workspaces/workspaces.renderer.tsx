@@ -57,15 +57,10 @@ export function WorkspaceBubble({
     sendCommand(WORKSPACES_SWITCH, { workspaceId: workspace.id });
   };
 
-  // Build the ring shadow using oklch with proper syntax
-  const activeRing = workspace.color.startsWith("oklch(")
-    ? `0 0 0 2px oklch(${workspace.color.slice(6, -1)} / 0.4)`
-    : `0 0 0 2px ${workspace.color}66`;
-
   const hasFaIcon = isFaIcon(workspace.icon);
   const [hovered, setHovered] = useState(false);
 
-  const scale = hovered ? 1.12 : isActive ? 1 : 0.75;
+  const scale = hovered ? 1.2 : isActive ? 1.1 : 0.75;
 
   return (
     <button
@@ -78,17 +73,13 @@ export function WorkspaceBubble({
       style={{
         width: 32,
         height: 32,
-        borderRadius: "var(--radius-full)",
         border: "none",
-        fontSize: hasFaIcon ? 14 : "var(--text-sm)",
+        fontSize: hasFaIcon ? 16 : "var(--text-sm)",
         fontWeight: hasFaIcon ? undefined : 600,
-        background: isActive
-          ? workspace.color
-          : workspace.color.startsWith("oklch(")
-            ? `oklch(${workspace.color.slice(6, -1)} / 0.2)`
-            : `${workspace.color}80`,
+        background: "transparent",
         color: "var(--glass-text-primary)",
-        boxShadow: isActive ? activeRing : undefined,
+        opacity: isActive || hovered ? 1 : 0.7,
+        filter: "drop-shadow(0 1px 3px rgba(0,0,0,0.5))",
         transform: `scale(${scale})`,
         transition: "all var(--duration-normal) var(--ease-in-out)",
       }}
@@ -223,10 +214,9 @@ export function WorkspaceEditor({
             style={{
               width: 28,
               height: 28,
-              borderRadius: "var(--radius-full)",
-              background: color,
+              background: "transparent",
               color: "var(--glass-text-primary)",
-              fontSize: 13,
+              fontSize: 14,
               border: "none",
               flexShrink: 0,
             }}
@@ -246,8 +236,7 @@ export function WorkspaceEditor({
             style={{
               width: 28,
               height: 28,
-              borderRadius: "var(--radius-full)",
-              background: color,
+              background: "transparent",
               color: "var(--glass-text-primary)",
               fontSize: "var(--text-xs)",
               fontWeight: 600,
@@ -362,27 +351,7 @@ export function WorkspaceEditor({
         )}
       </div>
 
-      {/* Row 3: Color swatches */}
-      <div className="flex items-center" style={{ gap: "0.25rem" }}>
-        {WORKSPACE_COLORS.map((c) => (
-          <button
-            key={c}
-            type="button"
-            className="cursor-pointer"
-            onClick={() => setColor(c)}
-            style={{
-              width: 16,
-              height: 16,
-              borderRadius: "var(--radius-full)",
-              background: c,
-              border: c === color ? "2px solid var(--glass-text-primary)" : "2px solid transparent",
-            }}
-            aria-label={`Color ${c}`}
-          />
-        ))}
-      </div>
-
-      {/* Row 4: Action buttons */}
+      {/* Row 3: Action buttons */}
       <div className="flex items-center" style={{ gap: "0.375rem" }}>
         <button
           type="submit"
@@ -555,7 +524,7 @@ export function WorkspaceSwitcher({
           {workspaces.map((ws, i) => {
             const isActive = ws.id === activeWorkspaceId;
             const prevActive = i > 0 && workspaces[i - 1]?.id === activeWorkspaceId;
-            const gap = i === 0 ? 0 : isActive || prevActive ? "0.375rem" : "0.1875rem";
+            const gap = i === 0 ? 0 : isActive || prevActive ? "0.125rem" : "0.0625rem";
             return (
               <div
                 key={ws.id}

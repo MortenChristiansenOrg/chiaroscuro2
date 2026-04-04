@@ -57,10 +57,10 @@ describe("WorkspaceBubble", () => {
     expect(onEdit).toHaveBeenCalled();
   });
 
-  it("active workspace has scale(1)", () => {
+  it("active workspace has scale(1.1)", () => {
     const ws = makeWorkspace();
     render(<WorkspaceBubble workspace={ws} isActive={true} />);
-    expect(screen.getByRole("button").style.transform).toBe("scale(1)");
+    expect(screen.getByRole("button").style.transform).toBe("scale(1.1)");
   });
 
   it("inactive workspace has scale(0.75)", () => {
@@ -69,10 +69,28 @@ describe("WorkspaceBubble", () => {
     expect(screen.getByRole("button").style.transform).toBe("scale(0.75)");
   });
 
-  it("active workspace has ring boxShadow", () => {
+  it("inactive workspace has opacity 0.7", () => {
+    const ws = makeWorkspace();
+    render(<WorkspaceBubble workspace={ws} isActive={false} />);
+    expect(screen.getByRole("button").style.opacity).toBe("0.7");
+  });
+
+  it("active workspace has opacity 1", () => {
+    const ws = makeWorkspace();
+    render(<WorkspaceBubble workspace={ws} isActive={true} />);
+    expect(screen.getByRole("button").style.opacity).toBe("1");
+  });
+
+  it("has drop shadow for depth", () => {
+    const ws = makeWorkspace();
+    render(<WorkspaceBubble workspace={ws} isActive={true} />);
+    expect(screen.getByRole("button").style.filter).toContain("drop-shadow");
+  });
+
+  it("has transparent background", () => {
     const ws = makeWorkspace({ color: "oklch(0.6 0.12 230)" });
     render(<WorkspaceBubble workspace={ws} isActive={true} />);
-    expect(screen.getByRole("button").style.boxShadow).toContain("2px");
+    expect(screen.getByRole("button").style.background).toBe("transparent");
   });
 
   it("sets aria-current on active workspace", () => {
@@ -198,14 +216,14 @@ describe("WorkspaceEditor", () => {
     expect(iconInput).toBeDefined();
   });
 
-  it("renders color swatches", () => {
+  it("does not render color swatches", () => {
     render(<WorkspaceEditor onClose={vi.fn()} />);
 
-    // Should have color swatch buttons
+    // Color swatches are hidden (color still stored internally)
     const colorButtons = screen
       .getAllByRole("button")
       .filter((b) => b.getAttribute("aria-label")?.startsWith("Color"));
-    expect(colorButtons.length).toBe(WORKSPACE_COLORS.length);
+    expect(colorButtons.length).toBe(0);
   });
 
   it("no delete button for new workspace", () => {
