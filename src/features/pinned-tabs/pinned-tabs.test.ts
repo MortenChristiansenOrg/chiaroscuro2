@@ -57,6 +57,8 @@ function setup(overrides: { activeTabId?: TabId | null } = {}) {
     lastAccessedAt: 0,
     createdAt: 0,
     order: 0,
+    favicon: "",
+    folderId: null,
   }));
   commands.handle(TABS_TOGGLE_BOOKMARK, async () => {});
 
@@ -129,6 +131,8 @@ describe("pinned-tabs commands", () => {
         lastAccessedAt: 0,
         createdAt: 0,
         order: 0,
+        favicon: "",
+        folderId: null,
       }));
       const toggleBookmark = vi.fn();
       commands.unhandle(TABS_TOGGLE_BOOKMARK);
@@ -195,6 +199,7 @@ describe("pinned-tabs commands", () => {
           lastAccessedAt: 0,
           createdAt: 0,
           order: 0,
+          folderId: null,
         },
       });
 
@@ -249,8 +254,11 @@ describe("start()", () => {
       lastAccessedAt: 0,
       createdAt: 0,
       order: 0,
+      favicon: "",
+      folderId: null,
     }));
-    commands.handle(TABS_TOGGLE_BOOKMARK, async () => {});
+    const toggleBookmark = vi.fn();
+    commands.handle(TABS_TOGGLE_BOOKMARK, toggleBookmark);
 
     const deps = {
       commands,
@@ -275,5 +283,6 @@ describe("start()", () => {
         pinnedTabs: expect.arrayContaining([expect.objectContaining({ id: "tab-pinned" })]),
       }),
     );
+    expect(toggleBookmark).toHaveBeenCalledWith({ tabId: "tab-pinned" });
   });
 });
