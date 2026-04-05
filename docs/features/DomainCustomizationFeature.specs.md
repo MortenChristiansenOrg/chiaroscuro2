@@ -96,7 +96,7 @@ Accessed via an icon button in the address bar (left of the URL). Clicking opens
 
 ### Commands
 
-- `domain-settings:open` �� Open domain settings tab for a domain. Payload: `{ domain: string }`.
+- `domain-settings:open` — Open domain settings tab for a domain. Payload: `{ domain: string }`.
 - `domain-css:toggle` — Toggle CSS injection for a domain. Payload: `{ domain: string }`.
 - `domain-css:edit` — Create CSS file if needed, enable CSS, open in system editor. Payload: `{ domain: string }`.
 - `domain-css:remove` — Remove the CSS file for a domain. Payload: `{ domain: string }`.
