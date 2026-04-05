@@ -36,6 +36,38 @@ const categories = [
   { id: "local-web-app", label: "Local Web App" },
 ];
 
+function ToggleButton({
+  enabled,
+  onClick,
+  label,
+}: {
+  enabled: boolean;
+  onClick: () => void;
+  label: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-2 cursor-pointer rounded-[var(--radius-sm)] px-3 py-1.5 font-[inherit] text-[length:var(--text-sm)] transition-all duration-[var(--duration-fast)] ease-[var(--ease-out)] hover:brightness-110 active:brightness-90"
+      style={{
+        color: enabled ? "var(--foreground)" : "var(--muted-foreground)",
+        background: enabled
+          ? "oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250) / 0.12)"
+          : "var(--background)",
+        border: `1px solid ${enabled ? "oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250) / 0.3)" : "var(--input)"}`,
+      }}
+    >
+      <Icon
+        name={enabled ? "toggle-on" : "toggle-off"}
+        style="solid"
+        css={{ fontSize: "var(--text-base)" }}
+      />
+      {label}
+    </button>
+  );
+}
+
 function AppearanceSettings({ tabId }: { tabId: TabId }) {
   const customization = useTabCustomizationStore((s) => s.customizations.get(tabId));
   const tab = useTabsStore((s) => s.tabs.get(tabId));
@@ -105,25 +137,11 @@ function AppearanceSettings({ tabId }: { tabId: TabId }) {
         label="Allow Address Updates"
         description="When enabled, pinned tabs update their saved address as you browse. Normally pinned tabs keep a fixed address."
       >
-        <button
-          type="button"
+        <ToggleButton
+          enabled={fixedAddressDisabled}
           onClick={handleFixedAddressToggle}
-          className="inline-flex items-center gap-2 cursor-pointer rounded-[var(--radius-sm)] px-3 py-1.5 font-[inherit] text-[length:var(--text-sm)] transition-all duration-[var(--duration-fast)] ease-[var(--ease-out)] hover:brightness-110 active:brightness-90"
-          style={{
-            color: fixedAddressDisabled ? "var(--foreground)" : "var(--muted-foreground)",
-            background: fixedAddressDisabled
-              ? "oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250) / 0.12)"
-              : "var(--background)",
-            border: `1px solid ${fixedAddressDisabled ? "oklch(var(--accent-L) var(--accent-C) var(--accent-hue, 250) / 0.3)" : "var(--input)"}`,
-          }}
-        >
-          <Icon
-            name={fixedAddressDisabled ? "toggle-on" : "toggle-off"}
-            style="solid"
-            css={{ fontSize: "var(--text-base)" }}
-          />
-          {fixedAddressDisabled ? "Enabled" : "Disabled"}
-        </button>
+          label={fixedAddressDisabled ? "Enabled" : "Disabled"}
+        />
       </SettingItem>
     </section>
   );

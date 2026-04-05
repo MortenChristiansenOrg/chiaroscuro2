@@ -6,9 +6,12 @@ export const DOMAIN_CSS_TOGGLE = "domain-css:toggle" as const;
 export const DOMAIN_CSS_EDIT = "domain-css:edit" as const;
 export const DOMAIN_CSS_REMOVE = "domain-css:remove" as const;
 export const DOMAIN_CSS_GET_STATE = "domain-css:get-state" as const;
+export const DOMAIN_NAVIGATION_SET = "domain-navigation:set" as const;
+export const DOMAIN_NAVIGATION_GET_STATE = "domain-navigation:get-state" as const;
 
 // ── Event names ──────────────────────────────────────────────────
 export const DOMAIN_CSS_CHANGED = "domain-css:changed" as const;
+export const DOMAIN_NAVIGATION_CHANGED = "domain-navigation:changed" as const;
 
 // ── Data types ───────────────────────────────────────────────────
 export interface DomainCssState {
@@ -16,6 +19,33 @@ export interface DomainCssState {
   enabled: boolean;
   hasFile: boolean;
 }
+
+export interface NavigationBlockRule {
+  enabled: boolean;
+  crossOriginOnly: boolean;
+}
+
+export const DEFAULT_NAVIGATION_BLOCK_RULE: NavigationBlockRule = {
+  enabled: false,
+  crossOriginOnly: false,
+};
+
+export interface DomainNavigationState {
+  domain: string;
+  blockNavigate: NavigationBlockRule;
+  blockRedirect: NavigationBlockRule;
+  blockFrameNavigate: NavigationBlockRule;
+  blockNewTabs: boolean;
+  blockNewWindows: boolean;
+}
+
+export const DEFAULT_DOMAIN_NAVIGATION_STATE: Omit<DomainNavigationState, "domain"> = {
+  blockNavigate: { ...DEFAULT_NAVIGATION_BLOCK_RULE },
+  blockRedirect: { ...DEFAULT_NAVIGATION_BLOCK_RULE },
+  blockFrameNavigate: { ...DEFAULT_NAVIGATION_BLOCK_RULE },
+  blockNewTabs: false,
+  blockNewWindows: false,
+};
 
 // ── Payload types ────────────────────────────────────────────────
 export interface DomainSettingsOpenPayload {
@@ -38,10 +68,32 @@ export interface DomainCssGetStatePayload {
   domain: string;
 }
 
+export interface DomainNavigationSetPayload {
+  domain: string;
+  blockNavigate: NavigationBlockRule;
+  blockRedirect: NavigationBlockRule;
+  blockFrameNavigate: NavigationBlockRule;
+  blockNewTabs: boolean;
+  blockNewWindows: boolean;
+}
+
+export interface DomainNavigationGetStatePayload {
+  domain: string;
+}
+
 export interface DomainCssChangedEvent {
   domain: string;
   enabled: boolean;
   hasFile: boolean;
+}
+
+export interface DomainNavigationChangedEvent {
+  domain: string;
+  blockNavigate: NavigationBlockRule;
+  blockRedirect: NavigationBlockRule;
+  blockFrameNavigate: NavigationBlockRule;
+  blockNewTabs: boolean;
+  blockNewWindows: boolean;
 }
 
 // ── Command registry ─────────────────────────────────────────────
@@ -51,9 +103,15 @@ export type DomainCssCommands = {
   [DOMAIN_CSS_EDIT]: { payload: DomainCssEditPayload; response: undefined };
   [DOMAIN_CSS_REMOVE]: { payload: DomainCssRemovePayload; response: undefined };
   [DOMAIN_CSS_GET_STATE]: { payload: DomainCssGetStatePayload; response: DomainCssState };
+  [DOMAIN_NAVIGATION_SET]: { payload: DomainNavigationSetPayload; response: undefined };
+  [DOMAIN_NAVIGATION_GET_STATE]: {
+    payload: DomainNavigationGetStatePayload;
+    response: DomainNavigationState;
+  };
 };
 
 // ── Event registry ───────────────────────────────────────────────
 export type DomainCssEvents = {
   [DOMAIN_CSS_CHANGED]: DomainCssChangedEvent;
+  [DOMAIN_NAVIGATION_CHANGED]: DomainNavigationChangedEvent;
 };

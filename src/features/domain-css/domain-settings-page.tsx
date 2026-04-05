@@ -1,9 +1,10 @@
 import type { BuiltInPageProps } from "../../renderer/src/components/BuiltInPage";
 import { SettingsLayout, useScrollSpy } from "../../renderer/src/components/SettingsLayout";
 import { PermissionsSection } from "../permissions/permissions.renderer";
-import { CssControls } from "./domain-css.renderer";
+import { CssControls, NavigationSettings } from "./domain-css.renderer";
 
 const categories = [
+  { id: "navigation", label: "Navigation" },
   { id: "css", label: "Custom CSS" },
   { id: "permissions", label: "Permissions" },
 ];
@@ -37,6 +38,7 @@ export default function DomainSettingsPage({ params }: BuiltInPageProps) {
       scrollRef={scrollRef}
       activeCategory={activeCategory}
     >
+      <NavigationSettings domain={domain} />
       <CssControls domain={domain} />
       <PermissionsSection domain={domain} />
     </SettingsLayout>

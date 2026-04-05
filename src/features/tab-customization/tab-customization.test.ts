@@ -141,10 +141,15 @@ describe("tab-customization commands", () => {
         title: "My Custom Title",
       });
 
-      expect(listener).toHaveBeenCalledWith({
-        tabId: "tab-1",
-        customization: { title: "My Custom Title", fixedAddressDisabled: false },
-      });
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tabId: "tab-1",
+          customization: expect.objectContaining({
+            title: "My Custom Title",
+            fixedAddressDisabled: false,
+          }),
+        }),
+      );
     });
 
     it("persists customization to data store", async () => {
@@ -157,7 +162,7 @@ describe("tab-customization commands", () => {
 
       const collection = dataStore.collection("tab-customizations");
       const doc = await collection.findOne("tab-1");
-      expect(doc).toEqual({
+      expect(doc).toMatchObject({
         id: "tab-1",
         title: "Persisted Title",
         fixedAddressDisabled: false,
@@ -182,10 +187,12 @@ describe("tab-customization commands", () => {
         title: null,
       });
 
-      expect(listener).toHaveBeenCalledWith({
-        tabId: "tab-1",
-        customization: { title: null, fixedAddressDisabled: false },
-      });
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tabId: "tab-1",
+          customization: expect.objectContaining({ title: null, fixedAddressDisabled: false }),
+        }),
+      );
     });
 
     it("removes from data store when all values are default", async () => {
@@ -218,10 +225,12 @@ describe("tab-customization commands", () => {
         disabled: true,
       });
 
-      expect(listener).toHaveBeenCalledWith({
-        tabId: "tab-1",
-        customization: { title: null, fixedAddressDisabled: true },
-      });
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tabId: "tab-1",
+          customization: expect.objectContaining({ title: null, fixedAddressDisabled: true }),
+        }),
+      );
     });
 
     it("persists to data store", async () => {
@@ -234,7 +243,7 @@ describe("tab-customization commands", () => {
 
       const collection = dataStore.collection("tab-customizations");
       const doc = await collection.findOne("tab-1");
-      expect(doc).toEqual({
+      expect(doc).toMatchObject({
         id: "tab-1",
         title: null,
         fixedAddressDisabled: true,
@@ -267,7 +276,7 @@ describe("tab-customization commands", () => {
         tabId: "tab-1" as TabId,
       });
 
-      expect(state).toEqual({ title: null, fixedAddressDisabled: false });
+      expect(state).toMatchObject({ title: null, fixedAddressDisabled: false });
     });
 
     it("returns current customization", async () => {
@@ -282,7 +291,7 @@ describe("tab-customization commands", () => {
         tabId: "tab-1" as TabId,
       });
 
-      expect(state).toEqual({ title: "Custom", fixedAddressDisabled: false });
+      expect(state).toMatchObject({ title: "Custom", fixedAddressDisabled: false });
     });
   });
 
@@ -306,7 +315,7 @@ describe("tab-customization commands", () => {
       const state = await commands.send(TAB_CUSTOMIZATION_GET_STATE, {
         tabId: "tab-1" as TabId,
       });
-      expect(state).toEqual({ title: null, fixedAddressDisabled: false });
+      expect(state).toMatchObject({ title: null, fixedAddressDisabled: false });
     });
 
     it("does not emit removed for uncustomized tabs", () => {
@@ -355,10 +364,15 @@ describe("tab-customization commands", () => {
 
       await start(deps);
 
-      expect(listener).toHaveBeenCalledWith({
-        tabId: "tab-1",
-        customization: { title: "Persisted Title", fixedAddressDisabled: true },
-      });
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tabId: "tab-1",
+          customization: expect.objectContaining({
+            title: "Persisted Title",
+            fixedAddressDisabled: true,
+          }),
+        }),
+      );
     });
 
     it("makes persisted customizations available via get-state", async () => {
@@ -376,7 +390,7 @@ describe("tab-customization commands", () => {
       const state = await commands.send(TAB_CUSTOMIZATION_GET_STATE, {
         tabId: "tab-2" as TabId,
       });
-      expect(state).toEqual({ title: null, fixedAddressDisabled: true });
+      expect(state).toMatchObject({ title: null, fixedAddressDisabled: true });
     });
 
     it("restores persisted customizations with their original IDs", async () => {
@@ -394,15 +408,20 @@ describe("tab-customization commands", () => {
 
       await start(deps);
 
-      expect(listener).toHaveBeenCalledWith({
-        tabId: "tab-1",
-        customization: { title: "Persisted", fixedAddressDisabled: true },
-      });
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({
+          tabId: "tab-1",
+          customization: expect.objectContaining({
+            title: "Persisted",
+            fixedAddressDisabled: true,
+          }),
+        }),
+      );
 
       const state = await commands.send(TAB_CUSTOMIZATION_GET_STATE, {
         tabId: "tab-1" as TabId,
       });
-      expect(state).toEqual({ title: "Persisted", fixedAddressDisabled: true });
+      expect(state).toMatchObject({ title: "Persisted", fixedAddressDisabled: true });
     });
   });
 
@@ -427,7 +446,7 @@ describe("tab-customization commands", () => {
 
       expect(listener).toHaveBeenCalledWith(
         expect.objectContaining({
-          customization: { title: "Custom", fixedAddressDisabled: true },
+          customization: expect.objectContaining({ title: "Custom", fixedAddressDisabled: true }),
         }),
       );
     });

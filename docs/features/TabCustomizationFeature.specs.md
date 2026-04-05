@@ -67,6 +67,7 @@ See also:
 - `tab-customization:close` — Close the customization page and navigate back to the original URL. Payload: `{ tabId: string }`.
 - `tab-customization:set-title` — Set a custom title for a tab. Payload: `{ tabId: string, title: string | null }`.
 - `tab-customization:set-fixed-address-disabled` — Set the fixed-address-disabled flag. Payload: `{ tabId: string, disabled: boolean }`.
+- `tab-customization:get-state` — Get the current customization state for a tab. Payload: `{ tabId: string }`. Response: `TabCustomization`.
 
 ### Events
 

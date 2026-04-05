@@ -11,14 +11,21 @@ import type { TabId } from "../../shared/types";
 import type { Tab, TabsCommands, TabsEvents } from "../tabs/tabs.shared";
 import { TABS_CLOSED, TABS_UPDATED } from "../tabs/tabs.shared";
 import {
+  DEFAULT_DOMAIN_NAVIGATION_STATE,
+  DEFAULT_NAVIGATION_BLOCK_RULE,
   DOMAIN_CSS_CHANGED,
   DOMAIN_CSS_EDIT,
   DOMAIN_CSS_GET_STATE,
   DOMAIN_CSS_REMOVE,
   DOMAIN_CSS_TOGGLE,
+  DOMAIN_NAVIGATION_CHANGED,
+  DOMAIN_NAVIGATION_GET_STATE,
+  DOMAIN_NAVIGATION_SET,
   DOMAIN_SETTINGS_OPEN,
   type DomainCssCommands,
   type DomainCssEvents,
+  type DomainNavigationState,
+  type NavigationBlockRule,
 } from "./domain-css.shared";
 
 type AllCommands = DomainCssCommands & Pick<TabsCommands, "tabs:create" | "tabs:activate">;
@@ -37,17 +44,61 @@ interface DomainState {
   enabled: boolean;
 }
 
+interface PersistedNavigationState {
+  blockNavigate?: NavigationBlockRule;
+  blockRedirect?: NavigationBlockRule;
+  blockFrameNavigate?: NavigationBlockRule;
+  blockNewTabs?: boolean;
+  blockNewWindows?: boolean;
+}
+
 // Track CSS keys injected per tab for removal
 const injectedCssKeys = new Map<TabId, string>();
 
 // Per-domain state (enabled/disabled)
 let domainStates = new Map<string, DomainState>();
 
+// Per-domain navigation blocking rules
+let navigationStates = new Map<string, Omit<DomainNavigationState, "domain">>();
+
 // File watchers
 const watchers = new Map<string, fs.FSWatcher>();
 
 let cssDir: string;
 let deps: DomainCssDeps;
+let stopNavigationBlock: (() => void) | undefined;
+
+function shouldBlock(rule: NavigationBlockRule, targetUrl: string, currentUrl: string): boolean {
+  if (!rule.enabled) return false;
+  if (!rule.crossOriginOnly) return true;
+  try {
+    return new URL(targetUrl).host !== new URL(currentUrl).host;
+  } catch {
+    return false;
+  }
+}
+
+function isNavigationDefault(state: Omit<DomainNavigationState, "domain">): boolean {
+  return (
+    !state.blockNavigate.enabled &&
+    !state.blockRedirect.enabled &&
+    !state.blockFrameNavigate.enabled &&
+    !state.blockNewTabs &&
+    !state.blockNewWindows
+  );
+}
+
+async function persistNavigationStates(): Promise<void> {
+  const serializable: Record<string, PersistedNavigationState> = {};
+  for (const [domain, state] of navigationStates) {
+    serializable[domain] = state;
+  }
+  try {
+    await deps.dataStore.setSetting("domain-navigation-states", serializable);
+  } catch (error) {
+    console.error("Failed to persist domain navigation states", error);
+  }
+}
 
 function isValidDomain(domain: string): boolean {
   return domain.length > 0 && !/[/\\:]|\.\./.test(domain);
@@ -198,6 +249,7 @@ export default defineFeature<DomainCssDeps>({
     deps = d_;
     cssDir = path.join(d_.dataDir, "domain-css");
     domainStates = new Map();
+    navigationStates = new Map();
     injectedCssKeys.clear();
     for (const w of watchers.values()) w.close();
     watchers.clear();
@@ -232,6 +284,27 @@ export default defineFeature<DomainCssDeps>({
         injectCssForTab(tab.id, domain).catch(logError("domain-css", "inject css"));
       } else {
         removeCssFromTab(tab.id).catch(logError("domain-css", "remove css"));
+      }
+    });
+
+    // ── Navigation blocking callback ────────────────────────────
+    stopNavigationBlock = d_.platform.onNavigationBlock((tabId, targetUrl, currentUrl, type) => {
+      const domain = getDomainFromUrl(currentUrl);
+      if (!domain) return false;
+      const navState = navigationStates.get(domain);
+      if (!navState) return false;
+
+      switch (type) {
+        case "navigate":
+          return shouldBlock(navState.blockNavigate, targetUrl, currentUrl);
+        case "redirect":
+          return shouldBlock(navState.blockRedirect, targetUrl, currentUrl);
+        case "frame-navigate":
+          return shouldBlock(navState.blockFrameNavigate, targetUrl, currentUrl);
+        case "new-tab":
+          return navState.blockNewTabs;
+        case "new-window":
+          return navState.blockNewWindows;
       }
     });
 
@@ -326,12 +399,40 @@ export default defineFeature<DomainCssDeps>({
       await persistStates();
       emitChanged(domain);
     });
+
+    commands.handle(DOMAIN_NAVIGATION_SET, async (payload) => {
+      const { domain, ...navSettings } = payload;
+      if (!isValidDomain(domain)) throw new Error(`Invalid domain: ${domain}`);
+
+      if (isNavigationDefault(navSettings)) {
+        navigationStates.delete(domain);
+      } else {
+        navigationStates.set(domain, navSettings);
+      }
+
+      await persistNavigationStates();
+      events.emit(DOMAIN_NAVIGATION_CHANGED, { domain, ...navSettings });
+    });
+
+    commands.handle(DOMAIN_NAVIGATION_GET_STATE, async (payload) => {
+      const { domain } = payload;
+      const state = navigationStates.get(domain);
+      return {
+        domain,
+        ...(state ?? { ...DEFAULT_DOMAIN_NAVIGATION_STATE }),
+      };
+    });
   },
 
   teardown() {
+    if (stopNavigationBlock) {
+      stopNavigationBlock();
+      stopNavigationBlock = undefined;
+    }
     for (const w of watchers.values()) w.close();
     watchers.clear();
     domainStates.clear();
+    navigationStates.clear();
     injectedCssKeys.clear();
   },
 
@@ -349,6 +450,25 @@ export default defineFeature<DomainCssDeps>({
         if (state.enabled && cssFileExists(domain)) {
           startWatching(domain);
         }
+      }
+    }
+
+    const storedNav = await dataStore.getSetting<Record<string, PersistedNavigationState>>(
+      "domain-navigation-states",
+    );
+    if (storedNav) {
+      for (const [domain, state] of Object.entries(storedNav)) {
+        if (!isValidDomain(domain)) {
+          console.error("Skipping invalid persisted domain navigation state", domain);
+          continue;
+        }
+        navigationStates.set(domain, {
+          blockNavigate: state.blockNavigate ?? { ...DEFAULT_NAVIGATION_BLOCK_RULE },
+          blockRedirect: state.blockRedirect ?? { ...DEFAULT_NAVIGATION_BLOCK_RULE },
+          blockFrameNavigate: state.blockFrameNavigate ?? { ...DEFAULT_NAVIGATION_BLOCK_RULE },
+          blockNewTabs: state.blockNewTabs ?? false,
+          blockNewWindows: state.blockNewWindows ?? false,
+        });
       }
     }
   },
