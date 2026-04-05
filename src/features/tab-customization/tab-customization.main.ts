@@ -59,6 +59,8 @@ const DEFAULT_CUSTOMIZATION: TabCustomization = {
   blockNewWindows: false,
 };
 
+let stopNavigationBlock: (() => void) | undefined;
+
 const _state = featureState<{
   customizations: Map<TabId, TabCustomization>;
   collection: Collection<PersistedCustomization>;
@@ -126,7 +128,7 @@ export default defineFeature<TabCustomizationDeps>({
     _state.init({ customizations, collection: coll });
 
     // ── Navigation blocking callback ────────────────────────────────
-    platform.onNavigationBlock((tabId, targetUrl, currentUrl, type) => {
+    stopNavigationBlock = platform.onNavigationBlock((tabId, targetUrl, currentUrl, type) => {
       const c = customizations.get(tabId);
       if (!c) return false;
 
@@ -200,6 +202,10 @@ export default defineFeature<TabCustomizationDeps>({
   },
 
   teardown() {
+    if (stopNavigationBlock) {
+      stopNavigationBlock();
+      stopNavigationBlock = undefined;
+    }
     _state.reset();
   },
 });
