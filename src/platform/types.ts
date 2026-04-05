@@ -136,7 +136,7 @@ export interface Platform {
     callback: (url: string, sourceTabId: TabId, disposition: string) => boolean,
   ): () => void;
 
-  // Navigation blocking (per-tab)
+  // Navigation blocking (per-domain)
   onNavigationBlock(
     callback: (
       tabId: TabId,

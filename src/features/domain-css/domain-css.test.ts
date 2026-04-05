@@ -16,10 +16,14 @@ import {
   DOMAIN_CSS_GET_STATE,
   DOMAIN_CSS_REMOVE,
   DOMAIN_CSS_TOGGLE,
+  DOMAIN_NAVIGATION_CHANGED,
+  DOMAIN_NAVIGATION_GET_STATE,
+  DOMAIN_NAVIGATION_SET,
   DOMAIN_SETTINGS_OPEN,
   type DomainCssChangedEvent,
   type DomainCssCommands,
   type DomainCssEvents,
+  type DomainNavigationChangedEvent,
 } from "./domain-css.shared";
 
 type AllCommands = DomainCssCommands & Pick<TabsCommands, "tabs:create" | "tabs:activate">;
@@ -289,6 +293,199 @@ describe("domain-css commands", () => {
       // Get state should reflect persisted data
       const state = await deps.commands.send(DOMAIN_CSS_GET_STATE, { domain: "persisted.com" });
       expect(state).toEqual({ domain: "persisted.com", enabled: true, hasFile: true });
+    });
+
+    it("loads persisted navigation states", async () => {
+      const { deps, dataStore } = setup();
+
+      await dataStore.setSetting("domain-navigation-states", {
+        "nav.com": {
+          blockNavigate: { enabled: true, crossOriginOnly: true },
+          blockRedirect: { enabled: false, crossOriginOnly: false },
+          blockFrameNavigate: { enabled: false, crossOriginOnly: false },
+          blockNewTabs: true,
+          blockNewWindows: false,
+        },
+      });
+
+      await feature.start?.(deps);
+
+      const state = await deps.commands.send(DOMAIN_NAVIGATION_GET_STATE, { domain: "nav.com" });
+      expect(state).toEqual({
+        domain: "nav.com",
+        blockNavigate: { enabled: true, crossOriginOnly: true },
+        blockRedirect: { enabled: false, crossOriginOnly: false },
+        blockFrameNavigate: { enabled: false, crossOriginOnly: false },
+        blockNewTabs: true,
+        blockNewWindows: false,
+      });
+    });
+  });
+
+  describe("DOMAIN_NAVIGATION_SET", () => {
+    const navSettings = {
+      blockNavigate: { enabled: true, crossOriginOnly: true },
+      blockRedirect: { enabled: true, crossOriginOnly: false },
+      blockFrameNavigate: { enabled: false, crossOriginOnly: false },
+      blockNewTabs: true,
+      blockNewWindows: false,
+    };
+
+    it("sets navigation rules and emits DOMAIN_NAVIGATION_CHANGED", async () => {
+      const { commands, events } = setup();
+      const listener = vi.fn();
+      events.on(DOMAIN_NAVIGATION_CHANGED, listener);
+
+      await commands.send(DOMAIN_NAVIGATION_SET, {
+        domain: "example.com",
+        ...navSettings,
+      });
+
+      expect(listener).toHaveBeenCalledWith(
+        expect.objectContaining({ domain: "example.com", ...navSettings }),
+      );
+    });
+
+    it("persists navigation state to data store", async () => {
+      const { commands, dataStore } = setup();
+
+      await commands.send(DOMAIN_NAVIGATION_SET, {
+        domain: "example.com",
+        ...navSettings,
+      });
+
+      const stored = await dataStore.getSetting<Record<string, unknown>>(
+        "domain-navigation-states",
+      );
+      expect(stored).toMatchObject({
+        "example.com": navSettings,
+      });
+    });
+
+    it("removes from store when reset to defaults", async () => {
+      const { commands, dataStore } = setup();
+
+      await commands.send(DOMAIN_NAVIGATION_SET, {
+        domain: "example.com",
+        ...navSettings,
+      });
+
+      await commands.send(DOMAIN_NAVIGATION_SET, {
+        domain: "example.com",
+        blockNavigate: { enabled: false, crossOriginOnly: false },
+        blockRedirect: { enabled: false, crossOriginOnly: false },
+        blockFrameNavigate: { enabled: false, crossOriginOnly: false },
+        blockNewTabs: false,
+        blockNewWindows: false,
+      });
+
+      const stored = await dataStore.getSetting<Record<string, unknown>>(
+        "domain-navigation-states",
+      );
+      expect(stored).toEqual({});
+    });
+  });
+
+  describe("DOMAIN_NAVIGATION_GET_STATE", () => {
+    it("returns defaults for unknown domain", async () => {
+      const { commands } = setup();
+      const state = await commands.send(DOMAIN_NAVIGATION_GET_STATE, { domain: "unknown.com" });
+      expect(state).toEqual({
+        domain: "unknown.com",
+        blockNavigate: { enabled: false, crossOriginOnly: false },
+        blockRedirect: { enabled: false, crossOriginOnly: false },
+        blockFrameNavigate: { enabled: false, crossOriginOnly: false },
+        blockNewTabs: false,
+        blockNewWindows: false,
+      });
+    });
+  });
+
+  describe("navigation blocking callback", () => {
+    it("blocks navigation for domain with blocking enabled", async () => {
+      const { commands, platform } = setup();
+
+      await commands.send(DOMAIN_NAVIGATION_SET, {
+        domain: "example.com",
+        blockNavigate: { enabled: true, crossOriginOnly: false },
+        blockRedirect: { enabled: false, crossOriginOnly: false },
+        blockFrameNavigate: { enabled: false, crossOriginOnly: false },
+        blockNewTabs: false,
+        blockNewWindows: false,
+      });
+
+      const callback = platform.onNavigationBlock.mock.calls[0]?.[0];
+      expect(callback).toBeDefined();
+
+      // Block navigation from example.com
+      expect(
+        callback("tab-1" as TabId, "https://other.com", "https://example.com/page", "navigate"),
+      ).toBe(true);
+    });
+
+    it("allows navigation for domain without blocking", async () => {
+      const { platform } = setup();
+
+      const callback = platform.onNavigationBlock.mock.calls[0]?.[0];
+      expect(callback).toBeDefined();
+
+      // No blocking rules for other.com
+      expect(
+        callback("tab-1" as TabId, "https://elsewhere.com", "https://other.com/page", "navigate"),
+      ).toBe(false);
+    });
+
+    it("respects cross-origin-only setting", async () => {
+      const { commands, platform } = setup();
+
+      await commands.send(DOMAIN_NAVIGATION_SET, {
+        domain: "example.com",
+        blockNavigate: { enabled: true, crossOriginOnly: true },
+        blockRedirect: { enabled: false, crossOriginOnly: false },
+        blockFrameNavigate: { enabled: false, crossOriginOnly: false },
+        blockNewTabs: false,
+        blockNewWindows: false,
+      });
+
+      const callback = platform.onNavigationBlock.mock.calls[0]?.[0];
+
+      // Same origin — should allow
+      expect(
+        callback(
+          "tab-1" as TabId,
+          "https://example.com/other",
+          "https://example.com/page",
+          "navigate",
+        ),
+      ).toBe(false);
+
+      // Cross origin — should block
+      expect(
+        callback("tab-1" as TabId, "https://other.com", "https://example.com/page", "navigate"),
+      ).toBe(true);
+    });
+
+    it("blocks new tabs and windows", async () => {
+      const { commands, platform } = setup();
+
+      await commands.send(DOMAIN_NAVIGATION_SET, {
+        domain: "example.com",
+        blockNavigate: { enabled: false, crossOriginOnly: false },
+        blockRedirect: { enabled: false, crossOriginOnly: false },
+        blockFrameNavigate: { enabled: false, crossOriginOnly: false },
+        blockNewTabs: true,
+        blockNewWindows: true,
+      });
+
+      const callback = platform.onNavigationBlock.mock.calls[0]?.[0];
+
+      expect(
+        callback("tab-1" as TabId, "https://other.com", "https://example.com/page", "new-tab"),
+      ).toBe(true);
+
+      expect(
+        callback("tab-1" as TabId, "https://other.com", "https://example.com/page", "new-window"),
+      ).toBe(true);
     });
   });
 });

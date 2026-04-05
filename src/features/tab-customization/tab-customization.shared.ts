@@ -6,7 +6,6 @@ export const TAB_CUSTOMIZATION_CLOSE = "tab-customization:close" as const;
 export const TAB_CUSTOMIZATION_SET_TITLE = "tab-customization:set-title" as const;
 export const TAB_CUSTOMIZATION_SET_FIXED_ADDRESS_DISABLED =
   "tab-customization:set-fixed-address-disabled" as const;
-export const TAB_CUSTOMIZATION_SET_NAVIGATION = "tab-customization:set-navigation" as const;
 export const TAB_CUSTOMIZATION_GET_STATE = "tab-customization:get-state" as const;
 
 // ── Event names ──────────────────────────────────────────────────
@@ -16,25 +15,10 @@ export const TAB_CUSTOMIZATION_CHANGED = "tab-customization:changed" as const;
 export const TAB_CUSTOMIZATION_REMOVED = "tab-customization:removed" as const;
 
 // ── Data types ───────────────────────────────────────────────────
-export interface NavigationBlockRule {
-  enabled: boolean;
-  crossOriginOnly: boolean;
-}
-
 export interface TabCustomization {
   title: string | null;
   fixedAddressDisabled: boolean;
-  blockNavigate: NavigationBlockRule;
-  blockRedirect: NavigationBlockRule;
-  blockFrameNavigate: NavigationBlockRule;
-  blockNewTabs: boolean;
-  blockNewWindows: boolean;
 }
-
-export const DEFAULT_NAVIGATION_BLOCK_RULE: NavigationBlockRule = {
-  enabled: false,
-  crossOriginOnly: false,
-};
 
 // ── Payload types ────────────────────────────────────────────────
 export interface TabCustomizationOpenPayload {
@@ -53,15 +37,6 @@ export interface TabCustomizationSetTitlePayload {
 export interface TabCustomizationSetFixedAddressDisabledPayload {
   tabId: TabId;
   disabled: boolean;
-}
-
-export interface TabCustomizationSetNavigationPayload {
-  tabId: TabId;
-  blockNavigate: NavigationBlockRule;
-  blockRedirect: NavigationBlockRule;
-  blockFrameNavigate: NavigationBlockRule;
-  blockNewTabs: boolean;
-  blockNewWindows: boolean;
 }
 
 export interface TabCustomizationGetStatePayload {
@@ -96,10 +71,6 @@ export type TabCustomizationCommands = {
   };
   [TAB_CUSTOMIZATION_SET_FIXED_ADDRESS_DISABLED]: {
     payload: TabCustomizationSetFixedAddressDisabledPayload;
-    response: undefined;
-  };
-  [TAB_CUSTOMIZATION_SET_NAVIGATION]: {
-    payload: TabCustomizationSetNavigationPayload;
     response: undefined;
   };
   [TAB_CUSTOMIZATION_GET_STATE]: {

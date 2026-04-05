@@ -352,7 +352,7 @@ if (gotLock) {
     domainCss.register({ ...deps, dataDir, getTabsSnapshot: getAllTabs });
     downloads.register(deps);
     findText.register(deps);
-    tabCustomization.register({ ...deps, getTab, isPinned, platform });
+    tabCustomization.register({ ...deps, getTab, isPinned });
     terminal.register(deps);
     localWebApp.register(deps);
     installer.register(deps);
@@ -412,7 +412,7 @@ if (gotLock) {
       await settings.start?.(deps);
       await domainCss.start?.({ ...deps, dataDir, getTabsSnapshot: getAllTabs });
       downloads.start?.(deps);
-      await startTabCustomization({ ...deps, getTab, isPinned, platform });
+      await startTabCustomization({ ...deps, getTab, isPinned });
       terminal.start?.(deps);
       await startLocalWebApp(deps);
       await externalLink.start?.(deps);

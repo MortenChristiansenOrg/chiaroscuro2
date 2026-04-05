@@ -1,7 +1,6 @@
 import type { CommandBus } from "../../bus/command-bus";
 import type { EventBus } from "../../bus/event-bus";
 import type { Collection, DataStore } from "../../data/types";
-import type { Platform } from "../../platform/types";
 import { defineFeature } from "../../shared/define-feature";
 import { featureState } from "../../shared/feature-state";
 import { logError } from "../../shared/log";
@@ -9,8 +8,6 @@ import type { TabId } from "../../shared/types";
 import type { Tab, TabsCommands, TabsEvents } from "../tabs/tabs.shared";
 import { TABS_ACTIVATE, TABS_CLOSED } from "../tabs/tabs.shared";
 import {
-  DEFAULT_NAVIGATION_BLOCK_RULE,
-  type NavigationBlockRule,
   TAB_CUSTOMIZATION_CHANGED,
   TAB_CUSTOMIZATION_CLOSE,
   TAB_CUSTOMIZATION_CLOSED,
@@ -19,7 +16,6 @@ import {
   TAB_CUSTOMIZATION_OPENED,
   TAB_CUSTOMIZATION_REMOVED,
   TAB_CUSTOMIZATION_SET_FIXED_ADDRESS_DISABLED,
-  TAB_CUSTOMIZATION_SET_NAVIGATION,
   TAB_CUSTOMIZATION_SET_TITLE,
   type TabCustomization,
   type TabCustomizationCommands,
@@ -30,11 +26,6 @@ interface PersistedCustomization {
   id: string;
   title: string | null;
   fixedAddressDisabled: boolean;
-  blockNavigate?: NavigationBlockRule;
-  blockRedirect?: NavigationBlockRule;
-  blockFrameNavigate?: NavigationBlockRule;
-  blockNewTabs?: boolean;
-  blockNewWindows?: boolean;
 }
 
 type AllCommands = TabCustomizationCommands & Pick<TabsCommands, typeof TABS_ACTIVATE>;
@@ -44,7 +35,6 @@ export interface TabCustomizationDeps {
   commands: CommandBus<AllCommands>;
   events: EventBus<AllEvents>;
   dataStore: DataStore;
-  platform: Platform;
   getTab: (tabId: TabId) => Tab | undefined;
   isPinned: (tabId: TabId) => boolean;
 }
@@ -52,14 +42,7 @@ export interface TabCustomizationDeps {
 const DEFAULT_CUSTOMIZATION: TabCustomization = {
   title: null,
   fixedAddressDisabled: false,
-  blockNavigate: { ...DEFAULT_NAVIGATION_BLOCK_RULE },
-  blockRedirect: { ...DEFAULT_NAVIGATION_BLOCK_RULE },
-  blockFrameNavigate: { ...DEFAULT_NAVIGATION_BLOCK_RULE },
-  blockNewTabs: false,
-  blockNewWindows: false,
 };
-
-let stopNavigationBlock: (() => void) | undefined;
 
 const _state = featureState<{
   customizations: Map<TabId, TabCustomization>;
@@ -67,25 +50,7 @@ const _state = featureState<{
 }>("tab-customization");
 
 function isDefault(c: TabCustomization): boolean {
-  return (
-    c.title === null &&
-    !c.fixedAddressDisabled &&
-    !c.blockNavigate.enabled &&
-    !c.blockRedirect.enabled &&
-    !c.blockFrameNavigate.enabled &&
-    !c.blockNewTabs &&
-    !c.blockNewWindows
-  );
-}
-
-function shouldBlock(rule: NavigationBlockRule, targetUrl: string, currentUrl: string): boolean {
-  if (!rule.enabled) return false;
-  if (!rule.crossOriginOnly) return true;
-  try {
-    return new URL(targetUrl).host !== new URL(currentUrl).host;
-  } catch {
-    return false;
-  }
+  return c.title === null && !c.fixedAddressDisabled;
 }
 
 function toPersistedCustomization(tabId: TabId, c: TabCustomization): PersistedCustomization {
@@ -93,11 +58,6 @@ function toPersistedCustomization(tabId: TabId, c: TabCustomization): PersistedC
     id: tabId,
     title: c.title,
     fixedAddressDisabled: c.fixedAddressDisabled,
-    blockNavigate: c.blockNavigate,
-    blockRedirect: c.blockRedirect,
-    blockFrameNavigate: c.blockFrameNavigate,
-    blockNewTabs: c.blockNewTabs,
-    blockNewWindows: c.blockNewWindows,
   };
 }
 
@@ -122,29 +82,10 @@ function saveOrRemove(
 
 export default defineFeature<TabCustomizationDeps>({
   register(deps) {
-    const { commands, events, dataStore, platform, getTab, isPinned } = deps;
+    const { commands, events, dataStore, getTab, isPinned } = deps;
     const customizations = new Map<TabId, TabCustomization>();
     const coll = dataStore.collection<PersistedCustomization>("tab-customizations");
     _state.init({ customizations, collection: coll });
-
-    // ── Navigation blocking callback ────────────────────────────────
-    stopNavigationBlock = platform.onNavigationBlock((tabId, targetUrl, currentUrl, type) => {
-      const c = customizations.get(tabId);
-      if (!c) return false;
-
-      switch (type) {
-        case "navigate":
-          return shouldBlock(c.blockNavigate, targetUrl, currentUrl);
-        case "redirect":
-          return shouldBlock(c.blockRedirect, targetUrl, currentUrl);
-        case "frame-navigate":
-          return shouldBlock(c.blockFrameNavigate, targetUrl, currentUrl);
-        case "new-tab":
-          return c.blockNewTabs;
-        case "new-window":
-          return c.blockNewWindows;
-      }
-    });
 
     // ── Clean up on tab close ──────────────────────────────────────
     events.on(TABS_CLOSED, (payload) => {
@@ -187,25 +128,12 @@ export default defineFeature<TabCustomizationDeps>({
       saveOrRemove(tabId, current, customizations, coll, events);
     });
 
-    commands.handle(TAB_CUSTOMIZATION_SET_NAVIGATION, async (payload) => {
-      const { tabId, ...navSettings } = payload;
-      const current = {
-        ...(customizations.get(tabId) ?? DEFAULT_CUSTOMIZATION),
-        ...navSettings,
-      };
-      saveOrRemove(tabId, current, customizations, coll, events);
-    });
-
     commands.handle(TAB_CUSTOMIZATION_GET_STATE, async (payload) => {
       return customizations.get(payload.tabId) ?? { ...DEFAULT_CUSTOMIZATION };
     });
   },
 
   teardown() {
-    if (stopNavigationBlock) {
-      stopNavigationBlock();
-      stopNavigationBlock = undefined;
-    }
     _state.reset();
   },
 });
@@ -218,11 +146,6 @@ export async function start(deps: TabCustomizationDeps): Promise<void> {
     const customization: TabCustomization = {
       title: doc.title,
       fixedAddressDisabled: doc.fixedAddressDisabled,
-      blockNavigate: doc.blockNavigate ?? { ...DEFAULT_NAVIGATION_BLOCK_RULE },
-      blockRedirect: doc.blockRedirect ?? { ...DEFAULT_NAVIGATION_BLOCK_RULE },
-      blockFrameNavigate: doc.blockFrameNavigate ?? { ...DEFAULT_NAVIGATION_BLOCK_RULE },
-      blockNewTabs: doc.blockNewTabs ?? false,
-      blockNewWindows: doc.blockNewWindows ?? false,
     };
     customizations.set(tabId, customization);
     deps.events.emit(TAB_CUSTOMIZATION_CHANGED, { tabId, customization });

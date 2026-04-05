@@ -9,7 +9,6 @@ import { CommandBus } from "../../bus/command-bus";
 import { EventBus } from "../../bus/event-bus";
 import { MemoryDataStore } from "../../data/memory-store";
 import type { TabId, WorkspaceId } from "../../shared/types";
-import { createMockPlatform } from "../../test-utils/mock-platform";
 import type { Tab, TabsCommands, TabsEvents } from "../tabs/tabs.shared";
 import { TABS_ACTIVATE } from "../tabs/tabs.shared";
 import type { TabCustomizationDeps } from "./tab-customization.main";
@@ -24,7 +23,6 @@ import {
   TAB_CUSTOMIZATION_OPENED,
   TAB_CUSTOMIZATION_REMOVED,
   TAB_CUSTOMIZATION_SET_FIXED_ADDRESS_DISABLED,
-  TAB_CUSTOMIZATION_SET_NAVIGATION,
   TAB_CUSTOMIZATION_SET_TITLE,
   type TabCustomizationChangedEvent,
   type TabCustomizationCommands,
@@ -61,12 +59,10 @@ function setup() {
   tabs.set("ephemeral-1" as TabId, makeTab("ephemeral-1"));
   tabs.set("builtin-1" as TabId, makeTab("builtin-1", { builtIn: true, url: "app:settings" }));
 
-  const platform = createMockPlatform();
   const deps: TabCustomizationDeps = {
     commands,
     events,
     dataStore,
-    platform,
     getTab: (id) => tabs.get(id),
     isPinned: (id) => mockIsPinned(id),
   };
@@ -269,91 +265,6 @@ describe("tab-customization commands", () => {
       const collection = dataStore.collection("tab-customizations");
       const doc = await collection.findOne("tab-1");
       expect(doc).toBeUndefined();
-    });
-  });
-
-  describe("TAB_CUSTOMIZATION_SET_NAVIGATION", () => {
-    const navSettings = {
-      blockNavigate: { enabled: true, crossOriginOnly: true },
-      blockRedirect: { enabled: true, crossOriginOnly: false },
-      blockFrameNavigate: { enabled: false, crossOriginOnly: false },
-      blockNewTabs: true,
-      blockNewWindows: false,
-    };
-
-    it("sets navigation blocking rules and emits changed", async () => {
-      const { commands, events } = setup();
-      const listener = vi.fn();
-      events.on(TAB_CUSTOMIZATION_CHANGED, listener);
-
-      await commands.send(TAB_CUSTOMIZATION_SET_NAVIGATION, {
-        tabId: "tab-1" as TabId,
-        ...navSettings,
-      });
-
-      expect(listener).toHaveBeenCalledWith(
-        expect.objectContaining({
-          tabId: "tab-1",
-          customization: expect.objectContaining(navSettings),
-        }),
-      );
-    });
-
-    it("persists navigation settings to data store", async () => {
-      const { commands, dataStore } = setup();
-
-      await commands.send(TAB_CUSTOMIZATION_SET_NAVIGATION, {
-        tabId: "tab-1" as TabId,
-        ...navSettings,
-      });
-
-      const collection = dataStore.collection("tab-customizations");
-      const doc = await collection.findOne("tab-1");
-      expect(doc).toMatchObject({
-        id: "tab-1",
-        ...navSettings,
-      });
-    });
-
-    it("removes from data store when reset to defaults", async () => {
-      const { commands, dataStore } = setup();
-
-      await commands.send(TAB_CUSTOMIZATION_SET_NAVIGATION, {
-        tabId: "tab-1" as TabId,
-        ...navSettings,
-      });
-
-      await commands.send(TAB_CUSTOMIZATION_SET_NAVIGATION, {
-        tabId: "tab-1" as TabId,
-        blockNavigate: { enabled: false, crossOriginOnly: false },
-        blockRedirect: { enabled: false, crossOriginOnly: false },
-        blockFrameNavigate: { enabled: false, crossOriginOnly: false },
-        blockNewTabs: false,
-        blockNewWindows: false,
-      });
-
-      const collection = dataStore.collection("tab-customizations");
-      const doc = await collection.findOne("tab-1");
-      expect(doc).toBeUndefined();
-    });
-
-    it("preserves navigation settings when changing title", async () => {
-      const { commands } = setup();
-
-      await commands.send(TAB_CUSTOMIZATION_SET_NAVIGATION, {
-        tabId: "tab-1" as TabId,
-        ...navSettings,
-      });
-
-      await commands.send(TAB_CUSTOMIZATION_SET_TITLE, {
-        tabId: "tab-1" as TabId,
-        title: "Custom",
-      });
-
-      const state = await commands.send(TAB_CUSTOMIZATION_GET_STATE, {
-        tabId: "tab-1" as TabId,
-      });
-      expect(state).toMatchObject({ title: "Custom", ...navSettings });
     });
   });
 

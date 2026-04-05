@@ -12,14 +12,10 @@ import type { TabId } from "../../shared/types";
 import { LocalWebAppSettings } from "../local-web-app/local-web-app.renderer";
 import { useTabsStore } from "../tabs/tabs.store";
 import {
-  DEFAULT_NAVIGATION_BLOCK_RULE,
-  type NavigationBlockRule,
   TAB_CUSTOMIZATION_CLOSE,
   TAB_CUSTOMIZATION_GET_STATE,
   TAB_CUSTOMIZATION_SET_FIXED_ADDRESS_DISABLED,
-  TAB_CUSTOMIZATION_SET_NAVIGATION,
   TAB_CUSTOMIZATION_SET_TITLE,
-  type TabCustomization,
   type TabCustomizationCommands,
 } from "./tab-customization.shared";
 import { useTabCustomizationStore } from "./tab-customization.store";
@@ -29,7 +25,6 @@ type UsedCommands = Pick<
   | typeof TAB_CUSTOMIZATION_CLOSE
   | typeof TAB_CUSTOMIZATION_SET_TITLE
   | typeof TAB_CUSTOMIZATION_SET_FIXED_ADDRESS_DISABLED
-  | typeof TAB_CUSTOMIZATION_SET_NAVIGATION
 >;
 
 function sendCommand<K extends keyof UsedCommands>(name: K, payload: UsedCommands[K]["payload"]) {
@@ -38,7 +33,6 @@ function sendCommand<K extends keyof UsedCommands>(name: K, payload: UsedCommand
 
 const categories = [
   { id: "appearance", label: "Appearance" },
-  { id: "navigation", label: "Navigation" },
   { id: "local-web-app", label: "Local Web App" },
 ];
 
@@ -71,33 +65,6 @@ function ToggleButton({
       />
       {label}
     </button>
-  );
-}
-
-function NavigationRuleControl({
-  rule,
-  onToggle,
-  onToggleCrossOrigin,
-}: {
-  rule: NavigationBlockRule;
-  onToggle: () => void;
-  onToggleCrossOrigin: () => void;
-}) {
-  return (
-    <div className="flex items-center flex-wrap" style={{ gap: "0.5rem" }}>
-      <ToggleButton
-        enabled={rule.enabled}
-        onClick={onToggle}
-        label={rule.enabled ? "Blocking" : "Allowed"}
-      />
-      {rule.enabled && (
-        <ToggleButton
-          enabled={rule.crossOriginOnly}
-          onClick={onToggleCrossOrigin}
-          label={rule.crossOriginOnly ? "Cross-origin only" : "All navigation"}
-        />
-      )}
-    </div>
   );
 }
 
@@ -180,115 +147,6 @@ function AppearanceSettings({ tabId }: { tabId: TabId }) {
   );
 }
 
-function NavigationSettings({ tabId }: { tabId: TabId }) {
-  const customization = useTabCustomizationStore((s) => s.customizations.get(tabId));
-
-  const blockNavigate = customization?.blockNavigate ?? DEFAULT_NAVIGATION_BLOCK_RULE;
-  const blockRedirect = customization?.blockRedirect ?? DEFAULT_NAVIGATION_BLOCK_RULE;
-  const blockFrameNavigate = customization?.blockFrameNavigate ?? DEFAULT_NAVIGATION_BLOCK_RULE;
-  const blockNewTabs = customization?.blockNewTabs ?? false;
-  const blockNewWindows = customization?.blockNewWindows ?? false;
-
-  function sendNav(updates: Partial<TabCustomization>) {
-    sendCommand(TAB_CUSTOMIZATION_SET_NAVIGATION, {
-      tabId,
-      blockNavigate: updates.blockNavigate ?? blockNavigate,
-      blockRedirect: updates.blockRedirect ?? blockRedirect,
-      blockFrameNavigate: updates.blockFrameNavigate ?? blockFrameNavigate,
-      blockNewTabs: updates.blockNewTabs ?? blockNewTabs,
-      blockNewWindows: updates.blockNewWindows ?? blockNewWindows,
-    });
-  }
-
-  return (
-    <section id="tab-customization-navigation">
-      <h2 style={settingsCategoryHeadingStyle}>Navigation</h2>
-
-      <SettingItem
-        label="Block Page Navigation"
-        description="Prevent the page from navigating away via JavaScript or links (will-navigate)."
-      >
-        <NavigationRuleControl
-          rule={blockNavigate}
-          onToggle={() =>
-            sendNav({
-              blockNavigate: { ...blockNavigate, enabled: !blockNavigate.enabled },
-            })
-          }
-          onToggleCrossOrigin={() =>
-            sendNav({
-              blockNavigate: { ...blockNavigate, crossOriginOnly: !blockNavigate.crossOriginOnly },
-            })
-          }
-        />
-      </SettingItem>
-
-      <SettingItem
-        label="Block Redirects"
-        description="Prevent server-side redirects from changing the page URL (will-redirect)."
-      >
-        <NavigationRuleControl
-          rule={blockRedirect}
-          onToggle={() =>
-            sendNav({
-              blockRedirect: { ...blockRedirect, enabled: !blockRedirect.enabled },
-            })
-          }
-          onToggleCrossOrigin={() =>
-            sendNav({
-              blockRedirect: { ...blockRedirect, crossOriginOnly: !blockRedirect.crossOriginOnly },
-            })
-          }
-        />
-      </SettingItem>
-
-      <SettingItem
-        label="Block Frame Navigation"
-        description="Prevent iframes from navigating to new URLs (will-frame-navigate)."
-      >
-        <NavigationRuleControl
-          rule={blockFrameNavigate}
-          onToggle={() =>
-            sendNav({
-              blockFrameNavigate: { ...blockFrameNavigate, enabled: !blockFrameNavigate.enabled },
-            })
-          }
-          onToggleCrossOrigin={() =>
-            sendNav({
-              blockFrameNavigate: {
-                ...blockFrameNavigate,
-                crossOriginOnly: !blockFrameNavigate.crossOriginOnly,
-              },
-            })
-          }
-        />
-      </SettingItem>
-
-      <SettingItem
-        label="Block New Tabs"
-        description="Prevent the page from opening new tabs (e.g. target=&quot;_blank&quot; links)."
-      >
-        <ToggleButton
-          enabled={blockNewTabs}
-          onClick={() => sendNav({ blockNewTabs: !blockNewTabs })}
-          label={blockNewTabs ? "Blocking" : "Allowed"}
-        />
-      </SettingItem>
-
-      <SettingItem
-        label="Block New Windows"
-        description="Prevent the page from opening new windows (e.g. window.open)."
-      >
-        <ToggleButton
-          enabled={blockNewWindows}
-          onClick={() => sendNav({ blockNewWindows: !blockNewWindows })}
-          label={blockNewWindows ? "Blocking" : "Allowed"}
-        />
-      </SettingItem>
-    </section>
-  );
-}
-
 export default function TabCustomizationPage({ params }: BuiltInPageProps) {
   const tabId = (params.tabId ?? "") as TabId;
   const { scrollRef, activeCategory } = useScrollSpy("tab-customization");
@@ -331,7 +189,6 @@ export default function TabCustomizationPage({ params }: BuiltInPageProps) {
       activeCategory={activeCategory}
     >
       <AppearanceSettings tabId={tabId} />
-      <NavigationSettings tabId={tabId} />
       <LocalWebAppSettings tabId={tabId} />
 
       <div style={{ paddingTop: "1rem" }}>
