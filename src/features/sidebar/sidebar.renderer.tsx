@@ -330,7 +330,13 @@ export function SidebarPanel() {
               />
             )}
             <div className="flex-1 overflow-y-auto">
-              <div style={{ position: "relative", overflow: "hidden" }}>
+              <div
+                style={{
+                  position: "relative",
+                  overflow: "hidden",
+                  minHeight: wsTransition ? "100%" : undefined,
+                }}
+              >
                 {/* Exiting workspace tabs (slide out) */}
                 {wsTransition && prevTabs && (
                   <div
