@@ -2,6 +2,22 @@
 import { ipcRenderer, webFrame } from "electron";
 import { ZOOM_MAX, ZOOM_MIN, ZOOM_STEP } from "../features/zoom/zoom.shared";
 
+// Disable FedCM (Federated Credential Management) in the page context.
+// Electron doesn't implement the FedCM account-chooser UI for WebContentsView,
+// so the API hangs or fails silently. Removing it forces identity providers
+// (Google, etc.) to fall back to popup-based OAuth which we handle properly.
+webFrame.executeJavaScript(`
+  if (navigator.credentials) {
+    const origGet = navigator.credentials.get.bind(navigator.credentials);
+    navigator.credentials.get = function(options) {
+      if (options && options.identity) {
+        return Promise.reject(new DOMException("FedCM is not supported", "NotSupportedError"));
+      }
+      return origGet(options);
+    };
+  }
+`);
+
 // Capture Ctrl+wheel for zoom — the 'zoom-changed' webContents event
 // doesn't fire reliably in WebContentsView, so we handle zoom directly
 // via webFrame and notify the main process via IPC.

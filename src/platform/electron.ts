@@ -406,13 +406,23 @@ export class ElectronPlatform implements Platform {
 
     view.webContents.setWindowOpenHandler(({ url, disposition }) => {
       if (isAllowedUrl(url)) {
-        // Let registered callback handle it (sub-tabs, etc.)
+        // Let registered callback handle it (sub-tabs for links, etc.)
         if (this.windowOpenCallback?.(url, tabId, disposition)) {
           return { action: "deny" as const };
         }
-        // Fallback: navigate the current tab
-        view.webContents.loadURL(url);
-      } else if (this.protocolRequestCallback) {
+        // Fallback: open as a real popup window so window.opener works
+        // (needed for OAuth flows, payment windows, etc.)
+        const parent = this.getWin();
+        return {
+          action: "allow" as const,
+          overrideBrowserWindowOptions: {
+            parent,
+            autoHideMenuBar: true,
+            webPreferences: { sandbox: true, contextIsolation: true },
+          },
+        };
+      }
+      if (this.protocolRequestCallback) {
         try {
           const parsed = new URL(url);
           if (
@@ -430,6 +440,27 @@ export class ElectronPlatform implements Platform {
         }
       }
       return { action: "deny" as const };
+    });
+
+    // Secure popup windows created by the above handler — guard navigation
+    // and prevent nested popups from escaping to disallowed URLs.
+    view.webContents.on("did-create-window", (popupWin) => {
+      const wc = popupWin.webContents;
+
+      wc.setWindowOpenHandler(({ url: childUrl }) => {
+        if (isAllowedUrl(childUrl)) {
+          wc.loadURL(childUrl);
+        }
+        return { action: "deny" as const };
+      });
+
+      wc.on("will-navigate", (event, navUrl) => {
+        if (!isAllowedUrl(navUrl)) {
+          event.preventDefault();
+        }
+      });
+
+      this.hookWebContents(wc);
     });
 
     view.webContents.on("will-navigate", (event, navUrl) => {
@@ -1444,6 +1475,11 @@ export class ElectronPlatform implements Platform {
   }
 
   private installPermissionHandlers(ses: Electron.Session): void {
+    // Present as standard Chrome so sites like Google don't block OAuth
+    // flows due to detecting "Electron" in the user-agent string.
+    const ua = ses.getUserAgent();
+    ses.setUserAgent(ua.replace(/ Electron\/\S+/g, "").replace(/ \S+\/\S+(?= Chrome\/)/g, ""));
+
     ses.setPermissionRequestHandler((wc, permission, callback, details) => {
       if (!this.permissionRequestHandler) {
         callback(false);
