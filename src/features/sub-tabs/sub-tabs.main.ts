@@ -279,15 +279,21 @@ export default defineFeature<Deps>({
         return true;
       }
 
-      // All other dispositions → sub-tab
-      const windowId = getActiveWindowId();
-      if (!windowId) return false;
+      // target="_blank" link clicks → sub-tab
+      if (disposition === "foreground-tab") {
+        const windowId = getActiveWindowId();
+        if (!windowId) return false;
 
-      const parentTabId = resolveParent(sourceTabId, stacks);
-      commands
-        .send(SUB_TABS_OPEN, { parentTabId, url })
-        .catch(logError("sub-tabs", "open sub-tab from window-open"));
-      return true;
+        const parentTabId = resolveParent(sourceTabId, stacks);
+        commands
+          .send(SUB_TABS_OPEN, { parentTabId, url })
+          .catch(logError("sub-tabs", "open sub-tab from window-open"));
+        return true;
+      }
+
+      // window.open() calls (OAuth popups, payment windows, etc.) →
+      // fall through to create a real BrowserWindow so window.opener works
+      return false;
     });
 
     // ── Command handlers ───────────────────────────────────────────
