@@ -22,7 +22,10 @@ import {
 const WIN_ID = "win-1" as WindowId;
 const TAB_ID = "tab-1" as TabId;
 
-function setup(platformOverrides: Partial<Platform> = {}) {
+function setup(
+  platformOverrides: Partial<Platform> = {},
+  { getTabUrl }: { getTabUrl?: (tabId: TabId) => string | undefined } = {},
+) {
   const commands = new CommandBus<WindowChromeCommands>();
   const events = new EventBus<WindowChromeEvents>();
   const platform = createMockPlatform(platformOverrides);
@@ -32,6 +35,7 @@ function setup(platformOverrides: Partial<Platform> = {}) {
     platform,
     getActiveWindowId: () => WIN_ID as WindowId | undefined,
     getActiveTabId: () => TAB_ID as TabId | undefined,
+    getTabUrl: getTabUrl ?? (() => undefined),
   };
   feature.register(deps);
   return { commands, events, platform, deps };
@@ -77,19 +81,40 @@ describe("window-chrome commands", () => {
   });
 
   it("copy-address writes URL to clipboard", async () => {
-    const { commands, platform } = setup({
-      getTabUrl: vi.fn(() => "https://example.com"),
-    });
+    const { commands, platform } = setup({}, { getTabUrl: () => "https://example.com" });
     await commands.send(WINDOW_COPY_ADDRESS, undefined);
     expect(platform.writeClipboard).toHaveBeenCalledWith("https://example.com");
   });
 
   it("copy-address strips tracking params", async () => {
-    const { commands, platform } = setup({
-      getTabUrl: vi.fn(() => "https://example.com/page?q=test&utm_source=google&fbclid=abc"),
-    });
+    const { commands, platform } = setup(
+      {},
+      {
+        getTabUrl: () => "https://example.com/page?q=test&utm_source=google&fbclid=abc",
+      },
+    );
     await commands.send(WINDOW_COPY_ADDRESS, undefined);
     expect(platform.writeClipboard).toHaveBeenCalledWith("https://example.com/page?q=test");
+  });
+
+  it("copy-address extracts real URL from built-in PDF tab", async () => {
+    const pdfUrl = "https://example.com/doc.pdf";
+    const { commands, platform } = setup(
+      {},
+      { getTabUrl: () => `app:pdf-reader?url=${encodeURIComponent(pdfUrl)}` },
+    );
+    await commands.send(WINDOW_COPY_ADDRESS, undefined);
+    expect(platform.writeClipboard).toHaveBeenCalledWith(pdfUrl);
+  });
+
+  it("copy-address extracts real URL from local file PDF tab", async () => {
+    const fileUrl = "file:///home/user/doc.pdf";
+    const { commands, platform } = setup(
+      {},
+      { getTabUrl: () => `app:pdf-reader?url=${encodeURIComponent(fileUrl)}` },
+    );
+    await commands.send(WINDOW_COPY_ADDRESS, undefined);
+    expect(platform.writeClipboard).toHaveBeenCalledWith(fileUrl);
   });
 
   it("copy-address does nothing when no active tab", async () => {
@@ -102,6 +127,7 @@ describe("window-chrome commands", () => {
       platform,
       getActiveWindowId: () => WIN_ID,
       getActiveTabId: () => undefined,
+      getTabUrl: () => undefined,
     });
     await commands.send(WINDOW_COPY_ADDRESS, undefined);
     expect(platform.writeClipboard).not.toHaveBeenCalled();
@@ -117,6 +143,7 @@ describe("window-chrome commands", () => {
       platform,
       getActiveWindowId: () => undefined,
       getActiveTabId: () => undefined,
+      getTabUrl: () => undefined,
     });
     await commands.send(WINDOW_MINIMIZE, undefined);
     await commands.send(WINDOW_MAXIMIZE_RESTORE, undefined);
@@ -156,6 +183,36 @@ describe("feature.start()", () => {
     feature.start(deps);
 
     expect(listener).toHaveBeenCalledWith({ maximized: true });
+  });
+
+  it("registers F5 and Ctrl+R shortcuts for reload", () => {
+    const { platform, deps } = setup();
+    feature.start(deps);
+
+    expect(platform.registerShortcut).toHaveBeenCalledWith("F5", expect.any(Function));
+    expect(platform.registerLocalShortcut).toHaveBeenCalledWith("F5", expect.any(Function));
+    expect(platform.registerShortcut).toHaveBeenCalledWith(
+      "CommandOrControl+R",
+      expect.any(Function),
+    );
+    expect(platform.registerLocalShortcut).toHaveBeenCalledWith(
+      "CommandOrControl+R",
+      expect.any(Function),
+    );
+  });
+
+  it("F5 shortcut triggers reload of active tab", async () => {
+    const { platform, deps } = setup();
+    feature.start(deps);
+
+    const f5Call = vi
+      .mocked(platform.registerShortcut)
+      .mock.calls.find(([accel]) => accel === "F5");
+    f5Call?.[1]();
+    // Allow the command to propagate
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(platform.reload).toHaveBeenCalledWith(TAB_ID);
   });
 });
 

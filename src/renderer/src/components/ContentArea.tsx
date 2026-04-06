@@ -51,7 +51,7 @@ export function ContentArea() {
     const el = contentRef.current ?? mainRef.current;
     if (!el) return;
 
-    if (isBuiltIn || isCustomizing) {
+    if (!activeTabId || isBuiltIn || isCustomizing) {
       if (rafId.current !== null) {
         cancelAnimationFrame(rafId.current);
         rafId.current = null;
@@ -73,7 +73,7 @@ export function ContentArea() {
       observer.disconnect();
       window.removeEventListener("resize", reportBounds);
     };
-  }, [isBuiltIn, isCustomizing, terminalVisible]);
+  }, [activeTabId, isBuiltIn, isCustomizing, terminalVisible]);
 
   // Show terminal only for non-built-in, non-customizing tabs
   const showTerminal = terminalVisible && !isBuiltIn && !isCustomizing && !!activeTabId;

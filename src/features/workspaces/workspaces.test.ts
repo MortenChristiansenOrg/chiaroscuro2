@@ -118,6 +118,7 @@ describe("workspaces commands", () => {
 
   describe("WORKSPACES_SWITCH", () => {
     it("hides all tabs, emits SWITCHED", async () => {
+      vi.useFakeTimers();
       const { commands, events, platform, setActiveWsId } = setup();
       const ws1Id = await commands.send(WORKSPACES_CREATE, {
         name: "Work",
@@ -136,6 +137,9 @@ describe("workspaces commands", () => {
 
       await commands.send(WORKSPACES_SWITCH, { workspaceId: ws2Id });
 
+      // hideAllTabs is deferred for empty workspaces to let the renderer
+      // update the background before the WebContentsView is removed
+      vi.runAllTimers();
       expect(platform.hideAllTabs).toHaveBeenCalled();
       expect(switched).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -144,6 +148,7 @@ describe("workspaces commands", () => {
           workspaceName: "Personal",
         }),
       );
+      vi.useRealTimers();
     });
 
     it("no-ops when switching to same workspace", async () => {

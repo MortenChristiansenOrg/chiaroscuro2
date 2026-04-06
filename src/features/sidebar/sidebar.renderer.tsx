@@ -306,6 +306,19 @@ export function SidebarPanel() {
             onDragStart={() => setIsDragging(true)}
             onDragEnd={handleDragEnd}
             onContextMenu={handleSidebarContextMenu}
+            onMouseDown={(e) => {
+              // Prevent sidebar elements from receiving focus on click.
+              // Allow inputs (workspace editor) and draggable elements to keep defaults.
+              const target = e.target as HTMLElement;
+              if (
+                target instanceof HTMLInputElement ||
+                target instanceof HTMLTextAreaElement ||
+                target.closest("[draggable]")
+              ) {
+                return;
+              }
+              e.preventDefault();
+            }}
           >
             <div className="sr-only" aria-live="polite" aria-atomic="true">
               {announcement}
@@ -320,7 +333,13 @@ export function SidebarPanel() {
               />
             )}
             <div className="flex-1 overflow-y-auto">
-              <div style={{ position: "relative", overflow: "hidden" }}>
+              <div
+                style={{
+                  position: "relative",
+                  overflow: "hidden",
+                  minHeight: wsTransition ? "100%" : undefined,
+                }}
+              >
                 {/* Exiting workspace tabs (slide out) */}
                 {wsTransition && prevTabs && (
                   <div
