@@ -78,12 +78,22 @@ interface Deps {
   platform: Platform;
   getActiveWindowId: () => WindowId | undefined;
   getActiveTabId: () => TabId | undefined;
+  /** Return the URL for a tab. Used for copy-address (falls back to tab store for built-in pages). */
+  getTabUrl: (tabId: TabId) => string | undefined;
   /** Optional handler for back navigation on special tabs (e.g. PDF). Returns true if handled. */
   handlePdfBack?: (tabId: TabId) => boolean;
 }
 
 export default defineFeature<Deps>({
-  register({ commands, events, platform, getActiveWindowId, getActiveTabId, handlePdfBack }) {
+  register({
+    commands,
+    events,
+    platform,
+    getActiveWindowId,
+    getActiveTabId,
+    getTabUrl,
+    handlePdfBack,
+  }) {
     commands.handle(WINDOW_MINIMIZE, async () => {
       const windowId = getActiveWindowId();
       if (windowId) await platform.minimizeWindow(windowId);
@@ -109,7 +119,7 @@ export default defineFeature<Deps>({
     commands.handle(WINDOW_COPY_ADDRESS, () => {
       const tabId = getActiveTabId();
       if (!tabId) return;
-      let url = platform.getTabUrl(tabId);
+      let url = getTabUrl(tabId);
       if (url?.startsWith("app:pdf-reader")) {
         const qIdx = url.indexOf("?");
         if (qIdx !== -1) {

@@ -314,9 +314,12 @@ if (gotLock) {
       eventBus: events as unknown as EventBus<EventRegistry>,
     });
 
+    const getTabUrl = (tabId: TabId) => platform.getTabUrl(tabId) ?? getTab(tabId)?.url;
+
     appState.register(deps);
     windowChrome.register({
       ...deps,
+      getTabUrl,
       handlePdfBack: (tabId) => {
         const sourceUrl = getPdfSourceUrl(tabId);
         if (!sourceUrl) return false;
@@ -396,7 +399,7 @@ if (gotLock) {
     ipcMain.once("renderer:ready", async () => {
       appState.start?.(deps);
       await workspaces.start?.({ ...deps, getTabsForWorkspace });
-      windowChrome.start?.(deps);
+      windowChrome.start?.({ ...deps, getTabUrl });
       await installer.start?.(deps);
       await startTabs({
         ...deps,
