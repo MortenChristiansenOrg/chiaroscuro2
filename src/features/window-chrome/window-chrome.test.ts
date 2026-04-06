@@ -184,6 +184,36 @@ describe("feature.start()", () => {
 
     expect(listener).toHaveBeenCalledWith({ maximized: true });
   });
+
+  it("registers F5 and Ctrl+R shortcuts for reload", () => {
+    const { platform, deps } = setup();
+    feature.start(deps);
+
+    expect(platform.registerShortcut).toHaveBeenCalledWith("F5", expect.any(Function));
+    expect(platform.registerLocalShortcut).toHaveBeenCalledWith("F5", expect.any(Function));
+    expect(platform.registerShortcut).toHaveBeenCalledWith(
+      "CommandOrControl+R",
+      expect.any(Function),
+    );
+    expect(platform.registerLocalShortcut).toHaveBeenCalledWith(
+      "CommandOrControl+R",
+      expect.any(Function),
+    );
+  });
+
+  it("F5 shortcut triggers reload of active tab", async () => {
+    const { platform, deps } = setup();
+    feature.start(deps);
+
+    const f5Call = vi
+      .mocked(platform.registerShortcut)
+      .mock.calls.find(([accel]) => accel === "F5");
+    f5Call?.[1]();
+    // Allow the command to propagate
+    await new Promise((r) => setTimeout(r, 0));
+
+    expect(platform.reload).toHaveBeenCalledWith(TAB_ID);
+  });
 });
 
 describe("stripTrackingParams", () => {

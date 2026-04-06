@@ -150,12 +150,18 @@ export default defineFeature<Deps>({
     });
   },
 
-  start({ events, platform, getActiveWindowId }) {
+  start({ commands, events, platform, getActiveWindowId }) {
     const windowId = getActiveWindowId();
     if (windowId) {
       events.emit(WINDOW_MAXIMIZED_CHANGED, {
         maximized: platform.isWindowMaximized(windowId),
       });
     }
+
+    const reload = () => commands.send(WINDOW_RELOAD, undefined);
+    platform.registerShortcut("F5", reload);
+    platform.registerLocalShortcut("F5", reload);
+    platform.registerShortcut("CommandOrControl+R", reload);
+    platform.registerLocalShortcut("CommandOrControl+R", reload);
   },
 });
