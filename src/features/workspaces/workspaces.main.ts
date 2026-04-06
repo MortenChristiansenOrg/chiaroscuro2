@@ -111,6 +111,8 @@ export default defineFeature<Deps>({
       }
     });
 
+    let pendingHideAllTabsTimer: ReturnType<typeof setTimeout> | null = null;
+
     commands.handle(WORKSPACES_SWITCH, async (payload) => {
       const { workspaceId } = payload;
       const ws = workspaces.get(workspaceId);
@@ -118,6 +120,11 @@ export default defineFeature<Deps>({
 
       const previousWsId = getActiveWorkspaceId() ?? null;
       if (previousWsId === workspaceId) return;
+
+      if (pendingHideAllTabsTimer !== null) {
+        clearTimeout(pendingHideAllTabsTimer);
+        pendingHideAllTabsTimer = null;
+      }
 
       // Save current ws active tab
       if (previousWsId) {
@@ -142,7 +149,10 @@ export default defineFeature<Deps>({
         // Without this delay, hideAllTabs removes the WCV immediately, revealing
         // the white content-bg before React re-renders with the empty-state bg.
         events.emit(TABS_ACTIVATED, { tabId: null, previousTabId });
-        setTimeout(() => platform.hideAllTabs(), 50);
+        pendingHideAllTabsTimer = setTimeout(() => {
+          platform.hideAllTabs();
+          pendingHideAllTabsTimer = null;
+        }, 50);
       }
 
       events.emit(WORKSPACES_SWITCHED, {
