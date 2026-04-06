@@ -306,6 +306,16 @@ export function SidebarPanel() {
             onDragStart={() => setIsDragging(true)}
             onDragEnd={handleDragEnd}
             onContextMenu={handleSidebarContextMenu}
+            onMouseDown={(e) => {
+              // Prevent sidebar elements from receiving focus on click.
+              // Allow inputs (workspace editor) to still receive focus.
+              if (
+                !(e.target instanceof HTMLInputElement) &&
+                !(e.target instanceof HTMLTextAreaElement)
+              ) {
+                e.preventDefault();
+              }
+            }}
           >
             <div className="sr-only" aria-live="polite" aria-atomic="true">
               {announcement}
