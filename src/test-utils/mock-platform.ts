@@ -59,7 +59,7 @@ export function createMockPlatform(overrides: Partial<Platform> = {}): Platform 
     findInPage: vi.fn(),
     stopFindInPage: vi.fn(),
     insertCSS: vi.fn(async () => "css-key"),
-    removeInsertedCSS: vi.fn(),
+    removeInsertedCSS: vi.fn(async () => {}),
     onWindowOpen: vi.fn(() => () => {}),
     onNavigationBlock: vi.fn(() => () => {}),
     onProtocolRequest: vi.fn(() => () => {}),

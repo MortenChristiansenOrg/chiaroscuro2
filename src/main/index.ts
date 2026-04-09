@@ -67,6 +67,8 @@ import type {
   PinnedTabsCommands,
   PinnedTabsEvents,
 } from "../features/pinned-tabs/pinned-tabs.shared";
+import pip from "../features/pip/pip.main";
+import type { PipCommands, PipEvents } from "../features/pip/pip.shared";
 import settings from "../features/settings/settings.main";
 import {
   SETTINGS_GET,
@@ -178,6 +180,7 @@ type AllCommands = MergeRegistries<
     ExternalLinkCommands,
     PermissionsCommands,
     PdfReaderCommands,
+    PipCommands,
   ]
 >;
 
@@ -209,6 +212,7 @@ type AllEvents = MergeRegistries<
     ExternalLinkEvents,
     PermissionsEvents,
     PdfReaderEvents,
+    PipEvents,
   ]
 >;
 
@@ -364,6 +368,7 @@ if (gotLock) {
     externalLink.register(deps);
     permissions.register(deps);
     pdfReader.register(deps);
+    pip.register(deps);
 
     // Register debug state providers
     registerDebugState("tabs", () => {
