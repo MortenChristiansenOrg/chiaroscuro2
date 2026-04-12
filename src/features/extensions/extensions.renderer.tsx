@@ -15,6 +15,14 @@ import {
   useExtensionsStore,
 } from "./extensions.store";
 
+// ── Formatting helpers ─────────────────────────────────────────
+
+function formatUserCount(count: number): string {
+  if (count >= 1_000_000) return `${Math.round(count / 1_000_000)}M+`;
+  if (count >= 1_000) return `${Math.round(count / 1_000)}K+`;
+  return `${count}`;
+}
+
 // ── Extension Icon (with fallback) ─────────────────────────────
 
 function ExtensionIcon({ url }: { url: string }) {
@@ -107,6 +115,47 @@ function SearchResultCard({
             {result.description}
           </div>
         )}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "0.625rem",
+            marginTop: "0.25rem",
+            fontSize: "var(--text-xs)",
+            color: "var(--muted-foreground)",
+          }}
+        >
+          {result.featured && (
+            <span
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "0.25rem",
+                color: "var(--primary)",
+              }}
+            >
+              <Icon name="certificate" style="solid" css={{ fontSize: "0.625rem" }} />
+              Featured
+            </span>
+          )}
+          {result.rating != null && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
+              <Icon name="star" style="solid" css={{ fontSize: "0.5625rem", color: "#f59e0b" }} />
+              {result.rating.toFixed(1)}
+              {result.ratingCount != null && (
+                <span style={{ color: "var(--muted-foreground)" }}>
+                  ({formatUserCount(result.ratingCount)})
+                </span>
+              )}
+            </span>
+          )}
+          {result.userCount != null && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
+              <Icon name="users" style="solid" css={{ fontSize: "0.5625rem" }} />
+              {formatUserCount(result.userCount)} users
+            </span>
+          )}
+        </div>
         {installError && (
           <div
             style={{

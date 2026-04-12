@@ -159,7 +159,11 @@ function parseStructuredData(html: string): CWSSearchResult[] {
     const id = entry[0];
     const iconUrl = entry[1];
     const name = entry[2];
+    const rating = entry[3];
+    const ratingCount = entry[4];
     const description = entry[6];
+    const featured = entry[8];
+    const userCount = entry[14];
 
     if (typeof id !== "string" || !/^[a-z]{32}$/.test(id)) continue;
 
@@ -168,6 +172,10 @@ function parseStructuredData(html: string): CWSSearchResult[] {
       name: typeof name === "string" ? name : id,
       description: typeof description === "string" ? description : "",
       iconUrl: typeof iconUrl === "string" ? iconUrl : "",
+      featured: featured === 1,
+      rating: typeof rating === "number" ? rating : null,
+      ratingCount: typeof ratingCount === "number" ? ratingCount : null,
+      userCount: typeof userCount === "number" ? userCount : null,
     });
   }
 
@@ -197,7 +205,16 @@ function parseFallback(html: string): CWSSearchResult[] {
       .map((w) => (w.length > 0 ? w.charAt(0).toUpperCase() + w.slice(1) : w))
       .join(" ");
 
-    results.push({ id, name, description: "", iconUrl: "" });
+    results.push({
+      id,
+      name,
+      description: "",
+      iconUrl: "",
+      featured: false,
+      rating: null,
+      ratingCount: null,
+      userCount: null,
+    });
   }
 
   return results;

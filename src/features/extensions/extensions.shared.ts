@@ -25,6 +25,14 @@ export interface CWSSearchResult {
   name: string;
   description: string;
   iconUrl: string;
+  /** Whether this extension is "Featured" on CWS (manually reviewed by Chrome team). */
+  featured: boolean;
+  /** Average star rating (0–5), or null if unrated. */
+  rating: number | null;
+  /** Number of ratings, or null if unrated. */
+  ratingCount: number | null;
+  /** Approximate user count (e.g. 6000000), or null if unknown. */
+  userCount: number | null;
 }
 
 export interface ExtensionsSearchPayload {
