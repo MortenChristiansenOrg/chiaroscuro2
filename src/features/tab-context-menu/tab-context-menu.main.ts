@@ -63,6 +63,16 @@ function getSearchUrl(provider: SearchProvider, query: string): string {
   return provider.urlTemplate.replace("{query}", encodeURIComponent(query));
 }
 
+const MAX_URL_DISPLAY_LENGTH = 50;
+
+function formatUrlForDisplay(url: string): string {
+  let display = url.replace(/^https?:\/\//, "").replace(/\/$/, "");
+  if (display.length > MAX_URL_DISPLAY_LENGTH) {
+    display = `${display.slice(0, MAX_URL_DISPLAY_LENGTH - 1)}\u2026`;
+  }
+  return display;
+}
+
 export default defineFeature<Deps>({
   register(deps) {
     const { commands, events, platform } = deps;
@@ -154,7 +164,7 @@ export default defineFeature<Deps>({
       // Link context
       if (params.linkURL) {
         items.push({
-          label: "Copy link",
+          label: `Copy link \u2014 ${formatUrlForDisplay(params.linkURL)}`,
           icon: "copy",
           action: () => {
             commands
