@@ -6,6 +6,7 @@ import { defineFeature } from "../../shared/define-feature";
 import { featureState } from "../../shared/feature-state";
 import { logError } from "../../shared/log";
 import type { TabId, WindowId, WorkspaceId } from "../../shared/types";
+import { isPinned } from "../pinned-tabs/pinned-tabs.main";
 import type { Tab, TabsCommands, TabsEvents } from "../tabs/tabs.shared";
 import {
   TABS_ACTIVATE,
@@ -126,19 +127,24 @@ export default defineFeature<Deps>({
         pendingHideAllTabsTimer = null;
       }
 
-      // Save current ws active tab
-      if (previousWsId) {
+      const activeTabId = getActiveTabId() ?? null;
+      const activePinned = activeTabId ? isPinned(activeTabId) : false;
+
+      // Save current ws active tab (skip pinned tabs — they're global)
+      if (previousWsId && !activePinned) {
         const prevWs = workspaces.get(previousWsId);
         if (prevWs) {
-          prevWs.activeTabId = getActiveTabId() ?? null;
+          prevWs.activeTabId = activeTabId;
         }
       }
 
       // Switch
       setActiveWorkspaceId(workspaceId);
 
-      // Activate new ws's tab
-      if (ws.activeTabId) {
+      // If a pinned tab is active, keep it — pinned tabs span all workspaces
+      if (activePinned) {
+        // nothing to do — the pinned tab stays shown
+      } else if (ws.activeTabId) {
         // TABS_ACTIVATE hides the previous active tab and shows the new one
         await commands.send(TABS_ACTIVATE, { tabId: ws.activeTabId });
       } else {

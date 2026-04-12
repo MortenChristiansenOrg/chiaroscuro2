@@ -10,6 +10,12 @@ vi.mock("../tabs/tabs.main", () => ({
   getTabsForWorkspace: vi.fn(() => []),
 }));
 
+// Mock pinned-tabs.main
+vi.mock("../pinned-tabs/pinned-tabs.main", () => ({
+  isPinned: vi.fn(() => false),
+}));
+
+import { isPinned } from "../pinned-tabs/pinned-tabs.main";
 import { getTabsForWorkspace } from "../tabs/tabs.main";
 import {
   TABS_ACTIVATE,
@@ -148,6 +154,37 @@ describe("workspaces commands", () => {
           workspaceName: "Personal",
         }),
       );
+      vi.useRealTimers();
+    });
+
+    it("keeps pinned tab active when switching workspaces", async () => {
+      vi.useFakeTimers();
+      const { commands, events, platform, setActiveTabId, setActiveWsId } = setup();
+      const ws1Id = await commands.send(WORKSPACES_CREATE, {
+        name: "Work",
+        color: "blue",
+        icon: "W",
+      });
+      const ws2Id = await commands.send(WORKSPACES_CREATE, {
+        name: "Personal",
+        color: "red",
+        icon: "P",
+      });
+      setActiveWsId(ws1Id);
+      setActiveTabId("pinned-t1" as TabId);
+      (isPinned as ReturnType<typeof vi.fn>).mockReturnValue(true);
+
+      const activated = vi.fn();
+      events.on(TABS_ACTIVATED, activated);
+
+      await commands.send(WORKSPACES_SWITCH, { workspaceId: ws2Id });
+      vi.runAllTimers();
+
+      // Should NOT hide tabs or deactivate — the pinned tab stays visible
+      expect(platform.hideAllTabs).not.toHaveBeenCalled();
+      expect(activated).not.toHaveBeenCalled();
+
+      (isPinned as ReturnType<typeof vi.fn>).mockReturnValue(false);
       vi.useRealTimers();
     });
 
