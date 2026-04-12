@@ -1521,10 +1521,10 @@ export class ElectronPlatform implements Platform {
     view.webContents.downloadURL(url);
   }
 
-  async executeJavaScript(tabId: TabId, code: string): Promise<unknown> {
+  async executeJavaScript(tabId: TabId, code: string, userGesture?: boolean): Promise<unknown> {
     const view = this.views.get(tabId);
     if (!view) return undefined;
-    return view.webContents.executeJavaScript(code);
+    return view.webContents.executeJavaScript(code, userGesture);
   }
 
   // ── Permissions ────────────────────────────────────────────────

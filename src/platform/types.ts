@@ -186,5 +186,5 @@ export interface Platform {
   /** Trigger a download of the given URL in the tab's session. */
   downloadUrl(tabId: TabId, url: string): void;
   /** Execute JavaScript in the tab's webContents and return the result. */
-  executeJavaScript(tabId: TabId, code: string): Promise<unknown>;
+  executeJavaScript(tabId: TabId, code: string, userGesture?: boolean): Promise<unknown>;
 }

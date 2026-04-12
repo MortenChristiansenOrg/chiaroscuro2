@@ -198,4 +198,10 @@ export const routes: Route[] = [
     group: "Components",
     component: lazy(() => import("./pages/components/pdf-viewer.mdx")),
   },
+  {
+    path: "/components/pip-player",
+    title: "PiP Player",
+    group: "Components",
+    component: lazy(() => import("./pages/components/pip-player.mdx")),
+  },
 ];
