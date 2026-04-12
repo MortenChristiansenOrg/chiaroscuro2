@@ -227,12 +227,31 @@ describe("tab-context-menu", () => {
       commands.unhandle?.(CONTEXT_MENU_SHOW);
       commands.handle(CONTEXT_MENU_SHOW, async (payload) => {
         expect(payload.items).toHaveLength(1);
-        expect(payload.items[0]).toEqual({ label: "Copy link", icon: "copy" });
+        expect(payload.items[0]).toEqual({
+          label: "Copy link \u2014 example.com",
+          icon: "copy",
+        });
         return -1;
       });
 
       emitTabCreated(events);
       await triggerContextMenu(tabEventCallbacks, { linkURL: "https://example.com" });
+    });
+
+    it("truncates long URLs in the label", async () => {
+      const { events, commands, tabEventCallbacks } = setup();
+      commands.unhandle?.(CONTEXT_MENU_SHOW);
+      const longUrl =
+        "https://example.com/very/long/path/that/exceeds/the/maximum/display/length/for/urls";
+      commands.handle(CONTEXT_MENU_SHOW, async (payload) => {
+        const label = payload.items[0]?.label ?? "";
+        expect(label).toMatch(/^Copy link \u2014 .+\u2026$/);
+        expect(label.length).toBeLessThanOrEqual("Copy link \u2014 ".length + 50);
+        return -1;
+      });
+
+      emitTabCreated(events);
+      await triggerContextMenu(tabEventCallbacks, { linkURL: longUrl });
     });
 
     it("copies link URL when selected", async () => {
@@ -309,7 +328,7 @@ describe("tab-context-menu", () => {
         expect(payload.items.map((i: { label: string }) => i.label)).toEqual([
           "Copy",
           "Search with Google",
-          "Copy link",
+          "Copy link \u2014 example.com",
           "Copy image",
           "Download image",
         ]);
