@@ -32,6 +32,11 @@ import domainCss from "../features/domain-css/domain-css.main";
 import type { DomainCssCommands, DomainCssEvents } from "../features/domain-css/domain-css.shared";
 import downloads from "../features/downloads/downloads.main";
 import type { DownloadsCommands, DownloadsEvents } from "../features/downloads/downloads.shared";
+import extensions from "../features/extensions/extensions.main";
+import type {
+  ExtensionsCommands,
+  ExtensionsEvents,
+} from "../features/extensions/extensions.shared";
 import externalLink, { setupExternalLink } from "../features/external-link/external-link.main";
 import type {
   ExternalLinkCommands,
@@ -178,6 +183,7 @@ type AllCommands = MergeRegistries<
     ExternalLinkCommands,
     PermissionsCommands,
     PdfReaderCommands,
+    ExtensionsCommands,
   ]
 >;
 
@@ -209,6 +215,7 @@ type AllEvents = MergeRegistries<
     ExternalLinkEvents,
     PermissionsEvents,
     PdfReaderEvents,
+    ExtensionsEvents,
   ]
 >;
 
@@ -364,6 +371,7 @@ if (gotLock) {
     externalLink.register(deps);
     permissions.register(deps);
     pdfReader.register(deps);
+    extensions.register(deps);
 
     // Register debug state providers
     registerDebugState("tabs", () => {
@@ -420,6 +428,7 @@ if (gotLock) {
       await startLocalWebApp(deps);
       await externalLink.start?.(deps);
       await permissions.start?.(deps);
+      await extensions.start?.(deps);
     });
 
     const win = createWindow(appStateData.windowBounds);

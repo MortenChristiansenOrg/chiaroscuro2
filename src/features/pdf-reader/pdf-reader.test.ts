@@ -208,7 +208,7 @@ describe("pdf-reader commands", () => {
       expect(closeSpy).toHaveBeenCalledWith({ tabId: "tab-1" });
       expect(createSpy).toHaveBeenCalledWith(
         expect.objectContaining({
-          url: expect.stringContaining("app:pdf-reader?url="),
+          url: expect.stringContaining("/pdf-reader?url="),
         }),
       );
     });
@@ -220,7 +220,7 @@ describe("pdf-reader commands", () => {
         tab: {
           id: "tab-2" as TabId,
           workspaceId: "ws-1" as WorkspaceId,
-          url: "app:pdf-reader?url=test.pdf",
+          url: "/pdf-reader?url=test.pdf",
           title: "PDF",
           favicon: "",
           loading: false,

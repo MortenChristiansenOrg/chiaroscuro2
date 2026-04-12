@@ -56,7 +56,7 @@ export default defineFeature<Deps>({
     });
 
     commands.handle(SETTINGS_OPEN, async () => {
-      await settingsTab.openOrActivate("app:settings");
+      await settingsTab.openOrActivate("/settings");
     });
 
     commands.handle(SETTINGS_GET, async () => {

@@ -1,10 +1,10 @@
 import { registerFeature } from "../../renderer/src/Shell";
 import { registerBuiltInPage } from "../../renderer/src/components/BuiltInPage";
-import { subscribeToEvents } from "./domain-css.store";
+import { subscribeToEvents } from "./extensions.store";
 
-registerBuiltInPage("/domain-settings", () => import("./domain-settings-page"));
+registerBuiltInPage("/extensions", () => import("./extensions.renderer"));
 
 registerFeature({
-  name: "domain-css",
+  name: "extensions",
   subscribeToEvents,
 });

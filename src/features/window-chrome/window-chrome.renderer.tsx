@@ -116,7 +116,7 @@ export function UrlPill({ hidden }: { hidden?: boolean }) {
   let displayUrl = url;
   let hostname = "";
   let isWebUrl = false;
-  if (url.startsWith("app:pdf-reader")) {
+  if (url.startsWith("/pdf-reader")) {
     const qIdx = url.indexOf("?");
     if (qIdx !== -1) {
       const params = new URLSearchParams(url.slice(qIdx + 1));
@@ -143,7 +143,7 @@ export function UrlPill({ hidden }: { hidden?: boolean }) {
         }
       }
     }
-  } else if (url.startsWith("app:domain-settings")) {
+  } else if (url.startsWith("/domain-settings")) {
     const qIdx = url.indexOf("?");
     if (qIdx !== -1) {
       const params = new URLSearchParams(url.slice(qIdx + 1));

@@ -187,4 +187,16 @@ export interface Platform {
   downloadUrl(tabId: TabId, url: string): void;
   /** Execute JavaScript in the tab's webContents and return the result. */
   executeJavaScript(tabId: TabId, code: string): Promise<unknown>;
+
+  // Chrome extensions
+  /** Load an unpacked Chrome extension from a directory path. */
+  loadExtension(
+    extensionPath: string,
+  ): Promise<{ id: string; name: string; version: string; path: string }>;
+  /** Remove a loaded Chrome extension by its ID. */
+  removeExtension(extensionId: string): void;
+  /** Get all currently loaded Chrome extensions. */
+  getAllExtensions(): Array<{ id: string; name: string; version: string; path: string }>;
+  /** Get the app's user data directory path. */
+  getUserDataPath(): string;
 }

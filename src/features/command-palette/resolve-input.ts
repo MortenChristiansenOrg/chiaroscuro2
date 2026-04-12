@@ -66,18 +66,16 @@ export const DEFAULT_CONFIG: ProviderConfig = {
 // ── Built-in pages ──────────────────────────────────────────────
 
 export interface BuiltInPage {
-  route: string; // e.g. "/settings"
-  url: string; // e.g. "app:settings"
+  route: string; // e.g. "/settings" — also used as the tab URL
   title: string; // e.g. "Settings"
 }
 
 const builtInPages: BuiltInPage[] = [
-  { route: "/settings", title: "Settings", url: "app:settings" },
+  { route: "/settings", title: "Settings" },
+  { route: "/extensions", title: "Extensions" },
 ];
 
-const builtInRoutes: Record<string, string> = Object.fromEntries(
-  builtInPages.map((p) => [p.route, p.url]),
-);
+const builtInRouteSet = new Set(builtInPages.map((p) => p.route));
 
 export function getBuiltInPages(): BuiltInPage[] {
   return builtInPages;
@@ -105,8 +103,7 @@ export function resolveInputDetailed(
       DEFAULT_PROVIDERS[0]) as SearchProvider;
 
   // Built-in page route
-  const builtInUrl = builtInRoutes[trimmed];
-  if (builtInUrl) return { type: "url", url: builtInUrl };
+  if (builtInRouteSet.has(trimmed)) return { type: "url", url: trimmed };
 
   // Bang at start: !g query
   const bangStartMatch = trimmed.match(/^(![\w]+)\s+(.+)/);

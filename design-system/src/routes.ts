@@ -198,4 +198,10 @@ export const routes: Route[] = [
     group: "Components",
     component: lazy(() => import("./pages/components/pdf-viewer.mdx")),
   },
+  {
+    path: "/components/extensions-page",
+    title: "Extensions Page",
+    group: "Components",
+    component: lazy(() => import("./pages/components/extensions-page.mdx")),
+  },
 ];

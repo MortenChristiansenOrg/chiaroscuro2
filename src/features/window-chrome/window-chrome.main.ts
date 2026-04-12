@@ -120,7 +120,7 @@ export default defineFeature<Deps>({
       const tabId = getActiveTabId();
       if (!tabId) return;
       let url = getTabUrl(tabId);
-      if (url?.startsWith("app:pdf-reader")) {
+      if (url?.startsWith("/pdf-reader")) {
         const qIdx = url.indexOf("?");
         if (qIdx !== -1) {
           const params = new URLSearchParams(url.slice(qIdx + 1));

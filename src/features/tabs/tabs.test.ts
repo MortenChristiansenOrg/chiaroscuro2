@@ -541,7 +541,7 @@ describe("start()", () => {
     await tabsColl.insert({
       id: "builtin-1",
       workspaceId: WS_ID,
-      url: "app:pdf-reader?url=file%3A%2F%2F%2Fhome%2Fuser%2Fdoc.pdf",
+      url: "/pdf-reader?url=file%3A%2F%2F%2Fhome%2Fuser%2Fdoc.pdf",
       title: "doc",
       favicon: "",
       bookmarked: false,
@@ -608,22 +608,22 @@ describe("start()", () => {
     const pdfTab = emitted?.tabs.find((t: Tab) => t.id === ("builtin-1" as TabId));
     expect(pdfTab).toBeDefined();
     expect(pdfTab?.builtIn).toBe(true);
-    expect(pdfTab?.url).toContain("app:pdf-reader");
+    expect(pdfTab?.url).toContain("/pdf-reader");
   });
 
   it("persists PDF reader tabs", async () => {
     const { commands, events, dataStore } = setup();
     const tabsColl = dataStore.collection("tabs");
 
-    // Create a PDF reader tab (app: URL → built-in)
+    // Create a PDF reader tab (built-in page)
     await commands.send(TABS_CREATE, {
-      url: "app:pdf-reader?url=file%3A%2F%2F%2Fhome%2Fuser%2Fdoc.pdf",
+      url: "/pdf-reader?url=file%3A%2F%2F%2Fhome%2Fuser%2Fdoc.pdf",
     });
 
     // Should be persisted despite being built-in
     const persisted = await tabsColl.findMany({});
     expect(persisted).toHaveLength(1);
-    expect(persisted[0]?.url).toContain("app:pdf-reader");
+    expect(persisted[0]?.url).toContain("/pdf-reader");
   });
 
   it("removes persisted PDF reader tab on close", async () => {
@@ -631,7 +631,7 @@ describe("start()", () => {
     const tabsColl = dataStore.collection("tabs");
 
     const tabId = await commands.send(TABS_CREATE, {
-      url: "app:pdf-reader?url=file%3A%2F%2F%2Fhome%2Fuser%2Fdoc.pdf",
+      url: "/pdf-reader?url=file%3A%2F%2F%2Fhome%2Fuser%2Fdoc.pdf",
     });
     expect(await tabsColl.findMany({})).toHaveLength(1);
 

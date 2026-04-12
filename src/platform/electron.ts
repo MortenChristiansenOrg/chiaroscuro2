@@ -1722,4 +1722,30 @@ export class ElectronPlatform implements Platform {
     const result = win ? await dialog.showMessageBox(win, opts) : await dialog.showMessageBox(opts);
     return result.response === 1;
   }
+
+  // ── Chrome extensions ─────────────────────────────────────────
+
+  async loadExtension(
+    extensionPath: string,
+  ): Promise<{ id: string; name: string; version: string; path: string }> {
+    const ext = await session.defaultSession.loadExtension(extensionPath);
+    return { id: ext.id, name: ext.name, version: ext.version, path: ext.path };
+  }
+
+  removeExtension(extensionId: string): void {
+    session.defaultSession.removeExtension(extensionId);
+  }
+
+  getAllExtensions(): Array<{ id: string; name: string; version: string; path: string }> {
+    return session.defaultSession.getAllExtensions().map((ext) => ({
+      id: ext.id,
+      name: ext.name,
+      version: ext.version,
+      path: ext.path,
+    }));
+  }
+
+  getUserDataPath(): string {
+    return app.getPath("userData");
+  }
 }
