@@ -82,8 +82,13 @@ describe("pip feature", () => {
       events.emit("tabs:activated", { tabId: TAB_B, previousTabId: TAB_A });
       await flush();
 
-      // Should have called detect + enter PiP JS
+      // Should have called detect + enter PiP JS with userGesture=true
       expect(platform.executeJavaScript).toHaveBeenCalledTimes(2);
+      expect(platform.executeJavaScript).toHaveBeenCalledWith(
+        TAB_A,
+        expect.stringContaining("requestPictureInPicture"),
+        true,
+      );
       expect(activated).toHaveBeenCalledWith({ tabId: TAB_A });
     });
 
