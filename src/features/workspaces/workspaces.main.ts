@@ -104,6 +104,17 @@ export default defineFeature<Deps>({
       });
     }
 
+    // Keep workspace activeTabId up-to-date on every non-pinned tab activation,
+    // so the workspace always remembers the last workspace-local tab even if the
+    // user later clicks a pinned tab before switching workspaces.
+    events.on(TABS_ACTIVATED, ({ tabId }) => {
+      const wsId = getActiveWorkspaceId();
+      if (!wsId || !tabId) return;
+      if (isPinned(tabId)) return;
+      const ws = workspaces.get(wsId);
+      if (ws) ws.activeTabId = tabId;
+    });
+
     // Track original URLs when tabs are first bookmarked
     events.on(TABS_UPDATED, (payload) => {
       const { tab } = payload;

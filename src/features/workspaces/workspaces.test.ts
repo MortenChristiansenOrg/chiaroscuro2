@@ -188,6 +188,54 @@ describe("workspaces commands", () => {
       vi.useRealTimers();
     });
 
+    it("remembers last non-pinned tab when pinned tab is active during switch", async () => {
+      vi.useFakeTimers();
+      const { commands, events, platform, setActiveTabId, setActiveWsId } = setup();
+      const ws1Id = await commands.send(WORKSPACES_CREATE, {
+        name: "Work",
+        color: "blue",
+        icon: "W",
+      });
+      const ws2Id = await commands.send(WORKSPACES_CREATE, {
+        name: "Personal",
+        color: "red",
+        icon: "P",
+      });
+      setActiveWsId(ws1Id);
+
+      // Activate a non-pinned tab — TABS_ACTIVATED listener saves it to ws1
+      const tabY = "tab-y" as TabId;
+      events.emit(TABS_ACTIVATED, { tabId: tabY, previousTabId: null });
+      setActiveTabId(tabY);
+
+      // Now switch to a pinned tab
+      const pinnedTab = "pinned-t1" as TabId;
+      (isPinned as ReturnType<typeof vi.fn>).mockImplementation((id: TabId) => id === pinnedTab);
+      events.emit(TABS_ACTIVATED, { tabId: pinnedTab, previousTabId: tabY });
+      setActiveTabId(pinnedTab);
+
+      // Switch to ws2 while pinned tab is active
+      await commands.send(WORKSPACES_SWITCH, { workspaceId: ws2Id });
+      vi.runAllTimers();
+
+      // Switch back to ws1 — should restore tabY (the last non-pinned tab), not the pinned tab
+      // Spy on TABS_ACTIVATE calls to see which tab gets activated
+      const activateCalls: unknown[] = [];
+      const origSend = commands.send.bind(commands);
+      vi.spyOn(commands, "send").mockImplementation(async (name: string, payload: unknown) => {
+        if (name === TABS_ACTIVATE) activateCalls.push(payload);
+        return origSend(name, payload);
+      });
+
+      (isPinned as ReturnType<typeof vi.fn>).mockReturnValue(false);
+      setActiveTabId(undefined);
+      await commands.send(WORKSPACES_SWITCH, { workspaceId: ws1Id });
+
+      expect(activateCalls).toContainEqual({ tabId: tabY });
+
+      vi.useRealTimers();
+    });
+
     it("no-ops when switching to same workspace", async () => {
       const { commands, events, setActiveWsId } = setup();
       const wsId = await commands.send(WORKSPACES_CREATE, {
