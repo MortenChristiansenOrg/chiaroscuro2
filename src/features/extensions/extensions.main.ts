@@ -17,10 +17,12 @@ import {
   EXTENSIONS_INSTALL_FAILED,
   EXTENSIONS_INSTALL_STARTED,
   EXTENSIONS_OPEN,
+  EXTENSIONS_OPEN_POPUP,
   EXTENSIONS_SEARCH,
   EXTENSIONS_SEARCH_RESULTS,
   EXTENSIONS_SET_ENABLED,
   EXTENSIONS_UNINSTALL,
+  type ExtensionAction,
   type ExtensionsCommands,
   type ExtensionsEvents,
   type InstalledExtension,
@@ -46,6 +48,58 @@ interface PersistedExtension {
 
 let installedExtensions: PersistedExtension[] = [];
 
+/** Runtime-only map of extension ID → action metadata (not persisted). */
+const extensionActions = new Map<string, ExtensionAction>();
+
+/**
+ * Maps persisted CWS extension ID → Electron's runtime extension ID.
+ * Electron assigns its own ID when loading unpacked extensions, which may
+ * differ from the CWS ID used to store the extension on disk.
+ */
+const runtimeIdMap = new Map<string, string>();
+
+/** Get the Electron runtime ID for a persisted extension, falling back to the persisted ID. */
+function getRuntimeId(persistedId: string): string {
+  return runtimeIdMap.get(persistedId) ?? persistedId;
+}
+
+/** Extract browser action info from a Chrome extension manifest. */
+function extractAction(
+  extensionId: string,
+  manifest: Record<string, unknown>,
+): ExtensionAction | undefined {
+  // Manifest V3 uses "action", V2 uses "browser_action"
+  const raw = (manifest.action ?? manifest.browser_action) as Record<string, unknown> | undefined;
+  if (!raw) return undefined;
+
+  const popup = typeof raw.default_popup === "string" ? raw.default_popup : "";
+  const title = typeof raw.default_title === "string" ? raw.default_title : "";
+
+  // Resolve the best icon: prefer 16px, then 19, 32, 48, 128, or default_icon string
+  let iconPath = "";
+  const icons = raw.default_icon;
+  if (typeof icons === "string") {
+    iconPath = icons;
+  } else if (icons && typeof icons === "object") {
+    const sizes = Object.keys(icons as Record<string, string>);
+    // Pick the smallest icon >= 16px for toolbar display
+    const preferred = sizes
+      .map(Number)
+      .filter((n) => !Number.isNaN(n))
+      .sort((a, b) => a - b);
+    const best = preferred.find((s) => s >= 16) ?? preferred[0];
+    if (best !== undefined) {
+      iconPath = (icons as Record<string, string>)[String(best)] ?? "";
+    }
+  }
+
+  const iconUrl = iconPath
+    ? `chrome-extension://${extensionId}/${iconPath.replace(/^\//, "")}`
+    : "";
+
+  return { popup, title, iconUrl };
+}
+
 function emitChanged(events: EventBus<AllEvents>): void {
   events.emit(EXTENSIONS_CHANGED, {
     extensions: installedExtensions.map((e) => ({
@@ -53,12 +107,83 @@ function emitChanged(events: EventBus<AllEvents>): void {
       name: e.name,
       version: e.version,
       enabled: e.enabled,
+      action: extensionActions.get(e.id),
     })),
   });
 }
 
 function getExtensionsDir(platform: Platform): string {
   return path.join(platform.getUserDataPath(), "extensions");
+}
+
+/**
+ * Ensure the extension's service worker can start by patching the
+ * background script to stub unsupported Chrome APIs.
+ * Electron doesn't support all Chrome APIs (e.g. webNavigation, contextMenus,
+ * notifications, privacy, offscreen). Without stubs the SW crashes on startup.
+ */
+function patchExtensionForElectron(extensionDir: string): void {
+  const manifestPath = path.join(extensionDir, "manifest.json");
+  let manifest: Record<string, unknown>;
+  try {
+    manifest = JSON.parse(fs.readFileSync(manifestPath, "utf-8"));
+  } catch {
+    return;
+  }
+
+  // Find the service worker / background script
+  const bg = manifest.background as Record<string, string> | undefined;
+  const swFile = bg?.service_worker;
+  if (!swFile) return;
+
+  const swPath = path.join(extensionDir, swFile);
+  if (!fs.existsSync(swPath)) return;
+
+  const marker = "/* chiaroscuro-api-stubs */";
+  const content = fs.readFileSync(swPath, "utf-8");
+  if (content.startsWith(marker)) return; // Already patched
+
+  const stubs = `${marker}
+(function(){
+var e={addListener:function(){},removeListener:function(){},hasListener:function(){return false},hasListeners:function(){return false},addRules:function(){},removeRules:function(){},getRules:function(){}};
+function s(o,k,v){if(!o[k])o[k]={};var a=o[k];for(var p in v)if(a[p]===undefined)a[p]=v[p]}
+var c=chrome||self.chrome;if(!c)return;
+s(c,"webNavigation",{onCommitted:e,onCompleted:e,onBeforeNavigate:e,onDOMContentLoaded:e,onErrorOccurred:e,onReferenceFragmentUpdated:e,onCreatedNavigationTarget:e,onHistoryStateUpdated:e,getFrame:function(){return Promise.resolve(null)},getAllFrames:function(){return Promise.resolve([])}});
+s(c,"contextMenus",{create:function(){},update:function(){return Promise.resolve()},remove:function(){return Promise.resolve()},removeAll:function(){return Promise.resolve()},onClicked:e,ACTION_MENU_TOP_LEVEL_LIMIT:6});
+s(c,"notifications",{create:function(_,__,cb){if(cb)cb("");return Promise.resolve("")},clear:function(_,cb){if(cb)cb(true);return Promise.resolve(true)},onClicked:e,onClosed:e,onButtonClicked:e});
+s(c,"offscreen",{createDocument:function(){return Promise.resolve()},closeDocument:function(){return Promise.resolve()},hasDocument:function(){return Promise.resolve(false)},Reason:{CLIPBOARD:"CLIPBOARD"}});
+s(c,"privacy",{services:{autofillAddressEnabled:{get:function(cb){var v={value:true};if(cb)cb(v);return Promise.resolve(v)},set:function(){return Promise.resolve()},onChange:e},autofillCreditCardEnabled:{get:function(cb){var v={value:true};if(cb)cb(v);return Promise.resolve(v)},set:function(){return Promise.resolve()},onChange:e},passwordSavingEnabled:{get:function(cb){var v={value:true};if(cb)cb(v);return Promise.resolve(v)},set:function(){return Promise.resolve()},onChange:e}}});
+/* IPC bridge for popup<->service worker messaging */
+try{
+var ipc=require("electron").ipcRenderer;
+ipc.send("crx:worker-preload-debug","SW bridge loaded");
+var onConnectListeners=[];
+var origAddConnect=c.runtime.onConnect.addListener.bind(c.runtime.onConnect);
+c.runtime.onConnect.addListener=function(cb){onConnectListeners.push(cb);origAddConnect(cb)};
+var onMsgListeners=[];
+var origAddMsg=c.runtime.onMessage.addListener.bind(c.runtime.onMessage);
+c.runtime.onMessage.addListener=function(cb){onMsgListeners.push(cb);origAddMsg(cb)};
+ipc.on("crx:runtime.onMessage",function(_ev,msgId,message,sender){
+var responded=false;
+var sendResponse=function(r){if(!responded){responded=true;ipc.send("crx:runtime.sendMessageResponse",msgId,r)}};
+for(var i=0;i<onMsgListeners.length;i++){try{var r=onMsgListeners[i](message,sender,sendResponse);if(r===true)continue;if(r&&typeof r.then==="function")r.then(function(v){sendResponse(v)},function(){sendResponse(void 0)})}catch(e){}}
+setTimeout(function(){sendResponse(void 0)},50);
+});
+ipc.on("crx:port.onConnect",function(_ev,portId,name,sender){
+var portOnMsg={_l:[],addListener:function(cb){this._l.push(cb)},removeListener:function(){},hasListener:function(){return false}};
+var portOnDisc={_l:[],addListener:function(cb){this._l.push(cb)},removeListener:function(){},hasListener:function(){return false}};
+var disc=false;
+var port={name:name,sender:sender,onMessage:portOnMsg,onDisconnect:portOnDisc,
+postMessage:function(m){if(!disc)ipc.send("crx:port.postMessage.fromWorker",portId,m)},
+disconnect:function(){if(!disc){disc=true;ipc.send("crx:port.disconnect",portId)}}};
+ipc.on("crx:port.onMessage:"+portId,function(_,m){if(!disc)for(var i=0;i<portOnMsg._l.length;i++)try{portOnMsg._l[i](m)}catch(e){}});
+ipc.on("crx:port.onDisconnect:"+portId,function(){disc=true;for(var i=0;i<portOnDisc._l.length;i++)try{portOnDisc._l[i]()}catch(e){}});
+for(var i=0;i<onConnectListeners.length;i++)try{onConnectListeners[i](port)}catch(e){}
+});
+}catch(ex){/* ipc not available */}
+})();
+`;
+  fs.writeFileSync(swPath, stubs + content);
 }
 
 // ── CWS Search ─────────────────────────────────────────────────
@@ -274,20 +399,23 @@ async function extractCRX(crxBuffer: Buffer, targetDir: string): Promise<void> {
 
   const zipData = crxBuffer.subarray(zipStart);
 
-  // Use Node's built-in to extract zip
-  // Since we can't use a zip library, write the zip to a temp file and use unzip
   const zipPath = path.join(targetDir, "__temp.zip");
   fs.mkdirSync(targetDir, { recursive: true });
   fs.writeFileSync(zipPath, zipData);
 
   try {
-    // Use the system unzip command
     const { execSync } = await import("node:child_process");
-    execSync(`unzip -o -q "${zipPath}" -d "${targetDir}"`, {
-      timeout: 30000,
-    });
+    if (process.platform === "win32") {
+      execSync(
+        `powershell -NoProfile -Command "Expand-Archive -Force -Path '${zipPath}' -DestinationPath '${targetDir}'"`,
+        { timeout: 30000 },
+      );
+    } else {
+      execSync(`unzip -o -q "${zipPath}" -d "${targetDir}"`, {
+        timeout: 30000,
+      });
+    }
   } finally {
-    // Clean up temp zip
     try {
       fs.unlinkSync(zipPath);
     } catch {
@@ -332,8 +460,14 @@ export default defineFeature<Deps>({
         const crxBuffer = await downloadCRX(extensionId);
         await extractCRX(crxBuffer, extensionDir);
 
-        // Load into session
+        // Patch and load into session
+        patchExtensionForElectron(extensionDir);
         const loaded = await platform.loadExtension(extensionDir);
+
+        // Track ID mapping and cache action metadata
+        if (loaded.id !== extensionId) runtimeIdMap.set(extensionId, loaded.id);
+        const action = extractAction(loaded.id, loaded.manifest);
+        if (action) extensionActions.set(extensionId, action);
 
         // Update persisted state
         const existing = installedExtensions.find((e) => e.id === extensionId);
@@ -364,8 +498,10 @@ export default defineFeature<Deps>({
     });
 
     commands.handle(EXTENSIONS_UNINSTALL, async ({ extensionId }) => {
-      // Remove from session
-      platform.removeExtension(extensionId);
+      // Remove from session and action cache — use runtime ID
+      platform.removeExtension(getRuntimeId(extensionId));
+      extensionActions.delete(extensionId);
+      runtimeIdMap.delete(extensionId);
 
       // Remove from disk
       const extensionsDir = getExtensionsDir(platform);
@@ -393,10 +529,16 @@ export default defineFeature<Deps>({
         // Load extension
         const extensionsDir = getExtensionsDir(platform);
         const extensionDir = path.join(extensionsDir, extensionId);
-        await platform.loadExtension(extensionDir);
+        patchExtensionForElectron(extensionDir);
+        const loaded = await platform.loadExtension(extensionDir);
+        if (loaded.id !== extensionId) runtimeIdMap.set(extensionId, loaded.id);
+        const action = extractAction(loaded.id, loaded.manifest);
+        if (action) extensionActions.set(extensionId, action);
       } else if (!enabled && ext.enabled) {
-        // Unload extension
-        platform.removeExtension(extensionId);
+        // Unload extension — use runtime ID
+        platform.removeExtension(getRuntimeId(extensionId));
+        extensionActions.delete(extensionId);
+        runtimeIdMap.delete(extensionId);
       }
 
       ext.enabled = enabled;
@@ -405,6 +547,13 @@ export default defineFeature<Deps>({
         .catch(logError("extensions", "persist enabled state"));
 
       emitChanged(events);
+    });
+
+    commands.handle(EXTENSIONS_OPEN_POPUP, async ({ extensionId }) => {
+      const action = extensionActions.get(extensionId);
+      if (!action?.popup) return;
+      // Use the Electron runtime ID, which may differ from the persisted CWS ID
+      platform.openExtensionPopup(getRuntimeId(extensionId), action.popup);
     });
   },
 
@@ -422,10 +571,15 @@ export default defineFeature<Deps>({
       const extensionDir = path.join(extensionsDir, ext.id);
       if (!fs.existsSync(extensionDir)) continue;
       try {
+        patchExtensionForElectron(extensionDir);
         const loaded = await platform.loadExtension(extensionDir);
-        // Update version/name from loaded extension in case it changed
         ext.name = loaded.name || ext.name;
         ext.version = loaded.version || ext.version;
+        // Track ID mapping (CWS ID → Electron runtime ID)
+        if (loaded.id !== ext.id) runtimeIdMap.set(ext.id, loaded.id);
+        // Cache action metadata using the runtime ID
+        const action = extractAction(loaded.id, loaded.manifest);
+        if (action) extensionActions.set(ext.id, action);
       } catch (error) {
         console.error(`Failed to load extension ${ext.id}:`, error);
       }

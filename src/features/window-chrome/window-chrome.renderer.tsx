@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "../../renderer/src/components/Icon";
 import { DOMAIN_SETTINGS_OPEN } from "../domain-css/domain-css.shared";
+import { ExtensionToolbar } from "../extensions/ExtensionToolbar";
 import { FindBar } from "../find-text/find-text.renderer";
 import { useFindTextStore } from "../find-text/find-text.store";
 import { useTabsStore } from "../tabs/tabs.store";
@@ -378,12 +379,14 @@ export function TitleBar() {
       {/* Flexible spacer */}
       <div className="flex-1 min-w-0" />
 
-      {/* Window controls: only on non-macOS */}
-      {!isMac && (
-        <div style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}>
-          <WindowControls />
-        </div>
-      )}
+      {/* Extension toolbar + Window controls */}
+      <div
+        className="flex items-center"
+        style={{ WebkitAppRegion: "no-drag" } as React.CSSProperties}
+      >
+        <ExtensionToolbar />
+        {!isMac && <WindowControls />}
+      </div>
     </div>
   );
 }

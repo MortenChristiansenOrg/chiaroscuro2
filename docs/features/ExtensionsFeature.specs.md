@@ -76,6 +76,7 @@ Adds initial Chrome extension support to Chiaroscuro. Users can search the Chrom
 - `extensions:install` — Install extension by CWS ID. Payload: `{ extensionId: string; name: string }`.
 - `extensions:uninstall` — Uninstall extension. Payload: `{ extensionId: string }`.
 - `extensions:set-enabled` — Enable or disable extension. Payload: `{ extensionId: string; enabled: boolean }`.
+- `extensions:open-popup` — Open an extension's browser action popup. Payload: `{ extensionId: string }`.
 
 ### Events
 

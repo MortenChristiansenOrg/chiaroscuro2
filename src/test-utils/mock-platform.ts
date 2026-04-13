@@ -85,9 +85,12 @@ export function createMockPlatform(overrides: Partial<Platform> = {}): Platform 
       name: "Mock Extension",
       version: "1.0.0",
       path: p,
+      manifest: {},
     })),
     removeExtension: vi.fn(),
     getAllExtensions: vi.fn(() => []),
+    openExtensionPopup: vi.fn(),
+    setupExtensionBridge: vi.fn(),
     getUserDataPath: vi.fn(() => "/mock/userdata"),
     ...overrides,
   } as Platform;

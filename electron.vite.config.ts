@@ -16,6 +16,8 @@ export default defineConfig({
         input: {
           index: resolve(__dirname, "src/preload/index.ts"),
           tab: resolve(__dirname, "src/preload/tab.ts"),
+          "extension-page": resolve(__dirname, "src/preload/extension-page.ts"),
+          "extension-worker": resolve(__dirname, "src/preload/extension-worker.ts"),
         },
       },
     },

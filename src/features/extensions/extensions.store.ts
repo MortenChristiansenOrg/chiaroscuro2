@@ -61,6 +61,10 @@ export function setExtensionEnabled(extensionId: string, enabled: boolean): void
     .catch(console.error);
 }
 
+export function openExtensionPopup(extensionId: string): void {
+  window.chiaroscuro.sendCommand("extensions:open-popup", { extensionId }).catch(console.error);
+}
+
 export function subscribeToEvents(
   onEvent: (name: string, callback: (payload: unknown) => void) => () => void,
 ): () => void {

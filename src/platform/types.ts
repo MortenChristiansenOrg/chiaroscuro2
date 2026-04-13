@@ -19,6 +19,16 @@ export interface PlatformDownload {
   removeListener(event: string, cb: (...args: any[]) => void): void;
 }
 
+/** Metadata returned when loading or querying Chrome extensions. */
+export interface LoadedExtension {
+  id: string;
+  name: string;
+  version: string;
+  path: string;
+  /** The extension's manifest.json contents (action/browser_action, icons, etc.). */
+  manifest: Record<string, unknown>;
+}
+
 export interface Platform {
   // Window management
   createWindow(): Promise<WindowId>;
@@ -189,14 +199,17 @@ export interface Platform {
   executeJavaScript(tabId: TabId, code: string): Promise<unknown>;
 
   // Chrome extensions
+
   /** Load an unpacked Chrome extension from a directory path. */
-  loadExtension(
-    extensionPath: string,
-  ): Promise<{ id: string; name: string; version: string; path: string }>;
+  loadExtension(extensionPath: string): Promise<LoadedExtension>;
   /** Remove a loaded Chrome extension by its ID. */
   removeExtension(extensionId: string): void;
   /** Get all currently loaded Chrome extensions. */
-  getAllExtensions(): Array<{ id: string; name: string; version: string; path: string }>;
+  getAllExtensions(): LoadedExtension[];
+  /** Open an extension's popup in a floating window. */
+  openExtensionPopup(extensionId: string, popupRelativePath: string): void;
+  /** Set up the extension API bridge (preloads + IPC handlers). */
+  setupExtensionBridge(): void;
   /** Get the app's user data directory path. */
   getUserDataPath(): string;
 }

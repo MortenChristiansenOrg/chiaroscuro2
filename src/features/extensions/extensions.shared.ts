@@ -4,8 +4,9 @@ export const EXTENSIONS_SEARCH = "extensions:search" as const;
 export const EXTENSIONS_INSTALL = "extensions:install" as const;
 export const EXTENSIONS_UNINSTALL = "extensions:uninstall" as const;
 export const EXTENSIONS_SET_ENABLED = "extensions:set-enabled" as const;
+export const EXTENSIONS_OPEN_POPUP = "extensions:open-popup" as const;
 
-// ── Event names ────────────────────────────────────────────────
+//── Event names ────────────────────────────────────────────────
 export const EXTENSIONS_CHANGED = "extensions:changed" as const;
 export const EXTENSIONS_INSTALL_STARTED = "extensions:install-started" as const;
 export const EXTENSIONS_INSTALL_COMPLETED = "extensions:install-completed" as const;
@@ -13,11 +14,23 @@ export const EXTENSIONS_INSTALL_FAILED = "extensions:install-failed" as const;
 export const EXTENSIONS_SEARCH_RESULTS = "extensions:search-results" as const;
 
 // ── Payload types ──────────────────────────────────────────────
+/** Browser action metadata extracted from the extension manifest. */
+export interface ExtensionAction {
+  /** Popup HTML page path (relative to extension root), empty if no popup. */
+  popup: string;
+  /** Tooltip title for the toolbar button. */
+  title: string;
+  /** Icon URL (chrome-extension:// protocol), empty if no icon. */
+  iconUrl: string;
+}
+
 export interface InstalledExtension {
   id: string;
   name: string;
   version: string;
   enabled: boolean;
+  /** Browser action info, present for enabled extensions with an action/browser_action. */
+  action?: ExtensionAction;
 }
 
 export interface CWSSearchResult {
@@ -45,6 +58,10 @@ export interface ExtensionsInstallPayload {
 }
 
 export interface ExtensionsUninstallPayload {
+  extensionId: string;
+}
+
+export interface ExtensionsOpenPopupPayload {
   extensionId: string;
 }
 
@@ -82,6 +99,7 @@ export type ExtensionsCommands = {
   [EXTENSIONS_INSTALL]: { payload: ExtensionsInstallPayload; response: undefined };
   [EXTENSIONS_UNINSTALL]: { payload: ExtensionsUninstallPayload; response: undefined };
   [EXTENSIONS_SET_ENABLED]: { payload: ExtensionsSetEnabledPayload; response: undefined };
+  [EXTENSIONS_OPEN_POPUP]: { payload: ExtensionsOpenPopupPayload; response: undefined };
 };
 
 // ── Event registry ─────────────────────────────────────────────

@@ -43,6 +43,7 @@
     "../src/features/command-palette/resolve-input.ts",
     "../src/features/pdf-reader/backends/**/*",
     "../src/features/pdf-reader/components/**/*",
+    "../src/features/extensions/ExtensionToolbar.tsx",
     "../src/bus/types.ts"
   ]
 }

@@ -204,4 +204,10 @@ export const routes: Route[] = [
     group: "Components",
     component: lazy(() => import("./pages/components/extensions-page.mdx")),
   },
+  {
+    path: "/components/extension-toolbar",
+    title: "Extension Toolbar",
+    group: "Components",
+    component: lazy(() => import("./pages/components/extension-toolbar.mdx")),
+  },
 ];

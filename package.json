@@ -47,7 +47,7 @@
     "@vitejs/plugin-react": "^4.5.2",
     "babel-plugin-react-compiler": "^1.0.0",
     "clsx": "^2.1.1",
-    "electron": "^40.2.1",
+    "electron": "^41.2.0",
     "electron-builder": "^26.0.12",
     "electron-vite": "^5.0.0",
     "jsdom": "^26.1.0",

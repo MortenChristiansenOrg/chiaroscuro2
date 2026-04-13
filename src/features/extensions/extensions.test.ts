@@ -97,6 +97,7 @@ describe("extensions commands", () => {
         name: "Test",
         version: "1.0.0",
         path: p,
+        manifest: {},
       }));
       const { commands, events, dataStore, deps } = setup({ loadExtension });
 
@@ -131,6 +132,7 @@ describe("extensions commands", () => {
         name: "Test",
         version: "1.0.0",
         path: p,
+        manifest: {},
       }));
       const { commands, events, dataStore, deps } = setup({
         removeExtension,
@@ -159,6 +161,7 @@ describe("extensions commands", () => {
         name: "Test",
         version: "1.0.0",
         path: p,
+        manifest: {},
       }));
       const { commands, events, dataStore, deps } = setup({
         removeExtension,
@@ -188,6 +191,7 @@ describe("extensions commands", () => {
         name: "Test",
         version: "1.0.0",
         path: p,
+        manifest: {},
       }));
       const { commands, dataStore, deps } = setup({ loadExtension });
 
@@ -211,6 +215,7 @@ describe("extensions commands", () => {
         name: "Loaded",
         version: "2.0.0",
         path: p,
+        manifest: {},
       }));
       const { events, dataStore, deps } = setup({ loadExtension });
 

@@ -371,6 +371,8 @@ if (gotLock) {
     externalLink.register(deps);
     permissions.register(deps);
     pdfReader.register(deps);
+    // Set up extension API bridge (preloads + IPC) before extensions are loaded
+    platform.setupExtensionBridge();
     extensions.register(deps);
 
     // Register debug state providers
