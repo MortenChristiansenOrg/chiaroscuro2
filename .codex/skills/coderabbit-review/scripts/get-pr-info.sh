@@ -12,6 +12,7 @@ OWNER=$(echo "$REPO_INFO" | cut -d' ' -f1)
 REPO=$(echo "$REPO_INFO" | cut -d' ' -f2)
 
 # Get PR number
+PR_NUMBER=""
 if [[ $# -ge 1 ]]; then
   PR_NUMBER="$1"
 else
@@ -28,6 +29,11 @@ else
     echo "Error: No PR found for current branch ($BRANCH) and no PR number provided" >&2
     exit 1
   fi
+fi
+
+if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then
+  echo "Error: PR number must be numeric (got: $PR_NUMBER)" >&2
+  exit 1
 fi
 
 echo "{\"owner\": \"$OWNER\", \"repo\": \"$REPO\", \"pr\": $PR_NUMBER}"

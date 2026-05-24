@@ -134,6 +134,10 @@ ELECTRON_WIN_PID=$("$POWERSHELL" -NoProfile -Command "
   \$p = Start-Process -FilePath '$WIN_ELECTRON' -ArgumentList '.' -PassThru
   Write-Output \$p.Id
 " | tr -d '\r')
+if ! [[ "$ELECTRON_WIN_PID" =~ ^[1-9][0-9]*$ ]]; then
+  echo "Error: failed to launch Electron on Windows (invalid PID: $ELECTRON_WIN_PID)" >&2
+  exit 1
+fi
 echo "Electron PID (Windows): $ELECTRON_WIN_PID"
 
 # Keep script alive (Vite server runs until Ctrl-C)

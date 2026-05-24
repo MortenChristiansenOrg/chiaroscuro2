@@ -53,7 +53,7 @@ When invoked:
 
 ### Design System Agent Prompt
 
-```
+```text
 Review uncommitted changes for DESIGN SYSTEM CONFORMANCE.
 
 Use relevant git operations to see changes, then check against the design system docs in design-system/src/pages/.
@@ -111,7 +111,7 @@ Be concise. Only report actual issues.
 
 ### Spec Conformance Agent Prompt
 
-```
+```text
 Review uncommitted changes for FEATURE SPEC CONFORMANCE.
 
 Use relevant git operations to see what changed. Identify which features are touched.
@@ -152,7 +152,7 @@ Be concise. Only report actual issues.
 
 ### Code Quality Agent Prompt
 
-```
+```text
 Review uncommitted changes for CODE QUALITY.
 
 Use relevant git operations to see changes.
@@ -172,7 +172,7 @@ Be concise. Only report actual issues.
 
 ### Security Agent Prompt
 
-```
+```text
 Review uncommitted changes for SECURITY.
 
 Use relevant git operations to see changes.

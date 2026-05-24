@@ -11,6 +11,7 @@ OWNER=$(echo "$REPO_INFO" | cut -d' ' -f1)
 REPO=$(echo "$REPO_INFO" | cut -d' ' -f2)
 
 # Get PR number
+PR_NUMBER=""
 if [[ $# -ge 1 ]]; then
   PR_NUMBER="$1"
   if ! [[ "$PR_NUMBER" =~ ^[0-9]+$ ]]; then

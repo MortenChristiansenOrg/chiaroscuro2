@@ -14,13 +14,13 @@ Process CodeRabbit review comments on a PR: fetch comments, triage, apply fixes,
 
 ```bash
 # Returns {"owner": "...", "repo": "...", "pr": N}
-.claude/skills/coderabbit-review/scripts/get-pr-info.sh [pr_number]
+.codex/skills/coderabbit-review/scripts/get-pr-info.sh [pr_number]
 ```
 
 ### 2. Fetch Review Threads
 
 ```bash
-.claude/skills/coderabbit-review/scripts/fetch-review-threads.sh <owner> <repo> <pr>
+.codex/skills/coderabbit-review/scripts/fetch-review-threads.sh <owner> <repo> <pr>
 ```
 
 Returns JSON array combining two sources:
@@ -39,7 +39,7 @@ Returns JSON array combining two sources:
 **Wrong/irrelevant comments:** Reply with explanation then resolve:
 
 ```bash
-.claude/skills/coderabbit-review/scripts/reply-to-comment.sh <owner> <repo> <pr> <comment_id> "@coderabbitai <explanation>"
+.codex/skills/coderabbit-review/scripts/reply-to-comment.sh <owner> <repo> <pr> <comment_id> "@coderabbitai <explanation>"
 ```
 
 ### 4. Apply Fixes
@@ -54,10 +54,10 @@ After user pushes, add reactions:
 
 ```bash
 # Fixed: rocket
-.claude/skills/coderabbit-review/scripts/add-reaction.sh <owner> <repo> <comment_id> rocket
+.codex/skills/coderabbit-review/scripts/add-reaction.sh <owner> <repo> <comment_id> rocket
 
 # Skipped: -1
-.claude/skills/coderabbit-review/scripts/add-reaction.sh <owner> <repo> <comment_id> -1
+.codex/skills/coderabbit-review/scripts/add-reaction.sh <owner> <repo> <comment_id> -1
 ```
 
 ## Scripts

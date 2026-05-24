@@ -80,6 +80,19 @@ export default function PdfReaderPage({ params }: BuiltInPageProps) {
   // Get index entries from store
   const entries = usePdfReaderStore((s) => (pdfKey ? s.indexes.get(pdfKey) : undefined)) ?? [];
 
+  useEffect(() => {
+    const viewState = getViewState(pdfUrl);
+    setCurrentPage(viewState.currentPage);
+    setZoom(viewState.zoom);
+    setIndexVisible(viewState.indexVisible);
+    setScrollTop(viewState.scrollTop);
+    setGoToPage(null);
+    setSearchMatches(new Map());
+    setAllMatches([]);
+    setCurrentMatchIdx(-1);
+    setSearchTerm("");
+  }, [pdfUrl]);
+
   // Load PDF (reuses cached document on tab re-activation)
   useEffect(() => {
     if (!pdfUrl) {
@@ -387,6 +400,7 @@ export default function PdfReaderPage({ params }: BuiltInPageProps) {
           />
         )}
         <PdfViewport
+          key={pdfUrl}
           document={document}
           zoom={zoom}
           initialScrollTop={scrollTop}

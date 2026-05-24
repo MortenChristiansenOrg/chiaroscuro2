@@ -23,14 +23,14 @@ Requires `gh` CLI authenticated with access to the repository (PR read + Actions
 
 ```bash
 # Returns {"owner": "...", "repo": "...", "pr": N}
-.claude/skills/pr-fix-failing-tests/scripts/get-pr-info.sh [pr_number]
+.codex/skills/pr-fix-failing-tests/scripts/get-pr-info.sh [pr_number]
 ```
 
 ### 2. Fetch Failed Jobs
 
 ```bash
 # Returns JSON array of failed jobs with name, jobId, detailsUrl
-.claude/skills/pr-fix-failing-tests/scripts/fetch-failed-jobs.sh <owner> <repo> <pr>
+.codex/skills/pr-fix-failing-tests/scripts/fetch-failed-jobs.sh <owner> <repo> <pr>
 ```
 
 If no failed jobs, report success and exit.
@@ -41,7 +41,7 @@ For each failed job:
 
 ```bash
 # Returns last N lines of job log (default 200)
-.claude/skills/pr-fix-failing-tests/scripts/fetch-job-logs.sh <owner> <repo> <job_id> [tail_lines]
+.codex/skills/pr-fix-failing-tests/scripts/fetch-job-logs.sh <owner> <repo> <job_id> [tail_lines]
 ```
 
 ### 4. Analyze Failures

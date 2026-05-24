@@ -39,15 +39,16 @@ WIN_PATH="C:\\Users\\${WIN_USER}\\.chiaroscuro-dev"
 mkdir -p "$WIN_DIR"
 
 # Build main + preload (renderer served live by Vite)
-if [ "$REBUILD" = true ] || [ ! -d "out" ]; then
+if [ "$REBUILD" = true ] || [ ! -d "$PROJECT_DIR/out" ]; then
   echo "Building..."
+  cd "$PROJECT_DIR"
   bunx electron-vite build
 fi
 
 echo "Syncing main + preload to Windows..."
-rsync -a --delete out/main out/preload "$WIN_DIR/out/"
-rsync -a --delete resources/ "$WIN_DIR/resources/" 2>/dev/null || true
-cp package.json "$WIN_DIR/"
+rsync -a --delete "$PROJECT_DIR/out/main" "$PROJECT_DIR/out/preload" "$WIN_DIR/out/"
+rsync -a --delete "$PROJECT_DIR/resources/" "$WIN_DIR/resources/" 2>/dev/null || true
+cp "$PROJECT_DIR/package.json" "$WIN_DIR/"
 
 # One-time: install electron on Windows side
 if [ ! -d "$WIN_DIR/node_modules/electron" ]; then

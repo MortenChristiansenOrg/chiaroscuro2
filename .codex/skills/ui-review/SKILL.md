@@ -16,7 +16,7 @@ Perform a comprehensive UI/UX review of the running Chiaroscuro app **or the des
 
 ## Prerequisites
 
-Use the `browse-app` skill for all app launching, connecting, and browser interaction. Refer to its SKILL.md at `.claude/skills/browse-app/SKILL.md` for:
+Use the `browse-app` skill for all app launching, connecting, and browser interaction. Refer to its SKILL.md at `.codex/skills/browse-app/SKILL.md` for:
 
 - Launch/teardown scripts and their usage
 - `playwright-cli` command reference

@@ -97,8 +97,8 @@ You can override with `--cdp-port PORT` on any script.
 The launcher builds, syncs to Windows, launches Electron, and auto-connects `playwright-cli` via CDP.
 
 ```bash
-.claude/skills/browse-app/scripts/launch-app.sh                        # build if needed + launch + connect
-.claude/skills/browse-app/scripts/launch-app.sh --rebuild               # force rebuild
+.codex/skills/browse-app/scripts/launch-app.sh                         # build if needed + launch + connect
+.codex/skills/browse-app/scripts/launch-app.sh --rebuild                # force rebuild
 ```
 
 `playwright-cli` connects directly to the Electron renderer via CDP — no separate browser window. You can interact with the actual Electron UI including WebContentsView tabs.
@@ -106,13 +106,13 @@ The launcher builds, syncs to Windows, launches Electron, and auto-connects `pla
 To reconnect manually (e.g., after daemon dies):
 
 ```bash
-.claude/skills/browse-app/scripts/connect-app.sh
+.codex/skills/browse-app/scripts/connect-app.sh
 ```
 
 ### Starting the design system
 
 ```bash
-.claude/skills/browse-app/scripts/launch-docs.sh
+.codex/skills/browse-app/scripts/launch-docs.sh
 ```
 
 This starts Vite, swaps `.playwright/cli.config.json` to standalone browser mode (backing up any CDP config), and auto-opens the page in `playwright-cli`. No manual `playwright-cli open` needed.
@@ -124,10 +124,10 @@ This starts Vite, swaps `.playwright/cli.config.json` to standalone browser mode
 playwright-cli close
 
 # For app:
-.claude/skills/browse-app/scripts/teardown-app.sh
+.codex/skills/browse-app/scripts/teardown-app.sh
 
 # For design system:
-.claude/skills/browse-app/scripts/teardown-docs.sh
+.codex/skills/browse-app/scripts/teardown-docs.sh
 ```
 
 `teardown-docs.sh` restores the CDP config backup if one exists, so subsequent `launch-app.sh` / `connect-app.sh` runs work correctly.
@@ -151,7 +151,7 @@ The scripts handle backup/restore automatically. If you get a `connectOverCDP: T
 
 ## Timeouts
 
-All scripts should complete in a few seconds. Use `timeout: 10000` (10s) max for any of them. Never run them in the background — they're fast and you need the output immediately. If a script takes longer than 10s, something is wrong — read the output and fix the root cause.
+Most scripts should complete in a few seconds. The docs launcher can wait up to about 30 seconds for Vite to become ready; use `timeout: 30000` for it and shorter timeouts for the others. Never run them in the background — you need the output immediately. If a script takes longer than expected, read the output and fix the root cause.
 
 ## Tips
 

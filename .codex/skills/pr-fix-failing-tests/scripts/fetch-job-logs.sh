@@ -20,4 +20,4 @@ if ! [[ "$TAIL_LINES" =~ ^[0-9]+$ ]]; then
   exit 1
 fi
 
-gh api "repos/$OWNER/$REPO/actions/jobs/$JOB_ID/logs" 2>/dev/null | tail -"$TAIL_LINES"
+gh api "repos/$OWNER/$REPO/actions/jobs/$JOB_ID/logs" | tail -"$TAIL_LINES"

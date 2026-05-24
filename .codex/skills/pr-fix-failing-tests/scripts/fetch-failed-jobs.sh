@@ -5,6 +5,11 @@
 
 set -euo pipefail
 
+if [[ $# -ne 3 ]]; then
+  echo "Usage: fetch-failed-jobs.sh <owner> <repo> <pr_number>" >&2
+  exit 1
+fi
+
 OWNER="$1"
 REPO="$2"
 PR="$3"
@@ -16,6 +21,11 @@ gh pr view "$PR" -R "$OWNER/$REPO" --json statusCheckRollup -q '
    | {
        name: .name,
        detailsUrl: .detailsUrl,
-       jobId: (.detailsUrl | capture("/job/(?<id>[0-9]+)") | .id // null)
+       jobId: (
+         if ((.detailsUrl | type) == "string" and (.detailsUrl | test("/job/[0-9]+")))
+         then (.detailsUrl | capture("/job/(?<id>[0-9]+)") | .id)
+         else null
+         end
+       )
      }
   ]'

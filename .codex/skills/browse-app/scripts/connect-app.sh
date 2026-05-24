@@ -5,7 +5,7 @@
 #
 # Usage: connect-app.sh [--cdp-port PORT]
 #   --cdp-port PORT   CDP port (default: 9333)
-set -e
+set -e -o pipefail
 
 CDP_PORT=""
 

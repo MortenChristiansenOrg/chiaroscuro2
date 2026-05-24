@@ -13,7 +13,7 @@ The app must be running in dev mode (`bun dev`). The debug server is enabled by 
 
 ## Base URL
 
-```
+```text
 http://127.0.0.1:19400
 ```
 
