@@ -15,6 +15,32 @@ const DEFAULT_ZOOM = 1;
 // Cache loaded PDF documents so tab switches don't re-fetch/re-parse
 const documentCache = new Map<string, { document: PdfDocument; pdfKey: string }>();
 
+interface PdfViewState {
+  currentPage: number;
+  zoom: number;
+  scrollTop: number;
+  indexVisible: boolean;
+}
+
+const defaultViewState: PdfViewState = {
+  currentPage: 1,
+  zoom: DEFAULT_ZOOM,
+  scrollTop: 0,
+  indexVisible: true,
+};
+
+const viewStateCache = new Map<string, PdfViewState>();
+
+function getViewState(pdfUrl: string | undefined): PdfViewState {
+  if (!pdfUrl) return defaultViewState;
+  return viewStateCache.get(pdfUrl) ?? defaultViewState;
+}
+
+function updateViewState(pdfUrl: string | undefined, patch: Partial<PdfViewState>): void {
+  if (!pdfUrl) return;
+  viewStateCache.set(pdfUrl, { ...getViewState(pdfUrl), ...patch });
+}
+
 async function loadBackend(type: PdfBackendType): Promise<PdfBackend> {
   if (type === "mupdf") {
     const { mupdfBackend } = await import("./backends/mupdf-backend");
@@ -35,14 +61,16 @@ function base64ToUint8Array(base64: string): Uint8Array {
 
 export default function PdfReaderPage({ params }: BuiltInPageProps) {
   const pdfUrl = params.url;
+  const initialViewState = getViewState(pdfUrl);
   const [document, setDocument] = useState<PdfDocument | null>(null);
   const [pdfKey, setPdfKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [zoom, setZoom] = useState(DEFAULT_ZOOM);
+  const [currentPage, setCurrentPage] = useState(initialViewState.currentPage);
+  const [zoom, setZoom] = useState(initialViewState.zoom);
   const [goToPage, setGoToPage] = useState<number | null>(null);
-  const [indexVisible, setIndexVisible] = useState(true);
+  const [indexVisible, setIndexVisible] = useState(initialViewState.indexVisible);
+  const [scrollTop, setScrollTop] = useState(initialViewState.scrollTop);
   const [searchMatches, setSearchMatches] = useState<Map<number, SearchMatch[]>>(new Map());
   const [allMatches, setAllMatches] = useState<{ page: number; matchIndex: number }[]>([]);
   const [currentMatchIdx, setCurrentMatchIdx] = useState(-1);
@@ -251,6 +279,37 @@ export default function PdfReaderPage({ params }: BuiltInPageProps) {
   );
 
   const handleGoToPageComplete = useCallback(() => setGoToPage(null), []);
+  const handleCurrentPageChange = useCallback(
+    (page: number) => {
+      setCurrentPage(page);
+      updateViewState(pdfUrl, { currentPage: page });
+    },
+    [pdfUrl],
+  );
+  const handleScrollPositionChange = useCallback(
+    (nextScrollTop: number) => {
+      setScrollTop(nextScrollTop);
+      updateViewState(pdfUrl, { scrollTop: nextScrollTop });
+    },
+    [pdfUrl],
+  );
+  const handleZoomChange = useCallback(
+    (updater: (zoom: number) => number) => {
+      setZoom((z) => {
+        const nextZoom = updater(z);
+        updateViewState(pdfUrl, { zoom: nextZoom });
+        return nextZoom;
+      });
+    },
+    [pdfUrl],
+  );
+  const handleToggleIndex = useCallback(() => {
+    setIndexVisible((visible) => {
+      const nextVisible = !visible;
+      updateViewState(pdfUrl, { indexVisible: nextVisible });
+      return nextVisible;
+    });
+  }, [pdfUrl]);
 
   if (loading) {
     return (
@@ -306,14 +365,14 @@ export default function PdfReaderPage({ params }: BuiltInPageProps) {
         currentSearchMatch={currentMatchIdx >= 0 ? currentMatchIdx + 1 : 0}
         indexVisible={indexVisible}
         onGoToPage={(p) => setGoToPage(p)}
-        onZoomIn={() => setZoom((z) => Math.min(ZOOM_MAX, z + ZOOM_STEP))}
-        onZoomOut={() => setZoom((z) => Math.max(ZOOM_MIN, z - ZOOM_STEP))}
-        onZoomReset={() => setZoom(DEFAULT_ZOOM)}
+        onZoomIn={() => handleZoomChange((z) => Math.min(ZOOM_MAX, z + ZOOM_STEP))}
+        onZoomOut={() => handleZoomChange((z) => Math.max(ZOOM_MIN, z - ZOOM_STEP))}
+        onZoomReset={() => handleZoomChange(() => DEFAULT_ZOOM)}
         onSearch={runSearch}
         onSearchNext={searchNext}
         onSearchPrevious={searchPrevious}
         onSearchClear={searchClear}
-        onToggleIndex={() => setIndexVisible((v) => !v)}
+        onToggleIndex={handleToggleIndex}
       />
       <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
         {indexVisible && (
@@ -330,10 +389,12 @@ export default function PdfReaderPage({ params }: BuiltInPageProps) {
         <PdfViewport
           document={document}
           zoom={zoom}
+          initialScrollTop={scrollTop}
           goToPage={goToPage}
           searchMatches={searchMatches}
           currentSearchMatch={currentSearchMatchInfo}
-          onCurrentPageChange={setCurrentPage}
+          onCurrentPageChange={handleCurrentPageChange}
+          onScrollPositionChange={handleScrollPositionChange}
           onGoToPageComplete={handleGoToPageComplete}
         />
       </div>

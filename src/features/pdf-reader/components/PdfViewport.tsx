@@ -12,10 +12,12 @@ interface PagePosition {
 interface PdfViewportProps {
   document: PdfDocument;
   zoom: number;
+  initialScrollTop: number;
   goToPage: number | null;
   searchMatches: Map<number, SearchMatch[]>;
   currentSearchMatch: { page: number; matchIndex: number } | null;
   onCurrentPageChange: (page: number) => void;
+  onScrollPositionChange: (scrollTop: number) => void;
   onGoToPageComplete: () => void;
 }
 
@@ -205,13 +207,16 @@ function PdfPage({
 export function PdfViewport({
   document,
   zoom,
+  initialScrollTop,
   goToPage,
   searchMatches,
   currentSearchMatch,
   onCurrentPageChange,
+  onScrollPositionChange,
   onGoToPageComplete,
 }: PdfViewportProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const restoredScrollRef = useRef(false);
   const [visibleRange, setVisibleRange] = useState({ start: 0, end: 1 });
   const [containerWidth, setContainerWidth] = useState(0);
 
@@ -297,15 +302,31 @@ export function PdfViewport({
     }
   }, [pagePositions, onCurrentPageChange]);
 
+  // Restore the last scroll position after page geometry is known.
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    if (!container || restoredScrollRef.current || pagePositions.length === 0) return;
+    container.scrollTop = Math.max(
+      0,
+      Math.min(initialScrollTop, totalHeight - container.clientHeight),
+    );
+    restoredScrollRef.current = true;
+    updateVisibleRange();
+  }, [initialScrollTop, pagePositions.length, totalHeight, updateVisibleRange]);
+
   // Scroll handler
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    const onScroll = () => requestAnimationFrame(updateVisibleRange);
+    const onScroll = () => {
+      const scrollTop = container.scrollTop;
+      onScrollPositionChange(scrollTop);
+      requestAnimationFrame(updateVisibleRange);
+    };
     container.addEventListener("scroll", onScroll, { passive: true });
     updateVisibleRange();
     return () => container.removeEventListener("scroll", onScroll);
-  }, [updateVisibleRange]);
+  }, [updateVisibleRange, onScrollPositionChange]);
 
   // Go to page
   useEffect(() => {
@@ -314,8 +335,9 @@ export function PdfViewport({
     const pos = pagePositions[pageIdx];
     if (!pos) return;
     containerRef.current.scrollTo({ top: pos.y - PAGE_GAP, behavior: "instant" });
+    onScrollPositionChange(containerRef.current.scrollTop);
     onGoToPageComplete();
-  }, [goToPage, pagePositions, onGoToPageComplete]);
+  }, [goToPage, pagePositions, onGoToPageComplete, onScrollPositionChange]);
 
   return (
     <div
