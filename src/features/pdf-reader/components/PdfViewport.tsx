@@ -9,6 +9,11 @@ interface PagePosition {
   height: number;
 }
 
+interface ViewAnchor {
+  pageIndex: number;
+  pageOffsetRatio: number;
+}
+
 interface PdfViewportProps {
   document: PdfDocument;
   zoom: number;
@@ -19,6 +24,7 @@ interface PdfViewportProps {
   onCurrentPageChange: (page: number) => void;
   onScrollPositionChange: (scrollTop: number) => void;
   onGoToPageComplete: () => void;
+  onBeforeZoomChangeRef?: React.MutableRefObject<(() => void) | null>;
 }
 
 /** Transparent text layer for selection/copy support */
@@ -222,9 +228,11 @@ export function PdfViewport({
   onCurrentPageChange,
   onScrollPositionChange,
   onGoToPageComplete,
+  onBeforeZoomChangeRef,
 }: PdfViewportProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const restoredScrollRef = useRef(false);
+  const zoomAnchorRef = useRef<ViewAnchor | null>(null);
   const [visibleRange, setVisibleRange] = useState({ start: 0, end: 1 });
   const [containerWidth, setContainerWidth] = useState(0);
 
@@ -246,6 +254,53 @@ export function PdfViewport({
     if (!last) return 0;
     return last.y + last.height + PAGE_GAP;
   }, [pagePositions]);
+
+  const getCenterAnchor = useCallback((): ViewAnchor | null => {
+    const container = containerRef.current;
+    if (!container || pagePositions.length === 0) return null;
+
+    const centerY = container.scrollTop + container.clientHeight / 2;
+    let nearestPage: { pageIndex: number; distance: number } | null = null;
+
+    for (let pageIndex = 0; pageIndex < pagePositions.length; pageIndex++) {
+      const pos = pagePositions[pageIndex];
+      if (!pos) continue;
+
+      if (centerY >= pos.y && centerY <= pos.y + pos.height) {
+        return {
+          pageIndex,
+          pageOffsetRatio: (centerY - pos.y) / pos.height,
+        };
+      }
+
+      const distance = Math.min(
+        Math.abs(centerY - pos.y),
+        Math.abs(centerY - (pos.y + pos.height)),
+      );
+      if (!nearestPage || distance < nearestPage.distance) {
+        nearestPage = { pageIndex, distance };
+      }
+    }
+
+    if (!nearestPage) return null;
+    const nearestPos = pagePositions[nearestPage.pageIndex];
+    if (!nearestPos) return null;
+
+    return {
+      pageIndex: nearestPage.pageIndex,
+      pageOffsetRatio: centerY < nearestPos.y ? 0 : 1,
+    };
+  }, [pagePositions]);
+
+  useLayoutEffect(() => {
+    if (!onBeforeZoomChangeRef) return;
+    onBeforeZoomChangeRef.current = () => {
+      zoomAnchorRef.current = getCenterAnchor();
+    };
+    return () => {
+      onBeforeZoomChangeRef.current = null;
+    };
+  }, [getCenterAnchor, onBeforeZoomChangeRef]);
 
   // Track container width for centering
   useEffect(() => {
@@ -321,6 +376,28 @@ export function PdfViewport({
     restoredScrollRef.current = true;
     updateVisibleRange();
   }, [initialScrollTop, pagePositions.length, totalHeight, updateVisibleRange]);
+
+  useLayoutEffect(() => {
+    const container = containerRef.current;
+    const anchor = zoomAnchorRef.current;
+    if (!container || !anchor) return;
+
+    const pos = pagePositions[anchor.pageIndex];
+    if (!pos) return;
+
+    const maxScrollTop = Math.max(0, totalHeight - container.clientHeight);
+    const nextScrollTop = Math.max(
+      0,
+      Math.min(
+        pos.y + pos.height * anchor.pageOffsetRatio - container.clientHeight / 2,
+        maxScrollTop,
+      ),
+    );
+    container.scrollTop = nextScrollTop;
+    zoomAnchorRef.current = null;
+    onScrollPositionChange(nextScrollTop);
+    updateVisibleRange();
+  }, [pagePositions, totalHeight, onScrollPositionChange, updateVisibleRange]);
 
   // Scroll handler
   useEffect(() => {

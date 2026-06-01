@@ -111,6 +111,7 @@ export default function PdfReaderPage({ params }: BuiltInPageProps) {
   const [isSearching, setIsSearching] = useState(false);
   const documentRef = useRef<PdfDocument | null>(null);
   const searchRunIdRef = useRef(0);
+  const beforeZoomChangeRef = useRef<(() => void) | null>(null);
 
   // Get index entries from store
   const entries = usePdfReaderStore((s) => (pdfKey ? s.indexes.get(pdfKey) : undefined)) ?? [];
@@ -393,6 +394,7 @@ export default function PdfReaderPage({ params }: BuiltInPageProps) {
   );
   const handleZoomChange = useCallback(
     (updater: (zoom: number) => number) => {
+      beforeZoomChangeRef.current?.();
       setZoom((z) => {
         const nextZoom = updater(z);
         updateViewState(pdfUrl, { zoom: nextZoom });
@@ -498,6 +500,7 @@ export default function PdfReaderPage({ params }: BuiltInPageProps) {
           onCurrentPageChange={handleCurrentPageChange}
           onScrollPositionChange={handleScrollPositionChange}
           onGoToPageComplete={handleGoToPageComplete}
+          onBeforeZoomChangeRef={beforeZoomChangeRef}
         />
       </div>
     </div>
