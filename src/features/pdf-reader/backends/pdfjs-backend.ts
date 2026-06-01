@@ -183,31 +183,52 @@ class PdfjsDocument implements PdfDocument {
       const startMap = charMap[found];
       if (!startMap) continue;
 
-      const startItem = content.items[startMap.itemIdx];
-      if (!startItem || !("transform" in startItem)) continue;
+      const segments = new Map<number, { startChar: number; endChar: number }>();
+      for (let offset = found; offset < found + term.length; offset++) {
+        const mappedChar = charMap[offset];
+        if (!mappedChar) continue;
+        const item = content.items[mappedChar.itemIdx];
+        if (!item || !("str" in item) || mappedChar.charIdx >= item.str.length) continue;
 
-      const transform = pdfjsLib.Util.transform(viewport.transform, startItem.transform);
-      const tx = transform[4] ?? 0;
-      const ty = transform[5] ?? 0;
-      const height = Math.hypot(transform[2] ?? 0, transform[3] ?? 0) || startItem.height;
-      const style = content.styles[startItem.fontName];
-      const fontFamily = style?.fontFamily ?? "sans-serif";
-      const font = `${height}px ${fontFamily}`;
-      const matchText = startItem.str.slice(startMap.charIdx, startMap.charIdx + term.length);
-      const prefixText = startItem.str.slice(0, startMap.charIdx);
-      const x = tx + startItem.width * getMeasuredTextRatio(prefixText, startItem.str, font);
-      const width = startItem.width * getMeasuredTextRatio(matchText, startItem.str, font);
+        const segment = segments.get(mappedChar.itemIdx);
+        if (segment) {
+          segment.endChar = Math.max(segment.endChar, mappedChar.charIdx + 1);
+        } else {
+          segments.set(mappedChar.itemIdx, {
+            startChar: mappedChar.charIdx,
+            endChar: mappedChar.charIdx + 1,
+          });
+        }
+      }
 
-      matches.push({
-        rects: [
-          {
-            x,
-            y: ty - height * TEXT_HIGHLIGHT_ASCENT_RATIO,
-            width,
-            height: height * TEXT_HIGHLIGHT_HEIGHT_RATIO,
-          },
-        ],
-      });
+      const rects: SearchMatch["rects"] = [];
+      for (const [itemIdx, segment] of segments) {
+        const item = content.items[itemIdx];
+        if (!item || !("str" in item) || !("transform" in item)) continue;
+
+        const transform = pdfjsLib.Util.transform(viewport.transform, item.transform);
+        const tx = transform[4] ?? 0;
+        const ty = transform[5] ?? 0;
+        const height = Math.hypot(transform[2] ?? 0, transform[3] ?? 0) || item.height;
+        const style = content.styles[item.fontName];
+        const fontFamily = style?.fontFamily ?? "sans-serif";
+        const font = `${height}px ${fontFamily}`;
+        const prefixText = item.str.slice(0, segment.startChar);
+        const matchText = item.str.slice(segment.startChar, segment.endChar);
+        const x = tx + item.width * getMeasuredTextRatio(prefixText, item.str, font);
+        const width = item.width * getMeasuredTextRatio(matchText, item.str, font);
+
+        rects.push({
+          x,
+          y: ty - height * TEXT_HIGHLIGHT_ASCENT_RATIO,
+          width,
+          height: height * TEXT_HIGHLIGHT_HEIGHT_RATIO,
+        });
+      }
+
+      if (rects.length > 0) {
+        matches.push({ rects });
+      }
     }
 
     return matches;
