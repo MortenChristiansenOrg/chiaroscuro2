@@ -11,6 +11,7 @@ const ZOOM_STEP = 0.25;
 const ZOOM_MIN = 0.25;
 const ZOOM_MAX = 5;
 const DEFAULT_ZOOM = 1;
+const SEARCH_YIELD_PAGE_INTERVAL = 1;
 
 // Cache loaded PDF documents so tab switches don't re-fetch/re-parse
 const documentCache = new Map<string, { document: PdfDocument; pdfKey: string }>();
@@ -22,6 +23,13 @@ interface PdfViewState {
   indexVisible: boolean;
 }
 
+interface PdfSearchState {
+  searchTerm: string;
+  searchMatches: Map<number, SearchMatch[]>;
+  allMatches: { page: number; matchIndex: number }[];
+  currentMatchIdx: number;
+}
+
 const defaultViewState: PdfViewState = {
   currentPage: 1,
   zoom: DEFAULT_ZOOM,
@@ -30,6 +38,7 @@ const defaultViewState: PdfViewState = {
 };
 
 const viewStateCache = new Map<string, PdfViewState>();
+const searchStateCache = new Map<string, PdfSearchState>();
 
 function getViewState(pdfUrl: string | undefined): PdfViewState {
   if (!pdfUrl) return defaultViewState;
@@ -39,6 +48,21 @@ function getViewState(pdfUrl: string | undefined): PdfViewState {
 function updateViewState(pdfUrl: string | undefined, patch: Partial<PdfViewState>): void {
   if (!pdfUrl) return;
   viewStateCache.set(pdfUrl, { ...getViewState(pdfUrl), ...patch });
+}
+
+function getSearchState(pdfUrl: string | undefined): PdfSearchState | undefined {
+  if (!pdfUrl) return undefined;
+  return searchStateCache.get(pdfUrl);
+}
+
+function updateSearchState(pdfUrl: string | undefined, state: PdfSearchState): void {
+  if (!pdfUrl) return;
+  searchStateCache.set(pdfUrl, state);
+}
+
+function clearSearchState(pdfUrl: string | undefined): void {
+  if (!pdfUrl) return;
+  searchStateCache.delete(pdfUrl);
 }
 
 async function loadBackend(type: PdfBackendType): Promise<PdfBackend> {
@@ -59,9 +83,14 @@ function base64ToUint8Array(base64: string): Uint8Array {
   return bytes;
 }
 
+function yieldToRenderer(): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, 0));
+}
+
 export default function PdfReaderPage({ params }: BuiltInPageProps) {
   const pdfUrl = params.url;
   const initialViewState = getViewState(pdfUrl);
+  const initialSearchState = getSearchState(pdfUrl);
   const [document, setDocument] = useState<PdfDocument | null>(null);
   const [pdfKey, setPdfKey] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -71,11 +100,17 @@ export default function PdfReaderPage({ params }: BuiltInPageProps) {
   const [goToPage, setGoToPage] = useState<number | null>(null);
   const [indexVisible, setIndexVisible] = useState(initialViewState.indexVisible);
   const [scrollTop, setScrollTop] = useState(initialViewState.scrollTop);
-  const [searchMatches, setSearchMatches] = useState<Map<number, SearchMatch[]>>(new Map());
-  const [allMatches, setAllMatches] = useState<{ page: number; matchIndex: number }[]>([]);
-  const [currentMatchIdx, setCurrentMatchIdx] = useState(-1);
-  const [searchTerm, setSearchTerm] = useState("");
+  const [searchMatches, setSearchMatches] = useState<Map<number, SearchMatch[]>>(
+    initialSearchState?.searchMatches ?? new Map(),
+  );
+  const [allMatches, setAllMatches] = useState<{ page: number; matchIndex: number }[]>(
+    initialSearchState?.allMatches ?? [],
+  );
+  const [currentMatchIdx, setCurrentMatchIdx] = useState(initialSearchState?.currentMatchIdx ?? -1);
+  const [searchTerm, setSearchTerm] = useState(initialSearchState?.searchTerm ?? "");
+  const [isSearching, setIsSearching] = useState(false);
   const documentRef = useRef<PdfDocument | null>(null);
+  const searchRunIdRef = useRef(0);
 
   // Get index entries from store
   const entries = usePdfReaderStore((s) => (pdfKey ? s.indexes.get(pdfKey) : undefined)) ?? [];
@@ -87,10 +122,12 @@ export default function PdfReaderPage({ params }: BuiltInPageProps) {
     setIndexVisible(viewState.indexVisible);
     setScrollTop(viewState.scrollTop);
     setGoToPage(null);
-    setSearchMatches(new Map());
-    setAllMatches([]);
-    setCurrentMatchIdx(-1);
-    setSearchTerm("");
+    const searchState = getSearchState(pdfUrl);
+    setSearchMatches(searchState?.searchMatches ?? new Map());
+    setAllMatches(searchState?.allMatches ?? []);
+    setCurrentMatchIdx(searchState?.currentMatchIdx ?? -1);
+    setSearchTerm(searchState?.searchTerm ?? "");
+    setIsSearching(false);
   }, [pdfUrl]);
 
   // Load PDF (reuses cached document on tab re-activation)
@@ -201,20 +238,34 @@ export default function PdfReaderPage({ params }: BuiltInPageProps) {
   // Search
   const runSearch = useCallback(
     async (term: string) => {
+      const searchRunId = searchRunIdRef.current + 1;
+      searchRunIdRef.current = searchRunId;
+
       if (!document || !term) {
         setSearchMatches(new Map());
         setAllMatches([]);
         setCurrentMatchIdx(-1);
         setSearchTerm("");
+        setIsSearching(false);
         return;
       }
 
       setSearchTerm(term);
+      setIsSearching(true);
       const matches = new Map<number, SearchMatch[]>();
       const flatMatches: { page: number; matchIndex: number }[] = [];
 
       for (let i = 0; i < document.pageCount; i++) {
+        if (searchRunId !== searchRunIdRef.current) return;
+
+        if (i % SEARCH_YIELD_PAGE_INTERVAL === 0) {
+          await yieldToRenderer();
+          if (searchRunId !== searchRunIdRef.current) return;
+        }
+
         const pageMatches = await document.searchPage(i, term);
+        if (searchRunId !== searchRunIdRef.current) return;
+
         if (pageMatches.length > 0) {
           matches.set(i, pageMatches);
           for (let m = 0; m < pageMatches.length; m++) {
@@ -226,37 +277,71 @@ export default function PdfReaderPage({ params }: BuiltInPageProps) {
       setSearchMatches(matches);
       setAllMatches(flatMatches);
       setCurrentMatchIdx(flatMatches.length > 0 ? 0 : -1);
+      updateSearchState(pdfUrl, {
+        searchTerm: term,
+        searchMatches: matches,
+        allMatches: flatMatches,
+        currentMatchIdx: flatMatches.length > 0 ? 0 : -1,
+      });
+      setIsSearching(false);
 
       // Jump to first match
       if (flatMatches.length > 0 && flatMatches[0]) {
         setGoToPage(flatMatches[0].page + 1);
       }
     },
-    [document],
+    [document, pdfUrl],
   );
 
   const searchNext = useCallback(() => {
     if (allMatches.length === 0) return;
     const next = (currentMatchIdx + 1) % allMatches.length;
     setCurrentMatchIdx(next);
+    updateSearchState(pdfUrl, { searchTerm, searchMatches, allMatches, currentMatchIdx: next });
     const match = allMatches[next];
     if (match) setGoToPage(match.page + 1);
-  }, [allMatches, currentMatchIdx]);
+  }, [allMatches, currentMatchIdx, pdfUrl, searchMatches, searchTerm]);
 
   const searchPrevious = useCallback(() => {
     if (allMatches.length === 0) return;
     const prev = (currentMatchIdx - 1 + allMatches.length) % allMatches.length;
     setCurrentMatchIdx(prev);
+    updateSearchState(pdfUrl, { searchTerm, searchMatches, allMatches, currentMatchIdx: prev });
     const match = allMatches[prev];
     if (match) setGoToPage(match.page + 1);
-  }, [allMatches, currentMatchIdx]);
+  }, [allMatches, currentMatchIdx, pdfUrl, searchMatches, searchTerm]);
+
+  const handleSearchInputChange = useCallback(
+    (term: string) => {
+      searchRunIdRef.current += 1;
+      setSearchMatches(new Map());
+      setAllMatches([]);
+      setCurrentMatchIdx(-1);
+      setSearchTerm(term);
+      setIsSearching(false);
+      if (term) {
+        updateSearchState(pdfUrl, {
+          searchTerm: term,
+          searchMatches: new Map(),
+          allMatches: [],
+          currentMatchIdx: -1,
+        });
+      } else {
+        clearSearchState(pdfUrl);
+      }
+    },
+    [pdfUrl],
+  );
 
   const searchClear = useCallback(() => {
+    searchRunIdRef.current += 1;
     setSearchMatches(new Map());
     setAllMatches([]);
     setCurrentMatchIdx(-1);
     setSearchTerm("");
-  }, []);
+    setIsSearching(false);
+    clearSearchState(pdfUrl);
+  }, [pdfUrl]);
 
   // Index handlers
   const handleIndexAdd = useCallback(
@@ -374,6 +459,8 @@ export default function PdfReaderPage({ params }: BuiltInPageProps) {
         currentPage={currentPage}
         pageCount={document.pageCount}
         zoom={zoom}
+        isSearching={isSearching}
+        initialSearchTerm={searchTerm}
         searchMatchCount={allMatches.length}
         currentSearchMatch={currentMatchIdx >= 0 ? currentMatchIdx + 1 : 0}
         indexVisible={indexVisible}
@@ -382,6 +469,7 @@ export default function PdfReaderPage({ params }: BuiltInPageProps) {
         onZoomOut={() => handleZoomChange((z) => Math.max(ZOOM_MIN, z - ZOOM_STEP))}
         onZoomReset={() => handleZoomChange(() => DEFAULT_ZOOM)}
         onSearch={runSearch}
+        onSearchInputChange={handleSearchInputChange}
         onSearchNext={searchNext}
         onSearchPrevious={searchPrevious}
         onSearchClear={searchClear}

@@ -1,10 +1,12 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "../../../renderer/src/components/Icon";
 
 interface PdfToolbarProps {
   currentPage: number;
   pageCount: number;
   zoom: number;
+  isSearching: boolean;
+  initialSearchTerm: string;
   searchMatchCount: number;
   currentSearchMatch: number;
   indexVisible: boolean;
@@ -13,6 +15,7 @@ interface PdfToolbarProps {
   onZoomOut: () => void;
   onZoomReset: () => void;
   onSearch: (term: string) => void;
+  onSearchInputChange: (term: string) => void;
   onSearchNext: () => void;
   onSearchPrevious: () => void;
   onSearchClear: () => void;
@@ -55,6 +58,8 @@ export function PdfToolbar({
   currentPage,
   pageCount,
   zoom,
+  isSearching,
+  initialSearchTerm,
   searchMatchCount,
   currentSearchMatch,
   indexVisible,
@@ -63,6 +68,7 @@ export function PdfToolbar({
   onZoomOut,
   onZoomReset,
   onSearch,
+  onSearchInputChange,
   onSearchNext,
   onSearchPrevious,
   onSearchClear,
@@ -71,6 +77,10 @@ export function PdfToolbar({
   const [searchTerm, setSearchTerm] = useState("");
   const [pageInput, setPageInput] = useState("");
   const searchInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setSearchTerm(initialSearchTerm);
+  }, [initialSearchTerm]);
 
   const handlePageSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,25 +93,25 @@ export function PdfToolbar({
 
   const handleSearchSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (searchTerm) {
-      onSearch(searchTerm);
+    const term = searchTerm.trim();
+    if (term) {
+      onSearch(term);
     }
   };
 
   const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setSearchTerm(value);
-    if (value) {
-      onSearch(value);
-    } else {
-      onSearchClear();
-    }
+    onSearchInputChange(value);
   };
 
   const handleSearchKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      if (e.shiftKey) {
+      const term = searchTerm.trim();
+      if (term && searchMatchCount === 0) {
+        onSearch(term);
+      } else if (e.shiftKey) {
         onSearchPrevious();
       } else {
         onSearchNext();
@@ -244,14 +254,20 @@ export function PdfToolbar({
                 color: "var(--muted-foreground)",
                 fontSize: "var(--text-xs)",
                 whiteSpace: "nowrap",
+                minWidth: "3.75rem",
               }}
+              aria-live="polite"
             >
-              {searchMatchCount > 0 ? `${currentSearchMatch} / ${searchMatchCount}` : "No matches"}
+              {isSearching
+                ? "Searching..."
+                : searchMatchCount > 0
+                  ? `${currentSearchMatch} / ${searchMatchCount}`
+                  : "No matches"}
             </span>
             <button
               type="button"
               onClick={onSearchPrevious}
-              disabled={searchMatchCount === 0}
+              disabled={isSearching || searchMatchCount === 0}
               className={buttonClass}
               data-tip="Previous match"
               aria-label="Previous match"
@@ -261,7 +277,7 @@ export function PdfToolbar({
             <button
               type="button"
               onClick={onSearchNext}
-              disabled={searchMatchCount === 0}
+              disabled={isSearching || searchMatchCount === 0}
               className={buttonClass}
               data-tip="Next match"
               aria-label="Next match"

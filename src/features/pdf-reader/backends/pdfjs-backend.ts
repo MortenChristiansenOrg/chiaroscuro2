@@ -22,6 +22,21 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(
   new Blob([wrapperCode], { type: "text/javascript" }),
 );
 
+const measureCanvas = document.createElement("canvas");
+const measureContext = measureCanvas.getContext("2d");
+const TEXT_HIGHLIGHT_ASCENT_RATIO = 0.78;
+const TEXT_HIGHLIGHT_HEIGHT_RATIO = 0.88;
+
+function getMeasuredTextRatio(text: string, fullText: string, font: string): number {
+  if (!text) return 0;
+  if (!measureContext) return text.length / Math.max(1, fullText.length);
+
+  measureContext.font = font;
+  const fullWidth = measureContext.measureText(fullText).width;
+  if (fullWidth <= 0) return text.length / Math.max(1, fullText.length);
+  return measureContext.measureText(text).width / fullWidth;
+}
+
 class PdfjsDocument implements PdfDocument {
   private pageDimsCache = new Map<number, PageDimensions>();
 
@@ -135,15 +150,10 @@ class PdfjsDocument implements PdfDocument {
   }
 
   async searchPage(pageIndex: number, term: string): Promise<SearchMatch[]> {
-    const text = await this.getPageText(pageIndex);
-    const lowerText = text.toLowerCase();
-    const lowerTerm = term.toLowerCase();
-    if (!lowerText.includes(lowerTerm)) return [];
-
-    // Get text items with positions for highlighting
     const page = await this.doc.getPage(pageIndex + 1);
     const content = await page.getTextContent();
     const viewport = page.getViewport({ scale: 1 });
+    const lowerTerm = term.toLowerCase();
     const matches: SearchMatch[] = [];
 
     // Build a text stream with position mapping
@@ -176,20 +186,27 @@ class PdfjsDocument implements PdfDocument {
       const startItem = content.items[startMap.itemIdx];
       if (!startItem || !("transform" in startItem)) continue;
 
-      // Transform coordinates from PDF space to viewport space
-      const transform = startItem.transform as number[];
+      const transform = pdfjsLib.Util.transform(viewport.transform, startItem.transform);
       const tx = transform[4] ?? 0;
       const ty = transform[5] ?? 0;
-      const height = startItem.height;
-      const itemLen = Math.max(1, startItem.str.length);
-      // Convert from PDF coordinate system (bottom-left origin) to canvas (top-left)
-      const charOffset = startMap.charIdx / itemLen;
-      const x = tx + startItem.width * charOffset;
-      const y = viewport.height - ty;
-      const width = startItem.width * (term.length / itemLen);
+      const height = Math.hypot(transform[2] ?? 0, transform[3] ?? 0) || startItem.height;
+      const style = content.styles[startItem.fontName];
+      const fontFamily = style?.fontFamily ?? "sans-serif";
+      const font = `${height}px ${fontFamily}`;
+      const matchText = startItem.str.slice(startMap.charIdx, startMap.charIdx + term.length);
+      const prefixText = startItem.str.slice(0, startMap.charIdx);
+      const x = tx + startItem.width * getMeasuredTextRatio(prefixText, startItem.str, font);
+      const width = startItem.width * getMeasuredTextRatio(matchText, startItem.str, font);
 
       matches.push({
-        rects: [{ x, y: y - height, width, height }],
+        rects: [
+          {
+            x,
+            y: ty - height * TEXT_HIGHLIGHT_ASCENT_RATIO,
+            width,
+            height: height * TEXT_HIGHLIGHT_HEIGHT_RATIO,
+          },
+        ],
       });
     }
 

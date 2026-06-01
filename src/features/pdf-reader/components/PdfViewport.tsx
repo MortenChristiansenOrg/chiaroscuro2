@@ -88,14 +88,14 @@ function PdfPage({
   zoom,
   style,
   searchMatches,
-  isCurrentMatchPage,
+  currentMatchIndex,
 }: {
   document: PdfDocument;
   pageIndex: number;
   zoom: number;
   style: React.CSSProperties;
   searchMatches?: SearchMatch[];
-  isCurrentMatchPage: boolean;
+  currentMatchIndex: number | null;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const overlayRef = useRef<HTMLCanvasElement>(null);
@@ -163,13 +163,21 @@ function PdfPage({
 
     ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
 
-    for (const match of searchMatches) {
+    for (let matchIndex = 0; matchIndex < searchMatches.length; matchIndex++) {
+      const match = searchMatches[matchIndex];
+      if (!match) continue;
+      const isCurrentMatch = currentMatchIndex === matchIndex;
       for (const rect of match.rects) {
-        ctx.fillStyle = isCurrentMatchPage ? "rgba(255, 165, 0, 0.4)" : "rgba(255, 255, 0, 0.3)";
+        ctx.fillStyle = isCurrentMatch ? "rgba(255, 133, 27, 0.62)" : "rgba(255, 226, 77, 0.34)";
         ctx.fillRect(rect.x * zoom, rect.y * zoom, rect.width * zoom, rect.height * zoom);
+        if (isCurrentMatch) {
+          ctx.strokeStyle = "rgba(194, 65, 12, 0.9)";
+          ctx.lineWidth = 1;
+          ctx.strokeRect(rect.x * zoom, rect.y * zoom, rect.width * zoom, rect.height * zoom);
+        }
       }
     }
-  }, [document, pageIndex, zoom, searchMatches, isCurrentMatchPage]);
+  }, [document, pageIndex, zoom, searchMatches, currentMatchIndex]);
 
   return (
     <div
@@ -367,7 +375,9 @@ export function PdfViewport({
                 height: pos.height,
               }}
               searchMatches={pageMatches}
-              isCurrentMatchPage={currentSearchMatch?.page === pageIdx}
+              currentMatchIndex={
+                currentSearchMatch?.page === pageIdx ? currentSearchMatch.matchIndex : null
+              }
             />
           );
         })}
