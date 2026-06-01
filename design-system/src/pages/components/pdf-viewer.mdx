@@ -60,6 +60,7 @@ A custom PDF reader that replaces Chromium's built-in viewer. Supports two rende
 | State | Display |
 |-------|---------|
 | No search | Search input only |
+| Search running | Input + "Searching..." status |
 | Searching with matches | Input + "N / M" count + prev/next buttons |
 | Searching no matches | Input + "No matches" |
 
@@ -80,7 +81,8 @@ A custom PDF reader that replaces Chromium's built-in viewer. Supports two rende
 - **HiDPI rendering** -- canvas pixel dimensions scaled by `devicePixelRatio` for crisp rendering.
 - **Index persistence** -- custom index stored by `{filename}:{hash}` key. Moving/copying a PDF preserves the index.
 - **Index auto-populate** -- on first open, the PDF's built-in outline is imported as index entries.
-- **Search highlighting** -- matches shown as semi-transparent overlays on a separate canvas layer. Current match page uses orange, others yellow.
+- **Search execution** -- typing in the search field updates the query only. Pressing Enter starts the document search.
+- **Search highlighting** -- matches shown as semi-transparent overlays on a separate canvas layer. The current match uses orange with an outline; other matches use yellow.
 
 ---
 
@@ -88,7 +90,8 @@ A custom PDF reader that replaces Chromium's built-in viewer. Supports two rende
 
 | Key | Action |
 |-----|--------|
-| Enter (in search) | Next match |
+| Enter (in search, before results) | Search document |
+| Enter (in search, with results) | Next match |
 | Shift+Enter (in search) | Previous match |
 | Escape (in search) | Clear search |
 | Enter (in page input) | Go to page |

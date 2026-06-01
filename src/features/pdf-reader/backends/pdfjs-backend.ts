@@ -22,6 +22,21 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = URL.createObjectURL(
   new Blob([wrapperCode], { type: "text/javascript" }),
 );
 
+const measureCanvas = document.createElement("canvas");
+const measureContext = measureCanvas.getContext("2d");
+const TEXT_HIGHLIGHT_ASCENT_RATIO = 0.78;
+const TEXT_HIGHLIGHT_HEIGHT_RATIO = 0.88;
+
+function getMeasuredTextRatio(text: string, fullText: string, font: string): number {
+  if (!text) return 0;
+  if (!measureContext) return text.length / Math.max(1, fullText.length);
+
+  measureContext.font = font;
+  const fullWidth = measureContext.measureText(fullText).width;
+  if (fullWidth <= 0) return text.length / Math.max(1, fullText.length);
+  return measureContext.measureText(text).width / fullWidth;
+}
+
 class PdfjsDocument implements PdfDocument {
   private pageDimsCache = new Map<number, PageDimensions>();
 
@@ -135,15 +150,10 @@ class PdfjsDocument implements PdfDocument {
   }
 
   async searchPage(pageIndex: number, term: string): Promise<SearchMatch[]> {
-    const text = await this.getPageText(pageIndex);
-    const lowerText = text.toLowerCase();
-    const lowerTerm = term.toLowerCase();
-    if (!lowerText.includes(lowerTerm)) return [];
-
-    // Get text items with positions for highlighting
     const page = await this.doc.getPage(pageIndex + 1);
     const content = await page.getTextContent();
     const viewport = page.getViewport({ scale: 1 });
+    const lowerTerm = term.toLowerCase();
     const matches: SearchMatch[] = [];
 
     // Build a text stream with position mapping
@@ -173,24 +183,52 @@ class PdfjsDocument implements PdfDocument {
       const startMap = charMap[found];
       if (!startMap) continue;
 
-      const startItem = content.items[startMap.itemIdx];
-      if (!startItem || !("transform" in startItem)) continue;
+      const segments = new Map<number, { startChar: number; endChar: number }>();
+      for (let offset = found; offset < found + term.length; offset++) {
+        const mappedChar = charMap[offset];
+        if (!mappedChar) continue;
+        const item = content.items[mappedChar.itemIdx];
+        if (!item || !("str" in item) || mappedChar.charIdx >= item.str.length) continue;
 
-      // Transform coordinates from PDF space to viewport space
-      const transform = startItem.transform as number[];
-      const tx = transform[4] ?? 0;
-      const ty = transform[5] ?? 0;
-      const height = startItem.height;
-      const itemLen = Math.max(1, startItem.str.length);
-      // Convert from PDF coordinate system (bottom-left origin) to canvas (top-left)
-      const charOffset = startMap.charIdx / itemLen;
-      const x = tx + startItem.width * charOffset;
-      const y = viewport.height - ty;
-      const width = startItem.width * (term.length / itemLen);
+        const segment = segments.get(mappedChar.itemIdx);
+        if (segment) {
+          segment.endChar = Math.max(segment.endChar, mappedChar.charIdx + 1);
+        } else {
+          segments.set(mappedChar.itemIdx, {
+            startChar: mappedChar.charIdx,
+            endChar: mappedChar.charIdx + 1,
+          });
+        }
+      }
 
-      matches.push({
-        rects: [{ x, y: y - height, width, height }],
-      });
+      const rects: SearchMatch["rects"] = [];
+      for (const [itemIdx, segment] of segments) {
+        const item = content.items[itemIdx];
+        if (!item || !("str" in item) || !("transform" in item)) continue;
+
+        const transform = pdfjsLib.Util.transform(viewport.transform, item.transform);
+        const tx = transform[4] ?? 0;
+        const ty = transform[5] ?? 0;
+        const height = Math.hypot(transform[2] ?? 0, transform[3] ?? 0) || item.height;
+        const style = content.styles[item.fontName];
+        const fontFamily = style?.fontFamily ?? "sans-serif";
+        const font = `${height}px ${fontFamily}`;
+        const prefixText = item.str.slice(0, segment.startChar);
+        const matchText = item.str.slice(segment.startChar, segment.endChar);
+        const x = tx + item.width * getMeasuredTextRatio(prefixText, item.str, font);
+        const width = item.width * getMeasuredTextRatio(matchText, item.str, font);
+
+        rects.push({
+          x,
+          y: ty - height * TEXT_HIGHLIGHT_ASCENT_RATIO,
+          width,
+          height: height * TEXT_HIGHLIGHT_HEIGHT_RATIO,
+        });
+      }
+
+      if (rects.length > 0) {
+        matches.push({ rects });
+      }
     }
 
     return matches;
