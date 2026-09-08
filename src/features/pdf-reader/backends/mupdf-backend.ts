@@ -156,7 +156,7 @@ class MupdfDocument implements PdfDocument {
     }));
   }
 
-  destroy(): void {
+  async destroy(): Promise<void> {
     // mupdf PDFDocument doesn't have an explicit destroy — GC handles it
   }
 }

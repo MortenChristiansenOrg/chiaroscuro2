@@ -73,6 +73,14 @@ echo "Installing locked dependencies on Windows (requires Bun 1.3.11+)..."
     Write-Error 'Install Bun 1.3.11 or newer on Windows before launching dev:win.'
     exit 1
   }
+  \$bunVersion = [version]'0.0.0'
+  \$bunVersionText = bun --version
+  if (\$LASTEXITCODE -ne 0 -or
+      -not [version]::TryParse(\$bunVersionText, [ref]\$bunVersion) -or
+      \$bunVersion -lt [version]'1.3.11') {
+    Write-Error 'Bun 1.3.11 or newer is required on Windows.'
+    exit 1
+  }
   bun install --frozen-lockfile
   if (\$LASTEXITCODE -ne 0) { exit \$LASTEXITCODE }
   bun run setup:electron

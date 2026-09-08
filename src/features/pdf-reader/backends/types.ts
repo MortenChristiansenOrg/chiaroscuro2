@@ -10,7 +10,7 @@ export interface PdfDocument {
   getPageText(pageIndex: number): Promise<string>;
   getPageTextItems(pageIndex: number): Promise<TextItem[]>;
   searchPage(pageIndex: number, term: string): Promise<SearchMatch[]>;
-  destroy(): void;
+  destroy(): Promise<void>;
 }
 
 export interface TextItem {
