@@ -61,6 +61,8 @@ powershell.exe -NoProfile -Command "
   }
   bun install --frozen-lockfile
   if (\$LASTEXITCODE -ne 0) { exit \$LASTEXITCODE }
+  bun run setup:electron
+  if (\$LASTEXITCODE -ne 0) { exit \$LASTEXITCODE }
 "
 
 # Resolve electron.exe path (direct path avoids npx failures)

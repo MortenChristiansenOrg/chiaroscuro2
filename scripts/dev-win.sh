@@ -75,6 +75,8 @@ echo "Installing locked dependencies on Windows (requires Bun 1.3.11+)..."
   }
   bun install --frozen-lockfile
   if (\$LASTEXITCODE -ne 0) { exit \$LASTEXITCODE }
+  bun run setup:electron
+  if (\$LASTEXITCODE -ne 0) { exit \$LASTEXITCODE }
 "
 
 # Resolve electron.exe path

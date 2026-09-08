@@ -15,6 +15,9 @@ Run `bun install --frozen-lockfile` for a checkout and `bun update --latest` for
   `electron` (runtime download), `esbuild` (binary setup), and `@biomejs/biome`
   (binary setup). This replaces Bun's default trusted list. Other dependency scripts
   stay blocked; use `bun pm untrusted` to inspect them and review any allowlist change.
+- Electron 44 downloads its executable on first use instead of during postinstall.
+  `bun run setup:electron` explicitly prepares the locked executable before parallel
+  E2E workers and before native Windows launch; this prevents simultaneous downloads.
 - Windows development also requires Bun on Windows and installs the same lockfile
   and policy on every launch, so an existing Electron installation is updated.
   Do not use npm to install this project's dependencies; it does not enforce this policy.
