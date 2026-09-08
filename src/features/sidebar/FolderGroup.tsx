@@ -3,8 +3,8 @@ import type { Folder } from "../folders/folders.shared";
 import type { Tab } from "../tabs/tabs.shared";
 import { FolderHeader } from "./FolderHeader";
 import { useSidebarDrag } from "./SidebarContext";
-import { TabItem } from "./TabItem";
 import type { TreeItem } from "./sidebar.renderer";
+import { TabItem } from "./TabItem";
 
 // ── Helpers ─────────────────────────────────────────────────────
 

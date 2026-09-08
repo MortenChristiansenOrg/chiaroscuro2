@@ -177,8 +177,8 @@ export interface Platform {
   /** Open URL without scheme filtering. Only for user-approved protocol launches. */
   openExternalApproved(url: string): Promise<void>;
   openPath(filePath: string): Promise<void>;
-  readClipboard(): string;
-  writeClipboard(text: string): void;
+  readClipboard(): Promise<string>;
+  writeClipboard(text: string): Promise<void>;
 
   // Tab content actions
   /** Copy the image at (x, y) in the tab to the system clipboard. */

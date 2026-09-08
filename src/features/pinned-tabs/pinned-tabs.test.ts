@@ -13,8 +13,7 @@ import {
   TABS_TOGGLE_BOOKMARK,
   TABS_UPDATED,
 } from "../tabs/tabs.shared";
-import feature from "./pinned-tabs.main";
-import { start } from "./pinned-tabs.main";
+import feature, { start } from "./pinned-tabs.main";
 import {
   PINNED_TABS_ACTIVATE,
   PINNED_TABS_ACTIVE_CHANGED,

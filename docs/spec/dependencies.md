@@ -1,29 +1,42 @@
 # Dependencies & Build
 
+## Installation policy
+
+Use Bun 1.3.11 or newer; `packageManager` and CI pin the verified version to 1.3.11.
+Run `bun install --frozen-lockfile` for a checkout and `bun update --latest` for upgrades.
+
+- `bunfig.toml` requires npm releases to be at least 86,400 seconds (one day) old.
+  This applies to newly resolved direct and transitive dependencies, with no exceptions.
+  Existing lockfile entries are reused; the age gate does not revalidate locked versions.
+- `package.json` explicitly allows dependency lifecycle scripts only for
+  `electron` (runtime download), `esbuild` (binary setup), and `@biomejs/biome`
+  (binary setup). This replaces Bun's default trusted list. Other dependency scripts
+  stay blocked; use `bun pm untrusted` to inspect them and review any allowlist change.
+- Windows development also requires Bun on Windows and installs the same lockfile
+  and policy on every launch, so an existing Electron installation is updated.
+  Do not use npm to install this project's dependencies; it does not enforce this policy.
+
+See [Bun's release-age documentation](https://bun.com/docs/pm/cli/install#minimum-release-age)
+and [lifecycle-script documentation](https://bun.com/docs/pm/lifecycle).
+
 ## Key Packages
 
-```json
-{
-  "electron": "^35.0.0",
-  "electron-updater": "^6.x",
-  "electron-chrome-extensions": "^4.9",
-  "electron-chrome-web-store": "^0.13",
-  "@cliqz/adblocker-electron": "^1.34",
-  "rxdb": "^16.x",
-  "rxdb-utils": "^2.x",
-  "react": "^19.x",
-  "babel-plugin-react-compiler": "^19.x",
-  "tailwindcss": "^4.x",
-  "zustand": "^5.x",
-  "zod": "^3.x"
-}
-```
+`package.json` and `bun.lock` are the authoritative dependency list and resolved versions.
 
-**Dev dependencies**: `electron-builder` ^26.x, `electron-vite`
-**Tailwind**: Use `@tailwindcss/vite` plugin (set `"moduleResolution": "bundler"` in tsconfig). Fallback: `@tailwindcss/postcss`.
-**shadcn/ui**: `bunx shadcn@latest init` (supports TW4 natively; may need `vite.config.js` symlink for electron-vite detection)
-**Zustand**: Use inline selectors (`useStore(s => s.field)`), avoid auto-generated selectors. Use `useShallow` for multi-field selections.
-**RxDB**: Free Filesystem RxStorage for main process, Memory RxStorage for tests. No native modules required — pure JS.
+- Electron 44.2.0: latest stable eligible under the age gate at the September 8, 2026 update
+  (44.3.0 was less than one day old).
+- React 19, RxDB 17, Zustand 5, Zod 4, Tailwind CSS 4.
+- PDF rendering: MuPDF 1.28 and PDF.js 6.
+- Build and validation: electron-builder 26, electron-vite 5, TypeScript 7,
+  Biome 2, Vitest 5, and Playwright 1.63.
+- Vite stays on the latest compatible 7.x release, with `@vitejs/plugin-react` 5.x.
+  electron-vite 5 only supports Vite 5–7; plugin-react 6 requires Vite 8.
+  React Compiler remains enabled through the Babel plugin.
+- The Biome 2 migration preserves the previous CSS checking scope and defers its
+  newly recommended `noStaticElementInteractions` rule for existing drag/hover UI.
+
+**Tailwind**: Use `@tailwindcss/vite` with `moduleResolution: "bundler"`.
+**Zustand**: Use inline selectors (`useStore(s => s.field)`) and `useShallow` for multiple fields.
 
 ## Build & Distribution
 

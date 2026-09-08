@@ -5,8 +5,8 @@ import type { Tab } from "../tabs/tabs.shared";
 import { BookmarkedTree } from "./BookmarkedTree";
 import { SectionDropZone } from "./SectionDropZone";
 import { useSidebarDrag } from "./SidebarContext";
-import { TabItem } from "./TabItem";
 import type { TreeItem } from "./sidebar.renderer";
+import { TabItem } from "./TabItem";
 
 export function TabSection({
   bookmarked,

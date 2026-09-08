@@ -143,7 +143,7 @@ class MupdfDocument implements PdfDocument {
 
   async searchPage(pageIndex: number, term: string): Promise<SearchMatch[]> {
     const page = this.doc.loadPage(pageIndex);
-    const results = page.search(term);
+    const results = page.search(term, {});
     return results.map((quads) => ({
       rects: quads.map((quad) => {
         // Quad is [ulx, uly, urx, ury, llx, lly, lrx, lry]

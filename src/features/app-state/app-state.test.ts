@@ -4,8 +4,7 @@ import { EventBus } from "../../bus/event-bus";
 import { MemoryDataStore } from "../../data/memory-store";
 import type { Bounds, WindowId } from "../../shared/types";
 import { createMockPlatform } from "../../test-utils";
-import feature from "./app-state.main";
-import { loadPersistedState } from "./app-state.main";
+import feature, { loadPersistedState } from "./app-state.main";
 import {
   APP_STATE_RESTORED,
   APP_STATE_SAVE,

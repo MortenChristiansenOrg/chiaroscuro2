@@ -4,8 +4,7 @@ import { EventBus } from "../../bus/event-bus";
 import type { TabId } from "../../shared/types";
 import { createMockPlatform } from "../../test-utils/mock-platform";
 import type { TabsEvents } from "../tabs/tabs.shared";
-import feature from "./terminal.main";
-import { _reset } from "./terminal.main";
+import feature, { _reset } from "./terminal.main";
 import {
   TERMINAL_CLEAR,
   TERMINAL_CLEARED,

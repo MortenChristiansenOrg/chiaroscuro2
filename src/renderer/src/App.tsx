@@ -22,6 +22,7 @@ import "../../features/pip/pip.feature";
 
 // All subscriptions wired — tell main process to start emitting events (phase 2)
 import { Shell, signalReady } from "./Shell";
+
 signalReady();
 
 export default function App() {

@@ -50,11 +50,18 @@ rsync -a --delete "$PROJECT_DIR/out/main" "$PROJECT_DIR/out/preload" "$WIN_DIR/o
 rsync -a --delete "$PROJECT_DIR/resources/" "$WIN_DIR/resources/" 2>/dev/null || true
 cp "$PROJECT_DIR/package.json" "$WIN_DIR/"
 
-# One-time: install electron on Windows side
-if [ ! -d "$WIN_DIR/node_modules/electron" ]; then
-  echo "First run: installing Electron on Windows (one-time)..."
-  powershell.exe -NoProfile -Command "cd '$WIN_PATH'; npm install --save-dev electron"
-fi
+# Use the repository lockfile and install policy on Windows as well.
+cp "$PROJECT_DIR/bun.lock" "$PROJECT_DIR/bunfig.toml" "$WIN_DIR/"
+echo "Installing locked dependencies on Windows (requires Bun 1.3.11+)..."
+powershell.exe -NoProfile -Command "
+  Set-Location '$WIN_PATH'
+  if (-not (Get-Command bun -ErrorAction SilentlyContinue)) {
+    Write-Error 'Install Bun 1.3.11 or newer on Windows before launching dev:win.'
+    exit 1
+  }
+  bun install --frozen-lockfile
+  if (\$LASTEXITCODE -ne 0) { exit \$LASTEXITCODE }
+"
 
 # Resolve electron.exe path (direct path avoids npx failures)
 ELECTRON_EXE="$WIN_DIR/node_modules/electron/dist/electron.exe"

@@ -4,8 +4,7 @@ import type { Platform } from "../../platform/types";
 import { defineFeature } from "../../shared/define-feature";
 import { logError } from "../../shared/log";
 import { TabScope } from "../../shared/tab-scope";
-import type { TabId } from "../../shared/types";
-import type { Bounds } from "../../shared/types";
+import type { Bounds, TabId } from "../../shared/types";
 import type { SearchProvider } from "../command-palette/resolve-input";
 import { CONTEXT_MENU_SHOW, type ContextMenuCommands } from "../context-menu/context-menu.shared";
 import { SETTINGS_GET, type Settings, type SettingsCommands } from "../settings/settings.shared";
@@ -87,7 +86,7 @@ export default defineFeature<Deps>({
     // ── Command handlers ───────────────────────────────────────────
 
     commands.handle(TAB_CONTEXT_MENU_COPY_TEXT, async ({ text }) => {
-      platform.writeClipboard(text);
+      await platform.writeClipboard(text);
     });
 
     commands.handle(TAB_CONTEXT_MENU_COPY_IMAGE, async ({ tabId, x, y }) => {

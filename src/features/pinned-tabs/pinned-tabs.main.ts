@@ -18,12 +18,12 @@ import {
   TABS_UPDATED,
 } from "../tabs/tabs.shared";
 import {
+  type PersistedPinnedTab,
   PINNED_TABS_ACTIVATE,
   PINNED_TABS_ACTIVE_CHANGED,
   PINNED_TABS_CHANGED,
   PINNED_TABS_IS_PINNED,
   PINNED_TABS_TOGGLE_PIN,
-  type PersistedPinnedTab,
   type PinnedTab,
   type PinnedTabsCommands,
   type PinnedTabsEvents,

@@ -235,7 +235,7 @@ class PdfjsDocument implements PdfDocument {
   }
 
   destroy(): void {
-    this.doc.destroy();
+    void this.doc.loadingTask.destroy();
   }
 }
 

@@ -4,15 +4,14 @@ import { EventBus } from "../../bus/event-bus";
 import type { Platform } from "../../platform/types";
 import type { TabId, WindowId } from "../../shared/types";
 import { createMockPlatform } from "../../test-utils";
-import feature from "./window-chrome.main";
-import { stripTrackingParams } from "./window-chrome.main";
+import feature, { stripTrackingParams } from "./window-chrome.main";
 import {
   WINDOW_CLOSE,
   WINDOW_COPY_ADDRESS,
   WINDOW_GO_BACK,
   WINDOW_GO_FORWARD,
-  WINDOW_MAXIMIZED_CHANGED,
   WINDOW_MAXIMIZE_RESTORE,
+  WINDOW_MAXIMIZED_CHANGED,
   WINDOW_MINIMIZE,
   WINDOW_RELOAD,
   type WindowChromeCommands,
@@ -84,6 +83,15 @@ describe("window-chrome commands", () => {
     const { commands, platform } = setup({}, { getTabUrl: () => "https://example.com" });
     await commands.send(WINDOW_COPY_ADDRESS, undefined);
     expect(platform.writeClipboard).toHaveBeenCalledWith("https://example.com");
+  });
+
+  it("copy-address propagates asynchronous clipboard failures", async () => {
+    const failure = new Error("Clipboard unavailable");
+    const { commands } = setup(
+      { writeClipboard: vi.fn().mockRejectedValue(failure) },
+      { getTabUrl: () => "https://example.com" },
+    );
+    await expect(commands.send(WINDOW_COPY_ADDRESS, undefined)).rejects.toThrow(failure);
   });
 
   it("copy-address strips tracking params", async () => {
