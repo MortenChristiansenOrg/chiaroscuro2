@@ -2,6 +2,9 @@
 
 ## Installation policy
 
+Use Node.js 24.20.0 LTS (`.node-version`) for build/test tools; jsdom 30 requires at least
+Node 24.15.0 on the 24.x line. CI explicitly installs this runtime.
+
 Use Bun 1.3.11 or newer; `packageManager` and CI pin the verified version to 1.3.11.
 Run `bun install --frozen-lockfile` for a checkout and `bun update --latest` for upgrades.
 
