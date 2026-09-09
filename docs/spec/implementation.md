@@ -162,7 +162,7 @@ export function Sidebar() {
 
 ## 13. Storage (Data Abstraction)
 
-All persistence goes through the `DataStore` interface. Each feature owns its RxDB collection schema and provides migrations. Features never touch RxDB or the filesystem directly.
+Application feature data goes through the `DataStore` interface. Electron manages persistent shell geometry and display mode separately in its profile; transient windows do not enable native persistence. Each feature owns its RxDB collection schema and provides migrations. Features never touch RxDB or the filesystem directly.
 
 **RxDB** runs in the main process using the free Filesystem RxStorage. Provides:
 
@@ -175,8 +175,9 @@ All persistence goes through the `DataStore` interface. Each feature owns its Rx
 
 ```
 RxDB collections: history, downloads, tabs, workspaces, pinned-tabs,
-                  tab-customizations, domain-customizations, window-state
-JSON files:       settings.json, shortcuts.json, extensions.json
+                  tab-customizations, domain-customizations
+JSON files:       settings.json (including sidebar width), shortcuts.json, extensions.json
+Electron profile: named persistent shell bounds and display mode
 ```
 
 **Cloud sync (Convex — optional)**: All data is local-only by default. Convex can be added as a separate optional data store for selective cross-device sync (bookmarks, workspace definitions, user preferences). Convex is not a sync layer for RxDB — it's an independent store for data the user opts to sync. Local RxDB remains the source of truth; synced data is mirrored to/from Convex when connected.
