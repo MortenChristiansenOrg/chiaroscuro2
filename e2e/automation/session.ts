@@ -109,7 +109,8 @@ export class AppSession {
       );
       this.debugUrl = `http://127.0.0.1:${port}`;
       const shellTarget = await this.target((target) => target.kind === "shell");
-      this.shell = await this.page(shellTarget);
+      // Cold native renderer startup can outlast an ordinary interaction deadline.
+      this.shell = await this.page(shellTarget, 15_000);
       this.record(
         "setup-window",
         await this.app.evaluate(({ BrowserWindow, screen }, id) => {
@@ -202,7 +203,7 @@ export class AppSession {
     return target;
   }
 
-  async page(target: DebugTarget): Promise<Page> {
+  async page(target: DebugTarget, timeoutMs = 5_000): Promise<Page> {
     const cached = this.pages.get(target.cdpTargetId);
     if (cached && !cached.isClosed()) return cached;
     const page = await waitUntil(
@@ -214,6 +215,8 @@ export class AppSession {
           try {
             const { targetInfo } = await cdp.send("Target.getTargetInfo");
             this.pages.set(targetInfo.targetId, page);
+            this.record("page-discovered", { id: targetInfo.targetId, url: page.url() });
+            if (targetInfo.targetId === target.cdpTargetId) return page;
           } finally {
             await cdp.detach();
           }
@@ -221,6 +224,7 @@ export class AppSession {
         return this.pages.get(target.cdpTargetId);
       },
       (page) => !!page,
+      timeoutMs,
     );
     if (!page) throw new Error(`No page for ${target.id}`);
     return page;
