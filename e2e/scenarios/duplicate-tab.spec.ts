@@ -114,7 +114,10 @@ test("Duplicate tab preserves history, session and zoom with independent lifecyc
     await expect(copy.result).toHaveText("copy survives");
     await copy.subTab.click();
     await session.target((t) => t.kind === "sub-tab" && t.url.endsWith("/child"));
-    await session.command("sub-tabs:close", { parentTabId: clone.tabId });
+    const frame = await session.page(await session.target((t) => t.kind === "sub-tab-frame"));
+    const closed = await session.eventCursor();
+    await frame.getByRole("button", { name: "Close sub-tab", exact: true }).click();
+    await session.waitForEvent("sub-tabs:closed", closed);
     expect((await session.capture("duplicate-tab")).status).toBe("complete");
   } finally {
     await Promise.all([site.close(), other.close()]);

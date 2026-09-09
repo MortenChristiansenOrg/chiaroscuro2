@@ -20,7 +20,23 @@ export function createTabView(source?: WebContents): WebContentsView {
     const zoomLevel = source.getZoomLevel();
     // First renderer initialization resets isolated zoom. Restore before feature listeners
     // publish did-finish-load, then allow each copy to zoom independently.
-    view.webContents.once("did-finish-load", () => view.webContents.setZoomLevel(zoomLevel));
+    const contents = view.webContents;
+    const restoreZoom = () => contents.setZoomLevel(zoomLevel);
+    const failed = (
+      _event: Electron.Event,
+      _code: number,
+      _description: string,
+      _url: string,
+      isMainFrame: boolean,
+    ) => {
+      if (isMainFrame) restoreZoom();
+    };
+    contents.on("did-finish-load", restoreZoom);
+    contents.on("did-fail-load", failed);
+    contents.once("did-stop-loading", () => {
+      contents.removeListener("did-finish-load", restoreZoom);
+      contents.removeListener("did-fail-load", failed);
+    });
   }
   return view;
 }

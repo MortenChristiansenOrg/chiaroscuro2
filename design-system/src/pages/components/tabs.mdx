@@ -97,6 +97,7 @@ Three tab types exist with different default text brightness:
 ### Duplicate tab
 
 `TabItem` exposes **Duplicate tab** in its native context menu. The action creates
-an active ephemeral tab in the source workspace, preserving web history, session,
-and zoom. It is disabled for built-in pages and PDF reader tabs. Bookmark and tab
+an ephemeral tab in the source workspace, preserving web history, session,
+and zoom. Copies in the active workspace activate immediately; commands targeting
+an inactive workspace create background copies there. It is disabled for built-in pages and PDF reader tabs. Bookmark and tab
 customization settings remain with the source.
