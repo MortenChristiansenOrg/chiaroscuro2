@@ -1,4 +1,7 @@
+import type { z } from "zod";
+import type { CommandTypes } from "../../bus/contract";
 import type { Bounds } from "../../shared/types";
+import type { commandContracts, SetSidebarWidthPayloadSchema } from "./app-state.contracts";
 
 // ── Command names ────────────────────────────────────────────────
 export const APP_STATE_SAVE = "app-state:save" as const;
@@ -17,9 +20,7 @@ export interface AppStateSidebarWidthChangedEvent {
   width: number;
 }
 
-export interface SetSidebarWidthPayload {
-  width: number;
-}
+export type SetSidebarWidthPayload = z.infer<typeof SetSidebarWidthPayloadSchema>;
 
 // ── Persisted shape ──────────────────────────────────────────────
 export interface PersistedAppState {
@@ -33,10 +34,7 @@ export const MAX_SIDEBAR_WIDTH = 480;
 export const DEFAULT_WINDOW_BOUNDS: Bounds = { x: 100, y: 100, width: 1200, height: 800 };
 
 // ── Command registry ─────────────────────────────────────────────
-export type AppStateCommands = {
-  [APP_STATE_SAVE]: { payload: undefined; response: undefined };
-  [APP_STATE_SET_SIDEBAR_WIDTH]: { payload: SetSidebarWidthPayload; response: undefined };
-};
+export type AppStateCommands = CommandTypes<typeof commandContracts>;
 
 // ── Event registry ───────────────────────────────────────────────
 export type AppStateEvents = {

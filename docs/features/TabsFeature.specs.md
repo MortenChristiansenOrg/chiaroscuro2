@@ -119,3 +119,21 @@ In the Sidebar tab list:
 - **Tab memory management**: SPEC.md mentions lazy-loading tabs and limiting concurrent WebContentsViews. This spec doesn't define the eviction/hibernation policy for tabs when memory is constrained.
 - **Session isolation**: SPEC.md mentions per-tab session isolation via `session.fromPartition()`. This spec doesn't address how isolated sessions interact with bookmarked/ephemeral tab lifecycle.
 - **New tab behavior**: When creating a tab from the command palette, should it default to ephemeral? The spec doesn't define the default tab type for new tabs.
+
+### Duplicate tab
+
+Right-click a normal, bookmarked, or pinned web tab and choose **Duplicate tab**
+(`tabs:duplicate`, `{ tabId }`). The copy is ephemeral and belongs to the
+source workspace (global pinned tabs duplicate into the current workspace); it does not copy a bookmark, pin, folder assignment, or tab
+customization. Chromium's cloned navigation controller retains back and forward
+history and the current entry. The current page reloads, creating a fresh DOM and
+JavaScript heap. The source session and current zoom are preserved, with subsequent
+zoom and navigation independent in each tab. Both contents use the normal platform
+listeners, navigation guards, permissions, shortcuts, and cleanup.
+
+A restored but unloaded source has only its persisted URL available, so the copy
+loads that URL. Built-in pages and PDF reader tabs have no web navigation controller:
+the menu item is disabled and the command returns no tab. Missing sources also
+return no tab; native cloning errors leave the source unchanged. Copies in the
+current workspace activate immediately. A command targeting a non-pinned tab in
+an inactive workspace creates its copy there in the background.

@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import type { PdfBackend } from "./types";
+import type { PdfDocument } from "./types";
 
 const { destroy } = vi.hoisted(() => ({ destroy: vi.fn() }));
 
@@ -11,7 +11,7 @@ vi.mock("pdfjs-dist", () => ({
 }));
 
 describe("PDF.js document cleanup", () => {
-  let backend: PdfBackend;
+  let loadDocument: (data: Uint8Array) => Promise<PdfDocument>;
 
   beforeAll(async () => {
     vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
@@ -23,7 +23,7 @@ describe("PDF.js document cleanup", () => {
         }
       },
     );
-    backend = (await import("./pdfjs-backend")).pdfjsBackend;
+    loadDocument = (await import("./pdfjs-backend")).loadPdfDocument;
   });
 
   beforeEach(() => {
@@ -38,7 +38,7 @@ describe("PDF.js document cleanup", () => {
   it("waits for the worker to finish cleanup", async () => {
     const cleanup = Promise.withResolvers<void>();
     destroy.mockReturnValue(cleanup.promise);
-    const doc = await backend.loadDocument(new Uint8Array());
+    const doc = await loadDocument(new Uint8Array());
     const completed = vi.fn();
     const pending = doc.destroy().then(completed);
 
@@ -51,7 +51,7 @@ describe("PDF.js document cleanup", () => {
 
   it("propagates cleanup failures to the caller", async () => {
     destroy.mockRejectedValue(new Error("Worker cleanup failed"));
-    const doc = await backend.loadDocument(new Uint8Array());
+    const doc = await loadDocument(new Uint8Array());
     await expect(doc.destroy()).rejects.toThrow("Worker cleanup failed");
   });
 });

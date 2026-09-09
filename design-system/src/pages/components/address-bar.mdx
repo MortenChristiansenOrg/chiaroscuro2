@@ -8,14 +8,17 @@ import { DEMO_TABS, makeDemoTabMap, tabId } from "../../lib/demo-data"
 
 # Address Bar
 
-The URL "pill" sits centered in the titlebar with an animated loading border and a copy button.
+The URL "pill" sits centered in the titlebar with an animated loading border, domain customization and copy buttons.
+
+The inactive Find bar is removed from layout. Opacity and `pointer-events: none` alone do not remove Electron native drag regions and can block these buttons on Windows. Icon centers and padding must remain hovered and clickable before and after using Find.
 
 ## Anatomy
 
 1. **Pill container** — rounded background housing URL and button
 2. **URL text** — monospace text with select-all behavior
 3. **Copy button** — icon-only button to copy URL to clipboard
-4. **Loading ring** — conic-gradient border animation shown during page load
+4. **Domain customization button** — sliders icon opening settings for the active web domain
+5. **Loading ring** — conic-gradient border animation shown during page load
 
 ---
 
@@ -47,11 +50,11 @@ The URL "pill" sits centered in the titlebar with an animated loading border and
 | Font size | `--text-sm` |
 | Color | `var(--glass-text-default)` |
 
-### Copy Button
+### Copy and Domain Customization Buttons
 
 | Property | Token/Value |
 |----------|-------------|
-| Size | `1.375rem x 1.375rem` |
+| Size | `24px x 24px` |
 | Border radius | `--radius-md` |
 | Default color | `var(--glass-text-muted)` |
 | Hover bg | `var(--glass-hover)` |
@@ -81,6 +84,8 @@ The URL "pill" sits centered in the titlebar with an animated loading border and
 
 ## Behavior
 
+- **Domain customization.** The sliders button is visible for HTTP(S) pages and opens the active domain’s settings. Its default, hover, and pressed colors follow the glass icon-button states; it has no copied-confirmation state.
+
 - **Select-all on focus.** When the URL bar gains focus, all text is selected so the user can immediately type a replacement.
 - **Monospace for URL display.** Uses `--font-mono` (JetBrains Mono) for the URL text.
 - **Copy to clipboard.** Copy button writes current URL to clipboard and shows check icon confirmation.
@@ -109,7 +114,7 @@ Uses `@property --url-angle` with a `conic-gradient` masked to the border edge. 
 
 ## Accessibility
 
-- **`aria-label`:** required on copy button (e.g., `aria-label="Copy URL"`).
+- **`aria-label`:** `Copy URL` on the copy button and `Domain customization` on the sliders button. Both are semantic buttons.
 - **Copy confirmation:** tooltip/`aria-live="polite"` announces "Copied" after clipboard write.
 - **Semantic HTML:** copy uses `<button type="button">`, URL text in a `<span>`.
 - **Touch target:** copy button meets `var(--click-target-min)` (1.375rem padded to 1.5rem).

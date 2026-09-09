@@ -12,6 +12,7 @@ import type {
   TabLoadingChangedPayload,
 } from "../window-chrome/window-chrome.shared";
 import {
+  canDuplicateTab,
   type PersistedTab,
   TABS_ACTIVATE,
   TABS_ACTIVATED,
@@ -22,6 +23,7 @@ import {
   TABS_CONTENT_BOUNDS_CHANGED,
   TABS_CREATE,
   TABS_CREATED,
+  TABS_DUPLICATE,
   TABS_GET,
   TABS_GET_FOR_WORKSPACE,
   TABS_LIST_CHANGED,
@@ -362,6 +364,43 @@ export default defineFeature<Deps>({
         await commands.send(TABS_ACTIVATE, { tabId });
       }
 
+      return tabId;
+    });
+
+    commands.handle(TABS_DUPLICATE, async ({ tabId: sourceId }) => {
+      const source = tabs.get(sourceId);
+      if (!source || !canDuplicateTab(source)) return undefined;
+      const windowId = getActiveWindowId();
+      if (!windowId) throw new Error("No active window");
+      const tabId = await platform.createTab(windowId, source.url, undefined, {
+        cloneFrom: sourceId,
+      });
+      const workspaceId = isPinned(sourceId)
+        ? (getActiveWorkspaceId() ?? source.workspaceId)
+        : source.workspaceId;
+      const now = Date.now();
+      const tab: Tab = {
+        id: tabId,
+        workspaceId,
+        url: source.url,
+        title: source.title,
+        favicon: source.favicon,
+        loading: true,
+        bookmarked: false,
+        lastAccessedAt: now,
+        createdAt: now,
+        order: tabs.size,
+        folderId: null,
+      };
+      tabs.set(tabId, tab);
+      attachTabListeners(tabId);
+      persistTab(tab);
+      events.emit(TABS_CREATED, { tab });
+      events.emit("tab:loading-changed", { tabId, loading: true });
+      scheduleListChanged();
+      if (workspaceId === getActiveWorkspaceId()) {
+        await commands.send(TABS_ACTIVATE, { tabId });
+      }
       return tabId;
     });
 

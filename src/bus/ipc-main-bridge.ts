@@ -1,5 +1,6 @@
 import { type BrowserWindow, ipcMain } from "electron";
 import type { CommandBus } from "./command-bus";
+import { type CommandResult, executeExternalCommand } from "./command-validation";
 import type { EventBus } from "./event-bus";
 import type { CommandRegistry, EventRegistry } from "./types";
 
@@ -12,14 +13,21 @@ export function bridgeBusToIpc<C extends CommandRegistry, E extends EventRegistr
   commandBus: CommandBus<C>,
   eventBus: EventBus<E>,
   getWindows: () => BrowserWindow[],
+  isTrustedSender: (sender: Electron.WebContents) => boolean,
 ): void {
   // Forward commands from renderer to command bus (with allowlist check)
-  ipcMain.handle("bus:command", async (_event, name: string, payload: unknown) => {
-    if (!commandBus.hasHandler(name)) {
-      throw new Error(`Unknown command from renderer: "${name}"`);
-    }
-    return commandBus.send(name as string & keyof C, payload as C[string & keyof C]["payload"]);
-  });
+  ipcMain.handle(
+    "bus:command",
+    async (event, name: unknown, payload: unknown): Promise<CommandResult> => {
+      if (!isTrustedSender(event.sender) || event.senderFrame !== event.sender.mainFrame) {
+        return {
+          ok: false,
+          error: { code: "FORBIDDEN", message: "Commands require an app-owned main frame" },
+        };
+      }
+      return executeExternalCommand(commandBus, name, payload);
+    },
+  );
 
   // Patch EventBus.emit to also broadcast to renderer windows
   const originalEmit = eventBus.emit.bind(eventBus);

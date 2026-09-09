@@ -1,3 +1,5 @@
+import type { CommandTypes } from "../../bus/contract";
+import type { commandContracts } from "./sidebar.contracts";
 // ── Command names ────────────────────────────────────────────────
 export const SIDEBAR_TOGGLE = "sidebar:toggle" as const;
 
@@ -10,9 +12,7 @@ export interface SidebarVisibilityChangedPayload {
 }
 
 // ── Command registry ─────────────────────────────────────────────
-export type SidebarCommands = {
-  [SIDEBAR_TOGGLE]: { payload: undefined; response: undefined };
-};
+export type SidebarCommands = CommandTypes<typeof commandContracts>;
 
 // ── Event registry ───────────────────────────────────────────────
 export type SidebarEvents = {

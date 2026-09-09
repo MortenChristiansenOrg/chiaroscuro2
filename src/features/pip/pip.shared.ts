@@ -1,4 +1,6 @@
+import type { CommandTypes } from "../../bus/contract";
 import type { TabId } from "../../shared/types";
+import type { commandContracts } from "./pip.contracts";
 
 // ── Command names ────────────────────────────────────────────────
 export const PIP_CLOSE = "pip:close" as const;
@@ -20,11 +22,7 @@ export interface PipPlayStateChangedEvent {
 }
 
 // ── Command registry ─────────────────────────────────────────────
-export type PipCommands = {
-  [PIP_CLOSE]: { payload: undefined; response: undefined };
-  [PIP_TOGGLE_PLAY]: { payload: undefined; response: undefined };
-  [PIP_RETURN_TO_TAB]: { payload: undefined; response: undefined };
-};
+export type PipCommands = CommandTypes<typeof commandContracts>;
 
 // ── Event registry ───────────────────────────────────────────────
 export type PipEvents = {

@@ -1,4 +1,11 @@
+import type { z } from "zod";
+import type { CommandTypes } from "../../bus/contract";
 import type { TabId } from "../../shared/types";
+import type {
+  commandContracts,
+  PinnedTabsActivatePayloadSchema,
+  PinnedTabsTogglePinPayloadSchema,
+} from "./pinned-tabs.contracts";
 
 // ── Command names ────────────────────────────────────────────────
 export const PINNED_TABS_TOGGLE_PIN = "pinned-tabs:toggle-pin" as const;
@@ -28,13 +35,9 @@ export interface PersistedPinnedTab {
 }
 
 // ── Payload types ────────────────────────────────────────────────
-export interface PinnedTabsTogglePinPayload {
-  tabId?: TabId;
-}
+export type PinnedTabsTogglePinPayload = z.infer<typeof PinnedTabsTogglePinPayloadSchema>;
 
-export interface PinnedTabsActivatePayload {
-  tabId: TabId;
-}
+export type PinnedTabsActivatePayload = z.infer<typeof PinnedTabsActivatePayloadSchema>;
 
 export interface PinnedTabsChangedEvent {
   pinnedTabs: PinnedTab[];
@@ -45,11 +48,7 @@ export interface PinnedTabsActiveChangedEvent {
 }
 
 // ── Command registry ─────────────────────────────────────────────
-export type PinnedTabsCommands = {
-  [PINNED_TABS_TOGGLE_PIN]: { payload: PinnedTabsTogglePinPayload; response: undefined };
-  [PINNED_TABS_ACTIVATE]: { payload: PinnedTabsActivatePayload; response: undefined };
-  [PINNED_TABS_IS_PINNED]: { payload: { tabId: TabId }; response: boolean };
-};
+export type PinnedTabsCommands = CommandTypes<typeof commandContracts>;
 
 // ── Event registry ───────────────────────────────────────────────
 export type PinnedTabsEvents = {

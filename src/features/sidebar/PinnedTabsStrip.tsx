@@ -8,12 +8,15 @@ import {
 } from "../tab-customization/tab-customization.shared";
 import { useTabCustomizationStore } from "../tab-customization/tab-customization.store";
 import type { Tab, TabsCommands } from "../tabs/tabs.shared";
-import { TABS_CLOSE, TABS_NAVIGATE } from "../tabs/tabs.shared";
+import { canDuplicateTab, TABS_CLOSE, TABS_DUPLICATE, TABS_NAVIGATE } from "../tabs/tabs.shared";
 import { Favicon } from "./Favicon";
 
 // ── Typed sendCommand ───────────────────────────────────────────
 
-type PinnedUsedCommands = Pick<TabsCommands, typeof TABS_CLOSE | typeof TABS_NAVIGATE> &
+type PinnedUsedCommands = Pick<
+  TabsCommands,
+  typeof TABS_CLOSE | typeof TABS_NAVIGATE | typeof TABS_DUPLICATE
+> &
   Pick<PinnedTabsCommands, typeof PINNED_TABS_ACTIVATE | typeof PINNED_TABS_TOGGLE_PIN> &
   Pick<TabCustomizationCommands, typeof TAB_CUSTOMIZATION_OPEN>;
 
@@ -41,7 +44,14 @@ function PinnedTabButton({
   const displayTitle = customTitle || pt.title || pt.url;
   const handleContextMenu = (e: React.MouseEvent) => {
     if (!onContextMenu) return;
-    const items: ContextMenuItem[] = [];
+    const items: ContextMenuItem[] = [
+      {
+        label: "Duplicate tab",
+        icon: "copy",
+        disabled: !canDuplicateTab(tab),
+        onSelect: () => sendCommand(TABS_DUPLICATE, { tabId: pt.id }),
+      },
+    ];
     items.push(
       {
         label: "Unpin tab",

@@ -1,14 +1,7 @@
 import "./map-polyfill"; // Must precede pdfjs-dist — see file for details
 import * as pdfjsLib from "pdfjs-dist";
 import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import type {
-  OutlineEntry,
-  PageDimensions,
-  PdfBackend,
-  PdfDocument,
-  SearchMatch,
-  TextItem,
-} from "./types";
+import type { OutlineEntry, PageDimensions, PdfDocument, SearchMatch, TextItem } from "./types";
 
 // pdfjs-dist v5.5+ uses Map.getOrInsertComputed which Electron 40 doesn't
 // support. Wrap the worker in a Blob that injects the polyfill before loading.
@@ -113,7 +106,7 @@ class PdfjsDocument implements PdfDocument {
     ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0);
 
     // Fill with white background to prevent transparency artifacts — matches
-    // mupdf's alpha=false rendering and avoids wrong-colored font outlines
+    // opaque PDF paper and avoids wrong-colored font outlines
     // when the page sits on a dark container background.
     ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, viewport.width, viewport.height);
@@ -239,15 +232,11 @@ class PdfjsDocument implements PdfDocument {
   }
 }
 
-export const pdfjsBackend: PdfBackend = {
-  async loadDocument(data: Uint8Array): Promise<PdfDocument> {
-    const doc = await pdfjsLib.getDocument({ data }).promise;
-    const pdfjsDoc = new PdfjsDocument(doc);
-    // Pre-load page dimensions for all pages
-    const promises = Array.from({ length: doc.numPages }, (_, i) =>
-      pdfjsDoc.ensurePageDimensions(i),
-    );
-    await Promise.all(promises);
-    return pdfjsDoc;
-  },
-};
+export async function loadPdfDocument(data: Uint8Array): Promise<PdfDocument> {
+  const doc = await pdfjsLib.getDocument({ data }).promise;
+  const pdfjsDoc = new PdfjsDocument(doc);
+  // Pre-load page dimensions for all pages.
+  const promises = Array.from({ length: doc.numPages }, (_, i) => pdfjsDoc.ensurePageDimensions(i));
+  await Promise.all(promises);
+  return pdfjsDoc;
+}

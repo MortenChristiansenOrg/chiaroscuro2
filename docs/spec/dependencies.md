@@ -32,7 +32,7 @@ and [lifecycle-script documentation](https://bun.com/docs/pm/lifecycle).
 - Electron 44.2.0: latest stable eligible under the age gate at the September 8, 2026 update
   (44.3.0 was less than one day old).
 - React 19, RxDB 17, Zustand 5, Zod 4, Tailwind CSS 4.
-- PDF rendering: MuPDF 1.28 and PDF.js 6.
+- PDF rendering: PDF.js 6.
 - Build and validation: electron-builder 26, electron-vite 5, TypeScript 7,
   Biome 2, Vitest 5, and Playwright 1.63.
 - Vite stays on the latest compatible 7.x release, with `@vitejs/plugin-react` 5.x.

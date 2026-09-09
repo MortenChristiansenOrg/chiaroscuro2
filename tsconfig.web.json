@@ -33,7 +33,8 @@
     "src/features/sub-tabs/SubTabFrame.tsx",
     "src/features/domain-css/domain-settings-page.tsx",
     "src/features/pdf-reader/backends/**/*",
-    "src/features/pdf-reader/components/**/*"
+    "src/features/pdf-reader/components/**/*",
+    "src/features/**/*.contracts.ts"
   ],
-  "exclude": ["src/bus/ipc-main-bridge.ts"]
+  "exclude": ["src/bus/ipc-main-bridge.ts", "src/bus/ipc-main-bridge.test.ts"]
 }

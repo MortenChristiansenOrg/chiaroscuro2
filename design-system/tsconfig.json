@@ -43,6 +43,8 @@
     "../src/features/command-palette/resolve-input.ts",
     "../src/features/pdf-reader/backends/**/*",
     "../src/features/pdf-reader/components/**/*",
-    "../src/bus/types.ts"
+    "../src/bus/types.ts",
+    "../src/features/**/*.contracts.ts",
+    "../src/bus/contract.ts"
   ]
 }

@@ -2,11 +2,11 @@
 
 ## Overview
 
-Custom PDF reader replacing Chromium's built-in PDF viewer. Supports two rendering backends (pdf.js and mupdf) selectable via settings. Provides a custom index/outline sidebar that users can edit and extend, stored by PDF name + content hash for portability. Optimized for large, graphics-heavy PDFs.
+Custom PDF reader replacing Chromium's built-in PDF viewer. Uses PDF.js as its sole rendering engine. Provides a custom index/outline sidebar that users can edit and extend, stored by PDF name + content hash for portability. Optimized for large, graphics-heavy PDFs.
 
 ## Terminology
 
-- **PDF backend**: The rendering engine used to display PDF pages (pdf.js or mupdf).
+- **PDF backend**: The rendering engine used to display PDF pages (PDF.js).
 - **Custom index**: A user-editable table of contents for a PDF, initially populated from the PDF's built-in outline.
 - **PDF hash**: A lightweight hash computed from the first 64KB + file size, used with the filename to identify a PDF across locations.
 - **Page viewport**: The visible area showing rendered PDF pages with virtual scrolling.
@@ -14,7 +14,7 @@ Custom PDF reader replacing Chromium's built-in PDF viewer. Supports two renderi
 ## Requirements
 
 - All PDFs (local files and remote URLs) must be intercepted and rendered using the custom reader instead of Chromium's built-in viewer.
-- Two rendering backends must be available: pdf.js and mupdf (WASM). The active backend is selected in settings.
+- PDF.js is the sole engine. Legacy `pdf-backend` preferences are ignored, including saved experimental-engine selections.
 - PDF pages render to `<canvas>` elements with virtual scrolling (only visible pages + buffer rendered).
 - Text selection and copy must work on rendered pages.
 - In-PDF search (Ctrl+F integration) must highlight matches and navigate between them.
@@ -32,13 +32,8 @@ Custom PDF reader replacing Chromium's built-in PDF viewer. Supports two renderi
 
 - Navigate to a PDF URL or open a local PDF file.
 - The main process intercepts the PDF response/navigation.
-- The PDF data is loaded and passed to the active rendering backend.
+- The PDF data is loaded and passed to the PDF.js.
 - Pages render in a scrollable viewport with the index sidebar visible.
-
-### Switch rendering backend
-
-- Open settings, change the PDF backend toggle (pdf.js / mupdf).
-- The next PDF opened uses the new backend. Already-open PDFs continue with their current backend.
 
 ### Edit custom index
 
@@ -83,7 +78,7 @@ Custom PDF reader replacing Chromium's built-in PDF viewer. Supports two renderi
 ### Cross-feature interactions
 
 - **Tabs**: PDF reader renders as a built-in page when a PDF tab is active. The tab title shows the PDF filename.
-- **Settings**: PDF backend preference stored in settings.
+- **Settings**: Legacy `pdf-backend` values are ignored. All documents use PDF.js.
 - **Find Text**: PDF reader handles search internally since the content is canvas-based, not DOM text. The existing find-text feature is suppressed for PDF tabs.
 - **Zoom**: PDF reader manages its own zoom, independent of the tab zoom feature.
 
@@ -115,7 +110,7 @@ Custom PDF reader replacing Chromium's built-in PDF viewer. Supports two renderi
 ## Resolved Decisions
 
 - Index entries are flat (no nesting), even if the PDF outline is hierarchical.
-- Search and zoom use native functionality from the rendering backend (pdf.js / mupdf APIs).
+- Search and zoom use native functionality from the rendering backend (PDF.js APIs).
 - No annotation support planned.
 
 ## Unresolved Issues

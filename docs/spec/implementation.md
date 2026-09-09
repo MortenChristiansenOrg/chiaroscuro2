@@ -5,6 +5,7 @@
 - Use `BrowserWindow` with `WebContentsView` (not deprecated `BrowserView`)
 - Each tab = one `WebContentsView` attached to window
 - Tab switching = show/hide views, not destroy/create
+- Web tabs use `setZoomMode("isolated")`: zoom belongs to each WebContents, including sub-tabs and adopted contents, while cookies/session sharing is unchanged. Keyboard zoom targets the topmost sub-tab when open. PDF reader zoom is independent.
 - Multi-window support from day 1
 - **Per-tab session isolation**: Use `session.fromPartition('persist:tab-{id}')` for isolated tabs
   - Default: shared session
@@ -183,3 +184,16 @@ Electron profile: named persistent shell bounds and display mode
 ```
 
 **Cloud sync (Convex — optional)**: All data is local-only by default. Convex can be added as a separate optional data store for selective cross-device sync (bookmarks, workspace definitions, user preferences). Convex is not a sync layer for RxDB — it's an independent store for data the user opts to sync. Local RxDB remains the source of truth; synced data is mirrored to/from Convex when connected.
+
+## Session identity and GitHub diagnostics
+
+Prepare each tab session's user-agent and permission handlers before constructing
+its web contents. Electron session user-agent changes do not update existing
+contents; doing this afterward gave the first tab a different identity. New tabs,
+sub-tabs and popup windows now inherit the same prepared identity. Normalize the
+app user-agent fallback too, since renderer-created popup contents use that value.
+
+A bounded, memory-only GitHub authentication timeline is available through the
+existing debug state provider. See [GitHub session diagnostics](../testing/github-session-diagnostics.md)
+for scope, redaction, and how to capture an overnight logout without exporting
+credentials. The confirmed identity fix does not close the unproven logout root cause.

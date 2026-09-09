@@ -25,6 +25,14 @@ export class WindowChromePage {
     this.domainCssButton = page.locator("button[aria-label='Domain customization']");
   }
 
+  get findInput() {
+    return this.page.getByPlaceholder("Find in page");
+  }
+
+  addressBarButton(name: string) {
+    return this.page.getByRole("button", { name, exact: true });
+  }
+
   async isVisible(): Promise<boolean> {
     return this.titleBar.isVisible();
   }

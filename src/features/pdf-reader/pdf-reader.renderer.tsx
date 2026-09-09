@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { BuiltInPageProps } from "../../renderer/src/components/BuiltInPage";
-import type { PdfBackend, PdfDocument, SearchMatch } from "./backends/types";
+import type { PdfDocument, SearchMatch } from "./backends/types";
 import { IndexSidebar } from "./components/IndexSidebar";
 import { PdfToolbar } from "./components/PdfToolbar";
 import { PdfViewport } from "./components/PdfViewport";
-import type { IndexEntry, PdfBackendType, PdfFetchResponse } from "./pdf-reader.shared";
+import type { IndexEntry, PdfFetchResponse } from "./pdf-reader.shared";
 import { usePdfReaderStore } from "./pdf-reader.store";
 
 const ZOOM_STEP = 0.25;
@@ -63,15 +63,6 @@ function updateSearchState(pdfUrl: string | undefined, state: PdfSearchState): v
 function clearSearchState(pdfUrl: string | undefined): void {
   if (!pdfUrl) return;
   searchStateCache.delete(pdfUrl);
-}
-
-async function loadBackend(type: PdfBackendType): Promise<PdfBackend> {
-  if (type === "mupdf") {
-    const { mupdfBackend } = await import("./backends/mupdf-backend");
-    return mupdfBackend;
-  }
-  const { pdfjsBackend } = await import("./backends/pdfjs-backend");
-  return pdfjsBackend;
 }
 
 function base64ToUint8Array(base64: string): Uint8Array {
@@ -169,18 +160,11 @@ export default function PdfReaderPage({ params }: BuiltInPageProps) {
         const key = `${filename}:${hash}`;
         setPdfKey(key);
 
-        // Determine backend from settings
-        const settings = (await window.chiaroscuro.sendCommand("settings:get", undefined)) as {
-          pdfBackend?: PdfBackendType;
-        };
-        if (cancelled) return;
-
-        const backendType: PdfBackendType = settings?.pdfBackend ?? "pdfjs";
-        const backend = await loadBackend(backendType);
+        const { loadPdfDocument } = await import("./backends/pdfjs-backend");
         if (cancelled) return;
 
         const data = base64ToUint8Array(dataBase64);
-        const doc = await backend.loadDocument(data);
+        const doc = await loadPdfDocument(data);
         if (cancelled) {
           await doc.destroy();
           return;

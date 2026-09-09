@@ -25,6 +25,8 @@ import {
   TABS_CLOSED,
   TABS_CREATE,
   TABS_CREATED,
+  TABS_DUPLICATE,
+  TABS_GET,
   TABS_LIST_CHANGED,
   TABS_NAVIGATE,
   TABS_REORDER,
@@ -83,6 +85,69 @@ describe("tabs commands", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  describe("TABS_DUPLICATE", () => {
+    it("creates a background copy in an inactive source workspace without changing its bookmark", async () => {
+      const { commands, platform, getActiveTabId } = setup();
+      const sourceId = await commands.send(TABS_CREATE, {
+        url: "https://example.com",
+        workspaceId: "other-workspace" as WorkspaceId,
+      });
+      await commands.send(TABS_TOGGLE_BOOKMARK, { tabId: sourceId });
+      const copyId = await commands.send(TABS_DUPLICATE, { tabId: sourceId });
+      expect(platform.createTab).toHaveBeenLastCalledWith(
+        WIN_ID,
+        "https://example.com",
+        undefined,
+        { cloneFrom: sourceId },
+      );
+      expect(getActiveTabId()).toBe(sourceId);
+      expect(await commands.send(TABS_GET, { tabId: copyId! })).toMatchObject({
+        workspaceId: "other-workspace",
+        bookmarked: false,
+        folderId: null,
+      });
+      expect(await commands.send(TABS_GET, { tabId: sourceId })).toMatchObject({
+        bookmarked: true,
+      });
+    });
+
+    it("duplicates global pins into the current workspace and activates the copy", async () => {
+      const { commands, getActiveTabId } = setup();
+      const tabId = await commands.send(TABS_CREATE, {
+        url: "https://example.com",
+        workspaceId: "other" as WorkspaceId,
+      });
+      vi.mocked(isPinned).mockReturnValue(true);
+      const copyId = await commands.send(TABS_DUPLICATE, { tabId });
+      expect(getActiveTabId()).toBe(copyId);
+      expect(await commands.send(TABS_GET, { tabId: copyId! })).toMatchObject({
+        workspaceId: WS_ID,
+        bookmarked: false,
+      });
+    });
+
+    it("ignores missing, built-in and PDF sources without creating contents", async () => {
+      const { commands, platform } = setup();
+      for (const url of ["app:settings", "app:pdf?file=fixture.pdf"]) {
+        const tabId = await commands.send(TABS_CREATE, { url });
+        expect(await commands.send(TABS_DUPLICATE, { tabId })).toBeUndefined();
+      }
+      expect(await commands.send(TABS_DUPLICATE, { tabId: "missing" as TabId })).toBeUndefined();
+      expect(platform.createTab).not.toHaveBeenCalled();
+    });
+
+    it("leaves the source active and unchanged when native cloning fails", async () => {
+      const { commands, platform, getActiveTabId } = setup();
+      const tabId = await commands.send(TABS_CREATE, { url: "https://example.com" });
+      vi.mocked(platform.createTab).mockRejectedValueOnce(new Error("clone failed"));
+      await expect(commands.send(TABS_DUPLICATE, { tabId })).rejects.toThrow("clone failed");
+      expect(getActiveTabId()).toBe(tabId);
+      expect(await commands.send(TABS_GET, { tabId })).toMatchObject({
+        url: "https://example.com",
+      });
+    });
   });
 
   describe("TABS_CREATE", () => {
