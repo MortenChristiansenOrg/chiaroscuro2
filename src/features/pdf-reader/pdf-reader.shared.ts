@@ -11,7 +11,6 @@ export const PDF_READER_INDEX_REORDER = "pdf-reader:index-reorder" as const;
 export const PDF_READER_INDEX_CHANGED = "pdf-reader:index-changed" as const;
 
 // ── Data types ───────────────────────────────────────────────────
-export type PdfBackendType = "pdfjs" | "mupdf";
 
 export interface IndexEntry {
   id: string;
