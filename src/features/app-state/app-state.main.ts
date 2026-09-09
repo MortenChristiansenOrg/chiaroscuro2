@@ -52,7 +52,7 @@ export default defineFeature<Deps>({
     });
 
     commands.handle(APP_STATE_SAVE, async () => {
-      state.flush();
+      await state.flush();
     });
   },
 

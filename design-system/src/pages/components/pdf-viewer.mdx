@@ -6,6 +6,12 @@ title: PDF Viewer
 
 A custom PDF reader that replaces Chromium's built-in viewer. Supports two rendering backends (pdf.js, mupdf) selectable in settings. Includes a user-editable index sidebar, search, zoom, and virtual scrolling for large documents.
 
+Toolbar zoom persists by document identity across application restarts. Verify
+the actual `PdfReaderPage` and `PdfToolbar` with
+`bun run verify:app --grep 'PDF toolbar'`; inspect the composed screenshot and
+trace in `test-results/verification/`. A design-system preview alone does not
+verify persistence or Electron's native view composition.
+
 ---
 
 ## Anatomy

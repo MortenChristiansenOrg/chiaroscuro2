@@ -15,6 +15,7 @@ import {
   PDF_READER_INDEX_DELETE,
   PDF_READER_INDEX_REORDER,
   PDF_READER_INDEX_UPDATE,
+  PDF_READER_SET_ZOOM,
   type PdfIndexChangedEvent,
   type PdfReaderCommands,
   type PdfReaderEvents,
@@ -51,6 +52,36 @@ function setup() {
 }
 
 describe("pdf-reader commands", () => {
+  it("restores zoom by document identity after feature recreation", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("%PDF-1.4 test document")),
+    );
+    try {
+      const { commands, deps, dataStore } = setup();
+      const pdf = await commands.send(PDF_READER_FETCH, { url: "https://fixture.test/sample.pdf" });
+      expect(pdf.zoom).toBe(1);
+      const pdfKey = `${pdf.filename}:${pdf.hash}`;
+      await commands.send(PDF_READER_SET_ZOOM, { pdfKey, zoom: 1.25 });
+      feature.teardown?.();
+      const restored = new CommandBus<AllCommands>();
+      feature.register({ ...deps, dataStore, commands: restored });
+      expect(
+        (await restored.send(PDF_READER_FETCH, { url: "https://fixture.test/sample.pdf" })).zoom,
+      ).toBe(1.25);
+      for (const zoom of [Number.NaN, Infinity, 0, 5.25]) {
+        await expect(restored.send(PDF_READER_SET_ZOOM, { pdfKey, zoom })).rejects.toThrow(
+          "finite zoom",
+        );
+      }
+      expect(
+        (await restored.send(PDF_READER_FETCH, { url: "https://fixture.test/sample.pdf" })).zoom,
+      ).toBe(1.25);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   describe("PDF_READER_GET_INDEX", () => {
     it("returns empty array for unknown PDF", async () => {
       const { commands } = setup();

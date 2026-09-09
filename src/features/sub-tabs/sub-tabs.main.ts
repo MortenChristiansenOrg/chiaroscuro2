@@ -552,3 +552,9 @@ export function hasSubTabs(tabId: TabId): boolean {
   const stack = stacks.get(tabId);
   return !!stack && stack.length > 0;
 }
+
+export function getSubTabSnapshot(): SubTab[] {
+  return _state.initialized
+    ? [..._state.get().stacks.values()].flat().map((tab) => ({ ...tab }))
+    : [];
+}

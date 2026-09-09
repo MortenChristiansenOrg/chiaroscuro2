@@ -4,7 +4,7 @@ import type { PdfBackend, PdfDocument, SearchMatch } from "./backends/types";
 import { IndexSidebar } from "./components/IndexSidebar";
 import { PdfToolbar } from "./components/PdfToolbar";
 import { PdfViewport } from "./components/PdfViewport";
-import type { IndexEntry, PdfBackendType } from "./pdf-reader.shared";
+import type { IndexEntry, PdfBackendType, PdfFetchResponse } from "./pdf-reader.shared";
 import { usePdfReaderStore } from "./pdf-reader.store";
 
 const ZOOM_STEP = 0.25;
@@ -162,11 +162,9 @@ export default function PdfReaderPage({ params }: BuiltInPageProps) {
         const response = await window.chiaroscuro.sendCommand("pdf-reader:fetch", { url });
         if (cancelled) return;
 
-        const { dataBase64, hash, filename } = response as {
-          dataBase64: string;
-          hash: string;
-          filename: string;
-        };
+        const { dataBase64, hash, filename, zoom: savedZoom } = response as PdfFetchResponse;
+        updateViewState(url, { zoom: savedZoom });
+        setZoom(savedZoom);
 
         const key = `${filename}:${hash}`;
         setPdfKey(key);
@@ -395,13 +393,15 @@ export default function PdfReaderPage({ params }: BuiltInPageProps) {
   const handleZoomChange = useCallback(
     (updater: (zoom: number) => number) => {
       beforeZoomChangeRef.current?.();
-      setZoom((z) => {
-        const nextZoom = updater(z);
-        updateViewState(pdfUrl, { zoom: nextZoom });
-        return nextZoom;
-      });
+      const nextZoom = updater(getViewState(pdfUrl).zoom);
+      updateViewState(pdfUrl, { zoom: nextZoom });
+      setZoom(nextZoom);
+      if (pdfKey)
+        window.chiaroscuro
+          .sendCommand("pdf-reader:set-zoom", { pdfKey, zoom: nextZoom })
+          .catch((error: unknown) => console.error("Failed to save PDF zoom", error));
     },
-    [pdfUrl],
+    [pdfUrl, pdfKey],
   );
   const handleToggleIndex = useCallback(() => {
     setIndexVisible((visible) => {

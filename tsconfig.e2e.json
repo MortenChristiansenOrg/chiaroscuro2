@@ -1,0 +1,23 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "composite": true,
+    "target": "ES2024",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "lib": ["ES2024", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "noEmit": true
+  },
+  "include": [
+    "e2e/**/*",
+    "playwright*.config.ts",
+    "src/features/debug-server/targets.shared.ts",
+    "src/features/debug-server/recorder.ts",
+    "src/bus/command-bus.ts",
+    "src/bus/event-bus.ts",
+    "src/bus/types.ts",
+    "src/shared/types.ts",
+    "src/renderer/src/env.d.ts"
+  ]
+}

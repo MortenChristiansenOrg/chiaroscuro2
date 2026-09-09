@@ -273,6 +273,56 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape')closePalette
 </script></body></html>`;
 
 export class ElectronPlatform implements Platform {
+  /** Read-only native inventory shared by HTTP discovery and Electron verification. */
+  getDebugTargets(): import("../features/debug-server/targets.shared").DebugTarget[] {
+    const windows = BrowserWindow.getAllWindows().filter((win) => !win.isDestroyed());
+    const targets: import("../features/debug-server/targets.shared").DebugTarget[] = windows.map(
+      (win) => ({
+        id: `window:${win.id}`,
+        kind:
+          win === this.paletteWin
+            ? "palette"
+            : win === this.subTabWin
+              ? "sub-tab-frame"
+              : win === this.tooltipWin
+                ? "tooltip"
+                : win.webContents.getURL().includes("/out/renderer/")
+                  ? "shell"
+                  : "window",
+        windowId: win.id,
+        parentId: win.getParentWindow() ? `window:${win.getParentWindow()?.id}` : null,
+        webContentsId: win.webContents.id,
+        cdpTargetId: win.webContents.getOrCreateDevToolsTargetId(),
+        url: win.webContents.getURL(),
+        title: win.getTitle(),
+        bounds: win.getBounds(),
+        visible: win.isVisible() && !win.isMinimized(),
+        focused: win.webContents.isFocused(),
+      }),
+    );
+    for (const [tabId, view] of this.views) {
+      if (view.webContents.isDestroyed()) continue;
+      const owner = windows.find((win) => win.contentView.children.includes(view));
+      const bounds = view.getBounds();
+      targets.push({
+        id: `tab:${tabId}`,
+        kind: "tab",
+        tabId,
+        windowId: owner?.id ?? null,
+        parentId: owner ? `window:${owner.id}` : null,
+        webContentsId: view.webContents.id,
+        cdpTargetId: view.webContents.getOrCreateDevToolsTargetId(),
+        url: view.webContents.getURL(),
+        title: view.webContents.getTitle(),
+        bounds,
+        visible:
+          !!owner?.isVisible() && !owner.isMinimized() && bounds.width > 0 && bounds.height > 0,
+        focused: view.webContents.isFocused(),
+      });
+    }
+    return targets;
+  }
+
   private shortcuts = new Map<string, () => void>();
   private localShortcuts = new Map<string, () => void>();
   private views = new Map<TabId, WebContentsView>();
@@ -925,7 +975,7 @@ export class ElectronPlatform implements Platform {
 
   private ensureSubTabWindow(): void {
     if (this.subTabWin && !this.subTabWin.isDestroyed()) return;
-    if (process.env.NODE_ENV === "test") return;
+    if (process.env.NODE_ENV === "test" && process.env.CHIAROSCURO_AUTOMATION !== "1") return;
 
     const parent = this.getWin();
     if (!parent) return;

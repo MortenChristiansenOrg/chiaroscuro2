@@ -1,5 +1,6 @@
 // ── Command names ────────────────────────────────────────────────
 export const PDF_READER_FETCH = "pdf-reader:fetch" as const;
+export const PDF_READER_SET_ZOOM = "pdf-reader:set-zoom" as const;
 export const PDF_READER_GET_INDEX = "pdf-reader:get-index" as const;
 export const PDF_READER_INDEX_ADD = "pdf-reader:index-add" as const;
 export const PDF_READER_INDEX_UPDATE = "pdf-reader:index-update" as const;
@@ -30,6 +31,7 @@ export interface PdfFetchResponse {
   dataBase64: string;
   hash: string;
   filename: string;
+  zoom: number;
 }
 
 // ── Payload types ────────────────────────────────────────────────
@@ -71,6 +73,7 @@ export interface PdfIndexChangedEvent {
 
 // ── Command registry ─────────────────────────────────────────────
 export type PdfReaderCommands = {
+  [PDF_READER_SET_ZOOM]: { payload: { pdfKey: string; zoom: number }; response: undefined };
   [PDF_READER_FETCH]: { payload: PdfFetchPayload; response: PdfFetchResponse };
   [PDF_READER_GET_INDEX]: { payload: PdfGetIndexPayload; response: IndexEntry[] };
   [PDF_READER_INDEX_ADD]: { payload: PdfIndexAddPayload; response: undefined };

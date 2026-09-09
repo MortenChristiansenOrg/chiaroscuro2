@@ -15,6 +15,8 @@ import { getDebugState, getDebugStateNames } from "./state-providers";
 const startTime = Date.now();
 let server: http.Server | null = null;
 let actualPort: number | null = null;
+const automation = process.env.NODE_ENV === "test" && process.env.CHIAROSCURO_AUTOMATION === "1";
+const automationToken = automation ? process.env.CHIAROSCURO_DEBUG_TOKEN : undefined;
 
 type AllCommands = DebugServerCommands;
 type AllEvents = Pick<SettingsEvents, typeof SETTINGS_CHANGED>;
@@ -72,7 +74,6 @@ function respond(res: http.ServerResponse, status: number, data: unknown, pretty
   const body = safeStringify(data, pretty);
   res.writeHead(status, {
     "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
   });
@@ -85,7 +86,19 @@ function handleRequest(
   commandBus: CommandBus<CommandRegistry>,
   eventBus: EventBus<EventRegistry>,
 ): void {
-  const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
+  // Browser pages must not be able to drive a local debug server, including through DNS rebinding.
+  if (req.headers.origin || !/^(127\.0\.0\.1|localhost)(:\d+)?$/.test(req.headers.host ?? "")) {
+    respond(res, 403, { error: "Debug access requires a local non-browser client" }, false);
+    return;
+  }
+  if (
+    automation &&
+    (!automationToken || req.headers.authorization !== `Bearer ${automationToken}`)
+  ) {
+    respond(res, 401, { error: "This test instance requires its debug bearer token" }, false);
+    return;
+  }
+  const url = new URL(req.url ?? "/", "http://127.0.0.1");
   const pretty = url.searchParams.has("pretty");
 
   // CORS preflight
@@ -308,9 +321,9 @@ function startServer(
       });
       srv.listen(tryPort, "127.0.0.1", () => {
         server = srv;
-        actualPort = tryPort;
-        debugLog.info("debug-server", `Listening on 127.0.0.1:${tryPort}`);
-        resolve(tryPort);
+        actualPort = (srv.address() as import("node:net").AddressInfo).port;
+        debugLog.info("debug-server", `Listening on 127.0.0.1:${actualPort}`);
+        resolve(actualPort);
       });
     }
     tryListen(port);
@@ -336,7 +349,7 @@ export default defineFeature<Deps>({
     // Register recorder early to capture all subsequent registrations
     registerRecorder(commandBus, eventBus);
 
-    let configuredPort = 19400;
+    let configuredPort = automation ? 0 : 19400;
     let enabled = false;
 
     commands.handle(DEBUG_SERVER_START, async () => {
@@ -350,8 +363,8 @@ export default defineFeature<Deps>({
 
     events.on(SETTINGS_CHANGED, (payload) => {
       const { settings } = payload as SettingsChangedEvent;
-      const newEnabled = isDev || settings.debugServer.enabled;
-      const newPort = settings.debugServer.port;
+      const newEnabled = automation || isDev || settings.debugServer.enabled;
+      const newPort = automation ? 0 : settings.debugServer.port;
 
       const needsRestart = newEnabled !== enabled || (newEnabled && newPort !== configuredPort);
       enabled = newEnabled;
