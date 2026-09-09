@@ -162,3 +162,14 @@ it("defaults omitted workspace privacy mode without weakening explicit boolean v
   ).toMatchObject({ ok: false });
   expect(handler).toHaveBeenCalledOnce();
 });
+
+it("documents response output rather than a schema's intermediate input", () => {
+  const contract = defineCommand(z.undefined(), z.string().transform(Number).pipe(z.number()), {
+    description: "Return a parsed number",
+    examples: [undefined],
+    sideEffects: [],
+  });
+  expect(documentCommand("parsed-number", contract).response.schema).toMatchObject({
+    type: "number",
+  });
+});

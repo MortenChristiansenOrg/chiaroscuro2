@@ -134,13 +134,13 @@ export async function executeExternalCommand<C extends CommandRegistry>(
   }
 }
 
-function schemaDocumentation(schema: z.ZodType) {
+function schemaDocumentation(schema: z.ZodType, io: "input" | "output") {
   // Undefined has no JSON representation. Preserve that distinction without publishing {}.
   if (schema instanceof z.ZodUndefined) return { schema: { type: "null" }, acceptsOmitted: true };
   try {
     return {
       schema: z.toJSONSchema(schema, {
-        io: "input",
+        io,
         unrepresentable: ({ zodSchema }) =>
           zodSchema instanceof z.ZodUndefined ? { type: "null" } : "throw",
       }),
@@ -161,8 +161,8 @@ export function documentCommand(name: string, contract: CommandContract) {
     description: contract.description,
     examples: contract.examples.map((payload) => ({ name, payload: payload ?? null })),
     sideEffects: contract.sideEffects,
-    payload: schemaDocumentation(contract.payload),
-    response: schemaDocumentation(contract.response),
+    payload: schemaDocumentation(contract.payload, "input"),
+    response: schemaDocumentation(contract.response, "output"),
   };
 }
 
