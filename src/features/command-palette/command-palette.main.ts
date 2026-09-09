@@ -20,7 +20,7 @@ import {
   type CommandPaletteCommands,
   type CommandPaletteEvents,
 } from "./command-palette.shared";
-import { type ProviderConfig, getBuiltInPages, resolveInput } from "./resolve-input";
+import { getBuiltInPages, type ProviderConfig, resolveInput } from "./resolve-input";
 import { initVisitTracking, recordVisit, searchVisits } from "./suggestions";
 
 type AllCommands = CommandPaletteCommands & Pick<TabsCommands, "tabs:create" | "tabs:navigate">;

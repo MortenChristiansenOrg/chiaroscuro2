@@ -6,11 +6,11 @@ import {
   settingsCategoryHeadingStyle,
 } from "../../renderer/src/components/SettingsLayout";
 import {
+  getPermissionInfo,
   PERMISSIONS_GET_DOMAIN,
   PERMISSIONS_REVOKE,
   PERMISSIONS_SET,
   type PermissionDecision,
-  getPermissionInfo,
 } from "./permissions.shared";
 import { usePermissionsStore } from "./permissions.store";
 

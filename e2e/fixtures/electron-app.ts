@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test as base } from "@playwright/test";
-import { type ElectronApplication, type Page, _electron as electron } from "playwright";
+import { type ElectronApplication, _electron as electron, type Page } from "playwright";
 
 type ElectronFixtures = {
   electronApp: ElectronApplication;
@@ -15,7 +15,13 @@ export const test = base.extend<ElectronFixtures>({
     const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "chiaroscuro-test-"));
     const args = [
       ...(process.platform === "linux"
-        ? ["--ozone-platform=headless", "--disable-gpu", "--no-sandbox"]
+        ? [
+            "--ozone-platform=headless",
+            // Electron 44's headless display otherwise constrains windows to 1x1.
+            "--ozone-override-screen-size=1920,1080",
+            "--disable-gpu",
+            "--no-sandbox",
+          ]
         : []),
       "./out/main/index.js",
     ];

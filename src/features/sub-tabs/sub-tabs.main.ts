@@ -6,23 +6,23 @@ import { featureState } from "../../shared/feature-state";
 import { logError } from "../../shared/log";
 import { TabScope } from "../../shared/tab-scope";
 import type { TabId, WindowId, WorkspaceId } from "../../shared/types";
+import type { CommandPaletteEvents } from "../command-palette/command-palette.shared";
 import {
   COMMAND_PALETTE_HIDDEN,
   COMMAND_PALETTE_SHOWN,
 } from "../command-palette/command-palette.shared";
-import type { CommandPaletteEvents } from "../command-palette/command-palette.shared";
 import { getContentBounds } from "../tabs/tabs.main";
+import type { TabsCommands, TabsEvents } from "../tabs/tabs.shared";
 import {
   TABS_ACTIVATED,
   TABS_ADOPT,
   TABS_CLOSED,
   TABS_CONTENT_BOUNDS_CHANGED,
 } from "../tabs/tabs.shared";
-import type { TabsCommands, TabsEvents } from "../tabs/tabs.shared";
 import {
   SUB_TABS_CLOSE,
-  SUB_TABS_CLOSED,
   SUB_TABS_CLOSE_ALL,
+  SUB_TABS_CLOSED,
   SUB_TABS_GET_STACK,
   SUB_TABS_OPEN,
   SUB_TABS_OPENED,

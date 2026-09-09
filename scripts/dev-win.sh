@@ -3,6 +3,8 @@
 # Renderer changes hot-reload instantly. Main/preload changes need Ctrl-C + rerun.
 set -e
 
+PROJECT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+
 find_powershell() {
   if command -v powershell.exe >/dev/null 2>&1; then
     command -v powershell.exe
@@ -62,17 +64,28 @@ rsync -a --delete out/main out/preload "$WIN_DIR/out/"
 rsync -a --delete resources/ "$WIN_DIR/resources/" 2>/dev/null || true
 cp package.json "$WIN_DIR/"
 
-# One-time: install electron on Windows side
-if [ ! -d "$WIN_DIR/node_modules/electron" ]; then
-  echo "First run: installing Electron on Windows (one-time)..."
-  "$POWERSHELL" -NoProfile -Command "
-    Set-Location '$WIN_PATH'
-    npm install --ignore-scripts --save-dev electron
-    if (\$LASTEXITCODE -ne 0) { exit \$LASTEXITCODE }
-    node node_modules/electron/install.js
-    if (\$LASTEXITCODE -ne 0) { exit \$LASTEXITCODE }
-  "
-fi
+# Use the repository lockfile and install policy on Windows as well.
+cp "$PROJECT_DIR/bun.lock" "$PROJECT_DIR/bunfig.toml" "$WIN_DIR/"
+echo "Installing locked dependencies on Windows (requires Bun 1.3.11+)..."
+"$POWERSHELL" -NoProfile -Command "
+  Set-Location '$WIN_PATH'
+  if (-not (Get-Command bun -ErrorAction SilentlyContinue)) {
+    Write-Error 'Install Bun 1.3.11 or newer on Windows before launching dev:win.'
+    exit 1
+  }
+  \$bunVersion = [version]'0.0.0'
+  \$bunVersionText = bun --version
+  if (\$LASTEXITCODE -ne 0 -or
+      -not [version]::TryParse(\$bunVersionText, [ref]\$bunVersion) -or
+      \$bunVersion -lt [version]'1.3.11') {
+    Write-Error 'Bun 1.3.11 or newer is required on Windows.'
+    exit 1
+  }
+  bun install --frozen-lockfile
+  if (\$LASTEXITCODE -ne 0) { exit \$LASTEXITCODE }
+  bun run setup:electron
+  if (\$LASTEXITCODE -ne 0) { exit \$LASTEXITCODE }
+"
 
 # Resolve electron.exe path
 ELECTRON_EXE="$WIN_DIR/node_modules/electron/dist/electron.exe"

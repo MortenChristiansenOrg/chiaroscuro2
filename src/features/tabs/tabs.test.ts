@@ -16,8 +16,7 @@ vi.mock("../folders/folders.main", () => ({
 
 import { isPinned } from "../pinned-tabs/pinned-tabs.main";
 import type { TabLoadingChangedPayload } from "../window-chrome/window-chrome.shared";
-import feature from "./tabs.main";
-import { start } from "./tabs.main";
+import feature, { start } from "./tabs.main";
 import {
   TABS_ACTIVATE,
   TABS_ACTIVATED,

@@ -5,8 +5,7 @@ import { defineFeature } from "../../shared/define-feature";
 import { featureState } from "../../shared/feature-state";
 import { PersistedMap } from "../../shared/persisted-map";
 import type { FolderId, TabId, WorkspaceId } from "../../shared/types";
-import type { Tab } from "../tabs/tabs.shared";
-import type { TabsEvents } from "../tabs/tabs.shared";
+import type { Tab, TabsEvents } from "../tabs/tabs.shared";
 import { TABS_LIST_CHANGED, TABS_UPDATED } from "../tabs/tabs.shared";
 import {
   FOLDERS_CHANGED,

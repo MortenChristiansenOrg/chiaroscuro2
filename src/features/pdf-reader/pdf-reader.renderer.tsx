@@ -184,7 +184,7 @@ export default function PdfReaderPage({ params }: BuiltInPageProps) {
         const data = base64ToUint8Array(dataBase64);
         const doc = await backend.loadDocument(data);
         if (cancelled) {
-          doc.destroy();
+          await doc.destroy();
           return;
         }
 

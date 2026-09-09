@@ -1,4 +1,4 @@
-import { type ComponentType, type LazyExoticComponent, Suspense, lazy } from "react";
+import { type ComponentType, type LazyExoticComponent, lazy, Suspense } from "react";
 
 export interface BuiltInPageProps {
   params: Record<string, string>;

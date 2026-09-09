@@ -1,6 +1,6 @@
-import { Icon } from "@/components/Icon";
 import { SubTabFrame } from "@features/sub-tabs/SubTabFrame";
 import { useRef, useState } from "react";
+import { Icon } from "@/components/Icon";
 
 const buttonClass = "sub-tab-action-btn";
 

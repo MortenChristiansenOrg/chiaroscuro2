@@ -5,6 +5,7 @@ import type { Platform } from "../../platform/types";
 import { defineFeature } from "../../shared/define-feature";
 import type { TabId } from "../../shared/types";
 import {
+  getPermissionInfo,
   PERMISSIONS_CHANGED,
   PERMISSIONS_GET_DOMAIN,
   PERMISSIONS_REVOKE,
@@ -12,7 +13,6 @@ import {
   type PermissionDecision,
   type PermissionsCommands,
   type PermissionsEvents,
-  getPermissionInfo,
 } from "./permissions.shared";
 
 type AllCommands = PermissionsCommands;

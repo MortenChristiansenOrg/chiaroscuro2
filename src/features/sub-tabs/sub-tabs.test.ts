@@ -33,8 +33,8 @@ import type { TabLoadingChangedPayload } from "../window-chrome/window-chrome.sh
 import subTabsFeature from "./sub-tabs.main";
 import {
   SUB_TABS_CLOSE,
-  SUB_TABS_CLOSED,
   SUB_TABS_CLOSE_ALL,
+  SUB_TABS_CLOSED,
   SUB_TABS_GET_STACK,
   SUB_TABS_OPEN,
   SUB_TABS_OPENED,

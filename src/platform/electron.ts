@@ -1,22 +1,21 @@
 import fs from "node:fs";
 import path from "node:path";
 import {
-  net,
-  BrowserWindow,
-  Menu,
-  WebContentsView,
   app,
+  BrowserWindow,
   clipboard,
   dialog,
   globalShortcut,
   ipcMain,
+  Menu,
+  net,
   screen,
   session,
   shell,
+  WebContentsView,
   webContents,
 } from "electron";
-import type { TabId, WindowId } from "../shared/types";
-import type { Bounds } from "../shared/types";
+import type { Bounds, TabId, WindowId } from "../shared/types";
 import type { Platform, PlatformDownload } from "./types";
 
 const ALLOWED_SCHEMES_WEB = new Set(["http:", "https:", "about:", "data:"]);
@@ -863,13 +862,7 @@ export class ElectronPlatform implements Platform {
     parent.on("resize", () => this.hideTooltip());
   }
 
-  showTooltip(opts: {
-    text: string;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  }): void {
+  showTooltip(opts: { text: string; x: number; y: number; width: number; height: number }): void {
     const win = this.getWin();
     if (!win || win.isDestroyed() || !this.tooltipWin || this.tooltipWin.isDestroyed()) return;
 
@@ -1499,12 +1492,12 @@ export class ElectronPlatform implements Platform {
     }
   }
 
-  readClipboard(): string {
+  async readClipboard(): Promise<string> {
     return clipboard.readText();
   }
 
-  writeClipboard(text: string): void {
-    clipboard.writeText(text);
+  async writeClipboard(text: string): Promise<void> {
+    await clipboard.writeText(text);
   }
 
   // ── Tab content actions ──────────────────────────────────────

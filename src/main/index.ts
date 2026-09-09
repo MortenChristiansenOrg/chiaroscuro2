@@ -1,13 +1,15 @@
 import path from "node:path";
-import { BrowserWindow, Menu, app, ipcMain, screen } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, screen } from "electron";
 import { CommandBus } from "../bus/command-bus";
 import { EventBus } from "../bus/event-bus";
 import { bridgeBusToIpc } from "../bus/ipc-main-bridge";
 import type { CommandRegistry, EventRegistry, MergeRegistries } from "../bus/types";
 import { createDataStore } from "../data/store";
 import type { DataStore } from "../data/types";
-import appState from "../features/app-state/app-state.main";
-import { loadPersistedState, onWindowBoundsChanged } from "../features/app-state/app-state.main";
+import appState, {
+  loadPersistedState,
+  onWindowBoundsChanged,
+} from "../features/app-state/app-state.main";
 import type { AppStateCommands, AppStateEvents } from "../features/app-state/app-state.shared";
 import commandPalette from "../features/command-palette/command-palette.main";
 import type {
@@ -19,8 +21,7 @@ import type {
   ContextMenuCommands,
   ContextMenuEvents,
 } from "../features/context-menu/context-menu.shared";
-import debugServer from "../features/debug-server/debug-server.main";
-import { getActualPort } from "../features/debug-server/debug-server.main";
+import debugServer, { getActualPort } from "../features/debug-server/debug-server.main";
 import type {
   DebugServerCommands,
   DebugServerEvents,
@@ -39,8 +40,7 @@ import type {
 } from "../features/external-link/external-link.shared";
 import findText from "../features/find-text/find-text.main";
 import type { FindTextCommands, FindTextEvents } from "../features/find-text/find-text.shared";
-import folders from "../features/folders/folders.main";
-import {
+import folders, {
   getFoldersForLevel,
   setFolderOrder,
   start as startFolders,
@@ -48,8 +48,9 @@ import {
 import type { FoldersCommands, FoldersEvents } from "../features/folders/folders.shared";
 import installer from "../features/installer/installer.main";
 import type { InstallerCommands, InstallerEvents } from "../features/installer/installer.shared";
-import localWebApp from "../features/local-web-app/local-web-app.main";
-import { start as startLocalWebApp } from "../features/local-web-app/local-web-app.main";
+import localWebApp, {
+  start as startLocalWebApp,
+} from "../features/local-web-app/local-web-app.main";
 import type {
   LocalWebAppCommands,
   LocalWebAppEvents,
@@ -61,8 +62,10 @@ import type {
   PermissionsCommands,
   PermissionsEvents,
 } from "../features/permissions/permissions.shared";
-import pinnedTabs from "../features/pinned-tabs/pinned-tabs.main";
-import { isPinned, start as startPinnedTabs } from "../features/pinned-tabs/pinned-tabs.main";
+import pinnedTabs, {
+  isPinned,
+  start as startPinnedTabs,
+} from "../features/pinned-tabs/pinned-tabs.main";
 import type {
   PinnedTabsCommands,
   PinnedTabsEvents,
@@ -84,8 +87,7 @@ import type {
   TabContextMenuCommands,
   TabContextMenuEvents,
 } from "../features/tab-context-menu/tab-context-menu.shared";
-import tabCustomization from "../features/tab-customization/tab-customization.main";
-import {
+import tabCustomization, {
   getCustomization,
   start as startTabCustomization,
 } from "../features/tab-customization/tab-customization.main";
@@ -93,8 +95,7 @@ import type {
   TabCustomizationCommands,
   TabCustomizationEvents,
 } from "../features/tab-customization/tab-customization.shared";
-import tabs from "../features/tabs/tabs.main";
-import {
+import tabs, {
   getAllTabs,
   getTab,
   getTabsForWorkspace,

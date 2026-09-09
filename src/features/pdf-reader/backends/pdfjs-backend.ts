@@ -234,8 +234,8 @@ class PdfjsDocument implements PdfDocument {
     return matches;
   }
 
-  destroy(): void {
-    this.doc.destroy();
+  async destroy(): Promise<void> {
+    await this.doc.loadingTask.destroy();
   }
 }
 
