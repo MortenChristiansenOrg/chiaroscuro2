@@ -113,7 +113,15 @@ for (const displayChange of ["removed-monitor", "smaller-work-area"] as const) {
     const userData = await session.app.evaluate(({ app }) => app.getPath("userData"));
     await session.stop();
     const preferencesPath = path.join(userData, "Local State");
-    const preferences = JSON.parse(await fs.readFile(preferencesPath, "utf8"));
+    // Exercise a profile with no native preference file as well as an existing one.
+    if (displayChange === "removed-monitor") await fs.rm(preferencesPath, { force: true });
+    const preferences = JSON.parse(
+      await fs.readFile(preferencesPath, "utf8").catch((error: unknown) => {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") return "{}";
+        throw error;
+      }),
+    );
+    preferences.windowStates ??= {};
     // Model a previous display configuration in this test's isolated profile.
     // This exercises Electron's restoration, not a physical hot-plug or DPI change.
     preferences.windowStates["main-window"] = {
