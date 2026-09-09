@@ -43,6 +43,21 @@ test("first and subsequent tabs, sub-tabs and OAuth popups share a stable browse
     const second = await VerificationPage.navigate(session, `${site.url}/identity-second`);
     expect(await second.page.evaluate(() => navigator.userAgent)).toBe(expected);
     expect(userAgents.get("/identity-second")).toBe(expected);
+    const secondTarget = await session.target(
+      (t) => t.kind === "tab" && t.url.endsWith("/identity-second"),
+    );
+    const duplicateId = await session.command<string>("tabs:duplicate", {
+      tabId: secondTarget.tabId,
+    });
+    const duplicate = await session.page(
+      await session.target((t) => t.kind === "tab" && t.tabId === duplicateId),
+    );
+    await duplicate.waitForLoadState("domcontentloaded");
+    expect(await duplicate.evaluate(() => navigator.userAgent)).toBe(expected);
+    expect(await duplicate.evaluate(() => document.cookie)).toContain(
+      "persistent-identity-fixture=survives-restart",
+    );
+    await session.command("tabs:close", { tabId: duplicateId });
     await second.subTab.click();
     const childTarget = await session.target(
       (t) => t.kind === "sub-tab" && t.url.endsWith("/child"),

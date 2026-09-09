@@ -2,6 +2,7 @@ import type { Bounds, FolderId, TabId, WorkspaceId } from "../../shared/types";
 
 // ── Command names ────────────────────────────────────────────────
 export const TABS_CREATE = "tabs:create" as const;
+export const TABS_DUPLICATE = "tabs:duplicate" as const;
 export const TABS_CLOSE = "tabs:close" as const;
 export const TABS_ACTIVATE = "tabs:activate" as const;
 export const TABS_NAVIGATE = "tabs:navigate" as const;
@@ -127,6 +128,7 @@ export interface TabsListChangedEvent {
 // ── Command registry ─────────────────────────────────────────────
 export type TabsCommands = {
   [TABS_CREATE]: { payload: TabsCreatePayload; response: TabId };
+  [TABS_DUPLICATE]: { payload: { tabId: TabId }; response: TabId | undefined };
   [TABS_CLOSE]: { payload: TabsClosePayload; response: undefined };
   [TABS_ACTIVATE]: { payload: TabsActivatePayload; response: undefined };
   [TABS_NAVIGATE]: { payload: TabsNavigatePayload; response: undefined };
@@ -157,3 +159,8 @@ export type TabsEvents = {
   [TABS_LIST_CHANGED]: TabsListChangedEvent;
   [TABS_CONTENT_BOUNDS_CHANGED]: Bounds;
 };
+
+/** Built-in renderers (including PDFs) have no independent web history to clone. */
+export function canDuplicateTab(tab: Tab | undefined): boolean {
+  return !!tab && !tab.builtIn && !tab.url.startsWith("app:");
+}
