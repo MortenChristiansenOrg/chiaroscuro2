@@ -5,9 +5,12 @@ import { defineFeature } from "../../shared/define-feature";
 import { logError } from "../../shared/log";
 import { TabScope } from "../../shared/tab-scope";
 import type { TabId } from "../../shared/types";
+import { SUB_TABS_CLOSED, SUB_TABS_OPENED, type SubTabsEvents } from "../sub-tabs/sub-tabs.shared";
 import {
+  TABS_ACTIVATED,
   TABS_CLOSED,
   TABS_CREATED,
+  type TabsActivatedEvent,
   type TabsClosedEvent,
   type TabsCreatedEvent,
 } from "../tabs/tabs.shared";
@@ -24,9 +27,12 @@ import {
   type ZoomEvents,
 } from "./zoom.shared";
 
-type AllEvents = ZoomEvents & { [K in typeof TABS_CREATED]: TabsCreatedEvent } & {
-  [K in typeof TABS_CLOSED]: TabsClosedEvent;
-};
+type AllEvents = ZoomEvents &
+  SubTabsEvents & { [K in typeof TABS_ACTIVATED]: TabsActivatedEvent } & {
+    [K in typeof TABS_CREATED]: TabsCreatedEvent;
+  } & {
+    [K in typeof TABS_CLOSED]: TabsClosedEvent;
+  };
 
 interface Deps {
   commands: CommandBus<ZoomCommands>;
@@ -98,16 +104,29 @@ export default defineFeature<Deps>({
     // the main process. This handler reads the already-applied level,
     // clamps if needed, and emits the bus event for UI updates.
 
-    events.on(TABS_CREATED, ({ tab }) => {
-      const cleanup = platform.onTabEvent(tab.id, "zoom-changed", () => {
-        const level = platform.getTabZoomLevel(tab.id);
+    function observeZoom(tabId: TabId) {
+      // Adoption reuses the contents and ID; replace the sub-tab subscription.
+      tabScope.cleanup(tabId);
+      const publishZoom = () => {
+        const level = platform.getTabZoomLevel(tabId);
         const clamped = clamp(level, ZOOM_MIN, ZOOM_MAX);
         if (clamped !== level) {
-          platform.setTabZoomLevel(tab.id, clamped);
+          platform.setTabZoomLevel(tabId, clamped);
         }
-        events.emit(ZOOM_CHANGED, { tabId: tab.id, zoomLevel: clamped });
-      });
-      tabScope.add(tab.id, cleanup);
+        events.emit(ZOOM_CHANGED, { tabId, zoomLevel: clamped });
+      };
+      tabScope.add(tabId, platform.onTabEvent(tabId, "zoom-changed", publishZoom));
+      tabScope.add(tabId, platform.onTabEvent(tabId, "did-finish-load", publishZoom));
+      publishZoom();
+    }
+
+    events.on(TABS_CREATED, ({ tab }) => observeZoom(tab.id));
+    events.on(SUB_TABS_OPENED, ({ subTab }) => observeZoom(subTab.id));
+    events.on(SUB_TABS_CLOSED, ({ subTabId }) => tabScope.cleanup(subTabId));
+    events.on(TABS_ACTIVATED, ({ tabId }) => {
+      const targetId = getActiveTabId() ?? tabId;
+      if (!targetId) return;
+      events.emit(ZOOM_CHANGED, { tabId: targetId, zoomLevel: platform.getTabZoomLevel(targetId) });
     });
 
     events.on(TABS_CLOSED, ({ tabId }) => {

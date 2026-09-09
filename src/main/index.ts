@@ -377,7 +377,17 @@ if (gotLock) {
     tooltip.register(deps);
     contextMenu.register(deps);
     folders.register({ ...deps, getTab, getTabsForWorkspace, setTabFolderId, setTabOrder });
-    zoom.register(deps);
+    zoom.register({
+      ...deps,
+      getActiveTabId: () => {
+        const parentId = deps.getActiveTabId();
+        return (
+          getSubTabSnapshot()
+            .filter((tab) => tab.parentTabId === parentId)
+            .at(-1)?.id ?? parentId
+        );
+      },
+    });
     devTools.register(deps);
     domainCss.register({ ...deps, dataDir, getTabsSnapshot: getAllTabs });
     downloads.register(deps);

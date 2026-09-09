@@ -12,7 +12,10 @@ Zoom is applied to the active tab's `WebContentsView` using Electron's `webConte
 
 ## Requirements
 
-- Zoom changes must only occur when a tab is active.
+- Zoom changes target the active tab or its topmost sub-tab.
+- Every web tab uses Electron isolated zoom mode, including lazy/restored tabs and sub-tabs later adopted as normal tabs. Same-origin tabs retain independent zoom while sharing their existing cookies/session.
+- Zoom mode persists across navigation. Current zoom is published after loading, activation, creation/adoption and wheel input.
+- Built-in PDF reader zoom remains a separate document-level setting.
 - Zoom changes must be possible using Ctrl + mouse wheel.
 - Zoom level must be resettable via keyboard.
 - Zoom level must be clamped to a reasonable range.
@@ -38,7 +41,7 @@ This feature uses the following shortcuts:
 - **Ctrl+Plus (+)**: Zoom in.
 - **Ctrl+Minus (-)**: Zoom out.
 - **Ctrl+0**: Reset zoom level.
-- **Ctrl+MouseWheel**: Change zoom level (native Chromium behavior).
+- **Ctrl+MouseWheel**: Change zoom level (captured by the tab preload).
 
 ### Mouse interactions
 

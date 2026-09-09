@@ -190,7 +190,7 @@ describe("Ctrl+MouseWheel (zoom-changed)", () => {
     const tab = makeTab({ id: "tab-new" as TabId });
     let onZoomChanged: (() => void) | undefined;
     vi.mocked(platform.onTabEvent).mockImplementation((_tabId, _event, cb) => {
-      onZoomChanged = cb as () => void;
+      if (_event === "zoom-changed") onZoomChanged = cb as () => void;
       return () => {};
     });
 
@@ -210,7 +210,7 @@ describe("Ctrl+MouseWheel (zoom-changed)", () => {
     const tab = makeTab({ id: "tab-new" as TabId });
     let onZoomChanged: (() => void) | undefined;
     vi.mocked(platform.onTabEvent).mockImplementation((_tabId, _event, cb) => {
-      onZoomChanged = cb as () => void;
+      if (_event === "zoom-changed") onZoomChanged = cb as () => void;
       return () => {};
     });
 

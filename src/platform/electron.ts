@@ -445,6 +445,10 @@ export class ElectronPlatform implements Platform {
       },
     });
 
+    // Keep zoom local to this WebContents without partitioning cookies/session.
+    // This also covers lazy tabs and sub-tabs that are later adopted.
+    view.webContents.setZoomMode("isolated");
+
     // Match the CSS border-radius of the content area (--radius = 0.5rem = 8px)
     view.setBorderRadius(8);
 
