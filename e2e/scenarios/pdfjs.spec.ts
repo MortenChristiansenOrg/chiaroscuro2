@@ -53,6 +53,25 @@ test("PDF.js opens legacy engine preferences with selectable text, search and in
     await expect(session.shell.getByRole("button", { name: "Reset zoom", exact: true })).toHaveText(
       "125%",
     );
+    await text.scrollIntoViewIfNeeded();
+    await expect(text).toBeInViewport();
+    await expect
+      .poll(() =>
+        session.shell
+          .locator("canvas")
+          .first()
+          .evaluate((canvas: HTMLCanvasElement) => {
+            const pixels = canvas
+              .getContext("2d")
+              ?.getImageData(0, 0, canvas.width, canvas.height).data;
+            if (!pixels) return false;
+            for (let i = 0; i < pixels.length; i += 4) {
+              if (pixels[i + 3] === 255 && (pixels[i] ?? 255) < 100) return true;
+            }
+            return false;
+          }),
+      )
+      .toBe(true);
     expect((await session.capture("pdfjs-search-index")).status).toBe("complete");
   } finally {
     await site.close();
