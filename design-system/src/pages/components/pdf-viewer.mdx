@@ -4,7 +4,7 @@ title: PDF Viewer
 
 # PDF Viewer
 
-A custom PDF reader that replaces Chromium's built-in viewer. Uses PDF.js for rendering. Includes a user-editable index sidebar, search, zoom, and virtual scrolling for large documents.
+A custom PDF reader that replaces Chromium's built-in viewer. Uses PDF.js for rendering. Legacy engine preferences are ignored; there is no engine selector. Includes a user-editable index sidebar, search, zoom, and virtual scrolling for large documents.
 
 Toolbar zoom persists by document identity across application restarts. Verify
 the actual `PdfReaderPage` and `PdfToolbar` with
@@ -125,5 +125,4 @@ verify persistence or Electron's native view composition.
 
 ## Related
 
-- [Settings Page](/components/settings-page) -- PDF backend toggle in settings
 - [Web Content Host](/components/web-content-host) -- parent container for built-in pages

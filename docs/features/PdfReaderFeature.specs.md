@@ -78,7 +78,7 @@ Custom PDF reader replacing Chromium's built-in PDF viewer. Uses PDF.js as its s
 ### Cross-feature interactions
 
 - **Tabs**: PDF reader renders as a built-in page when a PDF tab is active. The tab title shows the PDF filename.
-- **Settings**: PDF backend preference stored in settings.
+- **Settings**: Legacy `pdf-backend` values are ignored. All documents use PDF.js.
 - **Find Text**: PDF reader handles search internally since the content is canvas-based, not DOM text. The existing find-text feature is suppressed for PDF tabs.
 - **Zoom**: PDF reader manages its own zoom, independent of the tab zoom feature.
 
