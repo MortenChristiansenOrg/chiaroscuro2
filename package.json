@@ -29,7 +29,7 @@
     "setup:electron": "install-electron",
     "verify:app": "bun run setup:electron && bun e2e/automation/run.ts",
     "verify:app:win": "bash scripts/verify-app-win.sh",
-    "agent:app": "bun build e2e/automation/cli.ts --target=node --packages=external --outfile=out/verification/cli.mjs && node out/verification/cli.mjs",
+    "agent:app": "bun run setup:electron && bun build e2e/automation/cli.ts --target=node --packages=external --outfile=out/verification/cli.mjs && node out/verification/cli.mjs",
     "diagnose:address-bar": "bun run setup:electron && bun build e2e/diagnostics/address-bar.ts --target=node --packages=external --outfile=out/verification/address-bar.mjs && node out/verification/address-bar.mjs"
   },
   "dependencies": {
