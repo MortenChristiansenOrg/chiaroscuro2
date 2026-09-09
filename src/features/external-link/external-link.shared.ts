@@ -21,3 +21,6 @@ export type ExternalLinkCommands = CommandTypes<typeof commandContracts>;
 export type ExternalLinkEvents = {
   [EXTERNAL_LINK_RECEIVED]: ExternalLinkReceivedEvent;
 };
+
+/** Protocols handled by both command validation and OS link ingress. */
+export const EXTERNAL_LINK_PROTOCOL_PATTERN = /^(https?|file):/i;

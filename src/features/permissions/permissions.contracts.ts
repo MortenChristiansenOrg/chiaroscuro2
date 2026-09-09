@@ -5,8 +5,8 @@ import { PERMISSIONS_GET_DOMAIN, PERMISSIONS_REVOKE, PERMISSIONS_SET } from "./p
 export const PermissionDecisionSchema = z.union([z.literal("allow"), z.literal("deny")]);
 
 export const PermissionsSetPayloadSchema = z.strictObject({
-  domain: z.string(),
-  permission: z.string(),
+  domain: z.string().min(1),
+  permission: z.string().min(1),
   decision: PermissionDecisionSchema,
 });
 

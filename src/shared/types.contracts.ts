@@ -8,13 +8,13 @@ export const BoundsSchema = z.strictObject({
   height: z.number().nonnegative(),
 });
 
-export const TabIdSchema = z.string().min(1) as unknown as z.ZodType<TabId>;
+export const TabIdSchema = z.string().min(1) as unknown as z.ZodType<TabId, string>;
 
-export const FolderIdSchema = z.string().min(1) as unknown as z.ZodType<FolderId>;
+export const FolderIdSchema = z.string().min(1) as unknown as z.ZodType<FolderId, string>;
 
-export const WorkspaceIdSchema = z.string().min(1) as unknown as z.ZodType<WorkspaceId>;
+export const WorkspaceIdSchema = z.string().min(1) as unknown as z.ZodType<WorkspaceId, string>;
 
-export const WindowIdSchema = z.string().min(1) as unknown as z.ZodType<WindowId>;
+export const WindowIdSchema = z.string().min(1) as unknown as z.ZodType<WindowId, string>;
 
 /** URLs accepted by app navigation, including built-in pages and local documents. */
 export const NavigationUrlSchema = z

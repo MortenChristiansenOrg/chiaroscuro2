@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { defineCommand } from "../../bus/contract";
-import { FolderIdSchema, WorkspaceIdSchema } from "../../shared/types.contracts";
+import { FolderIdSchema, TabIdSchema, WorkspaceIdSchema } from "../../shared/types.contracts";
 import {
   FOLDERS_CREATE,
   FOLDERS_GET_FOR_LEVEL,
@@ -12,7 +12,7 @@ import {
   FOLDERS_TOGGLE_COLLAPSE,
 } from "./folders.shared";
 
-export const FoldersTogglePayloadSchema = z.strictObject({ tabId: z.string().optional() });
+export const FoldersTogglePayloadSchema = z.strictObject({ tabId: TabIdSchema.optional() });
 
 export const FoldersRenamePayloadSchema = z.strictObject({
   folderId: FolderIdSchema,
@@ -26,7 +26,7 @@ export const FoldersRemovePayloadSchema = z.strictObject({ folderId: FolderIdSch
 export const FoldersReorderPayloadSchema = z.strictObject({
   folderId: FolderIdSchema,
   targetFolderId: FolderIdSchema.optional(),
-  targetTabId: z.string().optional(),
+  targetTabId: TabIdSchema.optional(),
   position: z.union([z.literal("before"), z.literal("after")]).optional(),
   parentFolderId: z.union([FolderIdSchema, z.null()]).optional(),
 });

@@ -15,7 +15,10 @@ To add a command:
    required by the feature. Reuse ID and geometry schemas from `shared/types.contracts.ts`.
 3. Derive the feature registry with `CommandTypes<typeof commandContracts>`.
    Derive any public payload alias with `z.infer<typeof PayloadSchema>`; do not
-   maintain an equivalent hand-written interface.
+   maintain an equivalent hand-written interface. The registry retains both schema
+   `input` and validated `payload` types. `IpcRendererCommandBus.send` accepts input
+   (including omitted defaulted fields); internal `CommandBus.send` and handlers
+   require output because trusted sends bypass boundary validation.
 4. For a new feature, include its contracts in `bus/command-contracts.ts`. Register
    the ordinary typed handler on the bus. Both boundaries fail closed for handlers
    without a contract. Internal trusted sends retain the existing typed API.
@@ -26,6 +29,10 @@ To add a command:
 payloads never invoke a handler or enter the command execution recorder. Both the
 IPC bridge and `POST /commands/send` use this function. Zod types drive TypeScript
 inference and first-party JSON Schema export; no parallel JSON Schema is maintained.
+
+Settings retain incomplete search-provider rows during editing. Their bang fields
+therefore permit draft strings; only complete `!word` keywords participate in bang
+resolution. Discovery examples use a complete keyword and matching default bang.
 
 ## Payload and error conventions
 

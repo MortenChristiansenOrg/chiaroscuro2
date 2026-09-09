@@ -8,14 +8,13 @@ import type { WindowId } from "../../shared/types";
 import type { TabsCommands } from "../tabs/tabs.shared";
 import {
   EXTERNAL_LINK_OPEN,
+  EXTERNAL_LINK_PROTOCOL_PATTERN,
   EXTERNAL_LINK_RECEIVED,
   type ExternalLinkCommands,
   type ExternalLinkEvents,
 } from "./external-link.shared";
 
 // ── URL parsing (exported for testing) ───────────────────────────
-
-const ALLOWED_SCHEMES = new Set(["http:", "https:", "file:"]);
 
 /** File extensions the browser can open (from spec). */
 const BROWSER_FILE_EXTENSIONS = new Set([".html", ".htm", ".mhtml", ".svg", ".pdf"]);
@@ -24,7 +23,7 @@ const BROWSER_FILE_EXTENSIONS = new Set([".html", ".htm", ".mhtml", ".svg", ".pd
 export function validateUrl(raw: string): string | null {
   try {
     const parsed = new URL(raw);
-    return ALLOWED_SCHEMES.has(parsed.protocol) ? parsed.href : null;
+    return EXTERNAL_LINK_PROTOCOL_PATTERN.test(parsed.protocol) ? parsed.href : null;
   } catch {
     return null;
   }

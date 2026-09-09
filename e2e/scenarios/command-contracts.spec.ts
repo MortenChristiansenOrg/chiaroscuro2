@@ -99,3 +99,23 @@ test("IPC and HTTP share command validation without allowing invalid mutations",
     await site.close();
   }
 });
+
+test("settings contracts preserve draft bang keywords during editing", async ({
+  appSession: session,
+}) => {
+  await session.command("settings:open");
+  await session.shell.getByRole("button", { name: "Add provider" }).click();
+  const keyword = session.shell.getByRole("textbox", { name: "Bang keyword" }).last();
+  for (const draft of ["", "!", "!example"]) {
+    await keyword.fill(draft);
+    await expect
+      .poll(async () => {
+        const settings = await session.command<{ searchProviders: { bang: string }[] }>(
+          "settings:get",
+        );
+        return settings.searchProviders.at(-1)?.bang;
+      })
+      .toBe(draft);
+  }
+  expect((await session.capture("settings-bang-drafts")).status).toBe("complete");
+});

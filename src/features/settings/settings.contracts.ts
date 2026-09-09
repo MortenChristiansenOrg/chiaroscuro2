@@ -32,12 +32,12 @@ export const commandContracts = {
         searchProviders: [
           {
             id: "example-id",
-            bang: "g",
+            bang: "!g",
             name: "Google",
             urlTemplate: "https://www.google.com/search?q={query}",
           },
         ],
-        defaultSearchProviderId: "example-id",
+        defaultSearchProviderId: "!g",
         debugServer: { enabled: false, port: 9222 },
       },
     ],

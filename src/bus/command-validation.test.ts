@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
+import { resolveInputDetailed } from "../features/command-palette/resolve-input";
 import { CommandBus } from "./command-bus";
 import { commandContracts } from "./command-contracts";
 import { documentCommand, executeExternalCommand } from "./command-validation";
@@ -171,5 +172,45 @@ it("documents response output rather than a schema's intermediate input", () => 
   });
   expect(documentCommand("parsed-number", contract).response.schema).toMatchObject({
     type: "number",
+  });
+});
+
+it.each([
+  ["permissions:set", { domain: "", permission: "notifications", decision: "allow" }],
+  ["permissions:set", { domain: "example.com", permission: "", decision: "allow" }],
+  ["folders:toggle", { tabId: "" }],
+  ["folders:reorder", { folderId: "folder-example", targetTabId: "" }],
+  ["external-link:open", { url: "javascript:alert(1)" }],
+  ["external-link:open", { url: "not a URL" }],
+])("rejects unusable identifiers and external links before mutation: %s", async (name, payload) => {
+  const bus = new CommandBus<Record<string, { payload: unknown; response: unknown }>>(
+    commandContracts,
+  );
+  const handler = vi.fn();
+  bus.handle(name, handler);
+  expect(await executeExternalCommand(bus, name, payload)).toMatchObject({
+    ok: false,
+    error: { code: "INVALID_PAYLOAD" },
+  });
+  expect(handler).not.toHaveBeenCalled();
+});
+
+it("keeps local file links valid and publishes a working bang example", () => {
+  expect(
+    commandContracts["external-link:open"].payload.parse({
+      url: "file:///C:/Documents/example.pdf",
+    }),
+  ).toEqual({ url: "file:///C:/Documents/example.pdf" });
+  const contract = commandContracts["settings:save"];
+  const settings = contract.payload.parse(contract.examples[0]);
+  expect(
+    resolveInputDetailed("!g useful query", {
+      providers: settings.searchProviders,
+      defaultBang: settings.defaultSearchProviderId,
+    }),
+  ).toMatchObject({
+    type: "search",
+    provider: "Google",
+    url: "https://www.google.com/search?q=useful%20query",
   });
 });

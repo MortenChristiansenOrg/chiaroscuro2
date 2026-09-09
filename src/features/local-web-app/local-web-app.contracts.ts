@@ -32,9 +32,7 @@ export const LocalWebAppStatusSchema = z.union([
 export const commandContracts = {
   [LOCAL_WEB_APP_SAVE_CONFIG]: defineCommand(LocalWebAppSaveConfigPayloadSchema, z.undefined(), {
     description: "Save a tab's working directory and local server command.",
-    examples: [
-      { tabId: "tab-example", directory: "C:/Projects/example", command: "https://example.com/" },
-    ],
+    examples: [{ tabId: "tab-example", directory: "C:/Projects/example", command: "bun run dev" }],
     sideEffects: ["Writes local application configuration"],
   }),
   [LOCAL_WEB_APP_DELETE_CONFIG]: defineCommand(LocalWebAppTabPayloadSchema, z.undefined(), {
@@ -63,10 +61,7 @@ export const commandContracts = {
   ),
   [LOCAL_WEB_APP_GET_CONFIG]: defineCommand(
     LocalWebAppTabPayloadSchema,
-    z.union([
-      LocalWebAppConfigSchema.extend(z.strictObject({ status: LocalWebAppStatusSchema }).shape),
-      z.undefined(),
-    ]),
+    z.union([LocalWebAppConfigSchema.extend({ status: LocalWebAppStatusSchema }), z.undefined()]),
     {
       description: "Read a tab's local application configuration and process status.",
       examples: [{ tabId: "tab-example" }],
