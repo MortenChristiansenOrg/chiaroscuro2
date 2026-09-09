@@ -84,6 +84,10 @@ export function FindBar() {
       "background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out)",
   };
 
+  // Opacity/pointer-events do not remove native draggable regions.
+  // An invisible find bar can otherwise cover the address-bar buttons.
+  if (!active) return null;
+
   return (
     <div
       className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
