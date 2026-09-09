@@ -5,11 +5,13 @@ import type { AddressInfo } from "node:net";
 export function samplePdf(): Buffer {
   const content = "BT /F1 24 Tf 40 740 Td (Chiaroscuro verification PDF) Tj ET";
   const objects = [
-    "<< /Type /Catalog /Pages 2 0 R >>",
+    "<< /Type /Catalog /Pages 2 0 R /Outlines 6 0 R >>",
     "<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
     "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
     "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
     `<< /Length ${content.length} >>\nstream\n${content}\nendstream`,
+    "<< /Type /Outlines /First 7 0 R /Last 7 0 R /Count 1 >>",
+    "<< /Title (Fixture outline) /Parent 6 0 R /Dest [3 0 R /Fit] >>",
   ];
   let pdf = "%PDF-1.4\n";
   const offsets = [0];

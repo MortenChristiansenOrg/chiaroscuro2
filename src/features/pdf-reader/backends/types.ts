@@ -1,7 +1,3 @@
-export interface PdfBackend {
-  loadDocument(data: Uint8Array): Promise<PdfDocument>;
-}
-
 export interface PdfDocument {
   readonly pageCount: number;
   getOutline(): Promise<OutlineEntry[]>;

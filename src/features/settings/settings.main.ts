@@ -29,16 +29,11 @@ interface Deps {
 
 let currentSettings: Settings;
 
-function isPdfBackend(value: unknown): value is Settings["pdfBackend"] {
-  return value === "pdfjs" || value === "mupdf";
-}
-
 function getDefaultSettings(): Settings {
   return {
     searchProviders: [...DEFAULT_PROVIDERS],
     defaultSearchProviderId: "!g",
     debugServer: { enabled: false, port: 19400 },
-    pdfBackend: "pdfjs",
   };
 }
 
@@ -64,8 +59,11 @@ export default defineFeature<Deps>({
     });
 
     commands.handle(SETTINGS_SAVE, async (payload) => {
-      const pdfBackend = isPdfBackend(payload.pdfBackend) ? payload.pdfBackend : "pdfjs";
-      currentSettings = { ...payload, pdfBackend };
+      currentSettings = {
+        searchProviders: payload.searchProviders,
+        defaultSearchProviderId: payload.defaultSearchProviderId,
+        debugServer: payload.debugServer,
+      };
       events.emit(SETTINGS_CHANGED, { settings: { ...currentSettings } });
       await Promise.all([
         dataStore
@@ -77,9 +75,6 @@ export default defineFeature<Deps>({
         dataStore
           .setSetting("debug-server", payload.debugServer)
           .catch(logError("settings", "persist debug server")),
-        dataStore
-          .setSetting("pdf-backend", pdfBackend)
-          .catch(logError("settings", "persist pdf backend")),
       ]);
     });
   },
@@ -98,8 +93,7 @@ export default defineFeature<Deps>({
     const debugServer = await dataStore.getSetting<Settings["debugServer"]>("debug-server");
     if (debugServer) currentSettings.debugServer = debugServer;
 
-    const pdfBackend = await dataStore.getSetting<unknown>("pdf-backend");
-    if (isPdfBackend(pdfBackend)) currentSettings.pdfBackend = pdfBackend;
+    // Legacy pdf-backend settings are intentionally ignored: PDF.js is the sole engine.
 
     events.emit(SETTINGS_CHANGED, { settings: { ...currentSettings } });
   },
