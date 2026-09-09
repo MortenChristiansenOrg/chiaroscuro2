@@ -121,6 +121,8 @@ Main process is authoritative. Each renderer window gets projected Zustand store
 
 **Window state persistence:** Electron 44 native `windowStatePersistence: true` on the persistent shell, named `main-window`. Native IDs are process-local and must never be used as persistence names. Future independent application windows need durable, distinct names. Electron owns bounds and maximized/fullscreen restoration and adapts to display changes. Legacy `app-state.windowBounds` are validated constructor defaults on migration; native saved state takes precedence. Subsequent application-state saves remove legacy bounds while retaining sidebar width and other fields. Palette, tooltip, sub-tab frame and popup windows are transient and do not enable persistence.
 
+Native restart scenarios wait for Electron's debounced state to reach its preference file before relaunching. Recovery coverage includes off-screen reachability and simulated saved layouts from a removed monitor or larger work area. On an unchanged display Electron preserves partial off-screen positioning while ensuring a reachable area; a changed work area fits the window. These profile fixtures do not replace physical monitor hot-plug or DPI verification.
+
 ## 10. Optimistic UI Updates
 
 IPC round-trip is ~0.08ms — most actions don't need optimistic updates. Use selectively:
