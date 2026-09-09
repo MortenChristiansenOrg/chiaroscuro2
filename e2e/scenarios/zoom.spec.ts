@@ -8,6 +8,7 @@ test("same-origin tabs and sub-tabs keep independent zoom and shared sessions", 
 }) => {
   test.setTimeout(60_000);
   const site = await startSite();
+  const otherSite = await startSite();
   try {
     const first = await VerificationPage.navigate(session, `${site.url}/first`);
     const firstTarget = await session.target((t) => t.kind === "tab" && t.url.endsWith("/first"));
@@ -82,13 +83,13 @@ test("same-origin tabs and sub-tabs keep independent zoom and shared sessions", 
     await expect.poll(() => level(childTarget)).toBe(0);
     await session.shell.locator(`[data-tab-id="${firstTarget.tabId}"]`).click();
     await expect.poll(() => level(firstTarget)).toBe(1);
-    await first.page.goto(`${site.url.replace("127.0.0.1", "localhost")}/navigated`);
+    await first.page.goto(`${otherSite.url}/navigated`);
     await expect.poll(() => level(firstTarget)).toBe(1);
     await key(firstTarget, "0");
     await expect.poll(() => level(firstTarget)).toBe(0);
     expect(await level(secondTarget)).toBe(2);
     expect((await session.capture("isolated-zoom")).status).toBe("complete");
   } finally {
-    await site.close();
+    await Promise.all([site.close(), otherSite.close()]);
   }
 });
