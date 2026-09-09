@@ -4,7 +4,7 @@
 
 The App State feature remembers certain UI layout settings between app launches.
 
-This includes the size of the Sidebar panel and the window position/size.
+This includes the Sidebar panel width. Electron native window-state persistence owns window position, size and display mode.
 
 ## Terminology
 
@@ -16,7 +16,7 @@ This includes the size of the Sidebar panel and the window position/size.
 - The Sidebar panel must have a draggable resize handle on its right edge.
 - When the user resizes the Sidebar panel, the new width must be saved.
 - The saved Sidebar width must be restored on startup.
-- Window position and size must be persisted and restored on startup.
+- Window position, size, maximized and fullscreen state must be persisted and restored on startup by Electron.
 - Saves must be debounced to avoid excessive disk writes during resize drags.
 - App state is stored via `DataStore.setSetting()` (JSON key-value).
 
@@ -48,7 +48,7 @@ None.
 
 - (Planned) Listens to sidebar visibility events to know when sidebar is shown/hidden.
 - Provides restored sidebar width to the sidebar renderer via event on startup.
-- Tracks window bounds changes from the main process.
+- Supplies validated legacy bounds as constructor defaults during migration; removes legacy bounds from subsequent application-state saves.
 
 ## Commands & Events
 
@@ -59,9 +59,9 @@ None.
 
 ### Events
 
-- `app-state:restored` — App state was restored on startup. Payload: `{ sidebarWidth: number; windowBounds: { x: number; y: number; width: number; height: number } }`.
+- `app-state:restored` — App state was restored on startup. Payload: `{ sidebarWidth: number }`. Window bounds and display modes are owned by Electron native persistence; legacy bounds are migrated as initial constructor defaults.
 - `app-state:sidebar-width-changed` — Sidebar width changed. Payload: `{ width: number }`.
 
 ## Unresolved Issues
 
-- **Multi-window state**: If multiple windows are open, which window's position/size is saved? For now, save the last-focused window's bounds.
+- Independent application windows are not implemented yet. Each future persistent window requires a distinct durable name; the current shell uses `main-window`. Transient windows never enable persistence.

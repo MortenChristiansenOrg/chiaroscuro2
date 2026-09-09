@@ -121,6 +121,44 @@ describe("loadPersistedState", () => {
     expect(state.windowBounds).toEqual({ x: 50, y: 50, width: 1000, height: 700 });
   });
 
+  it("retires legacy bounds while preserving unrelated application state", async () => {
+    const { commands, dataStore } = setup();
+    await dataStore.setSetting("app-state", {
+      sidebarWidth: 310,
+      windowBounds: DEFAULT_WINDOW_BOUNDS,
+      futureSetting: "preserved",
+    });
+    await loadPersistedState(dataStore, () => DISPLAY_BOUNDS);
+    await commands.send(APP_STATE_SAVE, undefined);
+    expect(await dataStore.getSetting("app-state")).toEqual({
+      sidebarWidth: 310,
+      futureSetting: "preserved",
+    });
+    expect((await loadPersistedState(dataStore, () => DISPLAY_BOUNDS)).windowBounds).toEqual(
+      DEFAULT_WINDOW_BOUNDS,
+    );
+  });
+
+  it("fits legacy bounds after a resolution reduction", async () => {
+    const { dataStore } = setup();
+    await dataStore.setSetting("app-state", {
+      sidebarWidth: 300,
+      windowBounds: { x: 3000, y: 0, width: 3000, height: 2000 },
+    });
+    const restored = await loadPersistedState(dataStore, () => DISPLAY_BOUNDS);
+    expect(restored.windowBounds).toEqual(DISPLAY_BOUNDS[0]);
+  });
+
+  it("rejects non-finite legacy coordinates", async () => {
+    const { dataStore } = setup();
+    await dataStore.setSetting("app-state", {
+      sidebarWidth: 300,
+      windowBounds: { ...DEFAULT_WINDOW_BOUNDS, x: Number.NaN },
+    });
+    const restored = await loadPersistedState(dataStore, () => DISPLAY_BOUNDS);
+    expect(restored.windowBounds).toEqual(DEFAULT_WINDOW_BOUNDS);
+  });
+
   it("clamps out-of-range sidebar width", async () => {
     const { dataStore } = setup();
     await dataStore.setSetting("app-state", {
@@ -159,7 +197,6 @@ describe("feature.start()", () => {
 
     expect(listener).toHaveBeenCalledWith({
       sidebarWidth: DEFAULT_SIDEBAR_WIDTH,
-      windowBounds: DEFAULT_WINDOW_BOUNDS,
     });
   });
 
@@ -179,7 +216,6 @@ describe("feature.start()", () => {
 
     expect(listener).toHaveBeenCalledWith({
       sidebarWidth: 280,
-      windowBounds: { x: 200, y: 100, width: 1400, height: 900 },
     });
   });
 });

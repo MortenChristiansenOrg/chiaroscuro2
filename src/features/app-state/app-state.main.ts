@@ -39,7 +39,7 @@ function clampSidebarWidth(width: number): number {
 export default defineFeature<Deps>({
   register({ commands, events, dataStore }) {
     state = new DebouncedSave<PersistedAppState>(
-      { sidebarWidth: DEFAULT_SIDEBAR_WIDTH, windowBounds: { ...DEFAULT_WINDOW_BOUNDS } },
+      { sidebarWidth: DEFAULT_SIDEBAR_WIDTH },
       (value) => dataStore.setSetting(SAVE_SETTING_KEY, value),
       DEBOUNCE_MS,
     );
@@ -60,36 +60,37 @@ export default defineFeature<Deps>({
     const current = state.get();
     events.emit(APP_STATE_RESTORED, {
       sidebarWidth: current.sidebarWidth,
-      windowBounds: { ...current.windowBounds },
     });
   },
 });
 
-/** Call from main index.ts on window move/resize (debounced save). */
-export function onWindowBoundsChanged(bounds: Bounds): void {
-  state.update((prev) => ({ ...prev, windowBounds: { ...bounds } }));
-}
-
-/** Load persisted state. Returns bounds for createWindow. */
+/** Legacy bounds are constructor defaults only; Electron's saved state takes precedence. */
 export async function loadPersistedState(
   dataStore: DataStore,
   getDisplayBounds: () => Bounds[],
-): Promise<PersistedAppState> {
-  const saved = await dataStore.getSetting<PersistedAppState>(SAVE_SETTING_KEY);
+): Promise<PersistedAppState & { windowBounds: Bounds }> {
+  const saved = await dataStore.getSetting<PersistedAppState & { windowBounds?: Bounds }>(
+    SAVE_SETTING_KEY,
+  );
   if (saved) {
-    state.update((prev) => ({
-      ...prev,
+    const { windowBounds: _legacyBounds, ...applicationState } = saved;
+    state.set({
+      ...applicationState,
       sidebarWidth: clampSidebarWidth(saved.sidebarWidth ?? DEFAULT_SIDEBAR_WIDTH),
-      windowBounds: validateBounds(saved.windowBounds, getDisplayBounds()),
-    }));
+    });
   }
-  return { ...state.get() };
+  return {
+    ...state.get(),
+    windowBounds: validateBounds(saved?.windowBounds, getDisplayBounds()),
+  };
 }
 
 /** Ensure window bounds are visible on at least one display. */
 function validateBounds(bounds: Bounds | undefined, displays: Bounds[]): Bounds {
   if (
     !bounds ||
+    !Number.isFinite(bounds.x) ||
+    !Number.isFinite(bounds.y) ||
     !Number.isFinite(bounds.width) ||
     !Number.isFinite(bounds.height) ||
     bounds.width <= 0 ||
@@ -108,14 +109,17 @@ function validateBounds(bounds: Bounds | undefined, displays: Bounds[]): Bounds 
       bounds.y < d.y + d.height - minVisible,
   );
 
-  if (isVisible) return bounds;
+  if (isVisible && displays.some((d) => bounds.width <= d.width && bounds.height <= d.height))
+    return bounds;
 
   // Window is off-screen — keep size, center on primary display
   const primary = displays[0] ?? { x: 0, y: 0, width: 1920, height: 1080 };
+  const width = Math.min(bounds.width, primary.width);
+  const height = Math.min(bounds.height, primary.height);
   return {
-    x: primary.x + Math.round((primary.width - bounds.width) / 2),
-    y: primary.y + Math.round((primary.height - bounds.height) / 2),
-    width: bounds.width,
-    height: bounds.height,
+    x: primary.x + Math.round((primary.width - width) / 2),
+    y: primary.y + Math.round((primary.height - height) / 2),
+    width,
+    height,
   };
 }

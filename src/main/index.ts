@@ -8,10 +8,7 @@ import { bridgeBusToIpc } from "../bus/ipc-main-bridge";
 import type { CommandRegistry, EventRegistry, MergeRegistries } from "../bus/types";
 import { createDataStore } from "../data/store";
 import type { DataStore } from "../data/types";
-import appState, {
-  loadPersistedState,
-  onWindowBoundsChanged,
-} from "../features/app-state/app-state.main";
+import appState, { loadPersistedState } from "../features/app-state/app-state.main";
 import type { AppStateCommands, AppStateEvents } from "../features/app-state/app-state.shared";
 import commandPalette from "../features/command-palette/command-palette.main";
 import type {
@@ -265,6 +262,9 @@ function createWindow(windowBounds?: {
 }): BrowserWindow {
   const win = new BrowserWindow({
     ...(windowBounds ?? { width: 1200, height: 800 }),
+    // Stable across process restarts; transient overlay windows remain unnamed.
+    name: "main-window",
+    windowStatePersistence: true,
     icon: iconPath,
     titleBarStyle: "hidden",
     backgroundMaterial: "acrylic",
@@ -286,20 +286,6 @@ function createWindow(windowBounds?: {
   win.on("unmaximize", () => {
     if (!win.isDestroyed()) events.emit("window:maximized-changed", { maximized: false });
   });
-
-  // Track window bounds for app-state persistence
-  let boundsTimer: ReturnType<typeof setTimeout> | undefined;
-  const trackBounds = () => {
-    if (boundsTimer) clearTimeout(boundsTimer);
-    boundsTimer = setTimeout(() => {
-      if (win.isDestroyed()) return;
-      if (!win.isMaximized() && !win.isMinimized()) {
-        onWindowBoundsChanged(win.getBounds());
-      }
-    }, 200);
-  };
-  win.on("move", trackBounds);
-  win.on("resize", trackBounds);
 
   if (isDev && process.env.ELECTRON_RENDERER_URL) {
     win.loadURL(process.env.ELECTRON_RENDERER_URL);

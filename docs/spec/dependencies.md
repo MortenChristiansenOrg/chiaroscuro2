@@ -29,8 +29,8 @@ and [lifecycle-script documentation](https://bun.com/docs/pm/lifecycle).
 
 `package.json` and `bun.lock` are the authoritative dependency list and resolved versions.
 
-- Electron 44.2.0: latest stable eligible under the age gate at the September 8, 2026 update
-  (44.3.0 was less than one day old).
+- Electron 44.3.0: includes the native window display-mode persistence fix;
+  adopted after it cleared the 24-hour release-age gate on September 9, 2026.
 - React 19, RxDB 17, Zustand 5, Zod 4, Tailwind CSS 4.
 - PDF rendering: PDF.js 6.
 - Build and validation: electron-builder 26, electron-vite 5, TypeScript 7,

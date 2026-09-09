@@ -120,7 +120,9 @@ Main process is authoritative. Each renderer window gets projected Zustand store
 - **Bookmarked tabs**: per-workspace, owned by one window at a time.
 - **Ephemeral tabs**: per-workspace, owned by one window.
 
-**Window state persistence:** `electron-window-state` package. Per-window state stored in RxDB `window-state` collection keyed by `windowId` (x, y, width, height, maximized, activeWorkspaceId). Migrate to native Electron window state API when RFC #16 ships.
+**Window state persistence:** Electron 44 native `windowStatePersistence: true` on the persistent shell, named `main-window`. Native IDs are process-local and must never be used as persistence names. Future independent application windows need durable, distinct names. Electron owns bounds and maximized/fullscreen restoration and adapts to display changes. Legacy `app-state.windowBounds` are validated constructor defaults on migration; native saved state takes precedence. Subsequent application-state saves remove legacy bounds while retaining sidebar width and other fields. Palette, tooltip, sub-tab frame and popup windows are transient and do not enable persistence.
+
+Native restart scenarios wait for Electron's debounced state to reach its preference file before relaunching. Recovery coverage includes off-screen reachability and simulated saved layouts from a removed monitor or larger work area. On an unchanged display Electron preserves partial off-screen positioning while ensuring a reachable area; a changed work area fits the window. These profile fixtures do not replace physical monitor hot-plug or DPI verification.
 
 ## 10. Optimistic UI Updates
 
@@ -163,7 +165,7 @@ export function Sidebar() {
 
 ## 13. Storage (Data Abstraction)
 
-All persistence goes through the `DataStore` interface. Each feature owns its RxDB collection schema and provides migrations. Features never touch RxDB or the filesystem directly.
+Application feature data goes through the `DataStore` interface. Electron manages persistent shell geometry and display mode separately in its profile; transient windows do not enable native persistence. Each feature owns its RxDB collection schema and provides migrations. Features never touch RxDB or the filesystem directly.
 
 **RxDB** runs in the main process using the free Filesystem RxStorage. Provides:
 
@@ -176,8 +178,9 @@ All persistence goes through the `DataStore` interface. Each feature owns its Rx
 
 ```
 RxDB collections: history, downloads, tabs, workspaces, pinned-tabs,
-                  tab-customizations, domain-customizations, window-state
-JSON files:       settings.json, shortcuts.json, extensions.json
+                  tab-customizations, domain-customizations
+JSON files:       settings.json (including sidebar width), shortcuts.json, extensions.json
+Electron profile: named persistent shell bounds and display mode
 ```
 
 **Cloud sync (Convex — optional)**: All data is local-only by default. Convex can be added as a separate optional data store for selective cross-device sync (bookmarks, workspace definitions, user preferences). Convex is not a sync layer for RxDB — it's an independent store for data the user opts to sync. Local RxDB remains the source of truth; synced data is mirrored to/from Convex when connected.

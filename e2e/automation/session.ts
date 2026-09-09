@@ -113,22 +113,25 @@ export class AppSession {
       this.shell = await this.page(shellTarget, 15_000);
       this.record(
         "setup-window",
-        await this.app.evaluate(({ BrowserWindow, screen }, id) => {
-          const win = BrowserWindow.fromId(id);
-          if (!win) throw new Error("Shell window disappeared");
-          const before = win.getBounds();
-          const area = screen.getDisplayMatching(before).workArea;
-          const width = Math.min(before.width, area.width);
-          const height = Math.min(before.height, area.height);
-          const bounds = {
-            width,
-            height,
-            x: Math.max(area.x, Math.min(before.x, area.x + area.width - width)),
-            y: Math.max(area.y, Math.min(before.y, area.y + area.height - height)),
-          };
-          if (!win.isMaximized()) win.setBounds(bounds);
-          return { before, after: win.getBounds() };
-        }, shellTarget.windowId ?? 0),
+        await this.app.evaluate(
+          ({ BrowserWindow, screen }, { id, fit }) => {
+            const win = BrowserWindow.fromId(id);
+            if (!win) throw new Error("Shell window disappeared");
+            const before = win.getBounds();
+            const area = screen.getDisplayMatching(before).workArea;
+            const width = Math.min(before.width, area.width);
+            const height = Math.min(before.height, area.height);
+            const bounds = {
+              width,
+              height,
+              x: Math.max(area.x, Math.min(before.x, area.x + area.width - width)),
+              y: Math.max(area.y, Math.min(before.y, area.y + area.height - height)),
+            };
+            if (!win.isMaximized() && !win.isFullScreen() && fit) win.setBounds(bounds);
+            return { before, after: win.getBounds() };
+          },
+          { id: shellTarget.windowId ?? 0, fit: this.generation === 1 },
+        ),
       );
       await this.shell
         .locator("[data-testid='shell-ready']")
