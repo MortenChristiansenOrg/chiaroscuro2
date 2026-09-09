@@ -69,6 +69,9 @@ describe("pdf-reader commands", () => {
       expect(
         (await restored.send(PDF_READER_FETCH, { url: "https://fixture.test/sample.pdf" })).zoom,
       ).toBe(1.25);
+      expect(
+        (await restored.send(PDF_READER_FETCH, { url: "https://fixture.test/other.pdf" })).zoom,
+      ).toBe(1);
       for (const zoom of [Number.NaN, Infinity, 0, 5.25]) {
         await expect(restored.send(PDF_READER_SET_ZOOM, { pdfKey, zoom })).rejects.toThrow(
           "finite zoom",

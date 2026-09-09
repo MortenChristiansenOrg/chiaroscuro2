@@ -176,7 +176,23 @@ test("sidebar drag reorders real tabs and records animation frames", async ({
 });
 
 test("intentional failure produces reproducible evidence", async ({ appSession: session }) => {
-  await VerificationPage.navigate(session, `${site.url}/evidence`);
+  const parent = await VerificationPage.navigate(session, `${site.url}/evidence`);
+  await parent.popup.click();
+  const popupTarget = await session.target(
+    (target) => target.kind === "window" && target.url === `${site.url}/popup`,
+  );
+  const popup = new VerificationPage(await session.page(popupTarget));
+  await expect(
+    session.recordFrames(popupTarget, "closed-target", async () => {
+      await popup.submit("before target closes");
+      await popup.page.close();
+      throw new Error("Intentional action failure after closing target");
+    }),
+  ).rejects.toThrow("Intentional action failure after closing target");
+  const closedTargetFrames = JSON.parse(
+    await fs.readFile(path.join(session.artifactDir, "closed-target.frames.json"), "utf8"),
+  );
+  expect(closedTargetFrames.errors.length).toBeGreaterThan(0);
   let failure = "";
   try {
     await waitUntil(

@@ -17,18 +17,22 @@ export const test = base.extend<ElectronFixtures>({
         await session.launch();
         await use(session);
       } finally {
-        await session.writeJson("result.json", {
-          status: testInfo.status,
-          expectedStatus: testInfo.expectedStatus,
-          errors: testInfo.errors,
-          title: testInfo.title,
-          rerun: `bun run ${testInfo.project.testDir.endsWith("scenarios") ? "verify:app" : "e2e"} --grep ${JSON.stringify(testInfo.title)}`,
-        });
-        if (testInfo.status !== testInfo.expectedStatus) await session.capture("failure");
-        await session.close();
+        try {
+          await session.writeJson("result.json", {
+            status: testInfo.status,
+            expectedStatus: testInfo.expectedStatus,
+            errors: testInfo.errors,
+            title: testInfo.title,
+            rerun: `bun run ${testInfo.project.testDir.endsWith("scenarios") ? "verify:app" : "e2e"} --grep ${JSON.stringify(testInfo.title)}`,
+          });
+          if (testInfo.status !== testInfo.expectedStatus) await session.capture("failure");
+        } finally {
+          await session.close();
+        }
       }
     },
-    { timeout: 30_000 },
+    // Covers bounded launch steps plus failure evidence/cleanup without raising test deadlines.
+    { timeout: 90_000 },
   ],
   electronApp: async ({ appSession }, use) => {
     await use(appSession.app);

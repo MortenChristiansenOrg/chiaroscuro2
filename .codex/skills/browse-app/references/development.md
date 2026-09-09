@@ -23,7 +23,7 @@ Launch and interact with the running Chiaroscuro app **or the design system webs
 
 ## Browser Interaction via `playwright-cli`
 
-This personal development workflow uses `playwright-cli` via the shell. For isolated verification use the shared controller described in SKILL.md. The CLI manages its own headless Chromium browser with persistent sessions.
+This personal development workflow uses `playwright-cli` via the shell. For isolated verification use the shared controller described in SKILL.md. In app/CDP mode the CLI controls Electron's renderers; only the standalone design-system workflow launches its own Chromium browser.
 
 ### Key commands
 

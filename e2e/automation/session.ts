@@ -297,6 +297,10 @@ export class AppSession {
         frames.push({ data: frame.data, timestamp: frame.metadata.timestamp });
       cdp.send("Page.screencastFrameAck", { sessionId: frame.sessionId }).catch(() => {});
     });
+    let actionFailed = false;
+    let actionError: unknown;
+    let writeFailed = false;
+    let writeError: unknown;
     try {
       await cdp.send("Page.startScreencast", {
         format: "png",
@@ -305,17 +309,38 @@ export class AppSession {
         maxHeight: 800,
       });
       await action();
+    } catch (error) {
+      actionFailed = true;
+      actionError = error;
     } finally {
-      await cdp.send("Page.stopScreencast");
-      await cdp.detach();
-      const manifest = [];
-      for (const [index, frame] of frames.entries()) {
-        const file = `${label}.frame-${String(index).padStart(3, "0")}.png`;
-        await fs.writeFile(path.join(this.artifactDir, file), Buffer.from(frame.data, "base64"));
-        manifest.push({ file, timestamp: frame.timestamp });
+      const errors: string[] = [];
+      await cdp.send("Page.stopScreencast").catch((error) => {
+        errors.push(String(error));
+      });
+      await cdp.detach().catch((error) => {
+        errors.push(String(error));
+      });
+      try {
+        const manifest = [];
+        for (const [index, frame] of frames.entries()) {
+          const file = `${label}.frame-${String(index).padStart(3, "0")}.png`;
+          await fs.writeFile(path.join(this.artifactDir, file), Buffer.from(frame.data, "base64"));
+          manifest.push({ file, timestamp: frame.timestamp });
+        }
+        await this.writeJson(`${label}.frames.json`, {
+          target,
+          composed: false,
+          frames: manifest,
+          errors,
+        });
+      } catch (error) {
+        this.record("filmstrip-write-error", String(error));
+        writeFailed = true;
+        writeError = error;
       }
-      await this.writeJson(`${label}.frames.json`, { target, composed: false, frames: manifest });
     }
+    if (actionFailed) throw actionError;
+    if (writeFailed) throw writeError;
   }
 
   /** OS-composed display crop. Headless has no desktop compositor and must not claim this evidence. */

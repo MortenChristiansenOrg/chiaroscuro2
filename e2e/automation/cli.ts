@@ -63,6 +63,7 @@ if (process.argv.includes("--help")) {
   );
 } else {
   const session = new AppSession(path.resolve("test-results", `interactive-${Date.now()}`));
+  let failureCount = 0;
   const site = await startSite();
   const lines = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
   // Install the iterator before launching Electron so piped input/EOF is buffered during startup.
@@ -187,11 +188,19 @@ if (process.argv.includes("--help")) {
         );
       } catch (error) {
         process.exitCode = 1;
-        await session.capture("action-failure");
+        const evidenceLabel = `action-failure-${++failureCount}`;
+        let captureError: string | undefined;
+        try {
+          await session.capture(evidenceLabel);
+        } catch (problem) {
+          captureError = String(problem);
+        }
         console.log(
           JSON.stringify({
             status: "failed",
             error: error instanceof z.ZodError ? error.issues : String(error),
+            evidenceLabel,
+            captureError,
             artifactDir: session.artifactDir,
           }),
         );
