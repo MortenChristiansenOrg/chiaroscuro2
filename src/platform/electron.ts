@@ -12,10 +12,11 @@ import {
   screen,
   session,
   shell,
-  WebContentsView,
+  type WebContentsView,
   webContents,
 } from "electron";
 import type { Bounds, TabId, WindowId } from "../shared/types";
+import { createTabView } from "./tab-view";
 import type { Platform, PlatformDownload } from "./types";
 
 const ALLOWED_SCHEMES_WEB = new Set(["http:", "https:", "about:", "data:"]);
@@ -429,25 +430,18 @@ export class ElectronPlatform implements Platform {
     windowId: WindowId,
     url: string,
     existingTabId?: TabId,
-    options?: { lazy?: boolean },
+    options?: { lazy?: boolean; cloneFrom?: TabId },
   ): Promise<TabId> {
     const win = this.getWin(windowId);
     if (!win) throw new Error("No window found");
 
+    const source = options?.cloneFrom ? this.views.get(options.cloneFrom)?.webContents : undefined;
+    if (options?.cloneFrom && (!source || source.isDestroyed())) {
+      throw new Error("Cannot duplicate a missing tab");
+    }
+    if (!isAllowedUrl(url, "internal")) throw new Error(`Blocked URL scheme: ${url}`);
     const tabId = existingTabId ?? (crypto.randomUUID() as TabId);
-    const view = new WebContentsView({
-      webPreferences: {
-        sandbox: true,
-        contextIsolation: true,
-        nodeIntegration: false,
-        webSecurity: true,
-        preload: path.join(__dirname, "../preload/tab.js"),
-      },
-    });
-
-    // Keep zoom local to this WebContents without partitioning cookies/session.
-    // This also covers lazy tabs and sub-tabs that are later adopted.
-    view.webContents.setZoomMode("isolated");
+    const view = createTabView(source);
 
     // Match the CSS border-radius of the content area (--radius = 0.5rem = 8px)
     view.setBorderRadius(8);
@@ -602,8 +596,10 @@ export class ElectronPlatform implements Platform {
     }
 
     if (!options?.lazy) {
-      if (!isAllowedUrl(url, "internal")) throw new Error(`Blocked URL scheme: ${url}`);
-      view.webContents.loadURL(url);
+      // Reload the cloned controller entry without appending a URL or losing forward history.
+      // A restored, unloaded source has no native history yet.
+      if (source?.getURL()) view.webContents.reload();
+      else view.webContents.loadURL(url);
     }
 
     return tabId;

@@ -36,7 +36,7 @@ export interface Platform {
     windowId: WindowId,
     url: string,
     tabId?: TabId,
-    options?: { lazy?: boolean },
+    options?: { lazy?: boolean; cloneFrom?: TabId },
   ): Promise<TabId>;
   closeTab(tabId: TabId): Promise<void>;
   navigateTab(tabId: TabId, url: string): Promise<void>;
