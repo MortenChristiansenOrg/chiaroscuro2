@@ -16,6 +16,7 @@ import type {
 
 // ── Command names ────────────────────────────────────────────────
 export const TABS_CREATE = "tabs:create" as const;
+export const TABS_DUPLICATE = "tabs:duplicate" as const;
 export const TABS_CLOSE = "tabs:close" as const;
 export const TABS_ACTIVATE = "tabs:activate" as const;
 export const TABS_NAVIGATE = "tabs:navigate" as const;
@@ -106,3 +107,8 @@ export type TabsEvents = {
   [TABS_LIST_CHANGED]: TabsListChangedEvent;
   [TABS_CONTENT_BOUNDS_CHANGED]: Bounds;
 };
+
+/** Built-in renderers (including PDFs) have no independent web history to clone. */
+export function canDuplicateTab(tab: Tab | undefined): boolean {
+  return !!tab && !tab.builtIn && !tab.url.startsWith("app:");
+}

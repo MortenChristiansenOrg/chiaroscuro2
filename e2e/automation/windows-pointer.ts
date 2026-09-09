@@ -53,7 +53,8 @@ export async function windowsPointer(
       native.handle,
       ...(click ? ["-Click"] : []),
     ],
-    { timeout: 5_000, windowsHide: true },
+    // Cold PowerShell/Add-Type startup can exceed five seconds on Windows CI.
+    { timeout: 15_000, windowsHide: true },
   );
   const observation = JSON.parse(result.stdout);
   session.record("windows-pointer", { point, click, ...observation });

@@ -13,6 +13,7 @@ import {
   TABS_CLEAR_EPHEMERAL,
   TABS_CLOSE,
   TABS_CREATE,
+  TABS_DUPLICATE,
   TABS_GET,
   TABS_GET_FOR_WORKSPACE,
   TABS_NAVIGATE,
@@ -80,6 +81,12 @@ export const commandContracts = {
     description: "Create a tab, optionally choosing its workspace and activation.",
     examples: [{ url: "https://example.com/" }],
     sideEffects: ["Creates web contents or a built-in page and persists tab metadata"],
+  }),
+  [TABS_DUPLICATE]: defineCommand(z.strictObject({ tabId: TabIdSchema }), TabIdSchema.optional(), {
+    description:
+      "Duplicate a web tab with its navigation history; returns no value for unsupported tabs.",
+    examples: [{ tabId: "tab-example" }],
+    sideEffects: ["Creates independent web contents in the source session and persists a new tab"],
   }),
   [TABS_CLOSE]: defineCommand(TabsClosePayloadSchema, z.undefined(), {
     description: "Close a tab by ID.",

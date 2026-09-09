@@ -182,8 +182,7 @@ clipboard text and cleans up its own profile. It distinguishes the exact report
 (blocked icons with working padding), a broader failure (padding also blocked),
 no reproduction, and a failed positive control. Missing desktop screenshots are
 reported as partial evidence with a nonzero exit; renderer screenshots do not
-establish desktop composition. This is a diagnostic, not a passing regression
-test or a fix for #51, and it does not run in the regular CI suite.
+establish desktop composition. The diagnostic remains optional. `e2e/scenarios/address-bar.spec.ts` is the Windows regression for #51: icon/padding native clicks, hit tests, hover and command effects in restored and maximized windows, including after opening and closing Find.
 
 ### Remaining gaps
 
