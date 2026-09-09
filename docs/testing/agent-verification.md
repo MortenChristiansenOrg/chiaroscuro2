@@ -154,6 +154,39 @@ changed behavior, not solely on whether the app still responds.
 
 ## Limits and CI
 
+### Native title-bar hit testing
+
+For the address-bar icon click report in #51, run the optional diagnostic:
+
+```bash
+bun run verify:app:win --address-bar
+bun run verify:app:win --address-bar --maximized
+# Or inside a prepared native Windows checkout:
+bun run diagnose:address-bar
+```
+
+This uses the same isolated `AppSession` and local fixture site. It compares
+Playwright/CDP clicks with the Windows desktop pointer at each button's icon
+center and left padding, with Reload as a positive control. The Windows helper
+checks the foreground window and window under the pointer before clicking,
+accounts for display scale and renderer zoom, and records `WM_NCHITTEST` results:
+`HTCLIENT` (1) versus `HTCAPTION` (2). A caption region can consume mouse input
+before the renderer receives it; a successful CDP click alone cannot verify this
+path. See [Electron's draggable-region behavior](https://github.com/electron/electron/blob/main/docs/tutorial/custom-window-interactions.md)
+and [Windows hit-test results](https://learn.microsoft.com/en-us/windows/win32/inputdev/wm-nchittest).
+
+Results, hover screenshots, geometry, native input records and the standard
+evidence bundle are saved under `test-results/address-bar/`, mirrored to
+`test-results/windows/address-bar/` by the WSL launcher. The diagnostic restores
+clipboard text and cleans up its own profile. It distinguishes the exact report
+(blocked icons with working padding), a broader failure (padding also blocked),
+no reproduction, and a failed positive control. Missing desktop screenshots are
+reported as partial evidence with a nonzero exit; renderer screenshots do not
+establish desktop composition. This is a diagnostic, not a passing regression
+test or a fix for #51, and it does not run in the regular CI suite.
+
+### Remaining gaps
+
 Ozone headless has no desktop compositor and Electron 44's native popup path
 can terminate its process. The existing fast suite uses Ozone; the broader suite
 uses Xvfb + a window manager or native Windows. Do not report headless renderer

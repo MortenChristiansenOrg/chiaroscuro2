@@ -27,8 +27,16 @@
 # Development
 
 - `bun dev` — start dev server + Electron (Linux/WSLg)
-- `bun run dev:win` — build in WSL, run Electron natively on Windows
+- `bun run dev:win` — explicit HMR workflow: Vite in WSL, Electron on Windows
 - `bun run verify` — run all checks (typecheck + lint + tests)
+
+When the user asks to run, launch, or open the dev browser on Windows for manual
+testing, build the app, deploy the complete build (main, preload, renderer and
+resources) to Windows, and launch Windows Electron using those local files.
+The running browser must remain usable without a WSL dev server or an agent
+session. Use the browse-app skill's Windows deployment instructions. Only use
+the Vite/HMR workflow when the user explicitly requests hot reload. Do not create
+`.dev-server-pid` for the default Windows launch.
 
 The UI must adhere to the design system defined in the companion website found at design-system/.
 
