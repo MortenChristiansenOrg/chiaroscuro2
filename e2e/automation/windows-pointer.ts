@@ -53,9 +53,28 @@ export async function windowsPointer(
       native.handle,
       ...(click ? ["-Click"] : []),
     ],
-    // Cold PowerShell/Add-Type startup can exceed five seconds on Windows CI.
-    { timeout: 15_000, windowsHide: true },
-  );
+    // Cold PowerShell/Add-Type startup exceeded 15 seconds on Windows CI.
+    // Native responsiveness still has its separate one-second WM_NCHITTEST limit.
+    { timeout: 30_000, windowsHide: true },
+  ).catch((error: unknown) => {
+    const failure = error as Error & {
+      code?: string | number;
+      signal?: string;
+      killed?: boolean;
+      stdout?: string;
+      stderr?: string;
+    };
+    session.record("windows-pointer-error", {
+      point,
+      click,
+      code: failure.code,
+      signal: failure.signal,
+      killed: failure.killed,
+      stdout: failure.stdout,
+      stderr: failure.stderr,
+    });
+    throw error;
+  });
   const observation = JSON.parse(result.stdout);
   session.record("windows-pointer", { point, click, ...observation });
   return observation;
