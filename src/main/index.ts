@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
 import path from "node:path";
-import { app, BrowserWindow, ipcMain, Menu, screen } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, powerMonitor, screen } from "electron";
 import { CommandBus } from "../bus/command-bus";
 import { commandContracts } from "../bus/command-contracts";
 import { EventBus } from "../bus/event-bus";
@@ -123,6 +123,7 @@ import type {
 import zoom from "../features/zoom/zoom.main";
 import type { ZoomCommands, ZoomEvents } from "../features/zoom/zoom.shared";
 import { ElectronPlatform } from "../platform/electron";
+import { GithubSessionDiagnostics } from "../platform/github-session-diagnostics";
 import { logError } from "../shared/log";
 import type { TabId, WindowId, WorkspaceId } from "../shared/types";
 
@@ -243,7 +244,8 @@ let activeWorkspaceId: WorkspaceId | undefined;
 
 if (isDev && process.env.NODE_ENV !== "test")
   app.setPath("userData", path.join(app.getPath("userData"), "..", "chiaroscuro-dev"));
-const platform = new ElectronPlatform(() => activeWindowId);
+const githubSessions = new GithubSessionDiagnostics();
+const platform = new ElectronPlatform(() => activeWindowId, githubSessions);
 const dataDir = process.env.DATA_DIR ?? path.join(app.getPath("userData"), "data");
 const dataStore: DataStore = createDataStore(dataDir);
 
@@ -411,6 +413,7 @@ if (gotLock) {
       return { all, activeTabId };
     });
     registerDebugState("workspaces", () => ({ activeWorkspaceId }));
+    registerDebugState("github-session", () => githubSessions.getState());
     registerDebugState("settings", () => commands.send(SETTINGS_GET, undefined).catch(() => null));
     registerDebugState("window", () => {
       const win =
@@ -423,6 +426,8 @@ if (gotLock) {
         maximized: win && !win.isDestroyed() ? win.isMaximized() : null,
       };
     });
+    powerMonitor.on("suspend", () => void githubSessions.snapshot("suspend"));
+    powerMonitor.on("resume", () => void githubSessions.snapshot("resume"));
     registerDebugState("debug-server", () => ({ actualPort: getActualPort() }));
     registerDebugState("sub-tabs", getSubTabSnapshot);
     registerDebugState("targets", () => {

@@ -181,3 +181,16 @@ JSON files:       settings.json, shortcuts.json, extensions.json
 ```
 
 **Cloud sync (Convex — optional)**: All data is local-only by default. Convex can be added as a separate optional data store for selective cross-device sync (bookmarks, workspace definitions, user preferences). Convex is not a sync layer for RxDB — it's an independent store for data the user opts to sync. Local RxDB remains the source of truth; synced data is mirrored to/from Convex when connected.
+
+## Session identity and GitHub diagnostics
+
+Prepare each tab session's user-agent and permission handlers before constructing
+its web contents. Electron session user-agent changes do not update existing
+contents; doing this afterward gave the first tab a different identity. New tabs,
+sub-tabs and popup windows now inherit the same prepared identity. Normalize the
+app user-agent fallback too, since renderer-created popup contents use that value.
+
+A bounded, memory-only GitHub authentication timeline is available through the
+existing debug state provider. See [GitHub session diagnostics](../testing/github-session-diagnostics.md)
+for scope, redaction, and how to capture an overnight logout without exporting
+credentials. The confirmed identity fix does not close the unproven logout root cause.

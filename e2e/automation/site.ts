@@ -26,8 +26,9 @@ export function samplePdf(): Buffer {
   return Buffer.from(pdf);
 }
 
-export async function startSite() {
+export async function startSite(onRequest?: (request: http.IncomingMessage) => void) {
   const server = http.createServer((request, response) => {
+    onRequest?.(request);
     const url = new URL(request.url ?? "/", "http://localhost");
     if (url.pathname === "/sample.pdf") {
       response.writeHead(200, { "Content-Type": "application/pdf" });
