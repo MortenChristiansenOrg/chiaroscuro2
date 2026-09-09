@@ -5,6 +5,7 @@
 - Use `BrowserWindow` with `WebContentsView` (not deprecated `BrowserView`)
 - Each tab = one `WebContentsView` attached to window
 - Tab switching = show/hide views, not destroy/create
+- Web tabs use `setZoomMode("isolated")`: zoom belongs to each WebContents, including sub-tabs and adopted contents, while cookies/session sharing is unchanged. Keyboard zoom targets the topmost sub-tab when open. PDF reader zoom is independent.
 - Multi-window support from day 1
 - **Per-tab session isolation**: Use `session.fromPartition('persist:tab-{id}')` for isolated tabs
   - Default: shared session
