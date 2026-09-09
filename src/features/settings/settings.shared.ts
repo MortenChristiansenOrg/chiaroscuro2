@@ -1,4 +1,10 @@
-import type { SearchProvider } from "../command-palette/resolve-input";
+import type { z } from "zod";
+import type { CommandTypes } from "../../bus/contract";
+import type {
+  commandContracts,
+  DebugServerSettingsSchema,
+  SettingsSchema,
+} from "./settings.contracts";
 
 // ── Command names ────────────────────────────────────────────────
 export const SETTINGS_OPEN = "settings:open" as const;
@@ -9,16 +15,9 @@ export const SETTINGS_SAVE = "settings:save" as const;
 export const SETTINGS_CHANGED = "settings:changed" as const;
 
 // ── Data types ───────────────────────────────────────────────────
-export interface DebugServerSettings {
-  enabled: boolean;
-  port: number;
-}
+export type DebugServerSettings = z.infer<typeof DebugServerSettingsSchema>;
 
-export interface Settings {
-  searchProviders: SearchProvider[];
-  defaultSearchProviderId: string;
-  debugServer: DebugServerSettings;
-}
+export type Settings = z.infer<typeof SettingsSchema>;
 
 // ── Payload types ────────────────────────────────────────────────
 export interface SettingsChangedEvent {
@@ -26,11 +25,7 @@ export interface SettingsChangedEvent {
 }
 
 // ── Command registry ─────────────────────────────────────────────
-export type SettingsCommands = {
-  [SETTINGS_OPEN]: { payload: undefined; response: undefined };
-  [SETTINGS_GET]: { payload: undefined; response: Settings };
-  [SETTINGS_SAVE]: { payload: Settings; response: undefined };
-};
+export type SettingsCommands = CommandTypes<typeof commandContracts>;
 
 // ── Event registry ───────────────────────────────────────────────
 export type SettingsEvents = {

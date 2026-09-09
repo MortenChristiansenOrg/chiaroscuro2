@@ -1,3 +1,10 @@
+import type { z } from "zod";
+import type { CommandTypes } from "../../bus/contract";
+import type {
+  AllowProtocolPayloadSchema,
+  commandContracts,
+  DenyProtocolPayloadSchema,
+} from "./installer.contracts";
 // ── Command names ────────────────────────────────────────────────
 export const INSTALLER_CHECK_FOR_UPDATES = "installer:check-for-updates" as const;
 export const INSTALLER_APPLY_UPDATE = "installer:apply-update" as const;
@@ -15,14 +22,9 @@ export const INSTALLER_UPDATE_DISMISSED = "installer:update-dismissed" as const;
 export const INSTALLER_PROTOCOL_ALLOWED = "installer:protocol-allowed" as const;
 
 // ── Command payloads ─────────────────────────────────────────────
-export interface AllowProtocolPayload {
-  requestId: string;
-  always: boolean;
-}
+export type AllowProtocolPayload = z.infer<typeof AllowProtocolPayloadSchema>;
 
-export interface DenyProtocolPayload {
-  requestId: string;
-}
+export type DenyProtocolPayload = z.infer<typeof DenyProtocolPayloadSchema>;
 
 // ── Event payloads ───────────────────────────────────────────────
 export interface UpdateAvailableEvent {
@@ -51,13 +53,7 @@ export interface ProtocolAllowedEvent {
 }
 
 // ── Command registry ─────────────────────────────────────────────
-export type InstallerCommands = {
-  [INSTALLER_CHECK_FOR_UPDATES]: { payload: undefined; response: undefined };
-  [INSTALLER_APPLY_UPDATE]: { payload: undefined; response: undefined };
-  [INSTALLER_DISMISS_UPDATE]: { payload: undefined; response: undefined };
-  [INSTALLER_ALLOW_PROTOCOL]: { payload: AllowProtocolPayload; response: undefined };
-  [INSTALLER_DENY_PROTOCOL]: { payload: DenyProtocolPayload; response: undefined };
-};
+export type InstallerCommands = CommandTypes<typeof commandContracts>;
 
 // ── Event registry ───────────────────────────────────────────────
 export type InstallerEvents = {

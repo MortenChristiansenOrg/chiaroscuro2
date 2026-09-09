@@ -1,4 +1,18 @@
-import type { TabId } from "../../shared/types";
+import type { z } from "zod";
+import type { CommandTypes } from "../../bus/contract";
+import type {
+  commandContracts,
+  DomainCssEditPayloadSchema,
+  DomainCssGetStatePayloadSchema,
+  DomainCssRemovePayloadSchema,
+  DomainCssStateSchema,
+  DomainCssTogglePayloadSchema,
+  DomainNavigationGetStatePayloadSchema,
+  DomainNavigationSetPayloadSchema,
+  DomainNavigationStateSchema,
+  DomainSettingsOpenPayloadSchema,
+  NavigationBlockRuleSchema,
+} from "./domain-css.contracts";
 
 // ── Command names ────────────────────────────────────────────────
 export const DOMAIN_SETTINGS_OPEN = "domain-settings:open" as const;
@@ -14,30 +28,16 @@ export const DOMAIN_CSS_CHANGED = "domain-css:changed" as const;
 export const DOMAIN_NAVIGATION_CHANGED = "domain-navigation:changed" as const;
 
 // ── Data types ───────────────────────────────────────────────────
-export interface DomainCssState {
-  domain: string;
-  enabled: boolean;
-  hasFile: boolean;
-}
+export type DomainCssState = z.infer<typeof DomainCssStateSchema>;
 
-export interface NavigationBlockRule {
-  enabled: boolean;
-  crossOriginOnly: boolean;
-}
+export type NavigationBlockRule = z.infer<typeof NavigationBlockRuleSchema>;
 
 export const DEFAULT_NAVIGATION_BLOCK_RULE: NavigationBlockRule = {
   enabled: false,
   crossOriginOnly: false,
 };
 
-export interface DomainNavigationState {
-  domain: string;
-  blockNavigate: NavigationBlockRule;
-  blockRedirect: NavigationBlockRule;
-  blockFrameNavigate: NavigationBlockRule;
-  blockNewTabs: boolean;
-  blockNewWindows: boolean;
-}
+export type DomainNavigationState = z.infer<typeof DomainNavigationStateSchema>;
 
 export const DEFAULT_DOMAIN_NAVIGATION_STATE: Omit<DomainNavigationState, "domain"> = {
   blockNavigate: { ...DEFAULT_NAVIGATION_BLOCK_RULE },
@@ -48,38 +48,19 @@ export const DEFAULT_DOMAIN_NAVIGATION_STATE: Omit<DomainNavigationState, "domai
 };
 
 // ── Payload types ────────────────────────────────────────────────
-export interface DomainSettingsOpenPayload {
-  domain: string;
-}
+export type DomainSettingsOpenPayload = z.infer<typeof DomainSettingsOpenPayloadSchema>;
 
-export interface DomainCssTogglePayload {
-  domain: string;
-}
+export type DomainCssTogglePayload = z.infer<typeof DomainCssTogglePayloadSchema>;
 
-export interface DomainCssEditPayload {
-  domain: string;
-}
+export type DomainCssEditPayload = z.infer<typeof DomainCssEditPayloadSchema>;
 
-export interface DomainCssRemovePayload {
-  domain: string;
-}
+export type DomainCssRemovePayload = z.infer<typeof DomainCssRemovePayloadSchema>;
 
-export interface DomainCssGetStatePayload {
-  domain: string;
-}
+export type DomainCssGetStatePayload = z.infer<typeof DomainCssGetStatePayloadSchema>;
 
-export interface DomainNavigationSetPayload {
-  domain: string;
-  blockNavigate: NavigationBlockRule;
-  blockRedirect: NavigationBlockRule;
-  blockFrameNavigate: NavigationBlockRule;
-  blockNewTabs: boolean;
-  blockNewWindows: boolean;
-}
+export type DomainNavigationSetPayload = z.infer<typeof DomainNavigationSetPayloadSchema>;
 
-export interface DomainNavigationGetStatePayload {
-  domain: string;
-}
+export type DomainNavigationGetStatePayload = z.infer<typeof DomainNavigationGetStatePayloadSchema>;
 
 export interface DomainCssChangedEvent {
   domain: string;
@@ -97,18 +78,7 @@ export interface DomainNavigationChangedEvent {
 }
 
 // ── Command registry ─────────────────────────────────────────────
-export type DomainCssCommands = {
-  [DOMAIN_SETTINGS_OPEN]: { payload: DomainSettingsOpenPayload; response: TabId };
-  [DOMAIN_CSS_TOGGLE]: { payload: DomainCssTogglePayload; response: undefined };
-  [DOMAIN_CSS_EDIT]: { payload: DomainCssEditPayload; response: undefined };
-  [DOMAIN_CSS_REMOVE]: { payload: DomainCssRemovePayload; response: undefined };
-  [DOMAIN_CSS_GET_STATE]: { payload: DomainCssGetStatePayload; response: DomainCssState };
-  [DOMAIN_NAVIGATION_SET]: { payload: DomainNavigationSetPayload; response: undefined };
-  [DOMAIN_NAVIGATION_GET_STATE]: {
-    payload: DomainNavigationGetStatePayload;
-    response: DomainNavigationState;
-  };
-};
+export type DomainCssCommands = CommandTypes<typeof commandContracts>;
 
 // ── Event registry ───────────────────────────────────────────────
 export type DomainCssEvents = {

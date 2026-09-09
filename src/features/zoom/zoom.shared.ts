@@ -1,4 +1,6 @@
+import type { CommandTypes } from "../../bus/contract";
 import type { TabId } from "../../shared/types";
+import type { commandContracts } from "./zoom.contracts";
 
 // ── Command names ────────────────────────────────────────────────
 export const ZOOM_IN = "zoom:in" as const;
@@ -21,11 +23,7 @@ export interface ZoomChangedEvent {
 }
 
 // ── Command registry ─────────────────────────────────────────────
-export type ZoomCommands = {
-  [ZOOM_IN]: { payload: undefined; response: undefined };
-  [ZOOM_OUT]: { payload: undefined; response: undefined };
-  [ZOOM_RESET]: { payload: undefined; response: undefined };
-};
+export type ZoomCommands = CommandTypes<typeof commandContracts>;
 
 // ── Event registry ───────────────────────────────────────────────
 export type ZoomEvents = {

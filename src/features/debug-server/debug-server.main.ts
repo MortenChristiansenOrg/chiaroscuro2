@@ -1,5 +1,10 @@
 import http from "node:http";
 import type { CommandBus } from "../../bus/command-bus";
+import {
+  commandErrorStatus,
+  documentCommand,
+  executeExternalCommand,
+} from "../../bus/command-validation";
 import type { EventBus } from "../../bus/event-bus";
 import type { CommandRegistry, EventRegistry } from "../../bus/types";
 import { debugLog } from "../../shared/debug-log";
@@ -253,34 +258,77 @@ function handleRequest(
   }
 
   if (req.method === "GET" && pathname === "/commands") {
-    respond(res, 200, { commands: commandBus.getHandlerNames() }, pretty);
+    respond(
+      res,
+      200,
+      {
+        commands: commandBus.getHandlerNames(),
+        contracts: commandBus.getHandlerNames().flatMap((name) => {
+          const contract = commandBus.getContract(name);
+          return contract ? [documentCommand(name, contract)] : [];
+        }),
+      },
+      pretty,
+    );
     return;
   }
 
   if (req.method === "POST" && pathname === "/commands/send") {
-    let body = "";
-    req.on("data", (chunk) => {
-      body += chunk;
+    const chunks: Buffer[] = [];
+    let bodyBytes = 0;
+    let oversized = false;
+    req.on("data", (chunk: Buffer) => {
+      if (oversized) return;
+      bodyBytes += chunk.length;
+      if (bodyBytes > 1024 * 1024) {
+        oversized = true;
+        respond(
+          res,
+          413,
+          { error: { code: "INVALID_PAYLOAD", message: "Command body exceeds 1 MiB" } },
+          pretty,
+        );
+        return;
+      }
+      chunks.push(chunk);
     });
     req.on("end", async () => {
+      if (oversized) return;
+      let request: unknown;
       try {
-        const { name, payload } = JSON.parse(body) as { name: string; payload: unknown };
-        if (!name) {
-          respond(res, 400, { error: "Missing 'name' field" }, pretty);
-          return;
-        }
-        if (!commandBus.hasHandler(name)) {
-          respond(res, 404, { error: `No handler for command: ${name}` }, pretty);
-          return;
-        }
-        const response = await commandBus.send(
-          name as string & keyof CommandRegistry,
-          payload as CommandRegistry[string & keyof CommandRegistry]["payload"],
+        request = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      } catch {
+        respond(
+          res,
+          400,
+          { error: { code: "INVALID_COMMAND", message: "Request must contain valid JSON" } },
+          pretty,
         );
-        respond(res, 200, { response }, pretty);
-      } catch (err) {
-        respond(res, 500, { error: err instanceof Error ? err.message : String(err) }, pretty);
+        return;
       }
+      if (
+        !request ||
+        typeof request !== "object" ||
+        Array.isArray(request) ||
+        Object.keys(request).some((key) => key !== "name" && key !== "payload")
+      ) {
+        respond(
+          res,
+          400,
+          {
+            error: {
+              code: "INVALID_COMMAND",
+              message: "Expected an object with name and optional payload",
+            },
+          },
+          pretty,
+        );
+        return;
+      }
+      const { name, payload } = request as { name?: unknown; payload?: unknown };
+      const result = await executeExternalCommand(commandBus, name, payload);
+      if (result.ok) respond(res, 200, { response: result.response }, pretty);
+      else respond(res, commandErrorStatus(result.error), { error: result.error }, pretty);
     });
     return;
   }

@@ -1,4 +1,13 @@
+import type { z } from "zod";
+import type { CommandTypes } from "../../bus/contract";
 import type { TabId } from "../../shared/types";
+import type {
+  commandContracts,
+  LocalWebAppConfigSchema,
+  LocalWebAppSaveConfigPayloadSchema,
+  LocalWebAppStatusSchema,
+  LocalWebAppTabPayloadSchema,
+} from "./local-web-app.contracts";
 
 // ── Command names ────────────────────────────────────────────────
 export const LOCAL_WEB_APP_SAVE_CONFIG = "local-web-app:save-config" as const;
@@ -14,23 +23,14 @@ export const LOCAL_WEB_APP_CONFIG_CHANGED = "local-web-app:config-changed" as co
 export const LOCAL_WEB_APP_CONFIG_REMOVED = "local-web-app:config-removed" as const;
 
 // ── Data types ───────────────────────────────────────────────────
-export type LocalWebAppStatus = "running" | "stopped" | "error";
+export type LocalWebAppStatus = z.infer<typeof LocalWebAppStatusSchema>;
 
-export interface LocalWebAppConfig {
-  directory: string;
-  command: string;
-}
+export type LocalWebAppConfig = z.infer<typeof LocalWebAppConfigSchema>;
 
 // ── Command payloads ─────────────────────────────────────────────
-export interface LocalWebAppSaveConfigPayload {
-  tabId: TabId;
-  directory: string;
-  command: string;
-}
+export type LocalWebAppSaveConfigPayload = z.infer<typeof LocalWebAppSaveConfigPayloadSchema>;
 
-export interface LocalWebAppTabPayload {
-  tabId: TabId;
-}
+export type LocalWebAppTabPayload = z.infer<typeof LocalWebAppTabPayloadSchema>;
 
 // ── Event payloads ───────────────────────────────────────────────
 export interface LocalWebAppStatusChangedEvent {
@@ -48,17 +48,7 @@ export interface LocalWebAppConfigRemovedEvent {
 }
 
 // ── Command registry ─────────────────────────────────────────────
-export type LocalWebAppCommands = {
-  [LOCAL_WEB_APP_SAVE_CONFIG]: { payload: LocalWebAppSaveConfigPayload; response: undefined };
-  [LOCAL_WEB_APP_DELETE_CONFIG]: { payload: LocalWebAppTabPayload; response: undefined };
-  [LOCAL_WEB_APP_START]: { payload: LocalWebAppTabPayload; response: undefined };
-  [LOCAL_WEB_APP_STOP]: { payload: LocalWebAppTabPayload; response: undefined };
-  [LOCAL_WEB_APP_BROWSE_DIRECTORY]: { payload: undefined; response: string | undefined };
-  [LOCAL_WEB_APP_GET_CONFIG]: {
-    payload: LocalWebAppTabPayload;
-    response: (LocalWebAppConfig & { status: LocalWebAppStatus }) | undefined;
-  };
-};
+export type LocalWebAppCommands = CommandTypes<typeof commandContracts>;
 
 // ── Event registry ───────────────────────────────────────────────
 export type LocalWebAppEvents = {
