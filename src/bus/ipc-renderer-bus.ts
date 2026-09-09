@@ -1,3 +1,4 @@
+import type { CommandInput } from "./contract";
 import type { CommandRegistry, EventRegistry } from "./types";
 
 type Listener<P> = (payload: P) => void;
@@ -17,7 +18,7 @@ function getApi(): PreloadApi {
 export class IpcRendererCommandBus<TRegistry extends CommandRegistry> {
   async send<K extends string & keyof TRegistry>(
     name: K,
-    payload: TRegistry[K]["payload"],
+    payload: CommandInput<TRegistry[K]>,
   ): Promise<TRegistry[K]["response"]> {
     return getApi().sendCommand(name, payload) as Promise<TRegistry[K]["response"]>;
   }

@@ -2,6 +2,7 @@ import { mkdirSync } from "node:fs";
 import path from "node:path";
 import { app, BrowserWindow, ipcMain, Menu, powerMonitor, screen } from "electron";
 import { CommandBus } from "../bus/command-bus";
+import { commandContracts } from "../bus/command-contracts";
 import { EventBus } from "../bus/event-bus";
 import { bridgeBusToIpc } from "../bus/ipc-main-bridge";
 import type { CommandRegistry, EventRegistry, MergeRegistries } from "../bus/types";
@@ -233,7 +234,7 @@ type AllEvents = MergeRegistries<
   ]
 >;
 
-const commands = new CommandBus<AllCommands>();
+const commands = new CommandBus<AllCommands>(commandContracts);
 const events = new EventBus<AllEvents>();
 
 // ── App state ───────────────────────────────────────────────────
@@ -466,7 +467,12 @@ if (gotLock) {
     const appStateData = await loadPersistedState(dataStore, getDisplayBounds);
 
     // Bridge bus to IPC (once, before any window creation)
-    bridgeBusToIpc(commands, events, () => BrowserWindow.getAllWindows());
+    bridgeBusToIpc(
+      commands,
+      events,
+      () => BrowserWindow.getAllWindows(),
+      (sender) => platform.isCommandSender(sender),
+    );
 
     // Phase 2: wait for renderer subscriptions, then emit initial state.
     // Register BEFORE createWindow — the renderer sends "renderer:ready" at

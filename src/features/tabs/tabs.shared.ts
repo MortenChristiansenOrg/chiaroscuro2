@@ -1,4 +1,18 @@
-import type { Bounds, FolderId, TabId, WorkspaceId } from "../../shared/types";
+import type { z } from "zod";
+import type { CommandTypes } from "../../bus/contract";
+import type { Bounds, TabId } from "../../shared/types";
+import type {
+  commandContracts,
+  TabSchema,
+  TabsActivatePayloadSchema,
+  TabsAdoptPayloadSchema,
+  TabsClearEphemeralPayloadSchema,
+  TabsClosePayloadSchema,
+  TabsCreatePayloadSchema,
+  TabsNavigatePayloadSchema,
+  TabsReorderPayloadSchema,
+  TabsToggleBookmarkPayloadSchema,
+} from "./tabs.contracts";
 
 // ── Command names ────────────────────────────────────────────────
 export const TABS_CREATE = "tabs:create" as const;
@@ -26,22 +40,7 @@ export const TABS_LIST_CHANGED = "tabs:list-changed" as const;
 export const TABS_CONTENT_BOUNDS_CHANGED = "tabs:content-bounds-changed" as const;
 
 // ── Data types ───────────────────────────────────────────────────
-export interface Tab {
-  id: TabId;
-  workspaceId: WorkspaceId;
-  url: string;
-  title: string;
-  favicon: string;
-  loading: boolean;
-  bookmarked: boolean;
-  builtIn?: boolean;
-  lastAccessedAt: number;
-  createdAt: number;
-  order: number;
-  folderId: FolderId | null;
-  /** The URL saved when the tab was bookmarked. Transient — not persisted. */
-  fixedUrl?: string;
-}
+export type Tab = z.infer<typeof TabSchema>;
 
 /** Shape persisted to DataStore (no transient fields like loading). */
 export interface PersistedTab {
@@ -58,50 +57,21 @@ export interface PersistedTab {
 }
 
 // ── Payload types ────────────────────────────────────────────────
-export interface TabsCreatePayload {
-  url: string;
-  workspaceId?: WorkspaceId;
-  activate?: boolean;
-}
+export type TabsCreatePayload = z.infer<typeof TabsCreatePayloadSchema>;
 
-export interface TabsClosePayload {
-  tabId: TabId;
-}
+export type TabsClosePayload = z.infer<typeof TabsClosePayloadSchema>;
 
-export interface TabsActivatePayload {
-  tabId: TabId;
-}
+export type TabsActivatePayload = z.infer<typeof TabsActivatePayloadSchema>;
 
-export interface TabsNavigatePayload {
-  url: string;
-  tabId?: TabId;
-}
+export type TabsNavigatePayload = z.infer<typeof TabsNavigatePayloadSchema>;
 
-export interface TabsToggleBookmarkPayload {
-  tabId?: TabId;
-}
+export type TabsToggleBookmarkPayload = z.infer<typeof TabsToggleBookmarkPayloadSchema>;
 
-export interface TabsClearEphemeralPayload {
-  workspaceId?: WorkspaceId;
-}
+export type TabsClearEphemeralPayload = z.infer<typeof TabsClearEphemeralPayloadSchema>;
 
-export interface TabsAdoptPayload {
-  /** Existing tabId with a live WebContentsView (e.g. from sub-tab promotion). */
-  tabId: TabId;
-  workspaceId?: WorkspaceId;
-  activate?: boolean;
-}
+export type TabsAdoptPayload = z.infer<typeof TabsAdoptPayloadSchema>;
 
-export interface TabsReorderPayload {
-  tabId: TabId;
-  targetBookmarked: boolean;
-  /** Tab to insert relative to. Omit when dropping into an empty section. */
-  targetTabId?: TabId;
-  /** Where to insert relative to targetTabId. Defaults to "before". */
-  position?: "before" | "after";
-  /** Target folder to drop into. Omit to place at root level. */
-  targetFolderId?: FolderId | null;
-}
+export type TabsReorderPayload = z.infer<typeof TabsReorderPayloadSchema>;
 
 export interface TabsCreatedEvent {
   tab: Tab;
@@ -126,29 +96,7 @@ export interface TabsListChangedEvent {
 }
 
 // ── Command registry ─────────────────────────────────────────────
-export type TabsCommands = {
-  [TABS_CREATE]: { payload: TabsCreatePayload; response: TabId };
-  [TABS_DUPLICATE]: { payload: { tabId: TabId }; response: TabId | undefined };
-  [TABS_CLOSE]: { payload: TabsClosePayload; response: undefined };
-  [TABS_ACTIVATE]: { payload: TabsActivatePayload; response: undefined };
-  [TABS_NAVIGATE]: { payload: TabsNavigatePayload; response: undefined };
-  [TABS_TOGGLE_BOOKMARK]: { payload: TabsToggleBookmarkPayload; response: undefined };
-  [TABS_CLEAR_EPHEMERAL]: { payload: TabsClearEphemeralPayload; response: undefined };
-  [TABS_REORDER]: { payload: TabsReorderPayload; response: undefined };
-  [TABS_REPORT_CONTENT_BOUNDS]: { payload: Bounds; response: undefined };
-  [TABS_GET]: { payload: { tabId: TabId }; response: Tab | undefined };
-  [TABS_GET_FOR_WORKSPACE]: { payload: { workspaceId: WorkspaceId }; response: Tab[] };
-  [TABS_SET_FOLDER_ID]: {
-    payload: { tabId: TabId; folderId: FolderId | null };
-    response: undefined;
-  };
-  [TABS_SET_ORDER]: { payload: { tabId: TabId; order: number }; response: undefined };
-  [TABS_SET_WORKSPACE]: {
-    payload: { tabId: TabId; workspaceId: WorkspaceId };
-    response: undefined;
-  };
-  [TABS_ADOPT]: { payload: TabsAdoptPayload; response: TabId };
-};
+export type TabsCommands = CommandTypes<typeof commandContracts>;
 
 // ── Event registry ───────────────────────────────────────────────
 export type TabsEvents = {

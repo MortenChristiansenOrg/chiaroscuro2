@@ -325,6 +325,13 @@ export class ElectronPlatform implements Platform {
     return targets;
   }
 
+  /** Only app-owned UI renderers may invoke the privileged command bus. */
+  isCommandSender(sender: Electron.WebContents): boolean {
+    return [this.getWin(), this.paletteWin, this.subTabWin].some(
+      (win) => win && !win.isDestroyed() && win.webContents === sender,
+    );
+  }
+
   private shortcuts = new Map<string, () => void>();
   private localShortcuts = new Map<string, () => void>();
   private views = new Map<TabId, WebContentsView>();
