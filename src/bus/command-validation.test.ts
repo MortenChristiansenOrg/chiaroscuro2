@@ -132,3 +132,33 @@ it("publishes usable schemas and valid examples for every app command", () => {
     documentCommand("tabs:create", commandContracts["tabs:create"]).payload.schema,
   ).toMatchObject({ required: ["url"], additionalProperties: false });
 });
+
+it("defaults omitted workspace privacy mode without weakening explicit boolean validation", async () => {
+  const bus = new CommandBus<Record<string, { payload: unknown; response: unknown }>>(
+    commandContracts,
+  );
+  const handler = vi.fn();
+  bus.handle("workspaces:create", handler);
+  expect(
+    await executeExternalCommand(bus, "workspaces:create", {
+      name: "Work",
+      color: "blue",
+      icon: "W",
+    }),
+  ).toMatchObject({ ok: true });
+  expect(handler).toHaveBeenCalledWith({
+    name: "Work",
+    color: "blue",
+    icon: "W",
+    privacyMode: false,
+  });
+  expect(
+    await executeExternalCommand(bus, "workspaces:create", {
+      name: "Work",
+      color: "blue",
+      icon: "W",
+      privacyMode: "false",
+    }),
+  ).toMatchObject({ ok: false });
+  expect(handler).toHaveBeenCalledOnce();
+});

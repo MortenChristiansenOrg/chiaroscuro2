@@ -16,7 +16,7 @@ export const WorkspacesCreatePayloadSchema = z.strictObject({
   name: z.string(),
   color: z.string(),
   icon: z.string(),
-  privacyMode: z.boolean(),
+  privacyMode: z.boolean().default(false),
 });
 
 export const WorkspaceSchema = z.strictObject({

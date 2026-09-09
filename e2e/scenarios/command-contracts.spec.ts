@@ -25,6 +25,12 @@ test("IPC and HTTP share command validation without allowing invalid mutations",
       { name, payload },
     );
   try {
+    const workspace = await ipc("workspaces:create", {
+      name: "Contract workspace",
+      color: "blue",
+      icon: "W",
+    });
+    expect(workspace).toHaveProperty("response", expect.any(String));
     const created = await http("tabs:create", { url: `${site.url}/contracts` });
     expect(created.status).toBe(200);
     const tabId = created.body.response;
