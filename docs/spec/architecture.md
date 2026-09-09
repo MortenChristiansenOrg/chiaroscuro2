@@ -21,6 +21,8 @@ Interface wrapping WebContentsView management, sessions, windows, keyboard short
 - **`ElectronPlatform`** — production, delegates to real Electron APIs
 - **`MockPlatform`** — tests, in-memory simulation
 
+Persistent shell geometry and display mode belong to Electron native window-state persistence, keyed by a stable window name. Application layout state (such as sidebar width) remains in the DataStore; transient windows do not restore across restarts.
+
 ## Data Abstraction
 
 Interface wrapping RxDB + JSON storage. RxDB provides reactive NoSQL document collections with MongoDB-like queries — no SQL. Per-feature collections with schema validation and migrations. Two implementations:

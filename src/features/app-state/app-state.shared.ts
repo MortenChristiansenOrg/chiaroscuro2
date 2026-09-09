@@ -11,7 +11,6 @@ export const APP_STATE_SIDEBAR_WIDTH_CHANGED = "app-state:sidebar-width-changed"
 // ── Payload types ────────────────────────────────────────────────
 export interface AppStateRestoredEvent {
   sidebarWidth: number;
-  windowBounds: Bounds;
 }
 
 export interface AppStateSidebarWidthChangedEvent {
@@ -25,7 +24,6 @@ export interface SetSidebarWidthPayload {
 // ── Persisted shape ──────────────────────────────────────────────
 export interface PersistedAppState {
   sidebarWidth: number;
-  windowBounds: Bounds;
 }
 
 // ── Defaults ─────────────────────────────────────────────────────
