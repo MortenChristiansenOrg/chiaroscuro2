@@ -65,6 +65,8 @@ if (process.argv.includes("--help")) {
   const session = new AppSession(path.resolve("test-results", `interactive-${Date.now()}`));
   const site = await startSite();
   const lines = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
+  // Install the iterator before launching Electron so piped input/EOF is buffered during startup.
+  const input = lines[Symbol.asyncIterator]();
   process.once("SIGINT", () => lines.close());
   process.once("SIGTERM", () => lines.close());
   try {
@@ -78,7 +80,7 @@ if (process.argv.includes("--help")) {
         targets: await session.targets(),
       }),
     );
-    for await (const line of lines) {
+    for await (const line of input) {
       if (!line.trim()) continue;
       try {
         const request = requestSchema.parse(JSON.parse(line));
@@ -165,7 +167,7 @@ if (process.argv.includes("--help")) {
               result = await session.command(request.name, request.payload);
               break;
             case "capture":
-              await session.capture(request.label);
+              result = await session.capture(request.label);
               break;
             case "restart":
               await session.restart();
@@ -173,7 +175,16 @@ if (process.argv.includes("--help")) {
               break;
           }
         }
-        console.log(JSON.stringify({ status: "passed", action: request.action, result }));
+        const partial =
+          request.action === "capture" && (result as { status: string }).status === "partial";
+        if (partial) process.exitCode = 1;
+        console.log(
+          JSON.stringify({
+            status: partial ? "partial" : "passed",
+            action: request.action,
+            result,
+          }),
+        );
       } catch (error) {
         process.exitCode = 1;
         await session.capture("action-failure");

@@ -30,7 +30,7 @@ test("cross-window and sub-tab focus through visible UI", async ({ appSession: s
   await expect(child.result).toHaveText("child input");
   await child.message.click();
   await expect(child.message).toBeFocused();
-  await session.capture("sub-tab");
+  expect((await session.capture("sub-tab")).status).toBe("complete");
   const frame = await session.page(
     await session.target((target) => target.kind === "sub-tab-frame"),
   );
@@ -49,7 +49,7 @@ test("cross-window and sub-tab focus through visible UI", async ({ appSession: s
   const popup = new VerificationPage(await session.page(popupTarget));
   await popup.submit("popup input");
   await expect(popup.result).toHaveText("popup input");
-  await session.capture("popup");
+  expect((await session.capture("popup")).status).toBe("complete");
   await popup.page.close();
   await parent.message.click();
   await expect(parent.message).toBeFocused();
@@ -86,7 +86,7 @@ test("PDF toolbar zoom survives a full process restart", async ({ appSession: se
     "125%",
   );
   await expect(session.shell.locator("canvas").first()).toBeVisible();
-  await session.capture("pdf-restored");
+  expect((await session.capture("pdf-restored")).status).toBe("complete");
 });
 
 test("pointer resize, clipboard, file selection and deterministic download", async ({
@@ -147,7 +147,7 @@ test("pointer resize, clipboard, file selection and deterministic download", asy
       session.debug<{ maximized: boolean }>("/state/window").then((state) => state.maximized),
     )
     .toBe(true);
-  await session.capture("interactions");
+  expect((await session.capture("interactions")).status).toBe("complete");
 });
 
 test("sidebar drag reorders real tabs and records animation frames", async ({
@@ -168,7 +168,7 @@ test("sidebar drag reorders real tabs and records animation frames", async ({
       await expect(tabs.last()).toHaveAttribute("data-tab-id", firstId ?? "missing");
     },
   );
-  await session.capture("sidebar-reordered");
+  expect((await session.capture("sidebar-reordered")).status).toBe("complete");
   const filmstrip = JSON.parse(
     await fs.readFile(path.join(session.artifactDir, "sidebar-drag.frames.json"), "utf8"),
   );
@@ -187,7 +187,7 @@ test("intentional failure produces reproducible evidence", async ({ appSession: 
     );
   } catch (error) {
     failure = String(error);
-    await session.capture("intentional-failure");
+    expect((await session.capture("intentional-failure")).status).toBe("complete");
   }
   expect(failure).toContain("intentional missing tab");
   await session.writeJson("intentional-failure.result.json", {

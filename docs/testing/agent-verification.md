@@ -53,7 +53,7 @@ bun run verify:app:win --interactive
 
 The controller reports `ready`, a fixture URL, CDP connection URL, artifact
 directory and targets. Send one JSON object per line. Startup build output precedes
-the JSONL responses. Each action returns `passed` or `failed`; an action failure
+the JSONL responses. Each action returns `passed`, `partial` or `failed`; a partial capture or action failure
 also captures evidence and makes the eventual process exit nonzero. EOF, `stop`,
 SIGINT or SIGTERM closes only this controller's Electron instance and fixture site.
 
@@ -124,7 +124,9 @@ WebContentsViews or child windows. Artifacts are named by scope:
 
 Inspect the actual images as well as the assertions. Keep the app unobscured for
 desktop capture. A union of windows spanning displays is currently rejected;
-move the scenario onto one display. Capture errors do not replace the original
+move the scenario onto one display. Startup fits the owned shell onto the display;
+Windows invisible maximized borders are clipped, with crop geometry recorded in
+`*.composed.json`. Capture errors do not replace the original
 test failure. Open traces with `bunx playwright show-trace PATH`.
 
 ## Representative coverage

@@ -108,7 +108,27 @@ export class AppSession {
         15_000,
       );
       this.debugUrl = `http://127.0.0.1:${port}`;
-      this.shell = await this.page(await this.target((target) => target.kind === "shell"));
+      const shellTarget = await this.target((target) => target.kind === "shell");
+      this.shell = await this.page(shellTarget);
+      this.record(
+        "setup-window",
+        await this.app.evaluate(({ BrowserWindow, screen }, id) => {
+          const win = BrowserWindow.fromId(id);
+          if (!win) throw new Error("Shell window disappeared");
+          const before = win.getBounds();
+          const area = screen.getDisplayMatching(before).workArea;
+          const width = Math.min(before.width, area.width);
+          const height = Math.min(before.height, area.height);
+          const bounds = {
+            width,
+            height,
+            x: Math.max(area.x, Math.min(before.x, area.x + area.width - width)),
+            y: Math.max(area.y, Math.min(before.y, area.y + area.height - height)),
+          };
+          if (!win.isMaximized()) win.setBounds(bounds);
+          return { before, after: win.getBounds() };
+        }, shellTarget.windowId ?? 0),
+      );
       await this.shell
         .locator("[data-testid='shell-ready']")
         .waitFor({ state: "attached", timeout: 15_000 });
@@ -126,12 +146,15 @@ export class AppSession {
   }
 
   async environment() {
-    return this.app.evaluate(({ app }) => ({
+    return this.app.evaluate(({ app, screen }) => ({
       versions: process.versions,
       platform: process.platform,
       pid: process.pid,
       userData: app.getPath("userData"),
       argv: process.argv,
+      displays: screen
+        .getAllDisplays()
+        .map(({ id, bounds, workArea, scaleFactor }) => ({ id, bounds, workArea, scaleFactor })),
     }));
   }
 
@@ -308,6 +331,7 @@ export class AppSession {
         (candidate) => candidate.isVisible() && !candidate.isMinimized(),
       );
       const rectangles = visibleWindows.map((candidate) => candidate.getBounds());
+      if (!rectangles.length) throw new Error("No visible application windows");
       const left = Math.min(...rectangles.map((rect) => rect.x));
       const top = Math.min(...rectangles.map((rect) => rect.y));
       const bounds = {
@@ -317,13 +341,26 @@ export class AppSession {
         height: Math.max(...rectangles.map((rect) => rect.y + rect.height)) - top,
       };
       const display = screen.getDisplayMatching(bounds);
-      if (
-        bounds.x < display.bounds.x ||
-        bounds.y < display.bounds.y ||
-        bounds.x + bounds.width > display.bounds.x + display.bounds.width ||
-        bounds.y + bounds.height > display.bounds.y + display.bounds.height
-      )
+      const intersectingDisplays = screen
+        .getAllDisplays()
+        .filter(
+          ({ bounds: other }) =>
+            bounds.x < other.x + other.width &&
+            bounds.x + bounds.width > other.x &&
+            bounds.y < other.y + other.height &&
+            bounds.y + bounds.height > other.y,
+        );
+      if (intersectingDisplays.length > 1)
         throw new Error("Window spans displays; move it onto one display before capture");
+      // Maximized Windows windows include invisible borders outside the monitor.
+      const crop = {
+        x: Math.max(bounds.x, display.bounds.x),
+        y: Math.max(bounds.y, display.bounds.y),
+        right: Math.min(bounds.x + bounds.width, display.bounds.x + display.bounds.width),
+        bottom: Math.min(bounds.y + bounds.height, display.bounds.y + display.bounds.height),
+      };
+      if (crop.right <= crop.x || crop.bottom <= crop.y)
+        throw new Error("Application is outside the captured display");
       const sources = await desktopCapturer.getSources({
         types: ["screen"],
         thumbnailSize: {
@@ -337,22 +374,25 @@ export class AppSession {
       const size = source.thumbnail.getSize();
       const scaleX = size.width / display.size.width;
       const scaleY = size.height / display.size.height;
-      return source.thumbnail
+      const png = source.thumbnail
         .crop({
-          x: Math.round((bounds.x - display.bounds.x) * scaleX),
-          y: Math.round((bounds.y - display.bounds.y) * scaleY),
-          width: Math.round(bounds.width * scaleX),
-          height: Math.round(bounds.height * scaleY),
+          x: Math.round((crop.x - display.bounds.x) * scaleX),
+          y: Math.round((crop.y - display.bounds.y) * scaleY),
+          width: Math.round((crop.right - crop.x) * scaleX),
+          height: Math.round((crop.bottom - crop.y) * scaleY),
         })
         .toPNG()
         .toString("base64");
+      return { png, requestedBounds: bounds, crop, display: display.bounds };
     });
     const file = path.join(this.artifactDir, `${name}.composed.png`);
-    await fs.writeFile(file, Buffer.from(data, "base64"));
+    await fs.writeFile(file, Buffer.from(data.png, "base64"));
+    const { png: _png, ...geometry } = data;
+    await this.writeJson(`${name}.composed.json`, geometry);
     return file;
   }
 
-  async capture(label: string): Promise<void> {
+  async capture(label: string) {
     const errors: string[] = [];
     const bestEffort = async (action: () => Promise<unknown>) => {
       try {
@@ -391,12 +431,17 @@ export class AppSession {
     await bestEffort(async () => {
       composed = await this.composedCapture(label);
     });
-    await this.writeJson(`${label}.evidence.json`, {
+    const summary = {
+      status: errors.length ? ("partial" as const) : ("complete" as const),
       errors,
+      composedCapture: composed ?? (this.headless ? "unsupported" : "unavailable"),
+    };
+    await this.writeJson(`${label}.evidence.json`, {
+      ...summary,
       journal: this.journal,
       rendererScreenshotsIncludeNativeLayers: false,
-      composedCapture: composed ?? (this.headless ? "unsupported" : "unavailable"),
     });
+    return summary;
   }
 
   async stop(): Promise<void> {
