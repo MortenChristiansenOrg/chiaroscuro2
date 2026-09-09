@@ -118,6 +118,8 @@ jobs:
     name: Native Windows verification
     needs: [build, typecheck, lint, test]
     runs-on: windows-latest
+    permissions:
+      contents: read
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4

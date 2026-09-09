@@ -214,8 +214,9 @@ export class AppSession {
           const cdp = await this.app.context().newCDPSession(page);
           try {
             const { targetInfo } = await cdp.send("Target.getTargetInfo");
+            if (!this.pages.has(targetInfo.targetId))
+              this.record("page-discovered", { id: targetInfo.targetId, url: page.url() });
             this.pages.set(targetInfo.targetId, page);
-            this.record("page-discovered", { id: targetInfo.targetId, url: page.url() });
             if (targetInfo.targetId === target.cdpTargetId) return page;
           } finally {
             await cdp.detach();
@@ -359,7 +360,21 @@ export class AppSession {
       const visibleWindows = BrowserWindow.getAllWindows().filter(
         (candidate) => candidate.isVisible() && !candidate.isMinimized(),
       );
-      const rectangles = visibleWindows.map((candidate) => candidate.getBounds());
+      const rectangles = visibleWindows.map((candidate) => {
+        const bounds = candidate.getBounds();
+        // Only maximized Windows windows have invisible borders to remove. Clip each
+        // such window before the union; normal windows and separate popups may truly span displays.
+        if (process.platform !== "win32" || !candidate.isMaximized()) return bounds;
+        const display = screen.getDisplayMatching(bounds).bounds;
+        const x = Math.max(bounds.x, display.x);
+        const y = Math.max(bounds.y, display.y);
+        return {
+          x,
+          y,
+          width: Math.min(bounds.x + bounds.width, display.x + display.width) - x,
+          height: Math.min(bounds.y + bounds.height, display.y + display.height) - y,
+        };
+      });
       if (!rectangles.length) throw new Error("No visible application windows");
       const left = Math.min(...rectangles.map((rect) => rect.x));
       const top = Math.min(...rectangles.map((rect) => rect.y));
