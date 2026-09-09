@@ -68,6 +68,12 @@ test("first and subsequent tabs, sub-tabs and OAuth popups share a stable browse
     expect(await restarted.page.evaluate(() => document.cookie)).toContain(
       "persistent-identity-fixture=survives-restart",
     );
+    await expect
+      .poll(async () => {
+        const state = await session.debug<{ entries: { kind: string }[] }>("/state/github-session");
+        return state.entries.some((entry) => entry.kind === "cookie-snapshot");
+      })
+      .toBe(true);
     const diagnostics = await session.debug<{ entries: { kind: string; data: unknown }[] }>(
       "/state/github-session",
     );
