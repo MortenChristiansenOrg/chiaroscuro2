@@ -1,51 +1,45 @@
-import fs from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
 import { test as base } from "@playwright/test";
-import { type ElectronApplication, _electron as electron, type Page } from "playwright";
+import type { ElectronApplication, Page } from "playwright";
+import { AppSession } from "../automation/session";
 
 type ElectronFixtures = {
+  appSession: AppSession;
   electronApp: ElectronApplication;
   shellPage: Page;
 };
 
 export const test = base.extend<ElectronFixtures>({
-  // biome-ignore lint/correctness/noEmptyPattern: Playwright fixture signature requires destructured first arg
-  electronApp: async ({}, use) => {
-    const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "chiaroscuro-test-"));
-    const args = [
-      ...(process.platform === "linux"
-        ? [
-            "--ozone-platform=headless",
-            // Electron 44's headless display otherwise constrains windows to 1x1.
-            "--ozone-override-screen-size=1920,1080",
-            "--disable-gpu",
-            "--no-sandbox",
-          ]
-        : []),
-      "./out/main/index.js",
-    ];
-    const app = await electron.launch({
-      args,
-      env: {
-        ...process.env,
-        NODE_ENV: "test",
-        DATA_DIR: tmpDir,
-      },
-    });
-    await use(app);
-    await app.close();
-    await fs.rm(tmpDir, { recursive: true, force: true });
+  appSession: [
+    // biome-ignore lint/correctness/noEmptyPattern: Playwright requires destructured fixtures
+    async ({}, use, testInfo) => {
+      const session = new AppSession(testInfo.outputPath("evidence"));
+      try {
+        await session.launch();
+        await use(session);
+      } finally {
+        try {
+          await session.writeJson("result.json", {
+            status: testInfo.status,
+            expectedStatus: testInfo.expectedStatus,
+            errors: testInfo.errors,
+            title: testInfo.title,
+            rerun: `bun run ${testInfo.project.testDir.endsWith("scenarios") ? "verify:app" : "e2e"} --grep ${JSON.stringify(testInfo.title)}`,
+          });
+          if (testInfo.status !== testInfo.expectedStatus) await session.capture("failure");
+        } finally {
+          await session.close();
+        }
+      }
+    },
+    // Covers bounded launch steps plus failure evidence/cleanup without raising test deadlines.
+    { timeout: 90_000 },
+  ],
+  electronApp: async ({ appSession }, use) => {
+    await use(appSession.app);
   },
-
-  shellPage: async ({ electronApp }, use) => {
-    const page = await electronApp.firstWindow();
-    await page.waitForSelector("[data-testid='shell-ready']", {
-      state: "attached",
-      timeout: 15_000,
-    });
-    await page.emulateMedia({ reducedMotion: "reduce" });
-    await use(page);
+  shellPage: async ({ appSession }, use) => {
+    await appSession.shell.emulateMedia({ reducedMotion: "reduce" });
+    await use(appSession.shell);
   },
 });
 

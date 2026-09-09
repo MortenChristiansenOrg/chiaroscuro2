@@ -9,6 +9,16 @@ set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
+if [[ "${1:-}" == "--isolated" ]]; then
+  shift
+  cd "$PROJECT_DIR"
+  exec bun run agent:app "$@"
+fi
+if [[ "${1:-}" == "--verify" ]]; then
+  shift
+  cd "$PROJECT_DIR"
+  exec bun run verify:app "$@"
+fi
 REBUILD=false
 CDP_PORT=""
 

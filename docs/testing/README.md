@@ -9,6 +9,7 @@ Thorough test coverage is a project requirement. Every implemented feature must 
 | [Strategy](./strategy.md) | Test tiers, what to test, what not to test |
 | [Unit & Component Tests](./unit-and-component-tests.md) | Vitest + React Testing Library patterns, mocking |
 | [E2E Tests](./e2e-tests.md) | Playwright + Electron, page object model, fixtures |
+| [Agent Verification](./agent-verification.md) | Isolated launch/restart, target discovery, real input, Windows and failure evidence |
 | [Feature Test Guide](./feature-test-guide.md) | How to write tests for a feature spec, with worked example |
 | [Test Organization](./test-organization.md) | File layout, naming, shared utilities, avoiding conflicts |
 
@@ -31,4 +32,5 @@ bun run verify        # full pipeline (typecheck + lint + test)
 ## Config Files
 
 - `vitest.config.ts` — two projects: `main` (node) and `renderer` (jsdom)
-- `playwright.config.ts` — testDir `./e2e`, 30s timeout, retries on failure
+- `playwright.config.ts` — existing E2E suite, 5s timeout, no retries
+- `playwright.verification.config.ts` — coordinated scenarios including restart/evidence, 30s timeout, no retries
