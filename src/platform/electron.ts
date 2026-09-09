@@ -16,6 +16,7 @@ import {
   webContents,
 } from "electron";
 import type { Bounds, TabId, WindowId } from "../shared/types";
+import type { GithubSessionDiagnostics } from "./github-session-diagnostics";
 import type { Platform, PlatformDownload } from "./types";
 
 const ALLOWED_SCHEMES_WEB = new Set(["http:", "https:", "about:", "data:"]);
@@ -368,7 +369,10 @@ export class ElectronPlatform implements Platform {
       ) => boolean)
     | undefined;
 
-  constructor(private getActiveWindowId: () => WindowId | undefined) {}
+  constructor(
+    private getActiveWindowId: () => WindowId | undefined,
+    private readonly sessionDiagnostics?: GithubSessionDiagnostics,
+  ) {}
 
   private getWin(windowId?: WindowId): BrowserWindow | undefined {
     const id = windowId ?? this.getActiveWindowId();
@@ -434,9 +438,13 @@ export class ElectronPlatform implements Platform {
     const win = this.getWin(windowId);
     if (!win) throw new Error("No window found");
 
+    // Session UA changes do not update existing web contents. Prepare it before construction.
+    const tabSession = session.defaultSession;
+    this.prepareSession(tabSession);
     const tabId = existingTabId ?? (crypto.randomUUID() as TabId);
     const view = new WebContentsView({
       webPreferences: {
+        session: tabSession,
         sandbox: true,
         contextIsolation: true,
         nodeIntegration: false,
@@ -457,13 +465,6 @@ export class ElectronPlatform implements Platform {
 
     // Hide initially — caller will activate
     view.setBounds({ x: 0, y: 0, width: 0, height: 0 });
-
-    const ses = view.webContents.session;
-    if (!this.sessionsWithHandlers.has(ses)) {
-      this.installPermissionHandlers(ses);
-      this.installDevicePermissionHandlers(ses);
-      this.sessionsWithHandlers.add(ses);
-    }
 
     view.webContents.setWindowOpenHandler(({ url, disposition }) => {
       // Check per-tab navigation blocking for new tabs/windows
@@ -1585,12 +1586,21 @@ export class ElectronPlatform implements Platform {
     return undefined;
   }
 
-  private installPermissionHandlers(ses: Electron.Session): void {
-    // Present as standard Chrome so sites like Google don't block OAuth
-    // flows due to detecting "Electron" in the user-agent string.
-    const ua = ses.getUserAgent();
-    ses.setUserAgent(ua.replace(/ Electron\/\S+/g, "").replace(/ \S+\/\S+(?= Chrome\/)/g, ""));
+  private prepareSession(ses: Electron.Session): void {
+    if (this.sessionsWithHandlers.has(ses)) return;
+    // Present a consistent standard Chrome identity from the very first tab onward.
+    const chromeIdentity = (ua: string) =>
+      ua.replace(/ Electron\/\S+/g, "").replace(/ \S+\/\S+(?= Chrome\/)/g, "");
+    // Renderer-created window.open contents use the app fallback instead of the session UA.
+    app.userAgentFallback = chromeIdentity(app.userAgentFallback);
+    ses.setUserAgent(chromeIdentity(ses.getUserAgent()));
+    this.installPermissionHandlers(ses);
+    this.installDevicePermissionHandlers(ses);
+    this.sessionsWithHandlers.add(ses);
+    this.sessionDiagnostics?.observe(ses);
+  }
 
+  private installPermissionHandlers(ses: Electron.Session): void {
     ses.setPermissionRequestHandler((wc, permission, callback, details) => {
       if (!this.permissionRequestHandler) {
         callback(false);
