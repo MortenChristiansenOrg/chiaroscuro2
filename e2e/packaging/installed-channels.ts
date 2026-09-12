@@ -65,7 +65,9 @@ async function launch(channel: "stable" | "early-access" | "dev") {
   });
   running.add(app);
   const window = await app.firstWindow();
-  await window.locator("[data-testid='shell-ready']").waitFor({ timeout: 30_000 });
+  await window
+    .locator("[data-testid='shell-ready']")
+    .waitFor({ state: "attached", timeout: 30_000 });
   assert.equal(
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.getTitle()),
     APP_CHANNELS[channel].productName,
@@ -144,8 +146,10 @@ try {
     );
     assert.ok(config.includes(`${APP_CHANNELS[channel].packageName}-updater`));
   }
-  await close(beta.app);
+  const betaStopped = beta.app.waitForEvent("close", { timeout: 60_000 });
   install("early-access", "99.1.0-beta.2");
+  await betaStopped;
+  running.delete(beta.app);
   const upgraded = await launch("early-access");
   assert.equal(upgraded.info.version, "99.1.0-beta.2");
   assert.equal(await cookie(upgraded.app), "early-access");

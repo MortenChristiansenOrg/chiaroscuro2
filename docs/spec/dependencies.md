@@ -51,10 +51,11 @@ and [lifecycle-script documentation](https://bun.com/docs/pm/lifecycle).
 
 ### Default Browser (Windows)
 
-- Register as default browser via `electron-builder` config
+- Register as a default-browser candidate through `resources/installer.nsh`
 - Handle `http://`, `https://` protocol associations
 - Register file associations (`.html`, `.htm`, etc.)
-- Windows registry entries added during install
+- The NSIS include owns edition-specific Windows registry entries and Open With
+  candidates; it preserves the user's selected defaults
 
 ### External Application Protocol Support
 

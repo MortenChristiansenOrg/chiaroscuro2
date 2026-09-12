@@ -63,6 +63,7 @@ let stopProtocolAllowedListener: (() => void) | undefined;
 let cachedAutoUpdater: Awaited<typeof import("electron-updater")>["autoUpdater"] | undefined;
 let checkForUpdates: (() => Promise<void>) | undefined;
 let restoreUpdateSupport: (() => void) | undefined;
+let updateGeneration = 0;
 
 /** Make a key for protocol+origin lookups. */
 function protocolKey(protocol: string, origin: string): string {
@@ -159,9 +160,12 @@ export default defineFeature<Deps>({
 
     // Skip auto-updater in dev mode
     if (appChannel === "dev") return;
+    const generation = ++updateGeneration;
+    const isCurrent = () => generation === updateGeneration;
 
     try {
       const mod = await import("electron-updater");
+      if (!isCurrent()) return;
       // ESM/CJS interop: getter-defined exports may be on mod directly or mod.default
       // biome-ignore lint/suspicious/noExplicitAny: CJS interop fallback
       const autoUpdater = mod.autoUpdater ?? (mod as any).default?.autoUpdater;
@@ -182,7 +186,7 @@ export default defineFeature<Deps>({
       autoUpdater.autoDownload = false;
 
       autoUpdater.on("update-available", (info) => {
-        if (!isChannelVersion(appChannel, info.version)) return;
+        if (!isCurrent() || !isChannelVersion(appChannel, info.version)) return;
         console.log("[installer] Update available:", info.version);
         events.emit(INSTALLER_UPDATE_AVAILABLE, { version: info.version });
         autoUpdater.downloadUpdate().catch(() => {
@@ -191,16 +195,19 @@ export default defineFeature<Deps>({
       });
 
       autoUpdater.on("update-downloaded", (info) => {
+        if (!isCurrent()) return;
         console.log("[installer] Update downloaded:", info.version);
         events.emit(INSTALLER_UPDATE_DOWNLOADED, { version: info.version });
       });
 
       autoUpdater.on("update-not-available", (info) => {
+        if (!isCurrent()) return;
         console.log("[installer] No update available. Latest:", info?.version);
         events.emit(INSTALLER_UPDATE_NOT_AVAILABLE, undefined);
       });
 
       autoUpdater.on("error", (err) => {
+        if (!isCurrent()) return;
         // electron-updater emits "error" AND rejects the checkForUpdates() promise
         // for the same failure. We handle it here; callers swallow the rejection.
         console.error("[installer] Update error:", err);
@@ -215,16 +222,23 @@ export default defineFeature<Deps>({
           if (appChannel === "early-access") {
             try {
               const url = await earlyAccessFeed();
+              if (!isCurrent()) return;
               if (!url) {
                 events.emit(INSTALLER_UPDATE_NOT_AVAILABLE, undefined);
                 return;
               }
-              autoUpdater.setFeedURL({ provider: "generic", url, channel: "beta" });
+              autoUpdater.setFeedURL({
+                provider: "generic",
+                url,
+                channel: APP_CHANNELS[appChannel].updateChannel,
+                useMultipleRangeRequest: false,
+              });
             } catch (error) {
-              events.emit(INSTALLER_UPDATE_ERROR, { message: String(error) });
+              if (isCurrent()) events.emit(INSTALLER_UPDATE_ERROR, { message: String(error) });
               return;
             }
           }
+          if (!isCurrent()) return;
           await autoUpdater.checkForUpdates().catch(logWarn("installer", "check for updates"));
         })().finally(() => {
           pendingCheck = undefined;
@@ -248,6 +262,7 @@ export default defineFeature<Deps>({
   },
 
   teardown() {
+    updateGeneration++;
     if (checkTimer) {
       clearInterval(checkTimer);
       checkTimer = undefined;

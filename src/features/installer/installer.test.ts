@@ -271,6 +271,7 @@ describe("installer feature", () => {
       expect(autoUpdater.setFeedURL).toHaveBeenCalledWith({
         provider: "generic",
         channel: "beta",
+        useMultipleRangeRequest: false,
         url: "https://github.com/MortenChristiansenOrg/chiaroscuro2/releases/download/v1.9.0-beta.10/",
       });
       expect(autoUpdater.allowDowngrade).toBe(false);
@@ -293,6 +294,37 @@ describe("installer feature", () => {
       const { autoUpdater } = await import("electron-updater");
       expect(onError).toHaveBeenCalledOnce();
       expect(autoUpdater.checkForUpdates).not.toHaveBeenCalled();
+    });
+
+    it.each(["success", "failure"])("ignores discovery %s after teardown", async (result) => {
+      let complete: (response: Response) => void = () => {};
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(
+          () =>
+            new Promise<Response>((resolve) => {
+              complete = resolve;
+            }),
+        ),
+      );
+      const { deps, commands, events } = setup({ appChannel: "early-access" });
+      const onError = vi.fn();
+      events.on(INSTALLER_UPDATE_ERROR, onError);
+      await feature.start(deps);
+      const pending = commands.send(INSTALLER_CHECK_FOR_UPDATES, undefined);
+      feature.teardown();
+      complete(
+        result === "success"
+          ? new Response(
+              JSON.stringify([{ tag_name: "v9.0.0-beta.1", draft: false, prerelease: true }]),
+            )
+          : new Response("", { status: 403 }),
+      );
+      await pending;
+      const { autoUpdater } = await import("electron-updater");
+      expect(autoUpdater.setFeedURL).not.toHaveBeenCalled();
+      expect(autoUpdater.checkForUpdates).not.toHaveBeenCalled();
+      expect(onError).not.toHaveBeenCalled();
     });
     it("skips auto-updater in dev mode", async () => {
       const { deps } = setup({ isDev: true });
