@@ -24,6 +24,11 @@
     "src/features/debug-server/recorder.ts",
     "src/features/debug-server/state-providers.ts",
     "electron.vite.config.ts",
+    "scripts/release-config.ts",
+    "scripts/release-tag.ts",
+    "scripts/package-win.ts",
+    "scripts/convert-app-icon.ts",
+    "src/features/installer/early-access-feed.ts",
     "src/features/**/*.contracts.ts"
   ],
   "exclude": ["src/bus/ipc-renderer-bus.ts", "src/bus/ipc-renderer-bus.test.ts"]

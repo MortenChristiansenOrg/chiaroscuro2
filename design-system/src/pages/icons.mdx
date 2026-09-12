@@ -4,12 +4,31 @@ title: Icons
 
 import { ComponentPreview } from "../components/ComponentPreview"
 import { Icon } from "@/components/Icon"
+import stableAppIcon from "../../../resources/icon.png"
+import earlyAppIcon from "../../../resources/icon-early-access.png"
+import devAppIcon from "../../../resources/icon-dev.png"
 
 # Icons
 
 All icons must use the typed `<Icon>` component. Bare `<i>` FA classes are caught by the lint check.
 
 Use **Font Awesome 7 Free** for all icons. No inline SVGs. Icons inherit `color` from their parent and scale with `font-size`.
+
+## Application identity
+
+The operating-system application icon uses the Chiaroscuro mark rather than Font
+Awesome. Stable is white on black, Early Access is white on amber, and Dev is white
+on blue. Display names identify the edition as well as color. These are the actual
+PNG assets used by Electron; Windows executables and shortcuts use matching ICOs.
+
+<table style={{ width: "100%", textAlign: "left", borderCollapse: "collapse" }}>
+  <thead><tr>{["Edition", "16px", "32px", "64px"].map(label => <th key={label} style={{ padding: 8 }}>{label}</th>)}</tr></thead>
+  <tbody>
+    {[{ name: "Stable", src: stableAppIcon }, { name: "Early Access", src: earlyAppIcon }, { name: "Dev", src: devAppIcon }].map(({ name, src }) => (
+      <tr key={name}><td style={{ padding: 8 }}>{name}</td>{[16, 32, 64].map(size => <td key={size} style={{ padding: 8 }}><img src={src} width={size} height={size} alt={`${name} application icon at ${size}px`} /></td>)}</tr>
+    ))}
+  </tbody>
+</table>
 
 ## Available Styles (Free)
 

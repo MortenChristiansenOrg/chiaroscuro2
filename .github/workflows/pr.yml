@@ -143,3 +143,41 @@ jobs:
           name: native-windows-verification
           path: test-results/verification/
           retention-days: 7
+
+  verify-installers:
+    name: Windows channel installation
+    needs: [build, typecheck, lint, test]
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
+      - run: bun install --frozen-lockfile
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-output
+          path: out/
+      - run: bun run package:win v99.0.0
+      - run: bun run package:win v99.1.0-beta.1
+      - run: bun run package:win v99.1.0-beta.2
+      - name: Verify installed editions without publishing
+        run: |
+          bun build e2e/packaging/installed-channels.ts --target=node --packages=external --outfile=out/verification/installed-channels.mjs
+          node out/verification/installed-channels.mjs
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: windows-channel-installation
+          path: |
+            test-results/packaging/
+            dist/*/*.yml
+          retention-days: 7
