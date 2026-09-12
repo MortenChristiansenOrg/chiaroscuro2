@@ -61,7 +61,19 @@ test("sub-tab transitions survive nested opens, resize, rapid close and reopen",
       );
     })
     .toBe(true);
-  expect((await session.capture("nested-resized")).status).toBe("complete");
+  // Keep the owned shell above the Windows runner terminal during desktop capture.
+  await session.app.evaluate(({ BrowserWindow }) => {
+    const shell = BrowserWindow.getAllWindows().find((w) => !w.getParentWindow());
+    shell?.setAlwaysOnTop(true);
+  });
+  try {
+    expect((await session.capture("nested-resized")).status).toBe("complete");
+  } finally {
+    await session.app.evaluate(({ BrowserWindow }) => {
+      const shell = BrowserWindow.getAllWindows().find((w) => !w.getParentWindow());
+      shell?.setAlwaysOnTop(false);
+    });
+  }
 
   // Two immediate visible close actions must unwind two stack entries in order.
   await frame.getByRole("button", { name: "Close sub-tab", exact: true }).dblclick();
@@ -122,5 +134,41 @@ test("sub-tab backdrop honors reduced motion and settles interrupted promises", 
     "reduced-motion child removal",
     () => session.targets(),
     (targets) => !targets.some((t) => t.kind === "sub-tab"),
+  );
+});
+
+test("sub-tab remains usable when beforeunload prevents closing", async ({
+  appSession: session,
+}) => {
+  const parent = await VerificationPage.navigate(session, `${site.url}/parent`);
+  await parent.subTab.click();
+  const target = await session.target((t) => t.kind === "sub-tab" && t.visible);
+  const child = new VerificationPage(await session.page(target));
+  await child.submit("unsaved child input");
+  // Electron handles the beforeunload decision through will-prevent-unload;
+  // Playwright's automatic dialog dismissal would race that native decision.
+  child.page.on("dialog", () => {});
+  await child.page.evaluate(() => {
+    window.onbeforeunload = () => false;
+  });
+  await expect(
+    session.command("sub-tabs:close", {
+      parentTabId: target.parentId?.replace(/^tab:/, ""),
+    }),
+  ).rejects.toThrow("Page prevented closing");
+  await session.target((t) => t.id === target.id && t.visible);
+  await expect(child.message).toHaveValue("unsaved child input");
+  await child.message.fill("");
+  await child.submit("still usable");
+  await expect(child.result).toHaveText("still usable");
+  await child.page.evaluate(() => {
+    window.onbeforeunload = null;
+  });
+  const frame = await session.page(await session.target((t) => t.kind === "sub-tab-frame"));
+  await frame.getByRole("button", { name: "Close sub-tab", exact: true }).click();
+  await waitUntil(
+    "accepted close destroys child",
+    () => session.targets(),
+    (targets) => !targets.some((t) => t.id === target.id),
   );
 });

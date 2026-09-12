@@ -3,7 +3,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 type Phase = "closed" | "entering" | "open" | "exiting";
 
 function animationDuration(): number {
-  return window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 200;
+  return window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ? 0 : 200;
 }
 
 interface SubTabFrameProps {

@@ -13,7 +13,9 @@ The fallback now cancels on resize, hide, detach and close, resolves cancelled
 promises, starts interrupted exits at the displayed bounds, and skips animation
 for reduced motion. Per-parent operation ordering protects rapid open/close and
 promotion. The backdrop also resolves interrupted promises and prevents a stale
-hide from making a newly shown overlay click-through.
+hide from making a newly shown overlay click-through. Closing waits for native
+WebContents destruction; a prevented unload keeps the child in its stack and
+restores the visible overlay.
 
 ## Environment and reproduction
 

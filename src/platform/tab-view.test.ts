@@ -10,7 +10,7 @@ vi.mock("electron", () => ({
   },
 }));
 
-import { createTabView } from "./tab-view";
+import { closeTabContents, createTabView } from "./tab-view";
 
 describe("cloned tab initialization", () => {
   it("restores zoom on main-frame failure and stops restoring after the initial load", () => {
@@ -33,5 +33,52 @@ describe("cloned tab initialization", () => {
     contents.emit("did-fail-load", {}, -105, "Failed", "https://example.com", true);
     contents.emit("did-finish-load");
     expect(contents.setZoomLevel).not.toHaveBeenCalled();
+  });
+});
+
+describe("native tab close completion", () => {
+  function fixture() {
+    return Object.assign(new EventEmitter(), {
+      isDestroyed: vi.fn(() => false),
+      close: vi.fn(),
+    });
+  }
+
+  it("waits for destruction after the synchronous close call", async () => {
+    const contents = fixture();
+    const done = vi.fn();
+    const result = closeTabContents(contents as unknown as Electron.WebContents).then(done);
+    await Promise.resolve();
+    expect(done).not.toHaveBeenCalled();
+    contents.emit("destroyed");
+    await result;
+    expect(done).toHaveBeenCalledOnce();
+    expect(contents.eventNames()).toEqual([]);
+  });
+
+  it("rejects a prevented unload and removes its temporary listeners", async () => {
+    const contents = fixture();
+    const result = closeTabContents(contents as unknown as Electron.WebContents);
+    contents.emit("will-prevent-unload");
+    await expect(result).rejects.toThrow("Page prevented closing");
+    expect(contents.eventNames()).toEqual([]);
+  });
+
+  it("rejects a synchronous close failure without retaining listeners", async () => {
+    const contents = fixture();
+    contents.close.mockImplementation(() => {
+      throw new Error("native close failed");
+    });
+    await expect(closeTabContents(contents as unknown as Electron.WebContents)).rejects.toThrow(
+      "native close failed",
+    );
+    expect(contents.eventNames()).toEqual([]);
+  });
+
+  it("does not close already destroyed contents again", async () => {
+    const contents = fixture();
+    contents.isDestroyed.mockReturnValue(true);
+    await closeTabContents(contents as unknown as Electron.WebContents);
+    expect(contents.close).not.toHaveBeenCalled();
   });
 });

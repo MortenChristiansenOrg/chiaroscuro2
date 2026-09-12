@@ -586,3 +586,61 @@ describe("sub-tab exit across parent switching", () => {
     expect(await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: tabId })).toEqual([]);
   });
 });
+
+describe("sub-tab native close lifecycle", () => {
+  afterEach(() => {
+    tabsFeature.teardown?.();
+    subTabsFeature.teardown?.();
+  });
+
+  it("does not start the next open until native destruction completes", async () => {
+    let finishClose!: () => void;
+    const nativeClose = new Promise<void>((resolve) => {
+      finishClose = resolve;
+    });
+    const ctx = setup({ closeTab: vi.fn(() => nativeClose) });
+    const { tabId } = await createParentTab(ctx);
+    const first = await ctx.commands.send(SUB_TABS_OPEN, {
+      parentTabId: tabId,
+      url: "https://first.com",
+    });
+    const closing = ctx.commands.send(SUB_TABS_CLOSE, { parentTabId: tabId });
+    await vi.waitFor(() => expect(ctx.platform.closeTab).toHaveBeenCalledWith(first));
+    const opening = ctx.commands.send(SUB_TABS_OPEN, {
+      parentTabId: tabId,
+      url: "https://second.com",
+    });
+    expect(await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: tabId })).toHaveLength(1);
+    expect(ctx.platform.createTab).toHaveBeenCalledTimes(2);
+    finishClose();
+    await closing;
+    const second = await opening;
+    expect(
+      (await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: tabId })).map((st) => st.id),
+    ).toEqual([second]);
+  });
+
+  it("restores a visible child and retains its stack when native close is vetoed", async () => {
+    const ctx = setup({
+      closeTab: vi.fn(async () => {
+        throw new Error("Page prevented closing");
+      }),
+    });
+    const { tabId } = await createParentTab(ctx);
+    const child = await ctx.commands.send(SUB_TABS_OPEN, {
+      parentTabId: tabId,
+      url: "https://child.com",
+    });
+    const closed = vi.fn();
+    ctx.events.on(SUB_TABS_CLOSED, closed);
+    await expect(ctx.commands.send(SUB_TABS_CLOSE, { parentTabId: tabId })).rejects.toThrow(
+      "Page prevented closing",
+    );
+    expect(
+      (await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: tabId })).map((st) => st.id),
+    ).toEqual([child]);
+    expect(closed).not.toHaveBeenCalled();
+    expect(ctx.platform.showSubTabWindowStatic).toHaveBeenCalled();
+    expect(ctx.platform.attachTabToSubTabWindow).toHaveBeenLastCalledWith(child, expect.anything());
+  });
+});

@@ -271,9 +271,22 @@ export default defineFeature<Deps>({
     }
 
     async function closeSubTab(parentTabId: TabId, subTabId: TabId): Promise<void> {
-      tabScope.cleanup(subTabId);
       platform.hideTab(subTabId);
-      platform.closeTab(subTabId).catch(logError("sub-tabs", "close sub-tab"));
+      try {
+        await platform.closeTab(subTabId);
+      } catch (error) {
+        // A beforeunload veto keeps the child in the stack and usable.
+        if (getActiveTabId() === parentTabId && contentBounds.width > 0) {
+          platform.showSubTabWindowStatic(
+            contentBounds,
+            computeFrameBounds(contentBounds),
+            parentTabId,
+          );
+          showTopSubTab(parentTabId);
+        }
+        throw error;
+      }
+      tabScope.cleanup(subTabId);
 
       const stack = stacks.get(parentTabId);
       if (stack) {

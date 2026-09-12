@@ -40,3 +40,30 @@ export function createTabView(source?: WebContents): WebContentsView {
   }
   return view;
 }
+
+/** Resolve on native destruction, retaining a page that prevents beforeunload. */
+export function closeTabContents(contents: Electron.WebContents): Promise<void> {
+  if (contents.isDestroyed()) return Promise.resolve();
+  return new Promise<void>((resolve, reject) => {
+    const cleanup = () => {
+      contents.removeListener("destroyed", onDestroyed);
+      contents.removeListener("will-prevent-unload", onPreventUnload);
+    };
+    const onDestroyed = () => {
+      cleanup();
+      resolve();
+    };
+    const onPreventUnload = () => {
+      cleanup();
+      reject(new Error("Page prevented closing"));
+    };
+    contents.once("destroyed", onDestroyed);
+    contents.once("will-prevent-unload", onPreventUnload);
+    try {
+      contents.close({ waitForBeforeUnload: true });
+    } catch (error) {
+      cleanup();
+      reject(error);
+    }
+  });
+}

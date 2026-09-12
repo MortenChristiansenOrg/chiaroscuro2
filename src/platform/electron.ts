@@ -19,7 +19,7 @@ import {
 import type { Bounds, TabId, WindowId } from "../shared/types";
 import type { GithubSessionDiagnostics } from "./github-session-diagnostics";
 import { TabBoundsAnimation } from "./tab-bounds-animation";
-import { createTabView } from "./tab-view";
+import { closeTabContents, createTabView } from "./tab-view";
 import type { Platform, PlatformDownload } from "./types";
 
 const ALLOWED_SCHEMES_WEB = new Set(["http:", "https:", "about:", "data:"]);
@@ -625,6 +625,10 @@ export class ElectronPlatform implements Platform {
     if (!view) return;
     this.tabBoundsAnimations.cancel(view);
 
+    // Keep ownership intact if the page vetoes beforeunload. Native close is
+    // synchronous; only the destroyed event establishes completion.
+    await closeTabContents(view.webContents);
+
     // Remove from whichever window owns the view (main or sub-tab child window)
     const win = this.getWin();
     if (win) {
@@ -642,7 +646,6 @@ export class ElectronPlatform implements Platform {
       }
     }
 
-    await view.webContents.close({ waitForBeforeUnload: true });
     this.views.delete(tabId);
   }
 

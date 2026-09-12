@@ -62,6 +62,25 @@ describe("sub-tab bounds fallback", () => {
     }
   });
 
+  it("rejects and clears scheduled work when a native bounds update fails", async () => {
+    const { view, animation } = fixture();
+    const result = animation.animate(view, from, to, 200);
+    const rejection = expect(result).rejects.toThrow("native view gone");
+    view.setBounds.mockImplementationOnce(() => {
+      throw new Error("native view gone");
+    });
+    await vi.advanceTimersByTimeAsync(16);
+    await rejection;
+    expect(vi.getTimerCount()).toBe(0);
+    // A new transition must not try to read stale geometry from a retained entry.
+    view.getBounds = () => {
+      throw new Error("stale geometry");
+    };
+    const next = animation.animate(view, from, to, 200);
+    animation.cancel(view);
+    await next;
+  });
+
   it("applies reduced-motion bounds immediately without a timer", async () => {
     const { view, animation } = fixture();
     await animation.animate(view, from, to, 0);
