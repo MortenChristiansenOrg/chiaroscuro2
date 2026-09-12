@@ -82,5 +82,12 @@ Git tag (v1.0.0) → GitHub Actions → Build artifacts → GitHub Releases
 **Required**:
 
 - GitHub Actions workflow (`.github/workflows/release.yml`)
-- `electron-updater` config in `electron-builder.yml`
+- Shared packaging settings in `electron-builder.yml`, channel metadata in
+  `src/shared/app-channel.ts` and `scripts/release-config.ts`
 - Code signing (skipped for personal use)
+
+Stable tags publish on push. Early Access tags such as `v1.2.3-beta.1` publish only
+through a manual Release workflow run and produce a separate installation/update
+channel. See the [installer specification](../features/InstallerFeature.specs.md)
+for publishing commands and isolation behavior. Use `bun run package:win TAG` for
+local Windows packaging without publishing.

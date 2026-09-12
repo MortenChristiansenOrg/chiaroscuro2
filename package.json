@@ -13,6 +13,7 @@
     "generate:icons": "bun scripts/generate-fa-icons.ts",
     "dev": "bun run generate:icons && electron-vite dev",
     "build": "bun run generate:icons && electron-vite build",
+    "package:win": "bun scripts/package-win.ts",
     "preview": "electron-vite preview",
     "test": "vitest run",
     "test:watch": "vitest",

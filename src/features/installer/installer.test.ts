@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CommandBus } from "../../bus/command-bus";
 import { EventBus } from "../../bus/event-bus";
+import type { AppChannel } from "../../shared/app-channel";
 import { createMockPlatform } from "../../test-utils";
 import feature from "./installer.main";
 import {
@@ -28,6 +29,8 @@ vi.mock("electron-updater", () => {
     autoUpdater: {
       autoDownload: false,
       autoInstallOnAppQuit: false,
+      isUpdateSupported: vi.fn(() => true),
+      setFeedURL: vi.fn(),
       checkForUpdates: vi.fn(async () => undefined),
       downloadUpdate: vi.fn(async () => undefined),
       quitAndInstall: vi.fn(),
@@ -67,7 +70,7 @@ function createMockDataStore(): MockDataStore {
 
 let protocolCallback: ((url: string, origin: string) => void) | undefined;
 
-function setup(overrides: { isDev?: boolean } = {}) {
+function setup(overrides: { isDev?: boolean; appChannel?: AppChannel } = {}) {
   protocolCallback = undefined;
   const commands = new CommandBus<AllCommands>();
   const events = new EventBus<AllEvents>();
@@ -85,7 +88,7 @@ function setup(overrides: { isDev?: boolean } = {}) {
     events,
     platform,
     dataStore,
-    isDev: overrides.isDev ?? true,
+    appChannel: overrides.appChannel ?? (overrides.isDev === false ? "stable" : "dev"),
   };
   feature.register(deps);
   return { commands, events, platform, dataStore, deps };
@@ -103,6 +106,7 @@ describe("installer feature", () => {
     (autoUpdater as any)._reset?.();
     vi.clearAllMocks();
     vi.useRealTimers();
+    vi.unstubAllGlobals();
   });
 
   describe("protocol handling", () => {
@@ -234,6 +238,62 @@ describe("installer feature", () => {
   });
 
   describe("auto-updater", () => {
+    it("blocks a mislabeled prerelease before downloading on stable", async () => {
+      const { deps } = setup({ appChannel: "stable" });
+      await feature.start(deps);
+      const { autoUpdater } = await import("electron-updater");
+      expect(autoUpdater.allowPrerelease).toBe(false);
+      expect(autoUpdater.allowDowngrade).toBe(false);
+      expect(autoUpdater.isUpdateSupported({ version: "9.0.0-beta.1" } as never)).toBe(false);
+      expect(autoUpdater.isUpdateSupported({ version: "9.0.0" } as never)).toBe(true);
+      // biome-ignore lint/suspicious/noExplicitAny: test mock helper
+      (autoUpdater as any)._emit("update-available", { version: "9.0.0-beta.1" });
+      expect(autoUpdater.downloadUpdate).not.toHaveBeenCalled();
+    });
+
+    it("selects the beta feed and rejects stable, alpha and RC updates", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(
+          async () =>
+            new Response(
+              JSON.stringify([
+                { tag_name: "v2.0.0", draft: false, prerelease: false },
+                { tag_name: "v1.9.0-beta.10", draft: false, prerelease: true },
+              ]),
+            ),
+        ),
+      );
+      const { deps, commands } = setup({ appChannel: "early-access" });
+      await feature.start(deps);
+      const { autoUpdater } = await import("electron-updater");
+      await commands.send(INSTALLER_CHECK_FOR_UPDATES, undefined);
+      expect(autoUpdater.setFeedURL).toHaveBeenCalledWith({
+        provider: "generic",
+        channel: "beta",
+        url: "https://github.com/MortenChristiansenOrg/chiaroscuro2/releases/download/v1.9.0-beta.10/",
+      });
+      expect(autoUpdater.allowDowngrade).toBe(false);
+      for (const version of ["2.0.0", "2.0.0-alpha.1", "2.0.0-rc.1"]) {
+        expect(autoUpdater.isUpdateSupported({ version } as never)).toBe(false);
+      }
+      expect(autoUpdater.isUpdateSupported({ version: "1.9.0-beta.10" } as never)).toBe(true);
+    });
+
+    it("reports lookup failure without falling back to the stable feed", async () => {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => new Response("rate limited", { status: 403 })),
+      );
+      const { deps, commands, events } = setup({ appChannel: "early-access" });
+      const onError = vi.fn();
+      events.on(INSTALLER_UPDATE_ERROR, onError);
+      await feature.start(deps);
+      await commands.send(INSTALLER_CHECK_FOR_UPDATES, undefined);
+      const { autoUpdater } = await import("electron-updater");
+      expect(onError).toHaveBeenCalledOnce();
+      expect(autoUpdater.checkForUpdates).not.toHaveBeenCalled();
+    });
     it("skips auto-updater in dev mode", async () => {
       const { deps } = setup({ isDev: true });
       await feature.start(deps);

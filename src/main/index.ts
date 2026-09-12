@@ -1,4 +1,4 @@
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { app, BrowserWindow, ipcMain, Menu, powerMonitor, screen } from "electron";
 import { CommandBus } from "../bus/command-bus";
@@ -121,8 +121,10 @@ import zoom from "../features/zoom/zoom.main";
 import type { ZoomCommands, ZoomEvents } from "../features/zoom/zoom.shared";
 import { ElectronPlatform } from "../platform/electron";
 import { GithubSessionDiagnostics } from "../platform/github-session-diagnostics";
+import { APP_CHANNELS, runtimeChannel } from "../shared/app-channel";
 import { logError } from "../shared/log";
 import type { TabId, WindowId, WorkspaceId } from "../shared/types";
+import { configureAppIdentity } from "./app-identity";
 
 // Log uncaught exceptions to stderr for debugging
 process.on("uncaughtException", (err) => {
@@ -132,30 +134,36 @@ process.on("unhandledRejection", (reason) => {
   console.error("[unhandledRejection]", reason);
 });
 
-const iconFile = process.platform === "win32" ? "icon.ico" : "icon.png";
+const isTest = process.env.NODE_ENV === "test";
+const metadata = app.isPackaged
+  ? JSON.parse(readFileSync(path.join(app.getAppPath(), "package.json"), "utf8"))
+  : {};
+const appChannel = runtimeChannel(app.isPackaged, isTest, metadata.releaseChannel);
+const identity = APP_CHANNELS[appChannel];
+const iconFile = `${identity.icon}.${process.platform === "win32" ? "ico" : "png"}`;
 const iconPath = path.join(__dirname, "../../resources", iconFile);
 
 // ── Dev-mode isolation ───────────────────────────────────────────
 // Use a separate app identity so dev instances don't conflict with
 // the production single-instance lock or userData.
-const isDev = !!process.env.ELECTRON_RENDERER_URL;
+const isDev = appChannel === "dev";
 const isAutomation = process.env.NODE_ENV === "test" && process.env.CHIAROSCURO_AUTOMATION === "1";
 // Isolate Chromium cookies, caches, sessions and the single-instance lock, not just our JSON data.
-if (process.env.NODE_ENV === "test") {
+let testProfile: string | undefined;
+if (isTest) {
   if (!process.env.DATA_DIR || !path.isAbsolute(process.env.DATA_DIR)) {
     throw new Error("Tests require an absolute DATA_DIR; use the Electron verification fixture.");
   }
-  const chromiumProfile = path.join(process.env.DATA_DIR, "chromium");
-  mkdirSync(chromiumProfile, { recursive: true });
-  app.setPath("userData", chromiumProfile);
+  testProfile = path.join(process.env.DATA_DIR, "chromium");
   const downloadsPath = path.join(process.env.DATA_DIR, "downloads");
   mkdirSync(downloadsPath, { recursive: true });
   app.setPath("desktop", downloadsPath);
   app.setPath("downloads", downloadsPath);
 }
-if (isDev) {
-  app.setName("Chiaroscuro Dev");
-}
+configureAppIdentity(app, appChannel, testProfile);
+console.log(
+  `[app] channel=${appChannel} version=${app.getVersion()} profile=${app.getPath("userData")}`,
+);
 
 // ── Single-instance lock (must run before whenReady) ─────────────
 // Skip in test mode: parallel Playwright workers each launch their own
@@ -239,11 +247,10 @@ let activeWindowId: WindowId | undefined;
 let activeTabId: TabId | undefined;
 let activeWorkspaceId: WorkspaceId | undefined;
 
-if (isDev && process.env.NODE_ENV !== "test")
-  app.setPath("userData", path.join(app.getPath("userData"), "..", "chiaroscuro-dev"));
 const githubSessions = new GithubSessionDiagnostics();
 const platform = new ElectronPlatform(() => activeWindowId, githubSessions);
-const dataDir = process.env.DATA_DIR ?? path.join(app.getPath("userData"), "data");
+const dataDir =
+  (isDev ? process.env.DATA_DIR : undefined) ?? path.join(app.getPath("userData"), "data");
 const dataStore: DataStore = createDataStore(dataDir);
 
 function initOverlays(): void {
@@ -266,6 +273,7 @@ function createWindow(windowBounds?: {
     name: "main-window",
     windowStatePersistence: true,
     icon: iconPath,
+    title: identity.productName,
     titleBarStyle: "hidden",
     backgroundMaterial: "acrylic",
     webPreferences: {
@@ -275,6 +283,7 @@ function createWindow(windowBounds?: {
   });
 
   activeWindowId = String(win.id) as WindowId;
+  win.on("page-title-updated", (event) => event.preventDefault());
 
   // Hook BrowserWindow webContents for shortcut support
   platform.hookWebContents(win.webContents);
@@ -301,6 +310,7 @@ const deps = {
   platform,
   dataStore,
   isDev,
+  appChannel,
   getActiveWindowId: () => activeWindowId,
   getActiveTabId: () => activeTabId,
   setActiveTabId: (id: TabId | undefined) => {

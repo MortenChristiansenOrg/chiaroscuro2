@@ -2,8 +2,10 @@ import type { CommandBus } from "../../bus/command-bus";
 import type { EventBus } from "../../bus/event-bus";
 import type { DataStore } from "../../data/types";
 import type { Platform } from "../../platform/types";
+import { APP_CHANNELS, type AppChannel, isChannelVersion } from "../../shared/app-channel";
 import { defineFeature } from "../../shared/define-feature";
 import { logError, logWarn } from "../../shared/log";
+import { earlyAccessFeed } from "./early-access-feed";
 import {
   INSTALLER_ALLOW_PROTOCOL,
   INSTALLER_APPLY_UPDATE,
@@ -29,7 +31,7 @@ interface Deps {
   events: EventBus<AllEvents>;
   platform: Platform;
   dataStore: DataStore;
-  isDev: boolean;
+  appChannel: AppChannel;
 }
 
 const ALLOWED_PROTOCOLS_KEY = "installer:allowed-protocols";
@@ -59,6 +61,8 @@ let stopProtocolAllowedListener: (() => void) | undefined;
 // Dynamic import("electron-updater") doesn't expose getter-defined exports reliably
 // across ESM/CJS boundary, so we cache the reference after the first successful import.
 let cachedAutoUpdater: Awaited<typeof import("electron-updater")>["autoUpdater"] | undefined;
+let checkForUpdates: (() => Promise<void>) | undefined;
+let restoreUpdateSupport: (() => void) | undefined;
 
 /** Make a key for protocol+origin lookups. */
 function protocolKey(protocol: string, origin: string): string {
@@ -68,12 +72,12 @@ function protocolKey(protocol: string, origin: string): string {
 export default defineFeature<Deps>({
   register({ commands, events, platform, dataStore }) {
     commands.handle(INSTALLER_CHECK_FOR_UPDATES, async () => {
-      if (!cachedAutoUpdater) {
+      if (!checkForUpdates) {
         events.emit(INSTALLER_UPDATE_ERROR, { message: "Auto-updater not initialized" });
         return;
       }
       // Swallow rejection — the "error" event handler already emits INSTALLER_UPDATE_ERROR
-      await cachedAutoUpdater.checkForUpdates().catch(logWarn("installer", "check for updates"));
+      await checkForUpdates();
     });
 
     commands.handle(INSTALLER_APPLY_UPDATE, async () => {
@@ -108,7 +112,7 @@ export default defineFeature<Deps>({
     });
   },
 
-  async start({ events, platform, dataStore, isDev }) {
+  async start({ events, platform, dataStore, appChannel }) {
     // Load persisted allowed protocols
     try {
       const saved = await dataStore.getSetting<AllowedProtocolEntry[]>(ALLOWED_PROTOCOLS_KEY);
@@ -154,7 +158,7 @@ export default defineFeature<Deps>({
     });
 
     // Skip auto-updater in dev mode
-    if (isDev) return;
+    if (appChannel === "dev") return;
 
     try {
       const mod = await import("electron-updater");
@@ -163,11 +167,22 @@ export default defineFeature<Deps>({
       const autoUpdater = mod.autoUpdater ?? (mod as any).default?.autoUpdater;
       if (!autoUpdater) throw new Error("electron-updater: autoUpdater not found");
       cachedAutoUpdater = autoUpdater;
+      autoUpdater.channel = APP_CHANNELS[appChannel].updateChannel;
+      autoUpdater.allowPrerelease = appChannel === "early-access";
+      // Setting channel enables downgrades in electron-updater; reset explicitly.
+      autoUpdater.allowDowngrade = false;
+      const supportsUpdate = autoUpdater.isUpdateSupported.bind(autoUpdater);
+      restoreUpdateSupport = () => {
+        autoUpdater.isUpdateSupported = supportsUpdate;
+      };
+      autoUpdater.isUpdateSupported = (info) =>
+        isChannelVersion(appChannel, info.version) && supportsUpdate(info);
       autoUpdater.autoInstallOnAppQuit = true;
       // Manual download so we own the promise chain and avoid unhandled rejections
       autoUpdater.autoDownload = false;
 
       autoUpdater.on("update-available", (info) => {
+        if (!isChannelVersion(appChannel, info.version)) return;
         console.log("[installer] Update available:", info.version);
         events.emit(INSTALLER_UPDATE_AVAILABLE, { version: info.version });
         autoUpdater.downloadUpdate().catch(() => {
@@ -194,15 +209,38 @@ export default defineFeature<Deps>({
         });
       });
 
+      let pendingCheck: Promise<void> | undefined;
+      checkForUpdates = () => {
+        pendingCheck ??= (async () => {
+          if (appChannel === "early-access") {
+            try {
+              const url = await earlyAccessFeed();
+              if (!url) {
+                events.emit(INSTALLER_UPDATE_NOT_AVAILABLE, undefined);
+                return;
+              }
+              autoUpdater.setFeedURL({ provider: "generic", url, channel: "beta" });
+            } catch (error) {
+              events.emit(INSTALLER_UPDATE_ERROR, { message: String(error) });
+              return;
+            }
+          }
+          await autoUpdater.checkForUpdates().catch(logWarn("installer", "check for updates"));
+        })().finally(() => {
+          pendingCheck = undefined;
+        });
+        return pendingCheck;
+      };
+
       // Initial check after delay
       initialCheckTimer = setTimeout(() => {
         initialCheckTimer = undefined;
-        autoUpdater.checkForUpdates().catch(logError("installer", "initial update check"));
+        void checkForUpdates?.();
       }, INITIAL_CHECK_DELAY_MS);
 
       // Periodic checks
       checkTimer = setInterval(() => {
-        autoUpdater.checkForUpdates().catch(logError("installer", "periodic update check"));
+        void checkForUpdates?.();
       }, CHECK_INTERVAL_MS);
     } catch (err) {
       console.error("[installer] Failed to initialize auto-updater:", err);
@@ -229,5 +267,8 @@ export default defineFeature<Deps>({
     allowedProtocols = [];
     pendingRequests.clear();
     cachedAutoUpdater = undefined;
+    checkForUpdates = undefined;
+    restoreUpdateSupport?.();
+    restoreUpdateSupport = undefined;
   },
 });
