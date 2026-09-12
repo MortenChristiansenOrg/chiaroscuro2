@@ -1,6 +1,6 @@
 /** Runs only on a disposable GitHub Windows runner: installs real NSIS builds. */
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { type ElectronApplication, _electron as electron } from "playwright";
@@ -124,11 +124,16 @@ async function cookie(app: ElectronApplication) {
 }
 function uninstall(channel: "stable" | "early-access") {
   const name = APP_CHANNELS[channel].productName;
-  execFileSync(
+  const result = spawnSync(
     path.join(directory(channel), `Uninstall ${name}.exe`),
-    ["/S", `_?=${directory(channel)}`],
-    { timeout: 120_000 },
+    ["/S", "/currentuser", `_?=${directory(channel)}`],
+    // NSIS requires its final _?= argument unquoted, even with spaces. Without
+    // this it spawns a detached copy and the parent returns before removal.
+    // https://nsis.sourceforge.io/Docs/Chapter3.html#uninstallerusage
+    { timeout: 120_000, windowsVerbatimArguments: true },
   );
+  if (result.error) throw result.error;
+  assert.equal(result.status, 0, `Uninstall ${name} failed: ${result.stderr?.toString()}`);
   assert.equal(existsSync(executable(channel)), false);
 }
 
