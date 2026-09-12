@@ -748,6 +748,18 @@ describe("parent close with pending or prevented child destruction", () => {
     expect(await ctx.commands.send(TABS_GET, { tabId: child })).toBeUndefined();
     expect(await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: tabId })).toHaveLength(1);
 
+    const openWindow = vi.mocked(ctx.platform.onWindowOpen).mock.calls[0]?.[0];
+    expect(openWindow).toBeDefined();
+    for (let attempt = 0; attempt < 2; attempt++) {
+      openWindow?.("https://nested.com", child, "foreground-tab");
+      expect(send).toHaveBeenLastCalledWith(SUB_TABS_OPEN, {
+        parentTabId: tabId,
+        url: "https://nested.com",
+      });
+      await expect(send.mock.results.at(-1)?.value).rejects.toThrow("Parent tab was closed");
+    }
+    expect(ctx.platform.createTab).toHaveBeenCalledTimes(2);
+
     ctx.setActiveWorkspaceId(WS_ID);
     const switched = { workspaceId: WS_ID, previousWorkspaceId: null, workspaceName: "Restored" };
     ctx.events.emit(WORKSPACES_SWITCHED, switched);
@@ -764,5 +776,12 @@ describe("parent close with pending or prevented child destruction", () => {
       height: 800,
     });
     expect(send.mock.calls.filter(([name]) => name === TABS_ADOPT)).toHaveLength(2);
+    // After recovery, window-open resolves to the surviving standalone child.
+    openWindow?.("https://nested.com", child, "foreground-tab");
+    expect(send).toHaveBeenLastCalledWith(SUB_TABS_OPEN, {
+      parentTabId: child,
+      url: "https://nested.com",
+    });
+    await expect(send.mock.results.at(-1)?.value).resolves.toBeDefined();
   });
 });

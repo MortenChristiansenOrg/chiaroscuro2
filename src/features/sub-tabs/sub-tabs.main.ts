@@ -134,7 +134,14 @@ export default defineFeature<Deps>({
       const cleanup = () => {
         if (transitions.get(parentTabId) === next) {
           transitions.delete(parentTabId);
-          closedParents.delete(parentTabId);
+          // A retained live child can still request window-open. Keep its dead
+          // parent guarded until every child has closed or recovered.
+          if (
+            !stacks.get(parentTabId)?.length &&
+            ![...pendingRecovery.values()].some((entry) => entry.parentTabId === parentTabId)
+          ) {
+            closedParents.delete(parentTabId);
+          }
         }
       };
       void next.then(cleanup, cleanup);
