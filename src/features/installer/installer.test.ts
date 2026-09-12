@@ -13,6 +13,7 @@ import {
   INSTALLER_PROTOCOL_LAUNCH_REQUESTED,
   INSTALLER_UPDATE_DISMISSED,
   INSTALLER_UPDATE_ERROR,
+  INSTALLER_UPDATE_NOT_AVAILABLE,
   type InstallerCommands,
   type InstallerEvents,
   type ProtocolLaunchRequestedEvent,
@@ -296,36 +297,46 @@ describe("installer feature", () => {
       expect(autoUpdater.checkForUpdates).not.toHaveBeenCalled();
     });
 
-    it.each(["success", "failure"])("ignores discovery %s after teardown", async (result) => {
-      let complete: (response: Response) => void = () => {};
-      vi.stubGlobal(
-        "fetch",
-        vi.fn(
-          () =>
-            new Promise<Response>((resolve) => {
-              complete = resolve;
-            }),
-        ),
-      );
-      const { deps, commands, events } = setup({ appChannel: "early-access" });
-      const onError = vi.fn();
-      events.on(INSTALLER_UPDATE_ERROR, onError);
-      await feature.start(deps);
-      const pending = commands.send(INSTALLER_CHECK_FOR_UPDATES, undefined);
-      feature.teardown();
-      complete(
-        result === "success"
-          ? new Response(
-              JSON.stringify([{ tag_name: "v9.0.0-beta.1", draft: false, prerelease: true }]),
-            )
-          : new Response("", { status: 403 }),
-      );
-      await pending;
-      const { autoUpdater } = await import("electron-updater");
-      expect(autoUpdater.setFeedURL).not.toHaveBeenCalled();
-      expect(autoUpdater.checkForUpdates).not.toHaveBeenCalled();
-      expect(onError).not.toHaveBeenCalled();
-    });
+    it.each(["success", "empty", "failure"])(
+      "ignores discovery %s after teardown",
+      async (result) => {
+        let complete: (response: Response) => void = () => {};
+        vi.stubGlobal(
+          "fetch",
+          vi.fn(
+            () =>
+              new Promise<Response>((resolve) => {
+                complete = resolve;
+              }),
+          ),
+        );
+        const { deps, commands, events } = setup({ appChannel: "early-access" });
+        const onError = vi.fn();
+        const onNotAvailable = vi.fn();
+        events.on(INSTALLER_UPDATE_ERROR, onError);
+        events.on(INSTALLER_UPDATE_NOT_AVAILABLE, onNotAvailable);
+        await feature.start(deps);
+        const pending = commands.send(INSTALLER_CHECK_FOR_UPDATES, undefined);
+        feature.teardown();
+        complete(
+          result === "failure"
+            ? new Response("", { status: 403 })
+            : new Response(
+                JSON.stringify(
+                  result === "success"
+                    ? [{ tag_name: "v9.0.0-beta.1", draft: false, prerelease: true }]
+                    : [],
+                ),
+              ),
+        );
+        await pending;
+        const { autoUpdater } = await import("electron-updater");
+        expect(autoUpdater.setFeedURL).not.toHaveBeenCalled();
+        expect(autoUpdater.checkForUpdates).not.toHaveBeenCalled();
+        expect(onError).not.toHaveBeenCalled();
+        expect(onNotAvailable).not.toHaveBeenCalled();
+      },
+    );
     it("skips auto-updater in dev mode", async () => {
       const { deps } = setup({ isDev: true });
       await feature.start(deps);
