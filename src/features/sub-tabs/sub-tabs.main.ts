@@ -14,11 +14,13 @@ import {
 import { getContentBounds } from "../tabs/tabs.main";
 import type { TabsCommands, TabsEvents } from "../tabs/tabs.shared";
 import {
+  TABS_ACTIVATE,
   TABS_ACTIVATED,
   TABS_ADOPT,
   TABS_CLOSED,
   TABS_CONTENT_BOUNDS_CHANGED,
 } from "../tabs/tabs.shared";
+import { WORKSPACES_SWITCHED, type WorkspacesEvents } from "../workspaces/workspaces.shared";
 import {
   SUB_TABS_CLOSE,
   SUB_TABS_CLOSE_ALL,
@@ -87,6 +89,7 @@ function computeChildFrameBounds(cb: Bounds): Bounds {
 type AllCommands = SubTabsCommands & TabsCommands;
 type AllEvents = SubTabsEvents &
   TabsEvents &
+  Pick<WorkspacesEvents, typeof WORKSPACES_SWITCHED> &
   Pick<CommandPaletteEvents, typeof COMMAND_PALETTE_SHOWN | typeof COMMAND_PALETTE_HIDDEN>;
 
 interface Deps {
@@ -123,6 +126,7 @@ export default defineFeature<Deps>({
     // Keep open/close/promote mutations ordered while their animations yield.
     const transitions = new Map<TabId, Promise<unknown>>();
     const closedParents = new Set<TabId>();
+    const pendingRecovery = new Map<TabId, { parentTabId: TabId; activate: boolean }>();
     function transition<T>(parentTabId: TabId, action: () => Promise<T>): Promise<T> {
       const previous = transitions.get(parentTabId) ?? Promise.resolve();
       const next = previous.catch(() => {}).then(action);
@@ -301,6 +305,41 @@ export default defineFeature<Deps>({
 
       events.emit(SUB_TABS_CLOSED, { parentTabId, subTabId });
     }
+
+    async function recoverChild(subTabId: TabId): Promise<void> {
+      const recovery = pendingRecovery.get(subTabId);
+      if (!recovery) return;
+      const { parentTabId, activate } = recovery;
+      let newTabId: TabId;
+      try {
+        // Separate ownership transfer from activation so an activation failure
+        // cannot cause the same native view to be adopted twice.
+        newTabId = await commands.send(TABS_ADOPT, { tabId: subTabId, activate: false });
+      } catch (error) {
+        logError("sub-tabs", "preserve child; retry when workspace becomes available")(error);
+        return;
+      }
+      pendingRecovery.delete(subTabId);
+      tabScope.cleanup(subTabId);
+      removeFromStack(parentTabId, subTabId);
+      events.emit(SUB_TABS_PROMOTED, { parentTabId, subTabId, newTabId });
+      emitStackChanged(parentTabId);
+      if (activate) {
+        await commands
+          .send(TABS_ACTIVATE, { tabId: newTabId })
+          .catch(logError("sub-tabs", "activate preserved child"));
+      }
+    }
+
+    events.on(WORKSPACES_SWITCHED, () => {
+      // The closed parent's stack retains ownership until a workspace can
+      // accept the child. Serialize retries with any parent-close operation.
+      for (const [subTabId, { parentTabId }] of pendingRecovery) {
+        transition(parentTabId, () => recoverChild(subTabId)).catch(
+          logError("sub-tabs", "retry preserved child"),
+        );
+      }
+    });
 
     // ── Intercept window-open ──────────────────────────────────────
     platform.onWindowOpen((url, sourceTabId, disposition) => {
@@ -570,20 +609,9 @@ export default defineFeature<Deps>({
           } catch {
             // Preserve the existing WebContents (including unsaved form state).
             // Keep its ownership record until adoption succeeds.
-            let newTabId: TabId;
-            try {
-              newTabId = await commands.send(TABS_ADOPT, {
-                tabId: st.id,
-                activate: !preservedChild,
-              });
-              preservedChild = true;
-            } catch (error) {
-              logError("sub-tabs", "preserve child after parent close")(error);
-              continue;
-            }
-            tabScope.cleanup(st.id);
-            removeFromStack(tabId, st.id);
-            events.emit(SUB_TABS_PROMOTED, { parentTabId: tabId, subTabId: st.id, newTabId });
+            pendingRecovery.set(st.id, { parentTabId: tabId, activate: !preservedChild });
+            preservedChild = true;
+            await recoverChild(st.id);
           }
         }
         emitStackChanged(tabId);

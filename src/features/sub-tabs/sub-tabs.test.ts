@@ -31,6 +31,7 @@ import {
   type TabsEvents,
 } from "../tabs/tabs.shared";
 import type { TabLoadingChangedPayload } from "../window-chrome/window-chrome.shared";
+import { WORKSPACES_SWITCHED, type WorkspacesEvents } from "../workspaces/workspaces.shared";
 import subTabsFeature from "./sub-tabs.main";
 import {
   SUB_TABS_CLOSE,
@@ -51,7 +52,9 @@ const WIN_ID = "win-1" as WindowId;
 const WS_ID = "ws-1" as WorkspaceId;
 
 type AllCommands = TabsCommands & SubTabsCommands;
-type AllEvents = TabsEvents & SubTabsEvents & { "tab:loading-changed": TabLoadingChangedPayload };
+type AllEvents = TabsEvents &
+  SubTabsEvents &
+  WorkspacesEvents & { "tab:loading-changed": TabLoadingChangedPayload };
 
 let tabCounter = 0;
 
@@ -78,6 +81,7 @@ function setup(platformOverrides = {}) {
   };
 
   let activeTabId: TabId | undefined;
+  let activeWorkspaceId: WorkspaceId | undefined = WS_ID;
   const deps = {
     commands,
     events,
@@ -88,7 +92,7 @@ function setup(platformOverrides = {}) {
     setActiveTabId: (id: TabId | undefined) => {
       activeTabId = id;
     },
-    getActiveWorkspaceId: () => WS_ID as WorkspaceId | undefined,
+    getActiveWorkspaceId: () => activeWorkspaceId,
   };
 
   // Register tabs feature first (sub-tabs depends on tabs:adopt)
@@ -111,6 +115,9 @@ function setup(platformOverrides = {}) {
     commands,
     events,
     platform,
+    setActiveWorkspaceId: (id: WorkspaceId | undefined) => {
+      activeWorkspaceId = id;
+    },
     getActiveTabId: () => activeTabId,
     setActiveTabId: (id: TabId | undefined) => {
       activeTabId = id;
@@ -720,5 +727,42 @@ describe("parent close with pending or prevented child destruction", () => {
       expect(await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: tabId })).toEqual([]);
     });
     expect(ctx.getActiveTabId()).toBe(upper);
+  });
+
+  it("recovers a child after adoption rejects until a workspace becomes available", async () => {
+    const ctx = setup();
+    const { tabId } = await createParentTab(ctx);
+    const child = await ctx.commands.send(SUB_TABS_OPEN, {
+      parentTabId: tabId,
+      url: "https://child.com",
+    });
+    vi.mocked(ctx.platform.closeTab).mockImplementation(async (id) => {
+      if (id === child) throw new Error("Page prevented closing");
+    });
+    const send = vi.spyOn(ctx.commands, "send");
+    ctx.setActiveWorkspaceId(undefined);
+    await ctx.commands.send(TABS_CLOSE, { tabId });
+    await vi.waitFor(() =>
+      expect(send).toHaveBeenCalledWith(TABS_ADOPT, { tabId: child, activate: false }),
+    );
+    expect(await ctx.commands.send(TABS_GET, { tabId: child })).toBeUndefined();
+    expect(await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: tabId })).toHaveLength(1);
+
+    ctx.setActiveWorkspaceId(WS_ID);
+    const switched = { workspaceId: WS_ID, previousWorkspaceId: null, workspaceName: "Restored" };
+    ctx.events.emit(WORKSPACES_SWITCHED, switched);
+    ctx.events.emit(WORKSPACES_SWITCHED, switched);
+    await vi.waitFor(async () => {
+      expect(await ctx.commands.send(TABS_GET, { tabId: child })).toMatchObject({ id: child });
+      expect(await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: tabId })).toEqual([]);
+      expect(ctx.getActiveTabId()).toBe(child);
+    });
+    expect(ctx.platform.setTabBounds).toHaveBeenCalledWith(child, {
+      x: 0,
+      y: 0,
+      width: 1000,
+      height: 800,
+    });
+    expect(send.mock.calls.filter(([name]) => name === TABS_ADOPT)).toHaveLength(2);
   });
 });

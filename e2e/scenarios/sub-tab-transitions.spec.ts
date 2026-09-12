@@ -207,4 +207,13 @@ test("closing a parent preserves a vetoing child as a standalone tab", async ({
   await child.page.evaluate(() => {
     window.onbeforeunload = null;
   });
+  const preservedRow = session.shell.locator(`[data-tab-id="${preserved.tabId}"]`);
+  await preservedRow.hover();
+  await preservedRow.getByRole("button", { name: "Close tab", exact: true }).click();
+  await expect(preservedRow).toHaveCount(0);
+  await waitUntil(
+    "accepted close destroys preserved child",
+    () => session.targets(),
+    (targets) => !targets.some((t) => t.webContentsId === target.webContentsId),
+  );
 });

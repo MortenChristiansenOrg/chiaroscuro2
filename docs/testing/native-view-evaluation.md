@@ -17,6 +17,9 @@ hide from making a newly shown overlay click-through. Closing waits for native
 WebContents destruction; a prevented unload keeps the child in its stack and
 restores the visible overlay. If the parent is already closed, a vetoing child is
 adopted as a standalone tab before its sub-tab ownership record is removed.
+If adoption fails, the child remains queued for recovery on the next workspace
+selection. Recovery transfers ownership separately from activation and the
+preserved tab can close normally after its unload veto is cleared.
 
 ## Environment and reproduction
 
