@@ -25,7 +25,10 @@ export class AppSession {
   private running = false;
   private lastTargets: DebugTarget[] = [];
 
-  constructor(readonly artifactDir: string) {}
+  constructor(
+    readonly artifactDir: string,
+    private readonly launchArgs: string[] = [],
+  ) {}
 
   record(kind: string, data: unknown): void {
     this.journal.push({ time: new Date().toISOString(), generation: this.generation, kind, data });
@@ -46,6 +49,7 @@ export class AppSession {
             "--no-sandbox",
           ]
         : []),
+      ...this.launchArgs,
       path.resolve("out/main/index.js"),
     ];
     this.record("launch", { args, profile: this.profile });

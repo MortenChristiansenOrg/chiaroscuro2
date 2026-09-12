@@ -51,6 +51,10 @@ export function SubTabOverlayDemo() {
         .${buttonClass}:active {
           transform: scale(0.95);
         }
+        @media (prefers-reduced-motion: reduce) {
+          .${buttonClass} { transition: none; }
+          .${buttonClass}:hover, .${buttonClass}:active { transform: none; }
+        }
       `}</style>
 
       {/* Simulated parent tab surface — click to open */}

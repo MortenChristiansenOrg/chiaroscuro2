@@ -481,3 +481,108 @@ describe("window-open interception", () => {
     expect(ctx.platform.onWindowOpen).toHaveBeenCalled();
   });
 });
+
+describe("interrupted sub-tab transitions", () => {
+  afterEach(() => {
+    tabsFeature.teardown?.();
+    subTabsFeature.teardown?.();
+  });
+
+  it("orders close after an in-flight open and does not leave a view attached", async () => {
+    let finishEnter!: () => void;
+    const show = new Promise<void>((resolve) => {
+      finishEnter = resolve;
+    });
+    const ctx = setup({ showSubTabWindow: vi.fn(() => show) });
+    const { tabId } = await createParentTab(ctx);
+    const opening = ctx.commands.send(SUB_TABS_OPEN, {
+      parentTabId: tabId,
+      url: "https://child.com",
+    });
+    await vi.waitFor(() => expect(ctx.platform.showSubTabWindow).toHaveBeenCalled());
+    const closing = ctx.commands.send(SUB_TABS_CLOSE, { parentTabId: tabId });
+    finishEnter();
+    const childId = await opening;
+    await closing;
+    expect(await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: tabId })).toEqual([]);
+    expect(ctx.platform.detachTabFromSubTabWindow).toHaveBeenCalledWith(childId);
+    expect(ctx.platform.closeTab).toHaveBeenCalledWith(childId);
+  });
+
+  it("keeps a new open alive when requested during the last sub-tab exit", async () => {
+    let finishExit!: () => void;
+    const hide = new Promise<void>((resolve) => {
+      finishExit = resolve;
+    });
+    const ctx = setup({ hideSubTabWindow: vi.fn(() => hide) });
+    const { tabId } = await createParentTab(ctx);
+    const first = await ctx.commands.send(SUB_TABS_OPEN, {
+      parentTabId: tabId,
+      url: "https://first.com",
+    });
+    const closing = ctx.commands.send(SUB_TABS_CLOSE, { parentTabId: tabId });
+    await vi.waitFor(() => expect(ctx.platform.hideSubTabWindow).toHaveBeenCalled());
+    const opening = ctx.commands.send(SUB_TABS_OPEN, {
+      parentTabId: tabId,
+      url: "https://second.com",
+    });
+    finishExit();
+    await closing;
+    const second = await opening;
+    expect(
+      (await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: tabId })).map((st) => st.id),
+    ).toEqual([second]);
+    expect(ctx.platform.closeTab).toHaveBeenCalledWith(first);
+    expect(ctx.platform.closeTab).not.toHaveBeenCalledWith(second);
+  });
+
+  it("does not resurrect a child when its parent closes during backdrop entry", async () => {
+    let finishEnter!: () => void;
+    const show = new Promise<void>((resolve) => {
+      finishEnter = resolve;
+    });
+    const ctx = setup({ showSubTabWindow: vi.fn(() => show) });
+    const { tabId } = await createParentTab(ctx);
+    const opening = ctx.commands.send(SUB_TABS_OPEN, {
+      parentTabId: tabId,
+      url: "https://child.com",
+    });
+    await vi.waitFor(() => expect(ctx.platform.showSubTabWindow).toHaveBeenCalled());
+    await ctx.commands.send(TABS_CLOSE, { tabId });
+    finishEnter();
+    const childId = await opening;
+    expect(ctx.platform.attachTabToSubTabWindow).not.toHaveBeenCalledWith(
+      childId,
+      expect.anything(),
+    );
+    expect(await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: tabId })).toEqual([]);
+  });
+});
+
+describe("sub-tab exit across parent switching", () => {
+  afterEach(() => {
+    tabsFeature.teardown?.();
+    subTabsFeature.teardown?.();
+  });
+
+  it("hides the backdrop when returning to a parent whose last child is still closing", async () => {
+    let finishExit!: () => void;
+    const hide = new Promise<void>((resolve) => {
+      finishExit = resolve;
+    });
+    const ctx = setup({ hideSubTabWindow: vi.fn(() => hide) });
+    const { tabId } = await createParentTab(ctx);
+    await ctx.commands.send(SUB_TABS_OPEN, { parentTabId: tabId, url: "https://child.com" });
+    const closing = ctx.commands.send(SUB_TABS_CLOSE, { parentTabId: tabId });
+    await vi.waitFor(() => expect(ctx.platform.hideSubTabWindow).toHaveBeenCalled());
+    const other = await ctx.commands.send(TABS_CREATE, { url: "https://other.com" });
+    expect(other).not.toBe(tabId);
+    await ctx.commands.send(TABS_ACTIVATE, { tabId });
+    expect(ctx.platform.showSubTabWindowStatic).toHaveBeenCalled();
+    vi.mocked(ctx.platform.hideSubTabWindowInstant).mockClear();
+    finishExit();
+    await closing;
+    expect(ctx.platform.hideSubTabWindowInstant).toHaveBeenCalledOnce();
+    expect(await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: tabId })).toEqual([]);
+  });
+});

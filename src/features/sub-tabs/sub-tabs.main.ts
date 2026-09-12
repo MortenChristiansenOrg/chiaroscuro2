@@ -120,6 +120,22 @@ export default defineFeature<Deps>({
     const { commands, events, platform, getActiveWindowId, getActiveTabId } = deps;
 
     const stacks = new Map<TabId, SubTab[]>();
+    // Keep open/close/promote mutations ordered while their animations yield.
+    const transitions = new Map<TabId, Promise<unknown>>();
+    const closedParents = new Set<TabId>();
+    function transition<T>(parentTabId: TabId, action: () => Promise<T>): Promise<T> {
+      const previous = transitions.get(parentTabId) ?? Promise.resolve();
+      const next = previous.catch(() => {}).then(action);
+      transitions.set(parentTabId, next);
+      const cleanup = () => {
+        if (transitions.get(parentTabId) === next) {
+          transitions.delete(parentTabId);
+          closedParents.delete(parentTabId);
+        }
+      };
+      void next.then(cleanup, cleanup);
+      return next;
+    }
     const tabScope = new TabScope();
     let contentBounds: Bounds = { x: 0, y: 0, width: 0, height: 0 };
 
@@ -298,163 +314,185 @@ export default defineFeature<Deps>({
 
     // ── Command handlers ───────────────────────────────────────────
 
-    commands.handle(SUB_TABS_OPEN, async (payload) => {
-      const { parentTabId, url } = payload;
-      const windowId = getActiveWindowId();
-      if (!windowId) throw new Error("No active window");
+    commands.handle(SUB_TABS_OPEN, (payload) =>
+      transition(payload.parentTabId, async () => {
+        const { parentTabId, url } = payload;
+        const windowId = getActiveWindowId();
+        if (!windowId) throw new Error("No active window");
 
-      // Ensure we have content bounds — fetch from tabs if local copy is stale
-      if (contentBounds.width === 0) {
-        const fresh = getContentBounds();
-        if (fresh.width > 0) contentBounds = fresh;
-      }
+        // Ensure we have content bounds — fetch from tabs if local copy is stale
+        if (contentBounds.width === 0) {
+          const fresh = getContentBounds();
+          if (fresh.width > 0) contentBounds = fresh;
+        }
 
-      const subTabId = await platform.createTab(windowId, url);
-      const subTab: SubTab = {
-        id: subTabId,
-        parentTabId,
-        url,
-        title: url,
-        favicon: "",
-        loading: true,
-      };
+        if (closedParents.has(parentTabId)) throw new Error("Parent tab was closed");
+        const subTabId = await platform.createTab(windowId, url);
+        if (closedParents.has(parentTabId)) {
+          await platform.closeTab(subTabId);
+          throw new Error("Parent tab was closed");
+        }
+        const subTab: SubTab = {
+          id: subTabId,
+          parentTabId,
+          url,
+          title: url,
+          favicon: "",
+          loading: true,
+        };
 
-      const stack = getStack(parentTabId);
+        const stack = getStack(parentTabId);
 
-      // Hide current top sub-tab (if any)
-      const prevTop = stack.length > 0 ? stack[stack.length - 1] : undefined;
-      if (prevTop) platform.hideTab(prevTop.id);
+        // Hide current top sub-tab (if any)
+        const prevTop = stack.length > 0 ? stack[stack.length - 1] : undefined;
+        if (prevTop) platform.hideTab(prevTop.id);
 
-      const isFirst = stack.length === 0;
-      if (isFirst) {
-        disableParentInput(parentTabId);
-      }
+        const isFirst = stack.length === 0;
+        if (isFirst) {
+          disableParentInput(parentTabId);
+        }
 
-      stack.push(subTab);
-      attachSubTabListeners(subTabId, parentTabId);
+        stack.push(subTab);
+        attachSubTabListeners(subTabId, parentTabId);
 
-      const fb = contentBounds.width > 0 ? computeFrameBounds(contentBounds) : null;
-      const cfb = contentBounds.width > 0 ? computeChildFrameBounds(contentBounds) : null;
+        const fb = contentBounds.width > 0 ? computeFrameBounds(contentBounds) : null;
+        const cfb = contentBounds.width > 0 ? computeChildFrameBounds(contentBounds) : null;
 
-      // Show child window with backdrop fade — must await so the child window
-      // is visible before we attach the WCV and start its bounds animation.
-      if (isFirst && fb) {
-        await platform.showSubTabWindow(contentBounds, fb, parentTabId);
-      }
+        // Show child window with backdrop fade — must await so the child window
+        // is visible before we attach the WCV and start its bounds animation.
+        if (isFirst && fb && getActiveTabId() === parentTabId) {
+          await platform.showSubTabWindow(contentBounds, fb, parentTabId);
+        }
 
-      // Attach WCV at scaled-down bounds, then animate to full size
-      if (cfb) {
-        const startBounds = scaleBounds(cfb, ENTER_SCALE);
-        platform.attachTabToSubTabWindow(subTabId, startBounds);
-        platform.animateTabBounds(subTabId, startBounds, cfb, ANIM_DURATION).catch(() => {});
-      }
+        // Attach WCV at scaled-down bounds, then animate to full size
+        if (cfb && topSubTab(parentTabId)?.id === subTabId && getActiveTabId() === parentTabId) {
+          // Content bounds may have changed while the backdrop was entering.
+          const currentBounds = computeChildFrameBounds(contentBounds);
+          const startBounds = scaleBounds(currentBounds, ENTER_SCALE);
+          platform.attachTabToSubTabWindow(subTabId, startBounds);
+          platform
+            .animateTabBounds(subTabId, startBounds, currentBounds, ANIM_DURATION)
+            .catch(() => {});
+        }
 
-      events.emit(SUB_TABS_OPENED, { parentTabId, subTab: { ...subTab } });
-      emitStackChanged(parentTabId);
-
-      return subTabId;
-    });
-
-    commands.handle(SUB_TABS_CLOSE, async (payload) => {
-      const { parentTabId } = payload;
-      const top = topSubTab(parentTabId);
-      if (!top) return;
-
-      const wasLast = (stacks.get(parentTabId)?.length ?? 0) <= 1;
-
-      if (wasLast) {
+        if (closedParents.has(parentTabId)) return subTabId;
+        events.emit(SUB_TABS_OPENED, { parentTabId, subTab: { ...subTab } });
         emitStackChanged(parentTabId);
-        // Animate WCV bounds down + backdrop fade out in parallel
+
+        return subTabId;
+      }),
+    );
+
+    commands.handle(SUB_TABS_CLOSE, (payload) =>
+      transition(payload.parentTabId, async () => {
+        const { parentTabId } = payload;
+        const top = topSubTab(parentTabId);
+        if (!top) return;
+
+        const wasLast = (stacks.get(parentTabId)?.length ?? 0) <= 1;
+
+        if (wasLast && getActiveTabId() === parentTabId) {
+          emitStackChanged(parentTabId);
+          // Animate WCV bounds down + backdrop fade out in parallel
+          const cfb = computeChildFrameBounds(contentBounds);
+          const exitBounds = scaleBounds(cfb, ENTER_SCALE);
+          await Promise.all([
+            platform.animateTabBounds(top.id, cfb, exitBounds, ANIM_DURATION),
+            platform.hideSubTabWindow(),
+          ]);
+          platform.detachTabFromSubTabWindow(top.id);
+          await closeSubTab(parentTabId, top.id);
+          if (getActiveTabId() === parentTabId) platform.hideSubTabWindowInstant();
+          enableParentInput(parentTabId);
+        } else {
+          await closeSubTab(parentTabId, top.id);
+          if (getActiveTabId() === parentTabId) showTopSubTab(parentTabId);
+          if (wasLast) enableParentInput(parentTabId);
+        }
+
+        emitStackChanged(parentTabId);
+      }),
+    );
+
+    commands.handle(SUB_TABS_CLOSE_ALL, (payload) =>
+      transition(payload.parentTabId, async () => {
+        const { parentTabId } = payload;
+        const stack = stacks.get(parentTabId);
+        if (!stack || stack.length === 0) return;
+
+        // Animate top sub-tab bounds down + backdrop fade out in parallel
+        const topSt = stack[stack.length - 1];
         const cfb = computeChildFrameBounds(contentBounds);
         const exitBounds = scaleBounds(cfb, ENTER_SCALE);
-        await Promise.all([
-          platform.animateTabBounds(top.id, cfb, exitBounds, ANIM_DURATION),
-          platform.hideSubTabWindow(),
-        ]);
-        platform.detachTabFromSubTabWindow(top.id);
-        await closeSubTab(parentTabId, top.id);
+        if (getActiveTabId() === parentTabId)
+          await Promise.all([
+            topSt
+              ? platform.animateTabBounds(topSt.id, cfb, exitBounds, ANIM_DURATION)
+              : Promise.resolve(),
+            platform.hideSubTabWindow(),
+          ]);
+
+        // Detach all WCVs back to main window
+        for (const st of stack) {
+          platform.detachTabFromSubTabWindow(st.id);
+        }
+
+        const toClose = [...stack].reverse();
+        for (const st of toClose) {
+          await closeSubTab(parentTabId, st.id);
+        }
+
+        if (getActiveTabId() === parentTabId) platform.hideSubTabWindowInstant();
         enableParentInput(parentTabId);
-      } else {
-        await closeSubTab(parentTabId, top.id);
-        showTopSubTab(parentTabId);
-      }
+        emitStackChanged(parentTabId);
+      }),
+    );
 
-      emitStackChanged(parentTabId);
-    });
+    commands.handle(SUB_TABS_PROMOTE, (payload) =>
+      transition(payload.parentTabId, async () => {
+        const { parentTabId } = payload;
+        const top = topSubTab(parentTabId);
+        if (!top) throw new Error("No sub-tab to promote");
 
-    commands.handle(SUB_TABS_CLOSE_ALL, async (payload) => {
-      const { parentTabId } = payload;
-      const stack = stacks.get(parentTabId);
-      if (!stack || stack.length === 0) return;
+        const subTabId = top.id;
 
-      // Animate top sub-tab bounds down + backdrop fade out in parallel
-      const topSt = stack[stack.length - 1];
-      const cfb = computeChildFrameBounds(contentBounds);
-      const exitBounds = scaleBounds(cfb, ENTER_SCALE);
-      await Promise.all([
-        topSt
-          ? platform.animateTabBounds(topSt.id, cfb, exitBounds, ANIM_DURATION)
-          : Promise.resolve(),
-        platform.hideSubTabWindow(),
-      ]);
+        // Remove listeners managed by sub-tabs
+        tabScope.cleanup(subTabId);
 
-      // Detach all WCVs back to main window
-      for (const st of stack) {
-        platform.detachTabFromSubTabWindow(st.id);
-      }
-
-      const toClose = [...stack].reverse();
-      for (const st of toClose) {
-        await closeSubTab(parentTabId, st.id);
-      }
-
-      enableParentInput(parentTabId);
-      emitStackChanged(parentTabId);
-    });
-
-    commands.handle(SUB_TABS_PROMOTE, async (payload) => {
-      const { parentTabId } = payload;
-      const top = topSubTab(parentTabId);
-      if (!top) throw new Error("No sub-tab to promote");
-
-      const subTabId = top.id;
-
-      // Remove listeners managed by sub-tabs
-      tabScope.cleanup(subTabId);
-
-      // Remove from stack and close any sub-tabs above
-      const stack = stacks.get(parentTabId);
-      if (stack) {
-        const idx = stack.findIndex((s) => s.id === subTabId);
-        if (idx !== -1) {
-          const above = stack.splice(idx);
-          for (const st of above) {
-            if (st.id !== subTabId) {
-              tabScope.cleanup(st.id);
-              platform.detachTabFromSubTabWindow(st.id);
-              await platform.closeTab(st.id);
-              events.emit(SUB_TABS_CLOSED, { parentTabId, subTabId: st.id });
+        // Remove from stack and close any sub-tabs above
+        const stack = stacks.get(parentTabId);
+        if (stack) {
+          const idx = stack.findIndex((s) => s.id === subTabId);
+          if (idx !== -1) {
+            const above = stack.splice(idx);
+            for (const st of above) {
+              if (st.id !== subTabId) {
+                tabScope.cleanup(st.id);
+                platform.detachTabFromSubTabWindow(st.id);
+                await platform.closeTab(st.id);
+                events.emit(SUB_TABS_CLOSED, { parentTabId, subTabId: st.id });
+              }
             }
           }
+          if (stack.length === 0) {
+            stacks.delete(parentTabId);
+            enableParentInput(parentTabId);
+          }
         }
-        if (stack.length === 0) {
-          stacks.delete(parentTabId);
-          enableParentInput(parentTabId);
-        }
-      }
 
-      // Detach WCV from child window back to main window, then hide child window
-      platform.detachTabFromSubTabWindow(subTabId);
-      platform.hideSubTabWindowInstant();
-      platform.hideTab(subTabId);
+        // Detach WCV from child window back to main window, then hide child window
+        platform.detachTabFromSubTabWindow(subTabId);
+        platform.hideSubTabWindowInstant();
+        platform.hideTab(subTabId);
 
-      const newTabId = await commands.send(TABS_ADOPT, { tabId: subTabId, activate: true });
+        const newTabId = await commands.send(TABS_ADOPT, { tabId: subTabId, activate: true });
 
-      events.emit(SUB_TABS_PROMOTED, { parentTabId, subTabId, newTabId });
-      emitStackChanged(parentTabId);
+        events.emit(SUB_TABS_PROMOTED, { parentTabId, subTabId, newTabId });
+        emitStackChanged(parentTabId);
 
-      return newTabId;
-    });
+        return newTabId;
+      }),
+    );
 
     commands.handle(SUB_TABS_GET_STACK, (payload) => {
       return [...(stacks.get(payload.parentTabId) ?? [])];
@@ -502,10 +540,12 @@ export default defineFeature<Deps>({
 
     // When parent tab is closed, close all its sub-tabs
     events.on(TABS_CLOSED, ({ tabId }) => {
+      if (transitions.has(tabId)) closedParents.add(tabId);
+      disabledInputKeys.delete(tabId);
       const stack = stacks.get(tabId);
       if (!stack || stack.length === 0) return;
 
-      platform.hideSubTabWindowInstant();
+      if (getActiveTabId() === tabId) platform.hideSubTabWindowInstant();
       for (const st of stack) {
         tabScope.cleanup(st.id);
         platform.detachTabFromSubTabWindow(st.id);

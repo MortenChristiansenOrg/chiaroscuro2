@@ -2,7 +2,9 @@ import { useLayoutEffect, useRef, useState } from "react";
 
 type Phase = "closed" | "entering" | "open" | "exiting";
 
-const DURATION = 200;
+function animationDuration(): number {
+  return window.matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 200;
+}
 
 interface SubTabFrameProps {
   /** Whether the sub-tab overlay is visible. */
@@ -26,10 +28,8 @@ interface SubTabFrameProps {
 /**
  * Shared presentational component for the sub-tab overlay.
  * Handles the backdrop, frame card positioning, and fade animation.
- * Used by both the app renderer and the design-system demo.
- *
- * Uses the Web Animations API so the animation is immune to the global
- * `prefers-reduced-motion` CSS rule that sets `transition-duration: 0.01ms !important`.
+ * The design-system demo represents the native child-window presentation.
+ * Web Animations must check reduced motion explicitly; CSS cannot override them.
  */
 export function SubTabFrame({
   isOpen,
@@ -77,20 +77,23 @@ export function SubTabFrame({
         { opacity: 0, transform: "scale(0.88)" },
         { opacity: 1, transform: "scale(1)" },
       ],
-      { duration: DURATION, easing: "ease-out", fill: "forwards" },
+      { duration: animationDuration(), easing: "ease-out", fill: "forwards" },
     );
 
     const backdropAnim = backdrop.animate([{ opacity: 0 }, { opacity: 1 }], {
-      duration: DURATION,
+      duration: animationDuration(),
       easing: "ease-out",
       fill: "forwards",
     });
 
     animationsRef.current = [frameAnim, backdropAnim];
 
-    frameAnim.finished.then(() => {
-      onOpened?.();
-    });
+    frameAnim.finished.then(
+      () => {
+        onOpened?.();
+      },
+      () => {},
+    );
 
     setPhase("open");
   });
@@ -112,21 +115,24 @@ export function SubTabFrame({
         { opacity: 0.3, transform: "scale(1)" },
         { opacity: 0, transform: "scale(0.88)" },
       ],
-      { duration: DURATION, easing: "ease-in", fill: "forwards" },
+      { duration: animationDuration(), easing: "ease-in", fill: "forwards" },
     );
 
     const backdropAnim = backdrop.animate([{ opacity: 1 }, { opacity: 0 }], {
-      duration: DURATION,
+      duration: animationDuration(),
       easing: "ease-in",
       fill: "forwards",
     });
 
     animationsRef.current = [frameAnim, backdropAnim];
 
-    frameAnim.finished.then(() => {
-      setPhase("closed");
-      onClosed?.();
-    });
+    frameAnim.finished.then(
+      () => {
+        setPhase("closed");
+        onClosed?.();
+      },
+      () => {},
+    );
   }, [isOpen]);
 
   if (phase === "closed") return null;
