@@ -1,10 +1,11 @@
 /** Runs only on a disposable GitHub Windows runner: installs real NSIS builds. */
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { type ElectronApplication, _electron as electron } from "playwright";
 import { APP_CHANNELS } from "../../src/shared/app-channel";
+import { waitUntil } from "../automation/wait";
 
 if (process.platform !== "win32" || process.env.GITHUB_ACTIONS !== "true") {
   throw new Error("Installed-channel verification requires a disposable GitHub Windows runner");
@@ -64,12 +65,37 @@ async function launch(channel: "stable" | "early-access" | "dev") {
     timeout: 30_000,
   });
   running.add(app);
-  const window = await app.firstWindow();
+  const log = (message: string) =>
+    appendFileSync(path.join(artifacts, `${channel}.log`), `${message}\n`);
+  app.process().stdout?.on("data", (data) => log(String(data)));
+  app.process().stderr?.on("data", (data) => log(String(data)));
+  app.on("console", (message) => log(`${message.type()}: ${message.text()}`));
+  const window = await waitUntil(
+    "installed shell renderer",
+    async () => {
+      return app.windows().find((page) => page.url().endsWith("/out/renderer/index.html"));
+    },
+    (page) => !!page,
+    30_000,
+  ).catch(async (error) => {
+    writeFileSync(
+      path.join(artifacts, `${channel}.windows.json`),
+      JSON.stringify(app.windows().map((page) => page.url())),
+    );
+    throw error;
+  });
+  if (!window) throw new Error("Installed shell disappeared");
   await window
     .locator("[data-testid='shell-ready']")
-    .waitFor({ state: "attached", timeout: 30_000 });
+    .waitFor({ state: "attached", timeout: 30_000 })
+    .catch(async (error) => {
+      await window.screenshot({ path: path.join(artifacts, `${channel}.failure.png`) });
+      log(await window.locator("body").innerText());
+      throw error;
+    });
+  const nativeWindow = await app.browserWindow(window);
   assert.equal(
-    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.getTitle()),
+    await nativeWindow.evaluate((win) => win.getTitle()),
     APP_CHANNELS[channel].productName,
   );
   await window.screenshot({ path: path.join(artifacts, `${channel}.renderer.png`) });
