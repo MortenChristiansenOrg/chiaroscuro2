@@ -22,6 +22,7 @@ import {
   TABS_CLOSED,
   TABS_CREATE,
   TABS_CREATED,
+  TABS_GET,
   TABS_LIST_CHANGED,
   TABS_REPORT_CONTENT_BOUNDS,
   TABS_UPDATED,
@@ -551,6 +552,9 @@ describe("interrupted sub-tab transitions", () => {
     await ctx.commands.send(TABS_CLOSE, { tabId });
     finishEnter();
     const childId = await opening;
+    await vi.waitFor(async () => {
+      expect(await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: tabId })).toEqual([]);
+    });
     expect(ctx.platform.attachTabToSubTabWindow).not.toHaveBeenCalledWith(
       childId,
       expect.anything(),
@@ -642,5 +646,79 @@ describe("sub-tab native close lifecycle", () => {
     expect(closed).not.toHaveBeenCalled();
     expect(ctx.platform.showSubTabWindowStatic).toHaveBeenCalled();
     expect(ctx.platform.attachTabToSubTabWindow).toHaveBeenLastCalledWith(child, expect.anything());
+  });
+});
+
+describe("parent close with pending or prevented child destruction", () => {
+  afterEach(() => {
+    tabsFeature.teardown?.();
+    subTabsFeature.teardown?.();
+  });
+
+  it("keeps ownership until a child's native close settles", async () => {
+    const ctx = setup();
+    const { tabId } = await createParentTab(ctx);
+    const child = await ctx.commands.send(SUB_TABS_OPEN, {
+      parentTabId: tabId,
+      url: "https://child.com",
+    });
+    let finishClose!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      finishClose = resolve;
+    });
+    vi.mocked(ctx.platform.closeTab).mockImplementation((id) =>
+      id === child ? pending : Promise.resolve(),
+    );
+    await ctx.commands.send(TABS_CLOSE, { tabId });
+    await vi.waitFor(() => expect(ctx.platform.closeTab).toHaveBeenCalledWith(child));
+    expect(
+      (await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: tabId })).map((st) => st.id),
+    ).toEqual([child]);
+    finishClose();
+    await vi.waitFor(async () => {
+      expect(await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: tabId })).toEqual([]);
+    });
+  });
+
+  it("adopts a vetoing child as a standalone tab before removing its stack record", async () => {
+    const ctx = setup();
+    const { tabId } = await createParentTab(ctx);
+    const child = await ctx.commands.send(SUB_TABS_OPEN, {
+      parentTabId: tabId,
+      url: "https://child.com",
+    });
+    vi.mocked(ctx.platform.closeTab).mockImplementation(async (id) => {
+      if (id === child) throw new Error("Page prevented closing");
+    });
+    await ctx.commands.send(TABS_CLOSE, { tabId });
+    await vi.waitFor(async () => {
+      expect(await ctx.commands.send(TABS_GET, { tabId: child })).toMatchObject({ id: child });
+      expect(await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: tabId })).toEqual([]);
+    });
+    expect(ctx.getActiveTabId()).toBe(child);
+    expect(ctx.platform.createTab).toHaveBeenCalledTimes(2);
+  });
+
+  it("preserves nested vetoing children and keeps the topmost one active", async () => {
+    const ctx = setup();
+    const { tabId } = await createParentTab(ctx);
+    const lower = await ctx.commands.send(SUB_TABS_OPEN, {
+      parentTabId: tabId,
+      url: "https://lower.com",
+    });
+    const upper = await ctx.commands.send(SUB_TABS_OPEN, {
+      parentTabId: tabId,
+      url: "https://upper.com",
+    });
+    vi.mocked(ctx.platform.closeTab).mockImplementation(async (id) => {
+      if (id !== tabId) throw new Error("Page prevented closing");
+    });
+    await ctx.commands.send(TABS_CLOSE, { tabId });
+    await vi.waitFor(async () => {
+      expect(await ctx.commands.send(TABS_GET, { tabId: lower })).toMatchObject({ id: lower });
+      expect(await ctx.commands.send(TABS_GET, { tabId: upper })).toMatchObject({ id: upper });
+      expect(await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: tabId })).toEqual([]);
+    });
+    expect(ctx.getActiveTabId()).toBe(upper);
   });
 });

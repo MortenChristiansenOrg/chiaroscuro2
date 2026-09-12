@@ -112,10 +112,15 @@ function useExitAnimation(tabs: Map<TabId, Tab>) {
     }
     prevTabsRef.current = new Map(tabs);
     if (removed.length === 0) return;
-    setExitingTabs(removed);
+    setExitingTabs((current) => [...current, ...removed]);
+  }, [tabs]);
+
+  // New tabs and metadata updates must not cancel a closed row's removal.
+  useLayoutEffect(() => {
+    if (exitingTabs.length === 0) return;
     const timer = setTimeout(() => setExitingTabs([]), 200);
     return () => clearTimeout(timer);
-  }, [tabs]);
+  }, [exitingTabs]);
 
   const exitingIds = new Set(exitingTabs.map((t) => t.id));
   return { exitingTabs, exitingIds };

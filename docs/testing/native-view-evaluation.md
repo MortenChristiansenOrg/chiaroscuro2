@@ -15,7 +15,8 @@ for reduced motion. Per-parent operation ordering protects rapid open/close and
 promotion. The backdrop also resolves interrupted promises and prevents a stale
 hide from making a newly shown overlay click-through. Closing waits for native
 WebContents destruction; a prevented unload keeps the child in its stack and
-restores the visible overlay.
+restores the visible overlay. If the parent is already closed, a vetoing child is
+adopted as a standalone tab before its sub-tab ownership record is removed.
 
 ## Environment and reproduction
 

@@ -1,3 +1,4 @@
+import path from "node:path";
 import { startSite } from "../automation/site";
 import { waitUntil } from "../automation/wait";
 import { expect, test } from "../fixtures/electron-app";
@@ -171,4 +172,39 @@ test("sub-tab remains usable when beforeunload prevents closing", async ({
     () => session.targets(),
     (targets) => !targets.some((t) => t.id === target.id),
   );
+});
+
+test("closing a parent preserves a vetoing child as a standalone tab", async ({
+  appSession: session,
+}) => {
+  const parent = await VerificationPage.navigate(session, `${site.url}/parent`);
+  await parent.subTab.click();
+  const target = await session.target((t) => t.kind === "sub-tab" && t.visible);
+  const child = new VerificationPage(await session.page(target));
+  await child.submit("unsaved child state");
+  child.page.on("dialog", () => {});
+  await child.page.evaluate(() => {
+    window.onbeforeunload = () => false;
+  });
+  const parentRow = session.shell.locator(
+    `[data-tab-id="${target.parentId?.replace(/^tab:/, "")}"]`,
+  );
+  await parentRow.hover();
+  await parentRow.getByRole("button", { name: "Close tab", exact: true }).click();
+  const preserved = await session.target(
+    (t) => t.kind === "tab" && t.webContentsId === target.webContentsId && t.visible,
+  );
+  expect(preserved.tabId).toBe(target.tabId);
+  await expect(parentRow).toHaveCount(0);
+  await expect(child.message).toHaveValue("unsaved child state");
+  await child.message.fill("");
+  await child.submit("preserved child focus");
+  await expect(child.result).toHaveText("preserved child focus");
+  await session.shell.screenshot({
+    path: path.join(session.artifactDir, "preserved-child-shell.renderer.png"),
+  });
+  expect((await session.targets()).filter((t) => t.kind === "sub-tab")).toHaveLength(0);
+  await child.page.evaluate(() => {
+    window.onbeforeunload = null;
+  });
 });

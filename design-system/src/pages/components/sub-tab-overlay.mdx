@@ -81,7 +81,7 @@ Hover/active transitions use `200ms cubic-bezier(0.34, 1.56, 0.64, 1)` for a spr
 - **Escape key**: Dismisses the topmost sub-tab (registered as a local shortcut).
 - **Stacking**: Opening a link from within a sub-tab pushes a new sub-tab onto the stack. Only the topmost is visible.
 - **Promote**: Converts the sub-tab's WebContentsView into a standalone tab without page reload.
-- **Parent close**: Closing the parent tab closes all its sub-tabs.
+- **Parent close**: Closing the parent tab closes its sub-tabs. A child that prevents closing is preserved as a standalone tab without reloading its page.
 - **Tab switching**: Sub-tab stacks are hidden when switching to a different parent tab and restored when switching back.
 
 ---

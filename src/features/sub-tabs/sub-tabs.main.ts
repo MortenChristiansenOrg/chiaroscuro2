@@ -270,6 +270,15 @@ export default defineFeature<Deps>({
       );
     }
 
+    function removeFromStack(parentTabId: TabId, subTabId: TabId): void {
+      const stack = stacks.get(parentTabId);
+      if (stack) {
+        const idx = stack.findIndex((s) => s.id === subTabId);
+        if (idx !== -1) stack.splice(idx, 1);
+        if (stack.length === 0) stacks.delete(parentTabId);
+      }
+    }
+
     async function closeSubTab(parentTabId: TabId, subTabId: TabId): Promise<void> {
       platform.hideTab(subTabId);
       try {
@@ -288,12 +297,7 @@ export default defineFeature<Deps>({
       }
       tabScope.cleanup(subTabId);
 
-      const stack = stacks.get(parentTabId);
-      if (stack) {
-        const idx = stack.findIndex((s) => s.id === subTabId);
-        if (idx !== -1) stack.splice(idx, 1);
-        if (stack.length === 0) stacks.delete(parentTabId);
-      }
+      removeFromStack(parentTabId, subTabId);
 
       events.emit(SUB_TABS_CLOSED, { parentTabId, subTabId });
     }
@@ -551,20 +555,39 @@ export default defineFeature<Deps>({
       }
     });
 
-    // When parent tab is closed, close all its sub-tabs
+    // A child that prevents closing must survive the loss of its parent.
     events.on(TABS_CLOSED, ({ tabId }) => {
-      if (transitions.has(tabId)) closedParents.add(tabId);
       disabledInputKeys.delete(tabId);
-      const stack = stacks.get(tabId);
-      if (!stack || stack.length === 0) return;
-
-      if (getActiveTabId() === tabId) platform.hideSubTabWindowInstant();
-      for (const st of stack) {
-        tabScope.cleanup(st.id);
-        platform.detachTabFromSubTabWindow(st.id);
-        platform.closeTab(st.id).catch(logError("sub-tabs", "close sub-tab on parent close"));
-      }
-      stacks.delete(tabId);
+      if (!stacks.get(tabId)?.length && !transitions.has(tabId)) return;
+      closedParents.add(tabId);
+      if (!getActiveTabId() || getActiveTabId() === tabId) platform.hideSubTabWindowInstant();
+      transition(tabId, async () => {
+        let preservedChild = false;
+        for (const st of [...(stacks.get(tabId) ?? [])].reverse()) {
+          platform.detachTabFromSubTabWindow(st.id);
+          try {
+            await closeSubTab(tabId, st.id);
+          } catch {
+            // Preserve the existing WebContents (including unsaved form state).
+            // Keep its ownership record until adoption succeeds.
+            let newTabId: TabId;
+            try {
+              newTabId = await commands.send(TABS_ADOPT, {
+                tabId: st.id,
+                activate: !preservedChild,
+              });
+              preservedChild = true;
+            } catch (error) {
+              logError("sub-tabs", "preserve child after parent close")(error);
+              continue;
+            }
+            tabScope.cleanup(st.id);
+            removeFromStack(tabId, st.id);
+            events.emit(SUB_TABS_PROMOTED, { parentTabId: tabId, subTabId: st.id, newTabId });
+          }
+        }
+        emitStackChanged(tabId);
+      }).catch(logError("sub-tabs", "close children after parent close"));
     });
 
     // Track command palette state to avoid Escape race condition.

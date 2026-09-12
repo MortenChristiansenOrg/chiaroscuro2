@@ -44,7 +44,7 @@ Sub-tabs keep the user's context by avoiding full tab switches for casual link-f
 - Each parent tab has its own sub-tab stack (zero or more sub-tabs).
 - Opening a link from within a sub-tab pushes a new sub-tab onto the stack.
 - Closing the topmost sub-tab pops it and reveals the previous sub-tab (or the parent if stack is now empty).
-- Closing the parent tab closes all its sub-tabs.
+- Closing the parent tab closes its sub-tabs. A child that prevents closing is preserved as a standalone tab with the same page and unsaved state. Ownership is removed from the stack only after native destruction or successful adoption.
 - Switching to a different parent tab hides that parent's sub-tab stack; switching back reveals it.
 
 ### Promotion
