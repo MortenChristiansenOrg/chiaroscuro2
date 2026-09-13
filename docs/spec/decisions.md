@@ -13,7 +13,7 @@
 - **Default browser**: Windows registry registration for http/https protocols
 - **IPC architecture**: Command bus + event bus bridging IPC transparently; strong-typed with per-feature type registries
 - **Testing strategy**: MockPlatform + InMemoryDataStore (RxDB Memory RxStorage) for feature unit tests; integration tests with multiple features + mocks; E2E with real Electron
-- **Chrome extensions**: Opt-in/experimental via `electron-chrome-extensions` ^4.9. ~30-40% API coverage, no MV3 `declarativeNetRequest`. Use `@cliqz/adblocker-electron` for ad blocking, OS-level autofill for password managers, `session.loadExtension()` for DevTools extensions.
+- **Chrome extensions**: Keep Electron and use an in-house adapter around its native extension runtime. Prioritize the unmodified Bitwarden extension; retain native vault storage and messaging. Validate concrete workflows instead of estimating API coverage. No third-party GPL/proprietary compatibility dependency.
 - **Build tooling**: `electron-builder` ^26 + `electron-vite`. Forge doesn't support Bun, has experimental Vite plugin. electron-builder has built-in `electron-updater`, better cross-compilation, more CI examples.
 - **Tailwind 4 + shadcn**: Fully compatible since Feb 2025. Use `@tailwindcss/vite` plugin with `"moduleResolution": "bundler"`. Requires Electron 24+ (Chrome 112+).
 - **Storage**: RxDB (free Filesystem RxStorage) for structured data, JSON for settings. No SQL. All local-only by default; optional Convex sync for selected data (future). No native modules required — pure JS, no `@electron/rebuild` needed for storage.
@@ -50,7 +50,7 @@
 
 - **Code signing**: Skipped for now, accept warnings
 - **Electron bundle size**: ~200MB, acceptable for desktop app
-- **Chrome extension compatibility**: ~30-40% of APIs; document what works and what doesn't
+- **Chrome extension compatibility**: Partial API support; document tested workflows and unsupported capabilities (see implementation.md §6)
 
 ## Verification (Post-Implementation)
 

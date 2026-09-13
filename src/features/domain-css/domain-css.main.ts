@@ -314,7 +314,7 @@ export default defineFeature<DomainCssDeps>({
       const { domain } = payload;
       return domainTabs.openOrActivate(
         domain,
-        `app:domain-settings?domain=${encodeURIComponent(domain)}`,
+        `/domain-settings?domain=${encodeURIComponent(domain)}`,
       );
     });
 

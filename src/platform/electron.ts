@@ -17,13 +17,23 @@ import {
   webContents,
 } from "electron";
 import type { Bounds, TabId, WindowId } from "../shared/types";
+import { unpackedExtensionId } from "./extension-identity";
+import { migrateExtensionBootstrap } from "./extension-migration";
+import { ExtensionRuntime } from "./extension-runtime";
 import type { GithubSessionDiagnostics } from "./github-session-diagnostics";
 import { TabBoundsAnimation } from "./tab-bounds-animation";
 import { closeTabContents, createTabView } from "./tab-view";
-import type { Platform, PlatformDownload } from "./types";
+import type { ExtensionTabActions, Platform, PlatformDownload } from "./types";
 
 const ALLOWED_SCHEMES_WEB = new Set(["http:", "https:", "about:", "data:"]);
-const ALLOWED_SCHEMES_INTERNAL = new Set(["http:", "https:", "about:", "data:", "file:"]);
+const ALLOWED_SCHEMES_INTERNAL = new Set([
+  "http:",
+  "https:",
+  "about:",
+  "data:",
+  "file:",
+  "chrome-extension:",
+]);
 const ALLOWED_EXTERNAL_SCHEMES = new Set(["http:", "https:", "mailto:"]);
 
 function isAllowedUrl(url: string, source: "web" | "internal" = "web"): boolean {
@@ -469,6 +479,7 @@ export class ElectronPlatform implements Platform {
     view.setBorderRadius(8);
 
     this.views.set(tabId, view);
+    this.extensionRuntime?.addTab(tabId, view.webContents, win);
     win.contentView.addChildView(view);
 
     // Hide initially — caller will activate
@@ -960,6 +971,7 @@ export class ElectronPlatform implements Platform {
   // ── Context menu (native) ─────────────────────────────────────
 
   async showContextMenu(opts: {
+    tabId?: TabId;
     items: { label: string; icon?: string; disabled?: boolean }[];
     x: number;
     y: number;
@@ -980,7 +992,13 @@ export class ElectronPlatform implements Platform {
         },
       }));
 
-      const menu = Menu.buildFromTemplate(template);
+      const extensionItems = opts.tabId
+        ? (this.extensionRuntime?.contextMenu(opts.tabId) ?? [])
+        : [];
+      const menu = Menu.buildFromTemplate([
+        ...template,
+        ...(extensionItems.length ? [{ type: "separator" as const }, ...extensionItems] : []),
+      ]);
       menu.popup({
         window: win,
         x: Math.round(opts.x),
@@ -1810,5 +1828,173 @@ export class ElectronPlatform implements Platform {
     const win = BrowserWindow.getAllWindows().find((w) => !w.isDestroyed());
     const result = win ? await dialog.showMessageBox(win, opts) : await dialog.showMessageBox(opts);
     return result.response === 1;
+  }
+
+  // ── Chrome extensions ─────────────────────────────────────────
+
+  private get extensions() {
+    return session.defaultSession.extensions;
+  }
+
+  async clearExtensionCodeCache(extensionPath: string): Promise<void> {
+    const manifest = JSON.parse(fs.readFileSync(path.join(extensionPath, "manifest.json"), "utf8"));
+    const id = unpackedExtensionId(extensionPath, manifest.key);
+    // A persisted MV3 registration can otherwise run the previous package's script
+    // against the new files. Leave native vault storage, IndexedDB and cookies intact.
+    await session.defaultSession.clearStorageData({
+      origin: `chrome-extension://${id}`,
+      storages: ["serviceworkers", "cachestorage"],
+    });
+  }
+
+  async loadExtension(extensionPath: string) {
+    migrateExtensionBootstrap(extensionPath);
+    const ext = await this.extensions.loadExtension(extensionPath);
+    return {
+      id: ext.id,
+      name: ext.name,
+      version: ext.version,
+      path: ext.path,
+      manifest: (ext.manifest ?? {}) as Record<string, unknown>,
+    };
+  }
+
+  removeExtension(extensionId: string): void {
+    if (
+      this.extensionPopup &&
+      !this.extensionPopup.isDestroyed() &&
+      this.extensionPopup.webContents.getURL().startsWith(`chrome-extension://${extensionId}/`)
+    ) {
+      this.extensionPopup.close();
+      this.extensionPopup = null;
+    }
+    this.extensions.removeExtension(extensionId);
+  }
+
+  getAllExtensions() {
+    return this.extensions.getAllExtensions().map((ext) => ({
+      id: ext.id,
+      name: ext.name,
+      version: ext.version,
+      path: ext.path,
+      manifest: (ext.manifest ?? {}) as Record<string, unknown>,
+    }));
+  }
+
+  // ── Extension API bridge ────────────────────────────────────
+
+  private extensionPopup: BrowserWindow | null = null;
+  private extensionRuntime: ExtensionRuntime | undefined;
+
+  setupExtensionBridge(actions: ExtensionTabActions): void {
+    this.extensionRuntime = new ExtensionRuntime(actions, () => this.getWin());
+  }
+
+  setExtensionActiveTab(tabId: TabId | undefined): void {
+    this.extensionRuntime?.selectTab(tabId);
+  }
+
+  // ── Extension popup window ─────────────────────────────────
+
+  openExtensionPopup(extensionId: string, popupRelativePath: string): void {
+    // Close existing popup
+    if (this.extensionPopup && !this.extensionPopup.isDestroyed()) {
+      this.extensionPopup.close();
+      this.extensionPopup = null;
+    }
+
+    const parent = this.getWin();
+    if (!parent) return;
+
+    const ext = session.defaultSession.extensions.getExtension(extensionId);
+    if (!ext) return;
+
+    const popupFile = path.join(ext.path, popupRelativePath);
+    if (!fs.existsSync(popupFile)) return;
+
+    this.extensionPopup = new BrowserWindow({
+      parent,
+      width: 400,
+      height: 600,
+      frame: false,
+      resizable: false,
+      movable: false,
+      show: false,
+      skipTaskbar: true,
+      webPreferences: {
+        session: session.defaultSession,
+        sandbox: true,
+        contextIsolation: true,
+        nodeIntegration: false,
+        enablePreferredSizeMode: true,
+      },
+    });
+
+    this.extensionRuntime?.registerPopup(this.extensionPopup.webContents);
+
+    // Position at top-right of parent, below title bar
+    const parentBounds = parent.getBounds();
+    this.extensionPopup.setBounds({
+      x: parentBounds.x + parentBounds.width - 400 - 8,
+      y: parentBounds.y + 40,
+      width: 400,
+      height: 600,
+    });
+
+    // Auto-size based on content
+    // biome-ignore lint/suspicious/noExplicitAny: preferred-size-changed is not in Electron's TS defs
+    (this.extensionPopup.webContents as any).on(
+      "preferred-size-changed",
+      (_event: unknown, size: { width: number; height: number }) => {
+        if (this.extensionPopup && !this.extensionPopup.isDestroyed()) {
+          const w = Math.min(800, Math.max(100, size.width));
+          const h = Math.min(600, Math.max(100, size.height));
+          this.extensionPopup.setContentSize(w, h);
+          // Re-position to keep right-aligned
+          const pb = parent.getBounds();
+          this.extensionPopup.setBounds({
+            x: pb.x + pb.width - w - 8,
+            y: pb.y + 40,
+            width: w,
+            height: h,
+          });
+        }
+      },
+    );
+
+    // Preserve the extension origin and Electron runtime/storage/content-script APIs.
+    const popupUrl = `chrome-extension://${extensionId}/${popupRelativePath.replace(/^\//, "")}`;
+    this.extensionPopup.loadURL(popupUrl);
+
+    this.extensionPopup.webContents.once("did-finish-load", () => {
+      if (this.extensionPopup && !this.extensionPopup.isDestroyed()) {
+        this.extensionPopup.show();
+        this.extensionPopup.focus();
+
+        // Register blur-to-close AFTER showing, with a short delay so the
+        // initial focus transfer doesn't immediately trigger it.
+        setTimeout(() => {
+          if (this.extensionPopup && !this.extensionPopup.isDestroyed()) {
+            this.extensionPopup.on("blur", () => {
+              if (
+                this.extensionPopup &&
+                !this.extensionPopup.isDestroyed() &&
+                !this.extensionPopup.webContents.isDevToolsOpened()
+              ) {
+                this.extensionPopup.close();
+              }
+            });
+          }
+        }, 200);
+      }
+    });
+
+    this.extensionPopup.on("closed", () => {
+      this.extensionPopup = null;
+    });
+  }
+
+  getUserDataPath(): string {
+    return app.getPath("userData");
   }
 }

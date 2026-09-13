@@ -80,6 +80,20 @@ export function createMockPlatform(overrides: Partial<Platform> = {}): Platform 
     copyImageAt: vi.fn(),
     downloadUrl: vi.fn(),
     executeJavaScript: vi.fn(async () => undefined),
+    clearExtensionCodeCache: vi.fn(async () => {}),
+    loadExtension: vi.fn(async (p: string) => ({
+      id: p.split("/").pop() ?? "mock-ext",
+      name: "Mock Extension",
+      version: "1.0.0",
+      path: p,
+      manifest: {},
+    })),
+    removeExtension: vi.fn(),
+    getAllExtensions: vi.fn(() => []),
+    openExtensionPopup: vi.fn(),
+    setupExtensionBridge: vi.fn(),
+    setExtensionActiveTab: vi.fn(),
+    getUserDataPath: vi.fn(() => "/mock/userdata"),
     ...overrides,
   } as Platform;
 }

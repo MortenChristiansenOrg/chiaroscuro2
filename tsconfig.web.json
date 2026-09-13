@@ -34,7 +34,10 @@
     "src/features/domain-css/domain-settings-page.tsx",
     "src/features/pdf-reader/backends/**/*",
     "src/features/pdf-reader/components/**/*",
-    "src/features/**/*.contracts.ts"
+    "src/features/extensions/ExtensionToolbar.tsx",
+    "src/features/**/*.contracts.ts",
+    "src/features/extensions/*.tsx",
+    "src/features/extensions/extensions.styles.ts"
   ],
   "exclude": ["src/bus/ipc-main-bridge.ts", "src/bus/ipc-main-bridge.test.ts"]
 }

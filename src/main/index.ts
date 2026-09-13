@@ -32,6 +32,11 @@ import domainCss from "../features/domain-css/domain-css.main";
 import type { DomainCssCommands, DomainCssEvents } from "../features/domain-css/domain-css.shared";
 import downloads from "../features/downloads/downloads.main";
 import type { DownloadsCommands, DownloadsEvents } from "../features/downloads/downloads.shared";
+import extensions from "../features/extensions/extensions.main";
+import type {
+  ExtensionsCommands,
+  ExtensionsEvents,
+} from "../features/extensions/extensions.shared";
 import externalLink, { setupExternalLink } from "../features/external-link/external-link.main";
 import type {
   ExternalLinkCommands,
@@ -203,6 +208,7 @@ type AllCommands = MergeRegistries<
     ExternalLinkCommands,
     PermissionsCommands,
     PdfReaderCommands,
+    ExtensionsCommands,
     PipCommands,
   ]
 >;
@@ -235,6 +241,7 @@ type AllEvents = MergeRegistries<
     ExternalLinkEvents,
     PermissionsEvents,
     PdfReaderEvents,
+    ExtensionsEvents,
     PipEvents,
   ]
 >;
@@ -315,6 +322,7 @@ const deps = {
   getActiveTabId: () => activeTabId,
   setActiveTabId: (id: TabId | undefined) => {
     activeTabId = id;
+    platform.setExtensionActiveTab(id);
   },
   getActiveWorkspaceId: () => activeWorkspaceId,
   setActiveWorkspaceId: (id: WorkspaceId) => {
@@ -400,6 +408,13 @@ if (gotLock) {
     externalLink.register(deps);
     permissions.register(deps);
     pdfReader.register(deps);
+    // Set up extension API bridge (preloads + IPC) before extensions are loaded
+    platform.setupExtensionBridge({
+      create: (url, activate) => commands.send("tabs:create", { url, activate }),
+      activate: (tabId) => commands.send("tabs:activate", { tabId }),
+      close: (tabId) => commands.send("tabs:close", { tabId }),
+    });
+    extensions.register(deps);
     pip.register(deps);
 
     // Register debug state providers
@@ -497,6 +512,7 @@ if (gotLock) {
       await startLocalWebApp(deps);
       await externalLink.start?.(deps);
       await permissions.start?.(deps);
+      await extensions.start?.(deps);
       if (isAutomation)
         Object.assign((globalThis as unknown as { __testHooks: object }).__testHooks, {
           ready: true,
@@ -530,6 +546,7 @@ if (gotLock) {
   app.on("before-quit", (event) => {
     if (quitting) return;
     platform.deactivateShortcuts();
+    extensions.teardown?.();
     debugServer.teardown?.();
     localWebApp.teardown?.();
     installer.teardown?.();

@@ -199,6 +199,48 @@ export const routes: Route[] = [
     component: lazy(() => import("./pages/components/pdf-viewer.mdx")),
   },
   {
+    path: "/components/extensions-page",
+    title: "Extensions Page",
+    group: "Components",
+    component: lazy(() => import("./pages/components/extensions-page.mdx")),
+  },
+  {
+    path: "/components/extension-toolbar",
+    title: "Extension Toolbar",
+    group: "Components",
+    component: lazy(() => import("./pages/components/extension-toolbar.mdx")),
+  },
+  {
+    path: "/components/supported-extension-card",
+    title: "Supported Extension Card",
+    group: "Components",
+    component: lazy(() => import("./pages/components/supported-extension-card.mdx")),
+  },
+  {
+    path: "/components/installed-extension-card",
+    title: "Installed Extension Card",
+    group: "Components",
+    component: lazy(() => import("./pages/components/installed-extension-card.mdx")),
+  },
+  {
+    path: "/components/extension-permissions",
+    title: "Extension Permissions",
+    group: "Components",
+    component: lazy(() => import("./pages/components/extension-permissions.mdx")),
+  },
+  {
+    path: "/components/extension-icon",
+    title: "Extension Icon",
+    group: "Components",
+    component: lazy(() => import("./pages/components/extension-icon.mdx")),
+  },
+  {
+    path: "/components/extension-enabled-toggle",
+    title: "Extension Enabled Toggle",
+    group: "Components",
+    component: lazy(() => import("./pages/components/extension-enabled-toggle.mdx")),
+  },
+  {
     path: "/components/pip-player",
     title: "PiP Player",
     group: "Components",

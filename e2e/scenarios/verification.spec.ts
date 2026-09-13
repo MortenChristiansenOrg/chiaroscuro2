@@ -79,7 +79,7 @@ test("PDF toolbar zoom survives a full process restart", async ({ appSession: se
   expect(session.profile).toBe(oldProfile);
   // Select the restored PDF in the sidebar, rather than reopening it through an internal command.
   const pdfTarget = await session.target(
-    (target) => target.kind === "built-in" && target.url.startsWith("app:pdf-reader"),
+    (target) => target.kind === "built-in" && target.url.startsWith("/pdf-reader"),
   );
   await session.shell.locator(`[data-tab-id="${pdfTarget.tabId}"]`).click();
   await expect(session.shell.getByRole("button", { name: "Reset zoom", exact: true })).toHaveText(

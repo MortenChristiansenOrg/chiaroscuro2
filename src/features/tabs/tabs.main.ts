@@ -79,25 +79,35 @@ interface Deps {
   isPrivacyWorkspace: (id: WorkspaceId) => boolean;
 }
 
+const builtInRoutes = new Set([
+  "/settings",
+  "/tab-customization",
+  "/domain-settings",
+  "/pdf-reader",
+  "/extensions",
+]);
+const routeBase = (url: string) => url.split("?", 1)[0] ?? url;
+const isBuiltInUrl = (url: string) => builtInRoutes.has(routeBase(url));
+
 function resolveBuiltInTitle(url: string): string {
   const titles: Record<string, string> = {
-    "app:settings": "Settings",
-    "app:tab-customization": "Tab Customization",
+    "/settings": "Settings",
+    "/tab-customization": "Tab Customization",
   };
   if (titles[url]) return titles[url];
-  // Handle parameterized URLs like app:domain-settings?domain=github.com
+  // Handle parameterized URLs like /domain-settings?domain=github.com
   const qIndex = url.indexOf("?");
   if (qIndex !== -1) {
     const base = url.slice(0, qIndex);
-    if (base === "app:domain-settings") {
+    if (base === "/domain-settings") {
       const params = new URLSearchParams(url.slice(qIndex + 1));
       const domain = params.get("domain");
       return domain ? `Customization: ${domain}` : "Customization";
     }
-    if (base === "app:tab-customization") {
+    if (base === "/tab-customization") {
       return "Tab Customization";
     }
-    if (base === "app:pdf-reader") {
+    if (base === "/pdf-reader") {
       const params = new URLSearchParams(url.slice(qIndex + 1));
       const pdfUrl = params.get("url");
       if (pdfUrl) {
@@ -169,7 +179,7 @@ export default defineFeature<Deps>({
     // ── Persistence helpers ──────────────────────────────────────────
 
     function persistTab(tab: Tab): void {
-      if (tab.builtIn && !tab.url.startsWith("app:pdf-reader")) return;
+      if (tab.builtIn && routeBase(tab.url) !== "/pdf-reader") return;
       // Ephemeral tabs in privacy-mode workspaces are never persisted
       if (!tab.bookmarked && isPrivacyWorkspace(tab.workspaceId)) {
         removePersistedTab(tab.id);
@@ -328,7 +338,7 @@ export default defineFeature<Deps>({
       const workspaceId = payload.workspaceId ?? getActiveWorkspaceId();
       if (!workspaceId) throw new Error("No active workspace");
 
-      const isBuiltIn = payload.url.startsWith("app:");
+      const isBuiltIn = isBuiltInUrl(payload.url);
       const tabId = isBuiltIn
         ? (`builtin-${++builtInCounter}` as TabId)
         : await platform.createTab(windowId, payload.url);
@@ -738,7 +748,7 @@ export async function start(deps: Deps): Promise<void> {
   for (const pt of toRestore) {
     try {
       const tabId = pt.id as TabId;
-      const isBuiltIn = pt.url.startsWith("app:");
+      const isBuiltIn = isBuiltInUrl(pt.url);
 
       if (!isBuiltIn) {
         await platform.createTab(windowId, pt.url, tabId, { lazy: true });

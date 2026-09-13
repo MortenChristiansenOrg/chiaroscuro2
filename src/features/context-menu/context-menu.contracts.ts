@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { defineCommand } from "../../bus/contract";
+import { TabIdSchema } from "../../shared/types.contracts";
 import { CONTEXT_MENU_SHOW } from "./context-menu.shared";
 
 export const ContextMenuItemDataSchema = z.strictObject({
@@ -9,6 +10,7 @@ export const ContextMenuItemDataSchema = z.strictObject({
 });
 
 export const ContextMenuShowPayloadSchema = z.strictObject({
+  tabId: TabIdSchema.optional(),
   items: z.array(ContextMenuItemDataSchema),
   x: z.number(),
   y: z.number(),

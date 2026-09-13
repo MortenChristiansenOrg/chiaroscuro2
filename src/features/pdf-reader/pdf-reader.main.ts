@@ -44,7 +44,7 @@ const _state = featureState<{
 }>("pdf-reader");
 
 function isPdfUrl(url: string): boolean {
-  if (url.startsWith("app:")) return false;
+  if (url.startsWith("/")) return false;
   try {
     const pathname = new URL(url).pathname;
     return pathname.toLowerCase().endsWith(".pdf");
@@ -98,7 +98,7 @@ export default defineFeature<Deps>({
     }) {
       if (tab.builtIn || !isPdfUrl(tab.url) || processing.has(tab.id)) return;
       processing.add(tab.id);
-      const pdfUrl = `app:pdf-reader?url=${encodeURIComponent(tab.url)}`;
+      const pdfUrl = `/pdf-reader?url=${encodeURIComponent(tab.url)}`;
       const workspaceId = tab.workspaceId;
       const activate = getActiveTabId() === tab.id;
 

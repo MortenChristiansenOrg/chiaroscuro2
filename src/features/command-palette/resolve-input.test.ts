@@ -96,9 +96,9 @@ describe("resolveInputDetailed", () => {
     expect(result).toEqual({ type: "url", url: "https://example.com" });
   });
 
-  it("/settings → built-in app:settings URL", () => {
+  it("/settings → built-in page URL", () => {
     const result = resolveInputDetailed("/settings");
-    expect(result).toEqual({ type: "url", url: "app:settings" });
+    expect(result).toEqual({ type: "url", url: "/settings" });
   });
 
   it("single word → default search", () => {

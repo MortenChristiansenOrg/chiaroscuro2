@@ -1,0 +1,25 @@
+---
+title: Extensions Page
+---
+
+# Extensions Page
+
+Implementation: `src/features/extensions/extensions.renderer.tsx` (`ExtensionsPage`).
+
+The built-in Extensions page opens through the command palette. It offers official Bitwarden installation and complete lifecycle management, with a visible support boundary.
+
+## Composition
+
+- `PageHeader`: existing settings heading with puzzle-piece icon.
+- [SupportedExtensionCard](/components/supported-extension-card): shown before installation.
+- [InstalledExtensionCard](/components/installed-extension-card): installed or pending package, state, updates and removal confirmation.
+- [ExtensionPermissions](/components/extension-permissions): initial and expanded permission review.
+- [ExtensionIcon](/components/extension-icon): installed branding, including while disabled.
+
+## Layout and states
+
+Uses the settings page's dark content background, 1.5rem by 2rem content padding, 1rem card spacing and scrolling content. Cards use `--card`, `--border`, `--radius-sm`, and `--text-sm`. Secondary information uses `--content-text-secondary`.
+
+Installation downloads a package for review. Approval installs it; updates activate on the next complete browser start. Status shows busy, not running, enabled, disabled, pending review, ready after restart, last successful update check, or an actionable error. Removal requires confirmation and explains retention of local vault data.
+
+All controls are native buttons, labels, checkboxes and details elements. Icons are decorative. Errors use alerts and changing progress uses status announcements. Keyboard focus follows visual order.
