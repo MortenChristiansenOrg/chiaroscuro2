@@ -7,6 +7,10 @@ api.storage.session.onChanged.addListener((changes) => {
   if (changes.unlock?.newValue) void api.runtime.sendMessage({ stateReady: true });
 });
 api.runtime.onMessage.addListener((message, _sender, respond) => {
+  if (message.ready) {
+    respond("ready");
+    return;
+  }
   if (!message.fill) return;
   (async () => {
     const [tab] = await api.tabs.query({ active: true, currentWindow: true });

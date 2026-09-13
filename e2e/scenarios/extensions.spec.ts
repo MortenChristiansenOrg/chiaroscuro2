@@ -2,7 +2,7 @@ import fs from "node:fs/promises";
 import http from "node:http";
 import os from "node:os";
 import path from "node:path";
-import { expect, test } from "@playwright/test";
+import { expect, type Page, test } from "@playwright/test";
 import { unpackedExtensionId } from "../../src/platform/extension-identity";
 import { AppSession } from "../automation/session";
 
@@ -22,6 +22,18 @@ test("MV3 worker observes vault state, fills the active tab and retains only dur
   if (!address || typeof address === "string") throw new Error("Missing fixture listener");
   const base = `http://127.0.0.1:${address.port}`;
   const extensionId = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+  const workerReady = async (popup: Page) => {
+    const ready = await popup.evaluate(async () => {
+      const api = (
+        globalThis as unknown as {
+          chrome: { runtime: { sendMessage(message: unknown): Promise<unknown> } };
+        }
+      ).chrome;
+      return api.runtime.sendMessage({ ready: true });
+    });
+    expect(ready).toBe("ready");
+  };
+
   try {
     app.profile = await fs.mkdtemp(path.join(os.tmpdir(), "chiaroscuro-verify-extensions-"));
     await fs.cp(
@@ -82,6 +94,17 @@ test("MV3 worker observes vault state, fills the active tab and retains only dur
       }),
     );
     await app.launch();
+    // Subscribe before creating the tab whose activation event is under test.
+    // Native extension loading can resolve before an MV3 worker finishes startup.
+    await app.command("extensions:open-popup", { extensionId });
+    const initialPopup = await app.page(
+      await app.target(
+        (target) =>
+          target.url.startsWith("chrome-extension:") && target.url.endsWith("/popup.html"),
+      ),
+    );
+    await workerReady(initialPopup);
+    await initialPopup.close();
     const fill = async (name: string, count: number) => {
       await app.command("tabs:create", { url: `${base}/${name}` });
       const tab = await app.target((target) => target.url === `${base}/${name}`);
@@ -182,6 +205,7 @@ test("MV3 worker observes vault state, fills the active tab and retains only dur
           target.url.startsWith("chrome-extension:") && target.url.endsWith("/popup.html"),
       ),
     );
+    await workerReady(popup);
     const state = await popup.evaluate(async () => {
       const api = (
         globalThis as unknown as {
