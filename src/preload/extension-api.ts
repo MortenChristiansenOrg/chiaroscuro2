@@ -126,7 +126,9 @@ if (typeof extensionId === "string" && /^[a-p]{32}$/.test(extensionId)) {
         };
       }
       function api(name: string, methods: string[], events: string[]) {
-        chrome[name] = { ...chrome[name] };
+        // Chromium can refresh its lazy namespace properties after startup.
+        // Patch its cached API object in place so those refreshes retain our methods.
+        chrome[name] ??= {};
         for (const method of methods) chrome[name][method] = call(`${name}.${method}`);
         for (const namePart of events) chrome[name][namePart] = event(`${name}.${namePart}`);
       }
@@ -169,171 +171,172 @@ if (typeof extensionId === "string" && /^[a-p]{32}$/.test(extensionId)) {
       // Electron does not deliver native storage change events to MV3 workers.
       // Keep Chromium's storage, including in-memory session keys, and forward
       // invalidations. Workers re-read authoritative values to deduplicate signals.
-      const changed = event("storage.workerChanged");
-      if (typeof root.document === "undefined") {
-        const globalChanged = event("storage.onChanged");
-        chrome.storage.onChanged = globalChanged;
-        const known = new Map<string, string | undefined>();
-        let pending = Promise.resolve();
-        const areas = new Map<
-          string,
-          { get: (keys: unknown) => Promise<Record<string, unknown>> }
-        >();
-        for (const name of ["local", "session"]) {
-          const nativeArea = chrome.storage[name];
-          if (!nativeArea) continue;
-          // Native StorageArea.onChanged is a getter; assigning it has no effect.
-          const area = Object.fromEntries(
-            Object.keys(nativeArea).map((key) => [
-              key,
-              typeof nativeArea[key] === "function"
-                ? nativeArea[key].bind(nativeArea)
-                : nativeArea[key],
-            ]),
-          );
-          chrome.storage[name] = area;
-          const get = nativeArea.get.bind(nativeArea);
-          areas.set(name, { get });
-          area.onChanged = event(`storage.${name}.onChanged`);
-          for (const operation of ["set", "remove", "clear"]) {
-            const native = area[operation].bind(area);
-            area[operation] = (...args: unknown[]) => {
-              const callback =
-                typeof args.at(-1) === "function" ? (args.pop() as () => void) : undefined;
-              const promise = (async () => {
-                const keys =
-                  operation === "set"
-                    ? Object.keys(args[0] as object)
-                    : operation === "remove"
-                      ? args[0]
-                      : null;
-                const before = await get(keys);
-                await native(...args);
-                const after = await get(keys);
-                const changes = Object.fromEntries(
-                  [...new Set([...Object.keys(before), ...Object.keys(after)])]
-                    .filter((key) => JSON.stringify(before[key]) !== JSON.stringify(after[key]))
-                    .map((key) => [
-                      key,
-                      {
-                        ...(key in before ? { oldValue: before[key] } : {}),
-                        ...(key in after ? { newValue: after[key] } : {}),
-                      },
-                    ]),
-                );
-                if (Object.keys(changes).length)
-                  await bridge.invoke("storage.changed", [changes, name]);
-              })();
-              if (!callback) return promise;
-              promise.then(callback, (error: Error) => {
-                lastError = { message: error.message };
-                try {
-                  callback();
-                } finally {
-                  lastError = undefined;
-                }
-              });
-              return undefined;
-            };
-          }
-        }
-        changed.addListener((raw, areaName) => {
-          const name = String(areaName),
-            area = areas.get(name);
-          if (!area) return;
-          const changes = raw as Record<string, { oldValue?: unknown; newValue?: unknown }>;
-          pending = pending
-            .then(async () => {
-              const current = await area.get(Object.keys(changes));
-              const update: Record<string, { oldValue?: unknown; newValue?: unknown }> = {};
-              for (const [key, change] of Object.entries(changes)) {
-                const cacheKey = `${name}:${key}`,
-                  value = JSON.stringify(current[key]);
-                const previous = known.has(cacheKey)
-                  ? known.get(cacheKey)
-                  : JSON.stringify(change.oldValue);
-                known.set(cacheKey, value);
-                if (value === previous) continue;
-                update[key] = {
-                  ...(previous !== undefined ? { oldValue: JSON.parse(previous) } : {}),
-                  ...(key in current ? { newValue: current[key] } : {}),
-                };
-              }
-              if (!Object.keys(update).length) return;
-              dispatchEvent(`storage.${name}.onChanged`, [update]);
-              dispatchEvent("storage.onChanged", [update, name]);
-            })
-            .catch(() => {
-              /* A removed extension cannot read storage. */
-            });
-        });
-        if (root.browser?.storage) {
-          root.browser.storage.onChanged = chrome.storage.onChanged;
+      if (chrome.storage) {
+        const changed = event("storage.workerChanged");
+        if (typeof root.document === "undefined") {
+          const globalChanged = event("storage.onChanged");
+          Object.defineProperty(chrome.storage, "onChanged", {
+            configurable: true,
+            writable: true,
+            value: globalChanged,
+          });
+          const known = new Map<string, string | undefined>();
+          let pending = Promise.resolve();
+          const areas = new Map<
+            string,
+            { get: (keys: unknown) => Promise<Record<string, unknown>> }
+          >();
           for (const name of ["local", "session"]) {
-            root.browser.storage[name] = chrome.storage[name];
+            const nativeArea = chrome.storage[name];
+            if (!nativeArea) continue;
+            // Native StorageArea.onChanged is a getter; redefine it on the original object.
+            const area = nativeArea;
+            chrome.storage[name] = area;
+            const get = nativeArea.get.bind(nativeArea);
+            areas.set(name, { get });
+            Object.defineProperty(area, "onChanged", {
+              configurable: true,
+              writable: true,
+              value: event(`storage.${name}.onChanged`),
+            });
+            for (const operation of ["set", "remove", "clear"]) {
+              const native = area[operation].bind(area);
+              area[operation] = (...args: unknown[]) => {
+                const callback =
+                  typeof args.at(-1) === "function" ? (args.pop() as () => void) : undefined;
+                const promise = (async () => {
+                  const keys =
+                    operation === "set"
+                      ? Object.keys(args[0] as object)
+                      : operation === "remove"
+                        ? args[0]
+                        : null;
+                  const before = await get(keys);
+                  await native(...args);
+                  const after = await get(keys);
+                  const changes = Object.fromEntries(
+                    [...new Set([...Object.keys(before), ...Object.keys(after)])]
+                      .filter((key) => JSON.stringify(before[key]) !== JSON.stringify(after[key]))
+                      .map((key) => [
+                        key,
+                        {
+                          ...(key in before ? { oldValue: before[key] } : {}),
+                          ...(key in after ? { newValue: after[key] } : {}),
+                        },
+                      ]),
+                  );
+                  if (Object.keys(changes).length)
+                    await bridge.invoke("storage.changed", [changes, name]);
+                })();
+                if (!callback) return promise;
+                promise.then(callback, (error: Error) => {
+                  lastError = { message: error.message };
+                  try {
+                    callback();
+                  } finally {
+                    lastError = undefined;
+                  }
+                });
+                return undefined;
+              };
+            }
           }
-        }
-      } else {
-        chrome.storage.onChanged.addListener((changes: unknown, area: string) => {
-          if (area === "local" || area === "session") {
-            dispatchEvent(`storage.${area}.onChanged`, [changes]);
-            void bridge.invoke("storage.changed", [changes, area]);
-          }
-        });
-        for (const name of ["local", "session"]) {
-          const nativeArea = chrome.storage[name];
-          const area = Object.fromEntries(
-            Object.keys(nativeArea).map((key) => [
-              key,
-              typeof nativeArea[key] === "function"
-                ? nativeArea[key].bind(nativeArea)
-                : nativeArea[key],
-            ]),
-          );
-          // Normalize per-area events from the native global stream in documents too.
-          area.onChanged = event(`storage.${name}.onChanged`);
-          for (const operation of ["set", "remove", "clear"]) {
-            area[operation] = (...args: unknown[]) => {
-              const callback =
-                typeof args.at(-1) === "function" ? (args.pop() as () => void) : undefined;
-              const promise = (async () => {
-                await nativeArea[operation](...args);
-                // Drain native reads queued by onChanged listeners before resolving
-                // the write, so navigation guards observe the updated state.
-                const keys =
-                  operation === "set"
-                    ? Object.keys(args[0] as object)
-                    : operation === "remove"
-                      ? args[0]
-                      : null;
-                await nativeArea.get(keys);
-              })();
-              if (!callback) return promise;
-              promise.then(callback, (error: Error) => {
-                lastError = { message: error.message };
-                try {
-                  callback();
-                } finally {
-                  lastError = undefined;
+          changed.addListener((raw, areaName) => {
+            const name = String(areaName),
+              area = areas.get(name);
+            if (!area) return;
+            const changes = raw as Record<string, { oldValue?: unknown; newValue?: unknown }>;
+            pending = pending
+              .then(async () => {
+                const current = await area.get(Object.keys(changes));
+                const update: Record<string, { oldValue?: unknown; newValue?: unknown }> = {};
+                for (const [key, change] of Object.entries(changes)) {
+                  const cacheKey = `${name}:${key}`,
+                    value = JSON.stringify(current[key]);
+                  const previous = known.has(cacheKey)
+                    ? known.get(cacheKey)
+                    : JSON.stringify(change.oldValue);
+                  known.set(cacheKey, value);
+                  if (value === previous) continue;
+                  update[key] = {
+                    ...(previous !== undefined ? { oldValue: JSON.parse(previous) } : {}),
+                    ...(key in current ? { newValue: current[key] } : {}),
+                  };
                 }
+                if (!Object.keys(update).length) return;
+                dispatchEvent(`storage.${name}.onChanged`, [update]);
+                dispatchEvent("storage.onChanged", [update, name]);
+              })
+              .catch(() => {
+                /* A removed extension cannot read storage. */
               });
-              return undefined;
-            };
+          });
+          if (root.browser?.storage) {
+            root.browser.storage.onChanged = chrome.storage.onChanged;
+            for (const name of ["local", "session"]) {
+              root.browser.storage[name] = chrome.storage[name];
+            }
           }
-          chrome.storage[name] = area;
-          if (root.browser?.storage) root.browser.storage[name] = area;
+        } else {
+          chrome.storage.onChanged.addListener((changes: unknown, area: string) => {
+            if (area === "local" || area === "session") {
+              dispatchEvent(`storage.${area}.onChanged`, [changes]);
+              void bridge.invoke("storage.changed", [changes, area]);
+            }
+          });
+          for (const name of ["local", "session"]) {
+            const nativeArea = chrome.storage[name];
+            const area = nativeArea;
+            // Normalize per-area events from the native global stream in documents too.
+            Object.defineProperty(area, "onChanged", {
+              configurable: true,
+              writable: true,
+              value: event(`storage.${name}.onChanged`),
+            });
+            for (const operation of ["set", "remove", "clear"]) {
+              const native = nativeArea[operation].bind(nativeArea);
+              area[operation] = (...args: unknown[]) => {
+                const callback =
+                  typeof args.at(-1) === "function" ? (args.pop() as () => void) : undefined;
+                const promise = (async () => {
+                  await native(...args);
+                  // Drain native reads queued by onChanged listeners before resolving
+                  // the write, so navigation guards observe the updated state.
+                  const keys =
+                    operation === "set"
+                      ? Object.keys(args[0] as object)
+                      : operation === "remove"
+                        ? args[0]
+                        : null;
+                  await nativeArea.get(keys);
+                })();
+                if (!callback) return promise;
+                promise.then(callback, (error: Error) => {
+                  lastError = { message: error.message };
+                  try {
+                    callback();
+                  } finally {
+                    lastError = undefined;
+                  }
+                });
+                return undefined;
+              };
+            }
+            chrome.storage[name] = area;
+            if (root.browser?.storage) root.browser.storage[name] = area;
+          }
         }
+        // There is no enterprise policy provider. Managed storage is empty and read-only.
+        chrome.storage.managed = {
+          get: call("storage.managed.get"),
+          getBytesInUse: call("storage.managed.getBytesInUse"),
+          set: call("storage.managed.write"),
+          remove: call("storage.managed.write"),
+          clear: call("storage.managed.write"),
+          onChanged: event("storage.managed.onChanged"),
+        };
+        if (root.browser?.storage) root.browser.storage.managed = chrome.storage.managed;
       }
-      // There is no enterprise policy provider. Managed storage is empty and read-only.
-      chrome.storage.managed = {
-        get: call("storage.managed.get"),
-        getBytesInUse: call("storage.managed.getBytesInUse"),
-        set: call("storage.managed.write"),
-        remove: call("storage.managed.write"),
-        clear: call("storage.managed.write"),
-        onChanged: event("storage.managed.onChanged"),
-      };
-      if (root.browser?.storage) root.browser.storage.managed = chrome.storage.managed;
       // This browser has no competing built-in password/card/address autofill.
       // Report these settings as disabled and not controllable, never pretend to change them.
       chrome.privacy ??= {};
@@ -363,7 +366,7 @@ if (typeof extensionId === "string" && /^[a-p]{32}$/.test(extensionId)) {
           "commands",
           "privacy",
         ]) {
-          root.browser[name] = { ...root.browser[name], ...chrome[name] };
+          root.browser[name] = chrome[name];
         }
       }
     },

@@ -17,6 +17,8 @@ document.querySelector("#fill").addEventListener("click", async () => {
     });
     const unlock = crypto.randomUUID();
     await api.storage.session.set({ unlock });
+    // Deliberately assert at write completion: awaiting the listener here would
+    // hide the stale navigation-guard regression this adapter must prevent.
     if (renderedUnlock !== unlock) throw new Error("Navigation would see stale lock state");
     await stateReady;
     const result = await api.runtime.sendMessage({ fill: true });

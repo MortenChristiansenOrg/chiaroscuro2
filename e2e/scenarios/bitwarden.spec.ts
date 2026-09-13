@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { expect, type Page, test } from "@playwright/test";
 import { AppSession } from "../automation/session";
+import { BitwardenPopupPage } from "../pages/bitwarden-popup.page";
 
 // Opt-in acceptance against a disposable local Vaultwarden account. Never use a personal vault.
 const extensionDirectory = process.env.BITWARDEN_TEST_EXTENSION;
@@ -83,22 +84,13 @@ test("official Bitwarden password lifecycle", async ({ playwright: _playwright }
     await app.launch();
     await app.command("tabs:create", { url: "http://127.0.0.1:18328/alpha" });
     popup = await openPopup();
-    await popup.getByRole("button", { name: "Log in", exact: true }).click();
-    await popup.getByRole("button", { name: "bitwarden.com", exact: true }).click();
-    await popup.getByRole("menuitem", { name: "self-hosted", exact: true }).click();
-    await popup
-      .getByRole("textbox", { name: "Server URL", exact: true })
-      .fill("https://localhost:18329");
-    await popup.getByRole("button", { name: "Save", exact: true }).click();
-    await popup.getByRole("textbox", { name: /Email address/ }).fill(email);
-    await popup.getByRole("button", { name: "Continue", exact: true }).click();
-    await popup.getByLabel("Master password", { exact: false }).fill(password);
-    await popup.getByRole("button", { name: /^Log in(?: with master password)?$/ }).click();
-    if (process.env.BITWARDEN_TEST_TOTP === "1") {
-      await popup.getByRole("textbox", { name: /Verification code/ }).fill(totp());
-      await popup.getByRole("button", { name: "Continue logging in", exact: true }).click();
-    }
-    await popup.getByText("Fixture Alpha", { exact: true }).first().waitFor({ timeout: 20_000 });
+    await new BitwardenPopupPage(popup).login(
+      email,
+      password,
+      "https://localhost:18329",
+      process.env.BITWARDEN_TEST_TOTP === "1" ? totp : undefined,
+    );
+    await new BitwardenPopupPage(popup).waitForItem("Fixture Alpha");
     if (previousDirectory) {
       const identity = new URL(popup.url()).hostname;
       const current = JSON.parse(
@@ -122,40 +114,20 @@ test("official Bitwarden password lifecycle", async ({ playwright: _playwright }
       popup = undefined;
       popup = await openPopup();
       expect(new URL(popup.url()).hostname).toBe(identity);
-      await popup.getByLabel("Master password", { exact: false }).fill(password);
-      await popup.getByRole("button", { name: "Unlock", exact: true }).click();
-      await popup.getByText("Fixture Alpha", { exact: true }).first().waitFor();
+      await new BitwardenPopupPage(popup).unlock(password);
+      await new BitwardenPopupPage(popup).waitForItem("Fixture Alpha");
     }
 
-    await popup
-      .getByRole("button", { name: "View item - Fixture Alpha - alpha-user", exact: true })
-      .first()
-      .click();
+    const vault = new BitwardenPopupPage(popup);
     const updatedPassword = `alpha-updated-${Date.now()}`;
-    await popup.getByRole("button", { name: "Edit", exact: true }).click();
-    await popup.getByRole("textbox", { name: "Password", exact: true }).fill(updatedPassword);
-    await popup.getByRole("button", { name: "Save", exact: true }).click();
-    await popup.getByRole("heading", { name: "View Login", exact: true }).waitFor();
-    await popup.getByRole("button", { name: "Back", exact: true }).click();
-    await popup.getByRole("link", { name: "Generator", exact: true }).click();
-    await popup.getByRole("button", { name: "Generate password", exact: true }).click();
-    expect((await popup.locator("code").allTextContents()).join("").length).toBeGreaterThanOrEqual(
-      14,
+    await vault.editPassword("Fixture Alpha", "alpha-user", updatedPassword);
+    expect((await vault.generatePassword()).length).toBeGreaterThanOrEqual(14);
+    await vault.createLogin(
+      `Acceptance ${Date.now()}`,
+      "created-user",
+      "created-disposable-password",
+      "https://example.test",
     );
-    await popup.getByRole("link", { name: "Vault", exact: true }).click();
-    await popup.getByRole("button", { name: /New$/ }).click();
-    await popup.getByRole("menuitem", { name: "Login", exact: true }).click();
-    const createdName = `Acceptance ${Date.now()}`;
-    await popup.getByRole("textbox", { name: /^Item name/ }).fill(createdName);
-    await popup.getByRole("textbox", { name: "Username", exact: true }).fill("created-user");
-    await popup
-      .getByRole("textbox", { name: "Password", exact: true })
-      .fill("created-disposable-password");
-    await popup
-      .getByRole("textbox", { name: "Website (URI)", exact: true })
-      .fill("https://example.test");
-    await popup.getByRole("button", { name: "Save", exact: true }).click();
-    await popup.getByRole("heading", { name: createdName, exact: true }).waitFor();
     // Switching tabs resets Bitwarden's popup route cache to its vault view.
     for (const [url, name, user, secret, embedded] of [
       [
@@ -171,22 +143,21 @@ test("official Bitwarden password lifecycle", async ({ playwright: _playwright }
       await app.command("tabs:create", { url });
       const page = await app.page(await app.target((target) => target.url === url));
       popup = await openPopup();
-      await popup.getByRole("button", { name: `Autofill - ${name}`, exact: true }).click();
+      await new BitwardenPopupPage(popup).fill(name);
       const form = embedded ? page.frameLocator("iframe") : page;
       await expect(form.getByLabel("Username")).toHaveValue(user);
       await expect(form.getByLabel("Password", { exact: true })).toHaveValue(secret);
     }
     await app.command("tabs:create", { url: "http://127.0.0.2:18328/unmatched" });
     popup = await openPopup();
-    await popup.getByRole("heading", { name: "Vault", exact: true }).waitFor();
-    await expect(popup.getByRole("button", { name: /^Autofill - Fixture/ })).toHaveCount(0);
+    await new BitwardenPopupPage(popup).waitForVault();
+    await expect(new BitwardenPopupPage(popup).fixtureSuggestions).toHaveCount(0);
     await app.restart();
     popup = undefined;
     await app.command("tabs:create", { url: "http://localhost:18328/beta?restart" });
     popup = await openPopup();
-    await popup.getByLabel("Master password", { exact: false }).fill(password);
-    await popup.getByRole("button", { name: "Unlock", exact: true }).click();
-    await popup.getByRole("button", { name: "Autofill - Fixture Beta", exact: true }).click();
+    await new BitwardenPopupPage(popup).unlock(password);
+    await new BitwardenPopupPage(popup).fill("Fixture Beta");
     const restored = await app.page(
       await app.target((target) => target.url === "http://localhost:18328/beta?restart"),
     );

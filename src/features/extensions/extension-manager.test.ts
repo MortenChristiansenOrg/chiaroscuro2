@@ -158,6 +158,26 @@ describe("extension lifecycle", () => {
     ).toBe("1.0");
     expect((await store.getSetting<ExtensionRecord[]>("extensions"))?.[0]?.version).toBe("1.0");
   });
+  it("reports no installed version after an interrupted first installation", async () => {
+    const { manager, make } = await setup();
+    await manager.check(id);
+    const previous = structuredClone(manager.records[0]);
+    if (!previous) throw new Error("No pending installation");
+    manager.stop();
+    await fs.writeFile(
+      path.join(manager.root, `.${id}.transaction.json`),
+      JSON.stringify({
+        previous,
+        next: { ...previous, installed: true, version: "1.0" },
+        hadCurrent: false,
+      }),
+    );
+    const restarted = make();
+    await restarted.start();
+    expect(restarted.records[0]?.installed).toBe(false);
+    expect(restarted.records[0]?.error).toContain("No version is installed");
+    expect(restarted.loaded.has(id)).toBe(false);
+  });
   it("leaves working code intact on network or persistence failures", async () => {
     const { manager, fetch, store, remove } = await setup();
     await install(manager);

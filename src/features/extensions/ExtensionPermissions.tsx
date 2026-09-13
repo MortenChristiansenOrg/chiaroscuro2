@@ -10,8 +10,8 @@ export function ExtensionPermissions({ extension }: { extension: InstalledExtens
         Review {extension.installed === false ? "installation" : "permissions"}
       </p>
       <p>
-        Bitwarden can read and change website content, access your clipboard, and store vault data
-        on this device. Only approve if you trust Bitwarden.
+        Review the requested access listed below for {extension.name}. Only approve if you trust
+        this extension with that access.
       </p>
       <details>
         <summary>

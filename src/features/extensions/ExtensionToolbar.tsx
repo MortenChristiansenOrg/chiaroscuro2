@@ -20,7 +20,7 @@ const btnStyle: React.CSSProperties = {
 const btnClass =
   "bg-transparent text-glass-text-muted hover:bg-glass-hover hover:text-glass-text-hover active:bg-glass-pressed active:text-glass-text-pressed";
 
-function ExtensionButton({ ext }: { ext: InstalledExtension }) {
+function ExtensionButton({ ext, expanded }: { ext: InstalledExtension; expanded: boolean }) {
   const [iconFailed, setIconFailed] = useState(false);
   const hasPopup = !!ext.action?.popup;
 
@@ -35,7 +35,7 @@ function ExtensionButton({ ext }: { ext: InstalledExtension }) {
       type="button"
       style={btnStyle}
       className={btnClass}
-      tabIndex={-1}
+      tabIndex={expanded ? 0 : -1}
       onClick={handleClick}
       aria-label={ext.action?.title || ext.name}
       data-tip={ext.action?.title || ext.name}
@@ -59,7 +59,7 @@ export function ExtensionToolbar() {
   const [open, setOpen] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const withActions = extensions.filter((e) => e.enabled && e.action);
+  const withActions = extensions.filter((e) => e.enabled && e.action?.popup);
   if (withActions.length === 0) return null;
 
   return (
@@ -67,6 +67,7 @@ export function ExtensionToolbar() {
       {/* Extension buttons — slide in from right */}
       <div
         className="flex items-center overflow-hidden"
+        aria-hidden={!open}
         style={{
           gap: "0.0625rem",
           maxWidth: open ? `${withActions.length * 29}px` : 0,
@@ -76,7 +77,7 @@ export function ExtensionToolbar() {
         }}
       >
         {withActions.map((ext) => (
-          <ExtensionButton key={ext.id} ext={ext} />
+          <ExtensionButton key={ext.id} ext={ext} expanded={open} />
         ))}
       </div>
 
@@ -85,7 +86,6 @@ export function ExtensionToolbar() {
         type="button"
         style={btnStyle}
         className={btnClass}
-        tabIndex={-1}
         onClick={() => setOpen((prev) => !prev)}
         aria-label="Extensions"
         data-tip="Extensions"

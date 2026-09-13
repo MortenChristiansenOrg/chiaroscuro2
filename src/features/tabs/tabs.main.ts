@@ -79,6 +79,16 @@ interface Deps {
   isPrivacyWorkspace: (id: WorkspaceId) => boolean;
 }
 
+const builtInRoutes = new Set([
+  "/settings",
+  "/tab-customization",
+  "/domain-settings",
+  "/pdf-reader",
+  "/extensions",
+]);
+const routeBase = (url: string) => url.split("?", 1)[0] ?? url;
+const isBuiltInUrl = (url: string) => builtInRoutes.has(routeBase(url));
+
 function resolveBuiltInTitle(url: string): string {
   const titles: Record<string, string> = {
     "/settings": "Settings",
@@ -169,7 +179,7 @@ export default defineFeature<Deps>({
     // ── Persistence helpers ──────────────────────────────────────────
 
     function persistTab(tab: Tab): void {
-      if (tab.builtIn && !tab.url.startsWith("/pdf-reader")) return;
+      if (tab.builtIn && routeBase(tab.url) !== "/pdf-reader") return;
       // Ephemeral tabs in privacy-mode workspaces are never persisted
       if (!tab.bookmarked && isPrivacyWorkspace(tab.workspaceId)) {
         removePersistedTab(tab.id);
@@ -328,7 +338,7 @@ export default defineFeature<Deps>({
       const workspaceId = payload.workspaceId ?? getActiveWorkspaceId();
       if (!workspaceId) throw new Error("No active workspace");
 
-      const isBuiltIn = payload.url.startsWith("/");
+      const isBuiltIn = isBuiltInUrl(payload.url);
       const tabId = isBuiltIn
         ? (`builtin-${++builtInCounter}` as TabId)
         : await platform.createTab(windowId, payload.url);
@@ -738,7 +748,7 @@ export async function start(deps: Deps): Promise<void> {
   for (const pt of toRestore) {
     try {
       const tabId = pt.id as TabId;
-      const isBuiltIn = pt.url.startsWith("/");
+      const isBuiltIn = isBuiltInUrl(pt.url);
 
       if (!isBuiltIn) {
         await platform.createTab(windowId, pt.url, tabId, { lazy: true });

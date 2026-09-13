@@ -665,6 +665,7 @@ export class ExtensionRuntime {
         this.notifications.set(key, notification);
         notification.on("click", () => this.emit("notifications.onClicked", [id], extId));
         notification.on("close", () => {
+          if (this.notifications.get(key) !== notification) return;
           this.notifications.delete(key);
           this.emit("notifications.onClosed", [id, false], extId);
         });
@@ -674,9 +675,11 @@ export class ExtensionRuntime {
       case "notifications.clear": {
         const key = `${extId}:${z.string().parse(args[0])}`,
           notification = this.notifications.get(key);
-        notification?.close();
+        if (!notification) return false;
         this.notifications.delete(key);
-        return !!notification;
+        notification.close();
+        this.emit("notifications.onClosed", [key.slice(extId.length + 1), false], extId);
+        return true;
       }
       default:
         throw new Error(`Unsupported extension browser API: ${name}`);

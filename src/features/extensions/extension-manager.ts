@@ -402,7 +402,9 @@ export class ExtensionManager {
       pending: undefined,
       failedVersion: transaction.next.version,
       error:
-        "Installation was interrupted or failed. Previous version restored; check for updates to retry.",
+        transaction.previous.installed !== false && transaction.hadCurrent
+          ? "Installation was interrupted or failed. Previous version restored; check for updates to retry."
+          : "Installation was interrupted or failed. No version is installed; check for updates to retry.",
     };
     this.records = this.records.filter((record) => record.id !== id).concat(restored);
     await this.persist();

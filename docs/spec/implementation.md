@@ -47,6 +47,8 @@ has no dependency on `electron-chrome-extensions`.
   Preserve native vault storage, IndexedDB and cookies.
 - Keep vendor JavaScript unchanged. Loading an older installation removes only
   the identifiable bootstrap prepended by the original experiment.
+- Adapt native API objects in place: Chromium can refresh namespace getters after
+  startup, and replacement objects would lose the browser adapter.
 - Retain native runtime messaging, scripting, local storage and session storage.
   Session keys remain in memory and disappear on browser restart.
 - Supply browser tab/window operations and selected navigation, menu, permission

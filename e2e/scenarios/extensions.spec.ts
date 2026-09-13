@@ -64,7 +64,7 @@ test("MV3 worker observes vault state, fills the active tab and retains only dur
         manifest_version: 3,
         name: "Restricted fixture",
         version: "1.0.0",
-        permissions: ["storage"],
+        permissions: [],
         action: { default_popup: "popup.html" },
       }),
     );
@@ -88,12 +88,29 @@ test("MV3 worker observes vault state, fills the active tab and retains only dur
             name: "Restricted fixture",
             version: "1.0.0",
             enabled: true,
-            permissions: ["storage"],
+            permissions: [],
           },
         ],
       }),
     );
     await app.launch();
+    const disclosure = app.shell.getByRole("button", { name: "Extensions", exact: true });
+    await expect(disclosure).toHaveJSProperty("tabIndex", 0);
+    await expect(
+      app.shell.getByRole("button", { name: "Compatibility fixture", exact: true }),
+    ).toHaveCount(0);
+    await disclosure.focus();
+    await app.shell.keyboard.press("Enter");
+    await expect(disclosure).toHaveAttribute("aria-expanded", "true");
+    await expect(
+      app.shell.getByRole("button", { name: "Compatibility fixture", exact: true }),
+    ).toHaveJSProperty("tabIndex", 0);
+    await expect(
+      app.shell.getByRole("button", { name: "Compatibility fixture", exact: true }).locator(".."),
+    ).toHaveCSS("opacity", "1");
+    await app.shell.screenshot({ path: testInfo.outputPath("expanded-toolbar.png") });
+    await app.shell.keyboard.press("Enter");
+    await expect(disclosure).toHaveAttribute("aria-expanded", "false");
     // Subscribe before creating the tab whose activation event is under test.
     // Native extension loading can resolve before an MV3 worker finishes startup.
     await app.command("extensions:open-popup", { extensionId });
@@ -104,11 +121,17 @@ test("MV3 worker observes vault state, fills the active tab and retains only dur
       ),
     );
     await workerReady(initialPopup);
+    // Loading another extension may refresh Chromium’s lazy API namespaces.
+    await app.command("extensions:set-enabled", { extensionId: restrictedId, enabled: false });
+    await app.command("extensions:set-enabled", { extensionId: restrictedId, enabled: true });
+    await workerReady(initialPopup);
     await initialPopup.close();
     const fill = async (name: string, count: number) => {
       await app.command("tabs:create", { url: `${base}/${name}` });
       const tab = await app.target((target) => target.url === `${base}/${name}`);
       const page = await app.page(tab);
+      // Tab creation starts navigation asynchronously; fill only after the login form exists.
+      await expect(page.getByLabel("Password", { exact: true })).toBeVisible();
       expect(await page.evaluate(() => "__chiaroscuroExtensionBrowser" in globalThis)).toBe(false);
       const toggle = app.shell.getByRole("button", { name: "Extensions", exact: true });
       if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
@@ -160,6 +183,7 @@ test("MV3 worker observes vault state, fills the active tab and retains only dur
           activeTabId: tab.webContentsId,
           fills: count,
           frames: 1,
+          bindingsRetained: true,
         }),
       );
       await expect(page.getByLabel("Username")).toHaveValue(name);
@@ -185,11 +209,22 @@ test("MV3 worker observes vault state, fills the active tab and retains only dur
           };
         }
       ).__chiaroscuroExtensionBrowser;
+      const browser = (
+        globalThis as unknown as {
+          browser: {
+            privacy: {
+              services: { passwordSavingEnabled: { get(options: unknown): Promise<unknown> } };
+            };
+          };
+        }
+      ).browser;
       return {
+        privacy: await browser.privacy.services.passwordSavingEnabled.get({}),
         tabs: await bridge.invoke("tabs.query", [{}]),
         navigation: await bridge.invoke("webNavigation.getAllFrames", [{ tabId: 1 }]),
       };
     });
+    expect(permissions.privacy).toEqual({ value: false, levelOfControl: "not_controllable" });
     expect(permissions.navigation.ok).toBe(false);
     expect(permissions.tabs.ok).toBe(true);
     for (const tab of permissions.tabs.value as Record<string, unknown>[]) {

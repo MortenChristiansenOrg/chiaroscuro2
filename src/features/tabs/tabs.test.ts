@@ -87,6 +87,31 @@ describe("tabs commands", () => {
     vi.useRealTimers();
   });
 
+  it.each(["/unknown", "/pdf-reader-old", "/pdf-reader-old?url=file.pdf"])(
+    "treats unregistered route %s as a platform tab on creation and restore",
+    async (url) => {
+      const { commands, platform, dataStore, deps } = setup();
+      const id = await commands.send(TABS_CREATE, { url });
+      expect(platform.createTab).toHaveBeenCalledWith(WIN_ID, url);
+      expect((await commands.send(TABS_GET, { tabId: id }))?.builtIn).not.toBe(true);
+      expect(await dataStore.collection("tabs").findMany({})).toEqual(
+        expect.arrayContaining([expect.objectContaining({ url })]),
+      );
+      vi.mocked(platform.createTab).mockClear();
+      const restoredDeps = {
+        ...deps,
+        commands: new CommandBus<AllCommands>(),
+        events: new EventBus<AllEvents>(),
+      };
+      feature.register(restoredDeps);
+      const changed = vi.fn();
+      restoredDeps.events.on(TABS_LIST_CHANGED, changed);
+      await start(restoredDeps);
+      expect(platform.createTab).toHaveBeenCalledWith(WIN_ID, url, id, { lazy: true });
+      expect(changed.mock.calls.at(-1)?.[0].tabs[0]?.builtIn).not.toBe(true);
+    },
+  );
+
   describe("TABS_DUPLICATE", () => {
     it("creates a background copy in an inactive source workspace without changing its bookmark", async () => {
       const { commands, platform, getActiveTabId } = setup();
