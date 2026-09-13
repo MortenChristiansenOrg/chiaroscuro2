@@ -31,12 +31,21 @@ Sub-tabs keep the user's context by avoiding full tab switches for casual link-f
 - Only the topmost sub-tab in the stack is visible (previous sub-tabs are hidden behind it).
 - Sub-tabs must not obscure the command palette — the command palette's z-index takes priority.
 
+### Motion and interrupted transitions
+
+- Preserve the 200 ms centered bounds transition between 88% and full size, and the 200 ms backdrop fade.
+- Reduced-motion preferences make bounds/backdrop changes immediate and suppress action-button scaling.
+- Resize, hide, detach and close cancel pending bounds updates. An interrupted exit starts at the displayed geometry.
+- Order open/close/promote operations per parent; completing an old transition must not resurrect a closed child or disable a newly shown overlay.
+- Native animation and blur adoption is conditional on preserving these behaviors. See [the Electron 44.3.0 evaluation](../testing/native-view-evaluation.md).
+
 ### Sub-tab stack
 
 - Each parent tab has its own sub-tab stack (zero or more sub-tabs).
 - Opening a link from within a sub-tab pushes a new sub-tab onto the stack.
 - Closing the topmost sub-tab pops it and reveals the previous sub-tab (or the parent if stack is now empty).
-- Closing the parent tab closes all its sub-tabs.
+- Closing the parent tab closes its sub-tabs. A child that prevents closing is preserved as a standalone tab with the same page and unsaved state. Ownership is removed from the stack only after native destruction or successful adoption.
+- If adoption fails while no workspace is active, retain the child for recovery and retry when a workspace is selected.
 - Switching to a different parent tab hides that parent's sub-tab stack; switching back reveals it.
 
 ### Promotion

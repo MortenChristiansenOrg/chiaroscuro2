@@ -12,12 +12,14 @@ import {
   screen,
   session,
   shell,
+  systemPreferences,
   type WebContentsView,
   webContents,
 } from "electron";
 import type { Bounds, TabId, WindowId } from "../shared/types";
 import type { GithubSessionDiagnostics } from "./github-session-diagnostics";
-import { createTabView } from "./tab-view";
+import { TabBoundsAnimation } from "./tab-bounds-animation";
+import { closeTabContents, createTabView } from "./tab-view";
 import type { Platform, PlatformDownload } from "./types";
 
 const ALLOWED_SCHEMES_WEB = new Set(["http:", "https:", "about:", "data:"]);
@@ -61,6 +63,7 @@ box-shadow:0 4px 20px oklch(0 0 0/0.25),0 1px 3px oklch(0 0 0/0.15);
 cursor:pointer;display:flex;align-items:center;justify-content:center;
 transition:transform 200ms cubic-bezier(0.34,1.56,0.64,1);-webkit-font-smoothing:antialiased}
 button:hover{transform:scale(1.15)}button:active{transform:scale(0.95)}
+@media(prefers-reduced-motion:reduce){button{transition:none}button:hover,button:active{transform:none}}
 </style></head><body>
 <div id="backdrop"></div>
 <div id="btns" style="display:none">
@@ -69,7 +72,8 @@ button:hover{transform:scale(1.15)}button:active{transform:scale(0.95)}
 </div>
 <script>
 var bd=document.getElementById('backdrop'),btns=document.getElementById('btns');
-var pid=null,animId=null,D=200;
+var pid=null,animId=null,finishAnim=null,D=200;
+var reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
 function setParentTabId(id){pid=id}
 function positionButtons(fx,fy,fw,fh){
   var gap=12,btnH=108;
@@ -77,27 +81,31 @@ function positionButtons(fx,fy,fw,fh){
   btns.style.top=(fy+gap)+'px';
   btns.style.display='flex';
 }
-function cancelAnim(){if(animId){cancelAnimationFrame(animId);animId=null}}
+function cancelAnim(){if(animId){cancelAnimationFrame(animId);animId=null}if(finishAnim){var done=finishAnim;finishAnim=null;done()}}
 function enterAnimation(fx,fy,fw,fh){
   return new Promise(function(resolve){
     cancelAnim();
     positionButtons(fx,fy,fw,fh);
+    if(reducedMotion.matches){bd.style.opacity=1;resolve();return}
+    finishAnim=resolve;
     var start=performance.now();
     function tick(now){
       var t=Math.min((now-start)/D,1);
       bd.style.opacity=1-(1-t)*(1-t);
-      if(t<1){animId=requestAnimationFrame(tick)}else{animId=null;resolve()}
+      if(t<1){animId=requestAnimationFrame(tick)}else{animId=null;finishAnim=null;resolve()}
     }
     animId=requestAnimationFrame(tick);
   });
 }
 function exitAnimation(){
   return new Promise(function(resolve){
-    cancelAnim();var start=performance.now();
+    cancelAnim();
+    if(reducedMotion.matches){bd.style.opacity=0;btns.style.display='none';resolve();return}
+    finishAnim=resolve;var start=performance.now();
     function tick(now){
       var t=Math.min((now-start)/D,1);
       bd.style.opacity=1-t*t;
-      if(t<1){animId=requestAnimationFrame(tick)}else{animId=null;bd.style.opacity=0;btns.style.display='none';resolve()}
+      if(t<1){animId=requestAnimationFrame(tick)}else{animId=null;finishAnim=null;bd.style.opacity=0;btns.style.display='none';resolve()}
     }
     animId=requestAnimationFrame(tick);
   });
@@ -342,7 +350,8 @@ export class ElectronPlatform implements Platform {
   private subTabWinReady = false;
   private subTabWinParentListenersSet = false;
   private subTabWinContentBounds: Bounds | null = null;
-  private tabBoundsAnimations = new Map<string, () => void>();
+  private tabBoundsAnimations = new TabBoundsAnimation();
+  private subTabWindowTransition = 0;
   private pendingPaletteJs: string | null = null;
   private permissionRequestHandler:
     | ((
@@ -614,6 +623,11 @@ export class ElectronPlatform implements Platform {
   async closeTab(tabId: TabId): Promise<void> {
     const view = this.views.get(tabId);
     if (!view) return;
+    this.tabBoundsAnimations.cancel(view);
+
+    // Keep ownership intact if the page vetoes beforeunload. Native close is
+    // synchronous; only the destroyed event establishes completion.
+    await closeTabContents(view.webContents);
 
     // Remove from whichever window owns the view (main or sub-tab child window)
     const win = this.getWin();
@@ -632,7 +646,6 @@ export class ElectronPlatform implements Platform {
       }
     }
 
-    await view.webContents.close({ waitForBeforeUnload: true });
     this.views.delete(tabId);
   }
 
@@ -654,6 +667,7 @@ export class ElectronPlatform implements Platform {
   setTabBounds(tabId: TabId, bounds: Bounds): void {
     const view = this.views.get(tabId);
     if (!view) return;
+    this.tabBoundsAnimations.cancel(view);
     view.setBounds({
       x: Math.round(bounds.x),
       y: Math.round(bounds.y),
@@ -677,6 +691,7 @@ export class ElectronPlatform implements Platform {
   hideTab(tabId: TabId): void {
     const view = this.views.get(tabId);
     if (!view) return;
+    this.tabBoundsAnimations.cancel(view);
     view.setBounds({ x: 0, y: 0, width: 0, height: 0 });
   }
 
@@ -1051,6 +1066,7 @@ export class ElectronPlatform implements Platform {
     frameBounds: Bounds,
     parentTabId: string,
   ): Promise<{ originX: number; originY: number }> {
+    const transition = ++this.subTabWindowTransition;
     this.ensureSubTabWindow();
 
     // Click origin relative to the sub-tab frame (for CSS transform-origin)
@@ -1077,6 +1093,7 @@ export class ElectronPlatform implements Platform {
       await this.subTabWin.webContents.executeJavaScript(
         `setParentTabId(${JSON.stringify(parentTabId)})`,
       );
+      if (transition !== this.subTabWindowTransition || this.subTabWin.isDestroyed()) return origin;
       await this.subTabWin.webContents.executeJavaScript(`enterAnimation(${fx},${fy},${fw},${fh})`);
     } catch {
       // window may be destroyed
@@ -1086,6 +1103,7 @@ export class ElectronPlatform implements Platform {
   }
 
   async hideSubTabWindow(): Promise<void> {
+    const transition = ++this.subTabWindowTransition;
     if (!this.subTabWin || this.subTabWin.isDestroyed()) return;
 
     try {
@@ -1093,12 +1111,14 @@ export class ElectronPlatform implements Platform {
     } catch {
       // window may be destroyed
     }
+    if (transition !== this.subTabWindowTransition || this.subTabWin.isDestroyed()) return;
     // Pass through all events so the main window is usable
     this.subTabWin.setIgnoreMouseEvents(true, { forward: true });
     this.subTabWinContentBounds = null;
   }
 
   showSubTabWindowStatic(contentBounds: Bounds, frameBounds: Bounds, parentTabId: string): void {
+    this.subTabWindowTransition++;
     this.ensureSubTabWindow();
     if (!this.subTabWin || this.subTabWin.isDestroyed()) return;
 
@@ -1117,6 +1137,7 @@ export class ElectronPlatform implements Platform {
   }
 
   hideSubTabWindowInstant(): void {
+    this.subTabWindowTransition++;
     if (!this.subTabWin || this.subTabWin.isDestroyed()) return;
     this.subTabWin.webContents.executeJavaScript("hide()").catch(() => {});
     this.subTabWin.setIgnoreMouseEvents(true, { forward: true });
@@ -1138,6 +1159,7 @@ export class ElectronPlatform implements Platform {
   attachTabToSubTabWindow(tabId: TabId, frameBounds: Bounds): void {
     const view = this.views.get(tabId);
     if (!view) return;
+    this.tabBoundsAnimations.cancel(view);
     if (!this.subTabWin || this.subTabWin.isDestroyed()) return;
 
     const mainWin = this.getWin();
@@ -1170,6 +1192,7 @@ export class ElectronPlatform implements Platform {
   detachTabFromSubTabWindow(tabId: TabId): void {
     const view = this.views.get(tabId);
     if (!view) return;
+    this.tabBoundsAnimations.cancel(view);
 
     // Remove from child window
     if (this.subTabWin && !this.subTabWin.isDestroyed()) {
@@ -1193,36 +1216,8 @@ export class ElectronPlatform implements Platform {
     const view = this.views.get(tabId);
     if (!view) return Promise.resolve();
 
-    // Cancel any existing animation on this tab
-    this.tabBoundsAnimations.get(tabId)?.();
-
-    return new Promise<void>((resolve) => {
-      let cancelled = false;
-      this.tabBoundsAnimations.set(tabId, () => {
-        cancelled = true;
-        resolve();
-      });
-
-      const startTime = performance.now();
-      const tick = () => {
-        if (cancelled) return;
-        const t = Math.min((performance.now() - startTime) / duration, 1);
-        const e = 1 - (1 - t) * (1 - t); // ease-out quadratic
-        view.setBounds({
-          x: Math.round(from.x + (to.x - from.x) * e),
-          y: Math.round(from.y + (to.y - from.y) * e),
-          width: Math.max(1, Math.round(from.width + (to.width - from.width) * e)),
-          height: Math.max(1, Math.round(from.height + (to.height - from.height) * e)),
-        });
-        if (t < 1) {
-          setTimeout(tick, 16);
-        } else {
-          this.tabBoundsAnimations.delete(tabId);
-          resolve();
-        }
-      };
-      tick();
-    });
+    const reducedMotion = systemPreferences.getAnimationSettings().prefersReducedMotion;
+    return this.tabBoundsAnimations.animate(view, from, to, reducedMotion ? 0 : duration);
   }
 
   private syncSubTabWinBounds(): void {

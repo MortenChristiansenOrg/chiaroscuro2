@@ -22,6 +22,7 @@ import {
   TABS_CLOSED,
   TABS_CREATE,
   TABS_CREATED,
+  TABS_GET,
   TABS_LIST_CHANGED,
   TABS_REPORT_CONTENT_BOUNDS,
   TABS_UPDATED,
@@ -30,6 +31,7 @@ import {
   type TabsEvents,
 } from "../tabs/tabs.shared";
 import type { TabLoadingChangedPayload } from "../window-chrome/window-chrome.shared";
+import { WORKSPACES_SWITCHED, type WorkspacesEvents } from "../workspaces/workspaces.shared";
 import subTabsFeature from "./sub-tabs.main";
 import {
   SUB_TABS_CLOSE,
@@ -50,7 +52,9 @@ const WIN_ID = "win-1" as WindowId;
 const WS_ID = "ws-1" as WorkspaceId;
 
 type AllCommands = TabsCommands & SubTabsCommands;
-type AllEvents = TabsEvents & SubTabsEvents & { "tab:loading-changed": TabLoadingChangedPayload };
+type AllEvents = TabsEvents &
+  SubTabsEvents &
+  WorkspacesEvents & { "tab:loading-changed": TabLoadingChangedPayload };
 
 let tabCounter = 0;
 
@@ -77,6 +81,7 @@ function setup(platformOverrides = {}) {
   };
 
   let activeTabId: TabId | undefined;
+  let activeWorkspaceId: WorkspaceId | undefined = WS_ID;
   const deps = {
     commands,
     events,
@@ -87,7 +92,7 @@ function setup(platformOverrides = {}) {
     setActiveTabId: (id: TabId | undefined) => {
       activeTabId = id;
     },
-    getActiveWorkspaceId: () => WS_ID as WorkspaceId | undefined,
+    getActiveWorkspaceId: () => activeWorkspaceId,
   };
 
   // Register tabs feature first (sub-tabs depends on tabs:adopt)
@@ -110,6 +115,9 @@ function setup(platformOverrides = {}) {
     commands,
     events,
     platform,
+    setActiveWorkspaceId: (id: WorkspaceId | undefined) => {
+      activeWorkspaceId = id;
+    },
     getActiveTabId: () => activeTabId,
     setActiveTabId: (id: TabId | undefined) => {
       activeTabId = id;
@@ -479,5 +487,301 @@ describe("window-open interception", () => {
   it("registers onWindowOpen callback", () => {
     const ctx = setup();
     expect(ctx.platform.onWindowOpen).toHaveBeenCalled();
+  });
+});
+
+describe("interrupted sub-tab transitions", () => {
+  afterEach(() => {
+    tabsFeature.teardown?.();
+    subTabsFeature.teardown?.();
+  });
+
+  it("orders close after an in-flight open and does not leave a view attached", async () => {
+    let finishEnter!: () => void;
+    const show = new Promise<void>((resolve) => {
+      finishEnter = resolve;
+    });
+    const ctx = setup({ showSubTabWindow: vi.fn(() => show) });
+    const { tabId } = await createParentTab(ctx);
+    const opening = ctx.commands.send(SUB_TABS_OPEN, {
+      parentTabId: tabId,
+      url: "https://child.com",
+    });
+    await vi.waitFor(() => expect(ctx.platform.showSubTabWindow).toHaveBeenCalled());
+    const closing = ctx.commands.send(SUB_TABS_CLOSE, { parentTabId: tabId });
+    finishEnter();
+    const childId = await opening;
+    await closing;
+    expect(await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: tabId })).toEqual([]);
+    expect(ctx.platform.detachTabFromSubTabWindow).toHaveBeenCalledWith(childId);
+    expect(ctx.platform.closeTab).toHaveBeenCalledWith(childId);
+  });
+
+  it("keeps a new open alive when requested during the last sub-tab exit", async () => {
+    let finishExit!: () => void;
+    const hide = new Promise<void>((resolve) => {
+      finishExit = resolve;
+    });
+    const ctx = setup({ hideSubTabWindow: vi.fn(() => hide) });
+    const { tabId } = await createParentTab(ctx);
+    const first = await ctx.commands.send(SUB_TABS_OPEN, {
+      parentTabId: tabId,
+      url: "https://first.com",
+    });
+    const closing = ctx.commands.send(SUB_TABS_CLOSE, { parentTabId: tabId });
+    await vi.waitFor(() => expect(ctx.platform.hideSubTabWindow).toHaveBeenCalled());
+    const opening = ctx.commands.send(SUB_TABS_OPEN, {
+      parentTabId: tabId,
+      url: "https://second.com",
+    });
+    finishExit();
+    await closing;
+    const second = await opening;
+    expect(
+      (await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: tabId })).map((st) => st.id),
+    ).toEqual([second]);
+    expect(ctx.platform.closeTab).toHaveBeenCalledWith(first);
+    expect(ctx.platform.closeTab).not.toHaveBeenCalledWith(second);
+  });
+
+  it("does not resurrect a child when its parent closes during backdrop entry", async () => {
+    let finishEnter!: () => void;
+    const show = new Promise<void>((resolve) => {
+      finishEnter = resolve;
+    });
+    const ctx = setup({ showSubTabWindow: vi.fn(() => show) });
+    const { tabId } = await createParentTab(ctx);
+    const opening = ctx.commands.send(SUB_TABS_OPEN, {
+      parentTabId: tabId,
+      url: "https://child.com",
+    });
+    await vi.waitFor(() => expect(ctx.platform.showSubTabWindow).toHaveBeenCalled());
+    await ctx.commands.send(TABS_CLOSE, { tabId });
+    finishEnter();
+    const childId = await opening;
+    await vi.waitFor(async () => {
+      expect(await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: tabId })).toEqual([]);
+    });
+    expect(ctx.platform.attachTabToSubTabWindow).not.toHaveBeenCalledWith(
+      childId,
+      expect.anything(),
+    );
+    expect(await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: tabId })).toEqual([]);
+  });
+});
+
+describe("sub-tab exit across parent switching", () => {
+  afterEach(() => {
+    tabsFeature.teardown?.();
+    subTabsFeature.teardown?.();
+  });
+
+  it("hides the backdrop when returning to a parent whose last child is still closing", async () => {
+    let finishExit!: () => void;
+    const hide = new Promise<void>((resolve) => {
+      finishExit = resolve;
+    });
+    const ctx = setup({ hideSubTabWindow: vi.fn(() => hide) });
+    const { tabId } = await createParentTab(ctx);
+    await ctx.commands.send(SUB_TABS_OPEN, { parentTabId: tabId, url: "https://child.com" });
+    const closing = ctx.commands.send(SUB_TABS_CLOSE, { parentTabId: tabId });
+    await vi.waitFor(() => expect(ctx.platform.hideSubTabWindow).toHaveBeenCalled());
+    const other = await ctx.commands.send(TABS_CREATE, { url: "https://other.com" });
+    expect(other).not.toBe(tabId);
+    await ctx.commands.send(TABS_ACTIVATE, { tabId });
+    expect(ctx.platform.showSubTabWindowStatic).toHaveBeenCalled();
+    vi.mocked(ctx.platform.hideSubTabWindowInstant).mockClear();
+    finishExit();
+    await closing;
+    expect(ctx.platform.hideSubTabWindowInstant).toHaveBeenCalledOnce();
+    expect(await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: tabId })).toEqual([]);
+  });
+});
+
+describe("sub-tab native close lifecycle", () => {
+  afterEach(() => {
+    tabsFeature.teardown?.();
+    subTabsFeature.teardown?.();
+  });
+
+  it("does not start the next open until native destruction completes", async () => {
+    let finishClose!: () => void;
+    const nativeClose = new Promise<void>((resolve) => {
+      finishClose = resolve;
+    });
+    const ctx = setup({ closeTab: vi.fn(() => nativeClose) });
+    const { tabId } = await createParentTab(ctx);
+    const first = await ctx.commands.send(SUB_TABS_OPEN, {
+      parentTabId: tabId,
+      url: "https://first.com",
+    });
+    const closing = ctx.commands.send(SUB_TABS_CLOSE, { parentTabId: tabId });
+    await vi.waitFor(() => expect(ctx.platform.closeTab).toHaveBeenCalledWith(first));
+    const opening = ctx.commands.send(SUB_TABS_OPEN, {
+      parentTabId: tabId,
+      url: "https://second.com",
+    });
+    expect(await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: tabId })).toHaveLength(1);
+    expect(ctx.platform.createTab).toHaveBeenCalledTimes(2);
+    finishClose();
+    await closing;
+    const second = await opening;
+    expect(
+      (await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: tabId })).map((st) => st.id),
+    ).toEqual([second]);
+  });
+
+  it("restores a visible child and retains its stack when native close is vetoed", async () => {
+    const ctx = setup({
+      closeTab: vi.fn(async () => {
+        throw new Error("Page prevented closing");
+      }),
+    });
+    const { tabId } = await createParentTab(ctx);
+    const child = await ctx.commands.send(SUB_TABS_OPEN, {
+      parentTabId: tabId,
+      url: "https://child.com",
+    });
+    const closed = vi.fn();
+    ctx.events.on(SUB_TABS_CLOSED, closed);
+    await expect(ctx.commands.send(SUB_TABS_CLOSE, { parentTabId: tabId })).rejects.toThrow(
+      "Page prevented closing",
+    );
+    expect(
+      (await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: tabId })).map((st) => st.id),
+    ).toEqual([child]);
+    expect(closed).not.toHaveBeenCalled();
+    expect(ctx.platform.showSubTabWindowStatic).toHaveBeenCalled();
+    expect(ctx.platform.attachTabToSubTabWindow).toHaveBeenLastCalledWith(child, expect.anything());
+  });
+});
+
+describe("parent close with pending or prevented child destruction", () => {
+  afterEach(() => {
+    tabsFeature.teardown?.();
+    subTabsFeature.teardown?.();
+  });
+
+  it("keeps ownership until a child's native close settles", async () => {
+    const ctx = setup();
+    const { tabId } = await createParentTab(ctx);
+    const child = await ctx.commands.send(SUB_TABS_OPEN, {
+      parentTabId: tabId,
+      url: "https://child.com",
+    });
+    let finishClose!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      finishClose = resolve;
+    });
+    vi.mocked(ctx.platform.closeTab).mockImplementation((id) =>
+      id === child ? pending : Promise.resolve(),
+    );
+    await ctx.commands.send(TABS_CLOSE, { tabId });
+    await vi.waitFor(() => expect(ctx.platform.closeTab).toHaveBeenCalledWith(child));
+    expect(
+      (await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: tabId })).map((st) => st.id),
+    ).toEqual([child]);
+    finishClose();
+    await vi.waitFor(async () => {
+      expect(await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: tabId })).toEqual([]);
+    });
+  });
+
+  it("adopts a vetoing child as a standalone tab before removing its stack record", async () => {
+    const ctx = setup();
+    const { tabId } = await createParentTab(ctx);
+    const child = await ctx.commands.send(SUB_TABS_OPEN, {
+      parentTabId: tabId,
+      url: "https://child.com",
+    });
+    vi.mocked(ctx.platform.closeTab).mockImplementation(async (id) => {
+      if (id === child) throw new Error("Page prevented closing");
+    });
+    await ctx.commands.send(TABS_CLOSE, { tabId });
+    await vi.waitFor(async () => {
+      expect(await ctx.commands.send(TABS_GET, { tabId: child })).toMatchObject({ id: child });
+      expect(await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: tabId })).toEqual([]);
+    });
+    expect(ctx.getActiveTabId()).toBe(child);
+    expect(ctx.platform.createTab).toHaveBeenCalledTimes(2);
+  });
+
+  it("preserves nested vetoing children and keeps the topmost one active", async () => {
+    const ctx = setup();
+    const { tabId } = await createParentTab(ctx);
+    const lower = await ctx.commands.send(SUB_TABS_OPEN, {
+      parentTabId: tabId,
+      url: "https://lower.com",
+    });
+    const upper = await ctx.commands.send(SUB_TABS_OPEN, {
+      parentTabId: tabId,
+      url: "https://upper.com",
+    });
+    vi.mocked(ctx.platform.closeTab).mockImplementation(async (id) => {
+      if (id !== tabId) throw new Error("Page prevented closing");
+    });
+    await ctx.commands.send(TABS_CLOSE, { tabId });
+    await vi.waitFor(async () => {
+      expect(await ctx.commands.send(TABS_GET, { tabId: lower })).toMatchObject({ id: lower });
+      expect(await ctx.commands.send(TABS_GET, { tabId: upper })).toMatchObject({ id: upper });
+      expect(await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: tabId })).toEqual([]);
+    });
+    expect(ctx.getActiveTabId()).toBe(upper);
+  });
+
+  it("recovers a child after adoption rejects until a workspace becomes available", async () => {
+    const ctx = setup();
+    const { tabId } = await createParentTab(ctx);
+    const child = await ctx.commands.send(SUB_TABS_OPEN, {
+      parentTabId: tabId,
+      url: "https://child.com",
+    });
+    vi.mocked(ctx.platform.closeTab).mockImplementation(async (id) => {
+      if (id === child) throw new Error("Page prevented closing");
+    });
+    const send = vi.spyOn(ctx.commands, "send");
+    ctx.setActiveWorkspaceId(undefined);
+    await ctx.commands.send(TABS_CLOSE, { tabId });
+    await vi.waitFor(() =>
+      expect(send).toHaveBeenCalledWith(TABS_ADOPT, { tabId: child, activate: false }),
+    );
+    expect(await ctx.commands.send(TABS_GET, { tabId: child })).toBeUndefined();
+    expect(await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: tabId })).toHaveLength(1);
+
+    const openWindow = vi.mocked(ctx.platform.onWindowOpen).mock.calls[0]?.[0];
+    expect(openWindow).toBeDefined();
+    for (let attempt = 0; attempt < 2; attempt++) {
+      openWindow?.("https://nested.com", child, "foreground-tab");
+      expect(send).toHaveBeenLastCalledWith(SUB_TABS_OPEN, {
+        parentTabId: tabId,
+        url: "https://nested.com",
+      });
+      await expect(send.mock.results.at(-1)?.value).rejects.toThrow("Parent tab was closed");
+    }
+    expect(ctx.platform.createTab).toHaveBeenCalledTimes(2);
+
+    ctx.setActiveWorkspaceId(WS_ID);
+    const switched = { workspaceId: WS_ID, previousWorkspaceId: null, workspaceName: "Restored" };
+    ctx.events.emit(WORKSPACES_SWITCHED, switched);
+    ctx.events.emit(WORKSPACES_SWITCHED, switched);
+    await vi.waitFor(async () => {
+      expect(await ctx.commands.send(TABS_GET, { tabId: child })).toMatchObject({ id: child });
+      expect(await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: tabId })).toEqual([]);
+      expect(ctx.getActiveTabId()).toBe(child);
+    });
+    expect(ctx.platform.setTabBounds).toHaveBeenCalledWith(child, {
+      x: 0,
+      y: 0,
+      width: 1000,
+      height: 800,
+    });
+    expect(send.mock.calls.filter(([name]) => name === TABS_ADOPT)).toHaveLength(2);
+    // After recovery, window-open resolves to the surviving standalone child.
+    openWindow?.("https://nested.com", child, "foreground-tab");
+    expect(send).toHaveBeenLastCalledWith(SUB_TABS_OPEN, {
+      parentTabId: child,
+      url: "https://nested.com",
+    });
+    await expect(send.mock.results.at(-1)?.value).resolves.toBeDefined();
   });
 });

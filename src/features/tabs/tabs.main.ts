@@ -409,13 +409,12 @@ export default defineFeature<Deps>({
       const tab = tabs.get(tabId);
       if (!tab) return;
 
-      // Clean up event listeners
-      tabScope.cleanup(tabId);
-
       const wasActive = getActiveTabId() === tabId;
       if (!tab.builtIn) {
         await platform.closeTab(tabId);
       }
+      // A beforeunload veto must leave the tab's listeners attached.
+      tabScope.cleanup(tabId);
       removePersistedTab(tabId);
       tabs.delete(tabId);
       fixedUrls.delete(tabId);
