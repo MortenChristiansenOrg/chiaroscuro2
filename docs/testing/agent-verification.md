@@ -51,6 +51,11 @@ bun run agent:app                          # keep stdin open (for example, a too
 bun run verify:app:win --interactive
 ```
 
+For MV3 extension checks use `bun run agent:app --sandbox`, or instantiate
+`AppSession(artifactDir, [], true)`. Playwright otherwise injects `--no-sandbox`,
+which prevents Electron's service-worker preloads from running. The normal app
+launch keeps sandboxing enabled; do not disable it to test extensions.
+
 The controller reports `ready`, a fixture URL, CDP connection URL, artifact
 directory and targets. Send one JSON object per line. Startup build output precedes
 the JSONL responses. Each action returns `passed`, `partial` or `failed`; a partial capture or action failure
@@ -208,3 +213,29 @@ E2E/controller TypeScript compilation. Use the design system for component
 appearance and interactions; retain Electron scenarios for process boundaries,
 native layers and persistence. The PDF component documentation links to its
 restart scenario; design-system demos do not replace it.
+
+## Official Bitwarden acceptance
+
+`e2e/scenarios/bitwarden.spec.ts` is opt-in because it needs an unpacked official
+Bitwarden package and a disposable local Vaultwarden server. Set
+`BITWARDEN_TEST_EXTENSION` to the extension folder and `BITWARDEN_TEST_CERT` to
+the local server's public TLS certificate. It pins that certificate's SPKI only;
+normal certificate validation remains enabled elsewhere. Set `BITWARDEN_TEST_TOTP=1`
+when the fixture account has its test authenticator enabled.
+
+The fixture account is `extension-test@example.test`, with the deliberately public
+password `Disposable extension test password 2026!`. Never point this scenario at a
+personal vault. It expects Vaultwarden at `https://localhost:18329` and a local
+HTTP form server on port 18328. Seed Fixture Alpha (`alpha-user` /
+`alpha-fake-password`) for `http://127.0.0.1:18328/alpha` and Fixture Beta
+(`beta-user` / `beta-fake-password`) for `http://localhost:18328/beta`.
+The `/iframe` page embeds the `/alpha` form; forms label fields Username and Password.
+The optional test TOTP secret is the RFC test value
+`GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ`. The scenario changes Alpha's password and creates
+one disposable entry; reset the fixture between runs.
+
+Run `bunx playwright test --config playwright.verification.config.ts e2e/scenarios/bitwarden.spec.ts`
+after building. The same scenario can run with native Windows paths/environment
+variables in the Windows verification deployment. This proves self-hosted account
+workflows; selecting cloud endpoints is supported but it is not a test of a real
+Bitwarden cloud account.

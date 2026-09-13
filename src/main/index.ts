@@ -322,6 +322,7 @@ const deps = {
   getActiveTabId: () => activeTabId,
   setActiveTabId: (id: TabId | undefined) => {
     activeTabId = id;
+    platform.setExtensionActiveTab(id);
   },
   getActiveWorkspaceId: () => activeWorkspaceId,
   setActiveWorkspaceId: (id: WorkspaceId) => {
@@ -408,7 +409,11 @@ if (gotLock) {
     permissions.register(deps);
     pdfReader.register(deps);
     // Set up extension API bridge (preloads + IPC) before extensions are loaded
-    platform.setupExtensionBridge();
+    platform.setupExtensionBridge({
+      create: (url, activate) => commands.send("tabs:create", { url, activate }),
+      activate: (tabId) => commands.send("tabs:activate", { tabId }),
+      close: (tabId) => commands.send("tabs:close", { tabId }),
+    });
     extensions.register(deps);
     pip.register(deps);
 
@@ -541,6 +546,7 @@ if (gotLock) {
   app.on("before-quit", (event) => {
     if (quitting) return;
     platform.deactivateShortcuts();
+    extensions.teardown?.();
     debugServer.teardown?.();
     localWebApp.teardown?.();
     installer.teardown?.();

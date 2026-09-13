@@ -95,6 +95,7 @@ export interface Platform {
 
   // Context menu (native)
   showContextMenu(opts: {
+    tabId?: TabId;
     items: { label: string; icon?: string; disabled?: boolean }[];
     x: number;
     y: number;
@@ -209,7 +210,15 @@ export interface Platform {
   /** Open an extension's popup in a floating window. */
   openExtensionPopup(extensionId: string, popupRelativePath: string): void;
   /** Set up the extension API bridge (preloads + IPC handlers). */
-  setupExtensionBridge(): void;
+  setupExtensionBridge(actions: ExtensionTabActions): void;
+  /** Keep the extension runtime aligned with the active browser tab. */
+  setExtensionActiveTab(tabId: TabId | undefined): void;
   /** Get the app's user data directory path. */
   getUserDataPath(): string;
+}
+
+export interface ExtensionTabActions {
+  create(url: string, activate: boolean): Promise<TabId>;
+  activate(tabId: TabId): Promise<unknown>;
+  close(tabId: TabId): Promise<unknown>;
 }

@@ -1,112 +1,46 @@
-// ── Command names ──────────────────────────────────────────────
+export const BITWARDEN_ID = "nngceckbapebfimnlniiiahkandclblb";
 export const EXTENSIONS_OPEN = "extensions:open" as const;
-export const EXTENSIONS_SEARCH = "extensions:search" as const;
 export const EXTENSIONS_INSTALL = "extensions:install" as const;
 export const EXTENSIONS_UNINSTALL = "extensions:uninstall" as const;
 export const EXTENSIONS_SET_ENABLED = "extensions:set-enabled" as const;
 export const EXTENSIONS_OPEN_POPUP = "extensions:open-popup" as const;
-
-//── Event names ────────────────────────────────────────────────
+export const EXTENSIONS_CHECK_UPDATES = "extensions:check-updates" as const;
+export const EXTENSIONS_APPROVE = "extensions:approve" as const;
 export const EXTENSIONS_CHANGED = "extensions:changed" as const;
-export const EXTENSIONS_INSTALL_STARTED = "extensions:install-started" as const;
-export const EXTENSIONS_INSTALL_COMPLETED = "extensions:install-completed" as const;
-export const EXTENSIONS_INSTALL_FAILED = "extensions:install-failed" as const;
-export const EXTENSIONS_SEARCH_RESULTS = "extensions:search-results" as const;
-
-// ── Payload types ──────────────────────────────────────────────
-/** Browser action metadata extracted from the extension manifest. */
 export interface ExtensionAction {
-  /** Popup HTML page path (relative to extension root), empty if no popup. */
   popup: string;
-  /** Tooltip title for the toolbar button. */
   title: string;
-  /** Icon URL (chrome-extension:// protocol), empty if no icon. */
   iconUrl: string;
 }
-
 export interface InstalledExtension {
   id: string;
   name: string;
   version: string;
   enabled: boolean;
-  /** Browser action info, present for enabled extensions with an action/browser_action. */
+  installed?: boolean;
   action?: ExtensionAction;
+  iconUrl?: string;
+  loaded?: boolean;
+  busy?: boolean;
+  error?: string;
+  lastChecked?: number;
+  updateVersion?: string;
+  review?: { token: string; permissions: string[] };
+  restartRequired?: boolean;
 }
-
-export interface CWSSearchResult {
-  id: string;
-  name: string;
-  description: string;
-  iconUrl: string;
-  /** Whether this extension is "Featured" on CWS (manually reviewed by Chrome team). */
-  featured: boolean;
-  /** Average star rating (0–5), or null if unrated. */
-  rating: number | null;
-  /** Number of ratings, or null if unrated. */
-  ratingCount: number | null;
-  /** Approximate user count (e.g. 6000000), or null if unknown. */
-  userCount: number | null;
-}
-
-export interface ExtensionsSearchPayload {
-  query: string;
-}
-
-export interface ExtensionsInstallPayload {
-  extensionId: string;
-  name: string;
-}
-
-export interface ExtensionsUninstallPayload {
-  extensionId: string;
-}
-
-export interface ExtensionsOpenPopupPayload {
-  extensionId: string;
-}
-
-export interface ExtensionsSetEnabledPayload {
-  extensionId: string;
-  enabled: boolean;
-}
-
 export interface ExtensionsChangedEvent {
   extensions: InstalledExtension[];
 }
-
-export interface ExtensionsInstallStartedEvent {
-  extensionId: string;
-}
-
-export interface ExtensionsInstallCompletedEvent {
-  extensionId: string;
-}
-
-export interface ExtensionsInstallFailedEvent {
-  extensionId: string;
-  error: string;
-}
-
-export interface ExtensionsSearchResultsEvent {
-  query: string;
-  results: CWSSearchResult[];
-}
-
-// ── Command registry ───────────────────────────────────────────
 export type ExtensionsCommands = {
   [EXTENSIONS_OPEN]: { payload: undefined; response: undefined };
-  [EXTENSIONS_SEARCH]: { payload: ExtensionsSearchPayload; response: CWSSearchResult[] };
-  [EXTENSIONS_INSTALL]: { payload: ExtensionsInstallPayload; response: undefined };
-  [EXTENSIONS_UNINSTALL]: { payload: ExtensionsUninstallPayload; response: undefined };
-  [EXTENSIONS_SET_ENABLED]: { payload: ExtensionsSetEnabledPayload; response: undefined };
-  [EXTENSIONS_OPEN_POPUP]: { payload: ExtensionsOpenPopupPayload; response: undefined };
+  [EXTENSIONS_INSTALL]: { payload: { extensionId: string; name: string }; response: undefined };
+  [EXTENSIONS_UNINSTALL]: { payload: { extensionId: string }; response: undefined };
+  [EXTENSIONS_SET_ENABLED]: {
+    payload: { extensionId: string; enabled: boolean };
+    response: undefined;
+  };
+  [EXTENSIONS_OPEN_POPUP]: { payload: { extensionId: string }; response: undefined };
+  [EXTENSIONS_CHECK_UPDATES]: { payload: { extensionId: string }; response: undefined };
+  [EXTENSIONS_APPROVE]: { payload: { extensionId: string; token: string }; response: undefined };
 };
-
-// ── Event registry ─────────────────────────────────────────────
-export type ExtensionsEvents = {
-  [EXTENSIONS_CHANGED]: ExtensionsChangedEvent;
-  [EXTENSIONS_INSTALL_STARTED]: ExtensionsInstallStartedEvent;
-  [EXTENSIONS_INSTALL_COMPLETED]: ExtensionsInstallCompletedEvent;
-  [EXTENSIONS_INSTALL_FAILED]: ExtensionsInstallFailedEvent;
-  [EXTENSIONS_SEARCH_RESULTS]: ExtensionsSearchResultsEvent;
-};
+export type ExtensionsEvents = { [EXTENSIONS_CHANGED]: ExtensionsChangedEvent };

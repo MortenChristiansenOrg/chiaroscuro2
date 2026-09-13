@@ -92,3 +92,7 @@ through a manual Release workflow run and produce a separate installation/update
 channel. See the [installer specification](../features/InstallerFeature.specs.md)
 for publishing commands and isolation behavior. Use `bun run package:win TAG` for
 local Windows packaging without publishing.
+
+## Extension package extraction
+
+`yauzl` (MIT) provides bounded streaming ZIP extraction after in-house CRX3 signature verification with Node crypto. It is an archive utility, not an extension compatibility library.

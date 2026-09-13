@@ -1,93 +1,46 @@
-# Specification for Extensions Feature
+# Extensions: Bitwarden password support
 
-## Overview
+## Release boundary
 
-Adds initial Chrome extension support to Chiaroscuro. Users can search the Chrome Web Store, install extensions, and manage them (enable/disable/uninstall) from a dedicated `app:extensions` built-in page. Extensions are loaded into the shared Electron session and apply to all tabs. The target use case is productivity extensions like password managers.
+The supported extension is the official Manifest V3 Bitwarden Chrome Web Store package. Electron remains the browser runtime. A reusable in-house compatibility layer supplies missing browser semantics; Bitwarden owns its UI, encryption, vault, authentication and synchronization. Vendor JavaScript is not patched.
 
-## Terminology
+Supported workflows are password/authenticator-code sign-in to cloud and self-hosted vaults, sync, lock/unlock, password generation, saving/editing passwords, and popup filling in the selected tab and ordinary embedded login forms.
 
-- **Extension**: A Chrome extension (Manifest V2 or V3) loaded via Electron's `session.loadExtension()` API.
-- **CRX**: Chrome extension package format — a ZIP file with a binary header.
-- **Chrome Web Store (CWS)**: Google's extension marketplace at `chromewebstore.google.com`.
-- **Extension ID**: A 32-character lowercase string identifying a Chrome extension.
+## Installation and management
 
-## Requirements
+- The built-in `/extensions` page offers Bitwarden directly; it does not scrape or advertise an unrestricted store catalog.
+- Downloads are staged and authenticated with CRX3 developer and Chrome Web Store signatures before extraction. Extraction rejects unsafe paths, special files, duplicates and excessive sizes.
+- Initial installation executes no code before explicit permission approval. Approval identifies the exact reviewed package. Existing installations missing approval must also be reviewed before loading.
+- Installed cards display branding, version, actual running state, enable control, update state and actionable errors. Disabled branding survives restart.
+- Disable unloads extension code and closes its popup. Uninstall requires confirmation, removes installed/staged code and retains native local vault storage for reinstall. The UI states that policy explicitly.
 
-- Users can open an extensions management page via command.
-- The page displays a list of installed extensions with their name, version, icon, and enabled status.
-- Users can search the Chrome Web Store by keyword from within the extensions page.
-- Search results display extension name, icon, short description, and an install button.
-- Users can install an extension from search results. The extension is downloaded, extracted, and loaded into the session.
-- Users can enable or disable an installed extension (toggle).
-- Users can uninstall an installed extension (removes from disk and session).
-- Users cannot load local/unpacked extensions from a folder.
-- Extension state (installed extensions and their enabled/disabled status) persists across app restarts.
-- Extensions load into the shared default session, affecting all tabs.
-- Installation shows a progress indicator (downloading/installing states).
+## Updates and recovery
 
-## Workflows
+- Check at startup and every four hours, including disabled extensions. A manual check is available.
+- Use the running Chromium version and the official store version-check endpoint. Download full packages only when an update is offered.
+- Retain stable unpacked paths and manifest identity so native storage survives updates. Reject identity changes and versions requiring newer Chromium.
+- Stage updates during normal use and activate at the next complete browser start. Updates cannot interrupt an open vault.
+- Expanded permissions require approval before activation; declining leaves existing code in place.
+- Persist a transaction journal before swapping package directories. Failed native loading or interrupted activation restores previous code and metadata. Local vault data is not rolled back or replaced.
+- Report failed activation and permit a manual retry. Automatic checks may accept a subsequent newer release instead of repeatedly activating the same failed version.
+- Surface network, disk, invalid-package and compatibility errors. Never claim a failed check means the extension is current.
 
-### Search and Install Extension
+## Compatibility and isolation
 
-1. User opens the extensions page (command palette or keyboard shortcut).
-2. User types a search query in the search field.
-3. Results from Chrome Web Store appear below.
-4. User clicks "Install" on a result.
-5. Extension downloads and installs. Status shows "Installing..." then "Installed".
-6. Extension appears in the installed extensions list.
+- Extension documents execute at `chrome-extension://` with sandboxing and context isolation; no local-website wrapper or replacement vault.
+- Native local storage persists, native session storage remains in memory. Relay storage invalidations to MV3 workers where Electron omits events.
+- Route browser APIs using native tab IDs and the selected content view. Restrict adapter IPC to authenticated loaded extension frames/workers and filter metadata by granted permissions.
+- Optional permissions are denied unless already granted; required new grants use the management page. Managed policy storage is empty and read-only.
+- Future Bitwarden releases can require maintenance. Visible failures, disable/removal and retry are part of this release, not deferred features.
 
-### Enable/Disable Extension
+## Deferred
 
-1. User opens the extensions page.
-2. User toggles the enable/disable switch on an installed extension.
-3. Extension is loaded/unloaded from the session immediately.
-4. State persists across restarts.
+Inline suggestions, automatic filling on page load and extension keyboard shortcuts are tracked in [issue #64](https://github.com/MortenChristiansenOrg/chiaroscuro2/issues/64).
 
-### Uninstall Extension
+Other exclusions: general Chrome extension compatibility, alternate stores/sideloading, passkeys, native messaging/biometrics, enterprise SSO, side panels/browser overrides/themes, browser-level extension settings sync and a custom Bitwarden client.
 
-1. User opens the extensions page.
-2. User clicks the uninstall button on an installed extension.
-3. Extension is unloaded from session and removed from disk.
-4. Extension disappears from the installed list.
+## Verification
 
-## Interactions
+Package and lifecycle tests cover trust, traversal, permission approval, stable identity, staged updates, disabled updates, recovery and vault retention. The sandboxed Electron scenario runs on Linux and Windows and verifies native worker storage, active-tab scripting, metadata denial and restart behavior. See implementation.md section 6 for real Bitwarden acceptance evidence and limits.
 
-### Keyboard shortcuts
-
-- None (opened via command palette: "Open Extensions").
-
-### Mouse interactions
-
-- **Click Install**: Downloads and installs extension from CWS search result.
-- **Toggle switch**: Enables or disables installed extension.
-- **Click Uninstall**: Removes extension after confirmation.
-
-### Cross-feature interactions
-
-- **tabs**: Opens the `app:extensions` built-in page as a singleton tab.
-- **command-palette**: Registers "Open Extensions" command for discoverability.
-
-## Commands & Events
-
-### Commands
-
-- `extensions:open` — Open the extensions management page. Payload: `undefined`.
-- `extensions:search` — Search Chrome Web Store. Payload: `{ query: string }`. Response: search results array.
-- `extensions:install` — Install extension by CWS ID. Payload: `{ extensionId: string; name: string }`.
-- `extensions:uninstall` — Uninstall extension. Payload: `{ extensionId: string }`.
-- `extensions:set-enabled` — Enable or disable extension. Payload: `{ extensionId: string; enabled: boolean }`.
-- `extensions:open-popup` — Open an extension's browser action popup. Payload: `{ extensionId: string }`.
-
-### Events
-
-- `extensions:changed` — Emitted when the installed extensions list changes (install/uninstall/enable/disable). Payload: `{ extensions: InstalledExtension[] }`.
-- `extensions:install-started` — Emitted when download begins. Payload: `{ extensionId: string }`.
-- `extensions:install-completed` — Emitted when install succeeds. Payload: `{ extensionId: string }`.
-- `extensions:install-failed` — Emitted when install fails. Payload: `{ extensionId: string; error: string }`.
-- `extensions:search-results` — Emitted with search results. Payload: `{ query: string; results: CWSSearchResult[] }`.
-
-## Unresolved Issues
-
-- Chrome Web Store has no official search API. The implementation uses an unofficial approach (fetching and parsing CWS pages) which may break if Google changes their frontend.
-- Electron's Chrome extension support covers ~30-40% of Chrome APIs. Some extensions may not work correctly.
-- No extension permissions review UI — extensions are installed with all requested permissions.
+References: [Electron extension support](https://www.electronjs.org/docs/latest/api/extensions/), [Chrome update lifecycle](https://developer.chrome.com/docs/extensions/develop/concepts/extensions-update-lifecycle), [CRX3 format](https://github.com/chromium/chromium/blob/main/components/crx_file/crx3.proto).

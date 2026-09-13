@@ -17,10 +17,12 @@ import {
   webContents,
 } from "electron";
 import type { Bounds, TabId, WindowId } from "../shared/types";
+import { migrateExtensionBootstrap } from "./extension-migration";
+import { ExtensionRuntime } from "./extension-runtime";
 import type { GithubSessionDiagnostics } from "./github-session-diagnostics";
 import { TabBoundsAnimation } from "./tab-bounds-animation";
 import { closeTabContents, createTabView } from "./tab-view";
-import type { Platform, PlatformDownload } from "./types";
+import type { ExtensionTabActions, Platform, PlatformDownload } from "./types";
 
 const ALLOWED_SCHEMES_WEB = new Set(["http:", "https:", "about:", "data:"]);
 const ALLOWED_SCHEMES_INTERNAL = new Set([
@@ -476,6 +478,7 @@ export class ElectronPlatform implements Platform {
     view.setBorderRadius(8);
 
     this.views.set(tabId, view);
+    this.extensionRuntime?.addTab(tabId, view.webContents, win);
     win.contentView.addChildView(view);
 
     // Hide initially — caller will activate
@@ -967,6 +970,7 @@ export class ElectronPlatform implements Platform {
   // ── Context menu (native) ─────────────────────────────────────
 
   async showContextMenu(opts: {
+    tabId?: TabId;
     items: { label: string; icon?: string; disabled?: boolean }[];
     x: number;
     y: number;
@@ -987,7 +991,13 @@ export class ElectronPlatform implements Platform {
         },
       }));
 
-      const menu = Menu.buildFromTemplate(template);
+      const extensionItems = opts.tabId
+        ? (this.extensionRuntime?.contextMenu(opts.tabId) ?? [])
+        : [];
+      const menu = Menu.buildFromTemplate([
+        ...template,
+        ...(extensionItems.length ? [{ type: "separator" as const }, ...extensionItems] : []),
+      ]);
       menu.popup({
         window: win,
         x: Math.round(opts.x),
@@ -1826,13 +1836,8 @@ export class ElectronPlatform implements Platform {
   }
 
   async loadExtension(extensionPath: string) {
+    migrateExtensionBootstrap(extensionPath);
     const ext = await this.extensions.loadExtension(extensionPath);
-    // Track the mapping from directory name (CWS ID) to Electron's runtime ID.
-    // The directory name is the last component of the extension path.
-    const dirName = path.basename(extensionPath);
-    if (dirName !== ext.id) {
-      this.cwsToRuntimeId.set(dirName, ext.id);
-    }
     return {
       id: ext.id,
       name: ext.name,
@@ -1843,6 +1848,14 @@ export class ElectronPlatform implements Platform {
   }
 
   removeExtension(extensionId: string): void {
+    if (
+      this.extensionPopup &&
+      !this.extensionPopup.isDestroyed() &&
+      this.extensionPopup.webContents.getURL().startsWith(`chrome-extension://${extensionId}/`)
+    ) {
+      this.extensionPopup.close();
+      this.extensionPopup = null;
+    }
     this.extensions.removeExtension(extensionId);
   }
 
@@ -1859,301 +1872,14 @@ export class ElectronPlatform implements Platform {
   // ── Extension API bridge ────────────────────────────────────
 
   private extensionPopup: BrowserWindow | null = null;
-  private extensionStorageCache = new Map<string, Record<string, unknown>>();
-  private extensionI18nCache = new Map<string, Record<string, { message: string }>>();
-  private pendingMessages = new Map<string, (response: unknown) => void>();
-  private portCounter = 0;
-  /** Map portId → { popupWebContentsId, extensionId, workerVersionId } */
-  private ports = new Map<
-    string,
-    { popupWebContentsId: number; extensionId: string; workerVersionId: number }
-  >();
-  /** Maps directory-based ID (CWS ID) → Electron runtime ID. */
-  private cwsToRuntimeId = new Map<string, string>();
+  private extensionRuntime: ExtensionRuntime | undefined;
 
-  setupExtensionBridge(): void {
-    const ses = session.defaultSession;
-
-    // Register session-level preloads for extension pages and service workers.
-    ses.registerPreloadScript({
-      id: "crx-frame-preload",
-      type: "frame",
-      filePath: path.join(__dirname, "../preload/extension-page.js"),
-    });
-
-    ses.registerPreloadScript({
-      id: "crx-worker-preload",
-      type: "service-worker",
-      filePath: path.join(__dirname, "../preload/extension-worker.js"),
-    });
-
-    this.setupExtensionIpcHandlers();
+  setupExtensionBridge(actions: ExtensionTabActions): void {
+    this.extensionRuntime = new ExtensionRuntime(actions, () => this.getWin());
   }
 
-  /** Resolve a CWS/directory-based ID to Electron's runtime ID. */
-  private resolveExtId(id: string): string {
-    return this.cwsToRuntimeId.get(id) ?? id;
-  }
-
-  private setupExtensionIpcHandlers(): void {
-    // ── Manifest ─────────────────────────────────────────────
-
-    ipcMain.on("crx:getManifest", (event, extensionId: string) => {
-      const runtimeId = this.resolveExtId(extensionId);
-      const ext = session.defaultSession.extensions.getExtension(runtimeId);
-      event.returnValue = ext?.manifest ?? {};
-    });
-
-    // ── Runtime.sendMessage ──────────────────────────────────
-
-    ipcMain.handle(
-      "crx:runtime.sendMessage",
-      async (_event, extensionId: string, message: unknown) => {
-        const runtimeId = this.resolveExtId(extensionId);
-        const scope = `chrome-extension://${runtimeId}/`;
-        let worker: Electron.ServiceWorkerMain;
-        try {
-          worker = await session.defaultSession.serviceWorkers.startWorkerForScope(scope);
-        } catch (err) {
-          return undefined;
-        }
-
-        const task = worker.startTask();
-        const msgId = `msg-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-
-        const responsePromise = new Promise<unknown>((resolve) => {
-          this.pendingMessages.set(msgId, resolve);
-          // Timeout: don't wait forever
-          setTimeout(() => {
-            if (this.pendingMessages.has(msgId)) {
-              this.pendingMessages.delete(msgId);
-              resolve(undefined);
-            }
-          }, 30000);
-        });
-
-        const sender = { id: extensionId, url: scope, tab: null };
-        worker.send("crx:runtime.onMessage", msgId, message, sender);
-
-        const response = await responsePromise;
-        task.end();
-        return response;
-      },
-    );
-
-    // Response from service worker preload
-    ipcMain.on("crx:runtime.sendMessageResponse", (_event, msgId: string, response: unknown) => {
-      const resolve = this.pendingMessages.get(msgId);
-      if (resolve) {
-        this.pendingMessages.delete(msgId);
-        resolve(response);
-      }
-    });
-
-    // ── Runtime.connect (ports) ──────────────────────────────
-
-    ipcMain.on("crx:runtime.connect", (event, extensionId: string, name: string) => {
-      const runtimeId = this.resolveExtId(extensionId);
-      const portId = `port-${++this.portCounter}`;
-
-      const scope = `chrome-extension://${runtimeId}/`;
-      session.defaultSession.serviceWorkers
-        .startWorkerForScope(scope)
-        .then((worker) => {
-          this.ports.set(portId, {
-            popupWebContentsId: event.sender.id,
-            extensionId,
-            workerVersionId: worker.versionId,
-          });
-
-          const sender = {
-            id: extensionId,
-            url: scope,
-            tab: null,
-          };
-          worker.send("crx:port.onConnect", portId, name, sender);
-        })
-        .catch(() => {
-          // Worker not available — disconnect immediately
-          event.sender.send(`crx:port.onDisconnect:${portId}`);
-        });
-
-      event.returnValue = portId;
-    });
-
-    // Port messages from popup → service worker
-    ipcMain.on("crx:port.postMessage", (_event, portId: string, message: unknown) => {
-      const port = this.ports.get(portId);
-      if (!port) return;
-      const worker = session.defaultSession.serviceWorkers.getWorkerFromVersionID(
-        port.workerVersionId,
-      );
-      if (worker) {
-        worker.send(`crx:port.onMessage:${portId}`, message);
-      }
-    });
-
-    // Port messages from service worker → popup
-    ipcMain.on("crx:port.postMessage.fromWorker", (_event, portId: string, message: unknown) => {
-      const port = this.ports.get(portId);
-      if (!port) return;
-      const wc = webContents.fromId(port.popupWebContentsId);
-      if (wc && !wc.isDestroyed()) {
-        wc.send(`crx:port.onMessage:${portId}`, message);
-      }
-    });
-
-    // Port disconnect
-    ipcMain.on("crx:port.disconnect", (_event, portId: string) => {
-      const port = this.ports.get(portId);
-      if (!port) return;
-      this.ports.delete(portId);
-
-      // Notify both sides
-      const wc = webContents.fromId(port.popupWebContentsId);
-      if (wc && !wc.isDestroyed()) {
-        wc.send(`crx:port.onDisconnect:${portId}`);
-      }
-      const worker = session.defaultSession.serviceWorkers.getWorkerFromVersionID(
-        port.workerVersionId,
-      );
-      if (worker) {
-        worker.send(`crx:port.onDisconnect:${portId}`);
-      }
-    });
-
-    // ── Storage ──────────────────────────────────────────────
-
-    const storagePath = (extId: string, area: string) =>
-      path.join(app.getPath("userData"), "extension-storage", extId, `${area}.json`);
-
-    const readStorage = (extId: string, area: string): Record<string, unknown> => {
-      const key = `${extId}:${area}`;
-      const cached = this.extensionStorageCache.get(key);
-      if (cached) return cached;
-      const filePath = storagePath(extId, area);
-      try {
-        const data = JSON.parse(fs.readFileSync(filePath, "utf-8"));
-        this.extensionStorageCache.set(key, data);
-        return data;
-      } catch {
-        this.extensionStorageCache.set(key, {});
-        return {};
-      }
-    };
-
-    const writeStorage = (extId: string, area: string, data: Record<string, unknown>) => {
-      const key = `${extId}:${area}`;
-      this.extensionStorageCache.set(key, data);
-      const filePath = storagePath(extId, area);
-      fs.mkdirSync(path.dirname(filePath), { recursive: true });
-      fs.writeFileSync(filePath, JSON.stringify(data), "utf-8");
-    };
-
-    ipcMain.handle(
-      "crx:storage.get",
-      async (_event, extId: string, area: string, keys: unknown) => {
-        const data = readStorage(extId, area);
-        if (keys === null || keys === undefined) return { ...data };
-        if (typeof keys === "string") return { [keys]: data[keys] };
-        if (Array.isArray(keys)) {
-          const result: Record<string, unknown> = {};
-          for (const k of keys) {
-            if (typeof k === "string" && k in data) result[k] = data[k];
-          }
-          return result;
-        }
-        if (typeof keys === "object") {
-          // Keys is a default-values object
-          const result: Record<string, unknown> = {};
-          for (const [k, defaultVal] of Object.entries(keys as Record<string, unknown>)) {
-            result[k] = k in data ? data[k] : defaultVal;
-          }
-          return result;
-        }
-        return {};
-      },
-    );
-
-    ipcMain.handle(
-      "crx:storage.set",
-      async (_event, extId: string, area: string, items: unknown) => {
-        if (!items || typeof items !== "object") return;
-        const data = readStorage(extId, area);
-        Object.assign(data, items);
-        writeStorage(extId, area, data);
-      },
-    );
-
-    ipcMain.handle(
-      "crx:storage.remove",
-      async (_event, extId: string, area: string, keys: unknown) => {
-        const data = readStorage(extId, area);
-        if (keys === null) {
-          // Clear all
-          writeStorage(extId, area, {});
-          return;
-        }
-        const toRemove = typeof keys === "string" ? [keys] : Array.isArray(keys) ? keys : [];
-        for (const k of toRemove) {
-          if (typeof k === "string") delete data[k];
-        }
-        writeStorage(extId, area, data);
-      },
-    );
-
-    // ── i18n ─────────────────────────────────────────────────
-
-    ipcMain.on(
-      "crx:i18n.getMessage",
-      (event, extensionId: string, messageName: string, substitutions?: string | string[]) => {
-        if (!messageName) {
-          event.returnValue = "";
-          return;
-        }
-
-        const runtimeId = this.resolveExtId(extensionId);
-        let messages = this.extensionI18nCache.get(runtimeId);
-        if (!messages) {
-          const ext = session.defaultSession.extensions.getExtension(runtimeId);
-          if (ext) {
-            const locale = (ext.manifest as Record<string, string>).default_locale ?? "en";
-            const messagesPath = path.join(ext.path, "_locales", locale, "messages.json");
-            try {
-              messages = JSON.parse(fs.readFileSync(messagesPath, "utf-8"));
-              this.extensionI18nCache.set(runtimeId, messages ?? {});
-            } catch {
-              messages = {};
-              this.extensionI18nCache.set(runtimeId, messages);
-            }
-          } else {
-            event.returnValue = "";
-            return;
-          }
-        }
-
-        // Chrome message keys are case-insensitive
-        const key = messageName.toLowerCase();
-        const entry = Object.entries(messages ?? {}).find(([k]) => k.toLowerCase() === key)?.[1];
-
-        if (!entry) {
-          event.returnValue = "";
-          return;
-        }
-
-        let msg = entry.message;
-
-        // Apply substitutions ($1, $2, ...)
-        if (substitutions) {
-          const subs = Array.isArray(substitutions) ? substitutions : [substitutions];
-          for (let i = 0; i < subs.length; i++) {
-            msg = msg.replace(new RegExp(`\\$${i + 1}`, "g"), subs[i] ?? "");
-          }
-        }
-
-        event.returnValue = msg;
-      },
-    );
+  setExtensionActiveTab(tabId: TabId | undefined): void {
+    this.extensionRuntime?.selectTab(tabId);
   }
 
   // ── Extension popup window ─────────────────────────────────
@@ -2165,9 +1891,7 @@ export class ElectronPlatform implements Platform {
       this.extensionPopup = null;
     }
 
-    const parent = BrowserWindow.getAllWindows().find(
-      (w) => !w.isDestroyed() && w !== this.extensionPopup,
-    );
+    const parent = this.getWin();
     if (!parent) return;
 
     const ext = session.defaultSession.extensions.getExtension(extensionId);
@@ -2193,6 +1917,8 @@ export class ElectronPlatform implements Platform {
         enablePreferredSizeMode: true,
       },
     });
+
+    this.extensionRuntime?.registerPopup(this.extensionPopup.webContents);
 
     // Position at top-right of parent, below title bar
     const parentBounds = parent.getBounds();
@@ -2224,7 +1950,7 @@ export class ElectronPlatform implements Platform {
       },
     );
 
-    // Use chrome-extension:// URL so the page gets Electron's built-in chrome.* APIs
+    // Preserve the extension origin and Electron runtime/storage/content-script APIs.
     const popupUrl = `chrome-extension://${extensionId}/${popupRelativePath.replace(/^\//, "")}`;
     this.extensionPopup.loadURL(popupUrl);
 

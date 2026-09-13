@@ -29,7 +29,9 @@
     "scripts/package-win.ts",
     "scripts/convert-app-icon.ts",
     "src/features/installer/early-access-feed.ts",
-    "src/features/**/*.contracts.ts"
+    "src/features/**/*.contracts.ts",
+    "src/features/extensions/extension-manager.ts",
+    "src/features/extensions/extension-package.ts"
   ],
   "exclude": ["src/bus/ipc-renderer-bus.ts", "src/bus/ipc-renderer-bus.test.ts"]
 }
