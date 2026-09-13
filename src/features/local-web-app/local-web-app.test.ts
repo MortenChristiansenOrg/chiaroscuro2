@@ -9,8 +9,7 @@ import type { TabsEvents } from "../tabs/tabs.shared";
 import type { TerminalCommands } from "../terminal/terminal.shared";
 import { TERMINAL_WRITE } from "../terminal/terminal.shared";
 import type { LocalWebAppDeps } from "./local-web-app.main";
-import feature from "./local-web-app.main";
-import { _reset, start } from "./local-web-app.main";
+import feature, { _reset, start } from "./local-web-app.main";
 import {
   LOCAL_WEB_APP_BROWSE_DIRECTORY,
   LOCAL_WEB_APP_CONFIG_CHANGED,

@@ -2,7 +2,11 @@ export function ColorSwatch({
   color,
   name,
   value,
-}: { color: string; name: string; value?: string }) {
+}: {
+  color: string;
+  name: string;
+  value?: string;
+}) {
   return (
     <div className="flex items-center gap-3.5 py-2.5">
       <div

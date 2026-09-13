@@ -1,0 +1,3 @@
+[install]
+# Require npm releases to be at least one day old, including transitive dependencies.
+minimumReleaseAge = 86400

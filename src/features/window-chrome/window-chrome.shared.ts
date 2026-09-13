@@ -1,4 +1,6 @@
+import type { CommandTypes } from "../../bus/contract";
 import type { TabId } from "../../shared/types";
+import type { commandContracts } from "./window-chrome.contracts";
 
 // ── Command names ────────────────────────────────────────────────
 export const WINDOW_MINIMIZE = "window:minimize" as const;
@@ -24,15 +26,7 @@ export interface TabLoadingChangedPayload {
 }
 
 // ── Command registry ─────────────────────────────────────────────
-export type WindowChromeCommands = {
-  [WINDOW_MINIMIZE]: { payload: undefined; response: undefined };
-  [WINDOW_MAXIMIZE_RESTORE]: { payload: undefined; response: undefined };
-  [WINDOW_CLOSE]: { payload: undefined; response: undefined };
-  [WINDOW_COPY_ADDRESS]: { payload: undefined; response: undefined };
-  [WINDOW_GO_BACK]: { payload: undefined; response: undefined };
-  [WINDOW_GO_FORWARD]: { payload: undefined; response: undefined };
-  [WINDOW_RELOAD]: { payload: undefined; response: undefined };
-};
+export type WindowChromeCommands = CommandTypes<typeof commandContracts>;
 
 // ── Event registry ───────────────────────────────────────────────
 export type WindowChromeEvents = {

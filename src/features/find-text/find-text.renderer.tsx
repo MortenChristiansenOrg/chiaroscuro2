@@ -84,17 +84,12 @@ export function FindBar() {
       "background-color var(--duration-fast) var(--ease-out), color var(--duration-fast) var(--ease-out)",
   };
 
+  // Opacity/pointer-events do not remove native draggable regions.
+  // An invisible find bar can otherwise cover the address-bar buttons.
+  if (!active) return null;
+
   return (
-    <div
-      className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
-      style={{
-        transition:
-          "opacity var(--duration-normal) var(--ease-out), scale var(--duration-normal) var(--ease-out)",
-        opacity: active ? 1 : 0,
-        scale: active ? "1" : "0.96",
-        pointerEvents: active ? "auto" : "none",
-      }}
-    >
+    <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
       <div
         className="relative flex items-center"
         style={
@@ -106,7 +101,7 @@ export function FindBar() {
             padding: "0.1875rem 0.25rem",
             borderRadius: "var(--radius-lg)",
             background: "var(--glass-subtle)",
-            WebkitAppRegion: active ? "no-drag" : undefined,
+            WebkitAppRegion: "no-drag",
           } as React.CSSProperties
         }
       >

@@ -20,6 +20,7 @@ import {
   PDF_READER_INDEX_DELETE,
   PDF_READER_INDEX_REORDER,
   PDF_READER_INDEX_UPDATE,
+  PDF_READER_SET_ZOOM,
   type PdfReaderCommands,
   type PdfReaderEvents,
   type PersistedPdfIndex,
@@ -127,11 +128,32 @@ export default defineFeature<Deps>({
       const data = await fetchPdfData(url);
       const hash = computeHash(data);
       const filename = extractFilename(url);
+      const savedZoom = await dataStore.getSetting<number>(`pdf-zoom:${filename}:${hash}`);
       return {
         dataBase64: data.toString("base64"),
         hash,
         filename,
+        zoom:
+          typeof savedZoom === "number" &&
+          Number.isFinite(savedZoom) &&
+          savedZoom >= 0.25 &&
+          savedZoom <= 5
+            ? savedZoom
+            : 1,
       };
+    });
+
+    commands.handle(PDF_READER_SET_ZOOM, async ({ pdfKey, zoom }) => {
+      if (
+        typeof pdfKey !== "string" ||
+        !pdfKey ||
+        !Number.isFinite(zoom) ||
+        zoom < 0.25 ||
+        zoom > 5
+      ) {
+        throw new Error("PDF zoom requires a nonempty pdfKey and a finite zoom between 0.25 and 5");
+      }
+      await dataStore.setSetting(`pdf-zoom:${pdfKey}`, zoom);
     });
 
     // ── Index CRUD ────────────────────────────────────────────────

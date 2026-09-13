@@ -427,13 +427,7 @@ export function WorkspaceEditor({
 }
 
 /** Fades children in/out, unmounting after exit transition. */
-function FadePresence({
-  visible,
-  children,
-}: {
-  visible: boolean;
-  children: React.ReactNode;
-}) {
+function FadePresence({ visible, children }: { visible: boolean; children: React.ReactNode }) {
   const [mounted, setMounted] = useState(visible);
   const [show, setShow] = useState(false);
   const rafRef = useRef(0);

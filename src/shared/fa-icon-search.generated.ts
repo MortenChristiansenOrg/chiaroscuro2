@@ -1144,7 +1144,7 @@ export const FA_SOLID_SEARCH: Array<[string, string]> = [
 ["sort","sort arrange filter order organize prioritize ranking sequence sort sort ascending sort descending Sort"],
 ["sort-down","sort-down arrow arrow down decrease descending down down arrow filter order sort sort down sort-desc Sort Down"],
 ["sort-up","sort-up arrow arrow-up ascending filter growth increase order rise sort sort-asc up upgrade upward Sort Up"],
-["spa","spa aromatherapy calm flora health massage mindfulness plant rejuvenation relaxation self-care spa therapy wellness Spa"],
+["spa","spa aromatherapy calm flora health lotus massage mindfulness plant rejuvenation relaxation self-care spa therapy wellness Spa"],
 ["spaghetti-monster-flying","spaghetti-monster-flying agnosticism atheism flying spaghetti monster fsm noodly appendage parody religion pasta pastafarian satire skeptic Spaghetti Monster Flying"],
 ["spell-check","spell-check check correction dictionary editing editor grammar language proofreading spell check spellcheck text validate writing Spell Check"],
 ["spider","spider arachnid bug charlotte crawl creepy eight legs halloween insect-like pest spider web Spider"],

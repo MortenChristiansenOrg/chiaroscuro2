@@ -44,6 +44,8 @@
     "../src/features/pdf-reader/backends/**/*",
     "../src/features/pdf-reader/components/**/*",
     "../src/features/extensions/ExtensionToolbar.tsx",
-    "../src/bus/types.ts"
+    "../src/bus/types.ts",
+    "../src/features/**/*.contracts.ts",
+    "../src/bus/contract.ts"
   ]
 }

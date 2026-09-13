@@ -1,5 +1,10 @@
 import http from "node:http";
 import type { CommandBus } from "../../bus/command-bus";
+import {
+  commandErrorStatus,
+  documentCommand,
+  executeExternalCommand,
+} from "../../bus/command-validation";
 import type { EventBus } from "../../bus/event-bus";
 import type { CommandRegistry, EventRegistry } from "../../bus/types";
 import { debugLog } from "../../shared/debug-log";
@@ -15,6 +20,8 @@ import { getDebugState, getDebugStateNames } from "./state-providers";
 const startTime = Date.now();
 let server: http.Server | null = null;
 let actualPort: number | null = null;
+const automation = process.env.NODE_ENV === "test" && process.env.CHIAROSCURO_AUTOMATION === "1";
+const automationToken = automation ? process.env.CHIAROSCURO_DEBUG_TOKEN : undefined;
 
 type AllCommands = DebugServerCommands;
 type AllEvents = Pick<SettingsEvents, typeof SETTINGS_CHANGED>;
@@ -72,7 +79,6 @@ function respond(res: http.ServerResponse, status: number, data: unknown, pretty
   const body = safeStringify(data, pretty);
   res.writeHead(status, {
     "Content-Type": "application/json",
-    "Access-Control-Allow-Origin": "*",
     "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type",
   });
@@ -85,7 +91,19 @@ function handleRequest(
   commandBus: CommandBus<CommandRegistry>,
   eventBus: EventBus<EventRegistry>,
 ): void {
-  const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
+  // Browser pages must not be able to drive a local debug server, including through DNS rebinding.
+  if (req.headers.origin || !/^(127\.0\.0\.1|localhost)(:\d+)?$/.test(req.headers.host ?? "")) {
+    respond(res, 403, { error: "Debug access requires a local non-browser client" }, false);
+    return;
+  }
+  if (
+    automation &&
+    (!automationToken || req.headers.authorization !== `Bearer ${automationToken}`)
+  ) {
+    respond(res, 401, { error: "This test instance requires its debug bearer token" }, false);
+    return;
+  }
+  const url = new URL(req.url ?? "/", "http://127.0.0.1");
   const pretty = url.searchParams.has("pretty");
 
   // CORS preflight
@@ -240,34 +258,77 @@ function handleRequest(
   }
 
   if (req.method === "GET" && pathname === "/commands") {
-    respond(res, 200, { commands: commandBus.getHandlerNames() }, pretty);
+    respond(
+      res,
+      200,
+      {
+        commands: commandBus.getHandlerNames(),
+        contracts: commandBus.getHandlerNames().flatMap((name) => {
+          const contract = commandBus.getContract(name);
+          return contract ? [documentCommand(name, contract)] : [];
+        }),
+      },
+      pretty,
+    );
     return;
   }
 
   if (req.method === "POST" && pathname === "/commands/send") {
-    let body = "";
-    req.on("data", (chunk) => {
-      body += chunk;
+    const chunks: Buffer[] = [];
+    let bodyBytes = 0;
+    let oversized = false;
+    req.on("data", (chunk: Buffer) => {
+      if (oversized) return;
+      bodyBytes += chunk.length;
+      if (bodyBytes > 1024 * 1024) {
+        oversized = true;
+        respond(
+          res,
+          413,
+          { error: { code: "INVALID_PAYLOAD", message: "Command body exceeds 1 MiB" } },
+          pretty,
+        );
+        return;
+      }
+      chunks.push(chunk);
     });
     req.on("end", async () => {
+      if (oversized) return;
+      let request: unknown;
       try {
-        const { name, payload } = JSON.parse(body) as { name: string; payload: unknown };
-        if (!name) {
-          respond(res, 400, { error: "Missing 'name' field" }, pretty);
-          return;
-        }
-        if (!commandBus.hasHandler(name)) {
-          respond(res, 404, { error: `No handler for command: ${name}` }, pretty);
-          return;
-        }
-        const response = await commandBus.send(
-          name as string & keyof CommandRegistry,
-          payload as CommandRegistry[string & keyof CommandRegistry]["payload"],
+        request = JSON.parse(Buffer.concat(chunks).toString("utf8"));
+      } catch {
+        respond(
+          res,
+          400,
+          { error: { code: "INVALID_COMMAND", message: "Request must contain valid JSON" } },
+          pretty,
         );
-        respond(res, 200, { response }, pretty);
-      } catch (err) {
-        respond(res, 500, { error: err instanceof Error ? err.message : String(err) }, pretty);
+        return;
       }
+      if (
+        !request ||
+        typeof request !== "object" ||
+        Array.isArray(request) ||
+        Object.keys(request).some((key) => key !== "name" && key !== "payload")
+      ) {
+        respond(
+          res,
+          400,
+          {
+            error: {
+              code: "INVALID_COMMAND",
+              message: "Expected an object with name and optional payload",
+            },
+          },
+          pretty,
+        );
+        return;
+      }
+      const { name, payload } = request as { name?: unknown; payload?: unknown };
+      const result = await executeExternalCommand(commandBus, name, payload);
+      if (result.ok) respond(res, 200, { response: result.response }, pretty);
+      else respond(res, commandErrorStatus(result.error), { error: result.error }, pretty);
     });
     return;
   }
@@ -308,9 +369,9 @@ function startServer(
       });
       srv.listen(tryPort, "127.0.0.1", () => {
         server = srv;
-        actualPort = tryPort;
-        debugLog.info("debug-server", `Listening on 127.0.0.1:${tryPort}`);
-        resolve(tryPort);
+        actualPort = (srv.address() as import("node:net").AddressInfo).port;
+        debugLog.info("debug-server", `Listening on 127.0.0.1:${actualPort}`);
+        resolve(actualPort);
       });
     }
     tryListen(port);
@@ -336,7 +397,7 @@ export default defineFeature<Deps>({
     // Register recorder early to capture all subsequent registrations
     registerRecorder(commandBus, eventBus);
 
-    let configuredPort = 19400;
+    let configuredPort = automation ? 0 : 19400;
     let enabled = false;
 
     commands.handle(DEBUG_SERVER_START, async () => {
@@ -350,8 +411,8 @@ export default defineFeature<Deps>({
 
     events.on(SETTINGS_CHANGED, (payload) => {
       const { settings } = payload as SettingsChangedEvent;
-      const newEnabled = isDev || settings.debugServer.enabled;
-      const newPort = settings.debugServer.port;
+      const newEnabled = automation || isDev || settings.debugServer.enabled;
+      const newPort = automation ? 0 : settings.debugServer.port;
 
       const needsRestart = newEnabled !== enabled || (newEnabled && newPort !== configuredPort);
       enabled = newEnabled;

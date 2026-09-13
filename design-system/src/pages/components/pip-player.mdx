@@ -1,0 +1,238 @@
+---
+title: PiP Player
+---
+
+import { ComponentPreview } from "../../components/ComponentPreview"
+
+# PiP Player
+
+Always-on-top floating video player that appears when switching away from a tab with a playing video. A separate desktop window — independent of the browser — positioned at the bottom-right corner of the screen.
+
+<ComponentPreview label="PiP Player (hover state)">
+  <div style={{
+    position: "relative",
+    width: 400,
+    height: 225,
+    borderRadius: 12,
+    background: "oklch(0.15 0 0)",
+    overflow: "hidden",
+    boxShadow: "0 8px 32px oklch(0 0 0 / 0.35), 0 2px 8px oklch(0 0 0 / 0.18)",
+  }}>
+    {/* Simulated video content */}
+    <div style={{
+      position: "absolute",
+      inset: 0,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      color: "oklch(1 0 0 / 0.15)",
+      fontSize: "3rem",
+    }}>
+      <i className="fa-solid fa-film" />
+    </div>
+    {/* Hover scrim */}
+    <div style={{
+      position: "absolute",
+      inset: 0,
+      borderRadius: 12,
+      background: "oklch(0 0 0 / 0.45)",
+    }} />
+    {/* Return button */}
+    <button type="button" style={{
+      position: "absolute",
+      top: 8,
+      left: 8,
+      width: 28,
+      height: 28,
+      borderRadius: "50%",
+      border: "none",
+      background: "oklch(1 0 0 / 0.9)",
+      color: "oklch(0.25 0 0)",
+      fontSize: "0.625rem",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      boxShadow: "0 2px 8px oklch(0 0 0 / 0.25)",
+      cursor: "pointer",
+    }}>
+      <i className="fa-solid fa-up-right-from-square" />
+    </button>
+    {/* Play/Pause button */}
+    <button type="button" style={{
+      position: "absolute",
+      top: "50%",
+      left: "50%",
+      transform: "translate(-50%, -50%)",
+      width: 48,
+      height: 48,
+      borderRadius: "50%",
+      border: "none",
+      background: "white",
+      color: "oklch(0.15 0 0)",
+      fontSize: "1.125rem",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      boxShadow: "0 4px 16px oklch(0 0 0 / 0.3)",
+      cursor: "pointer",
+    }}>
+      <i className="fa-solid fa-pause" />
+    </button>
+    {/* Close button */}
+    <button type="button" style={{
+      position: "absolute",
+      top: 8,
+      right: 8,
+      width: 28,
+      height: 28,
+      borderRadius: "50%",
+      border: "none",
+      background: "oklch(1 0 0 / 0.9)",
+      color: "oklch(0.25 0 0)",
+      fontSize: "0.625rem",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      boxShadow: "0 2px 8px oklch(0 0 0 / 0.25)",
+      cursor: "pointer",
+    }}>
+      <i className="fa-solid fa-xmark" />
+    </button>
+  </div>
+</ComponentPreview>
+
+## Anatomy
+
+1. **Content window** — frameless, transparent BrowserWindow containing the tab's WebContentsView
+2. **Overlay window** — transparent child BrowserWindow on top with hover controls
+3. **Scrim** — semi-transparent dark overlay, visible on hover
+4. **Play/Pause button** — centered, large circular button
+5. **Return button** — top-left corner, small circular button
+6. **Close button** — top-right corner, small circular button
+
+---
+
+## Visual Specs
+
+### Content Window
+
+| Property | Token/Value |
+|----------|-------------|
+| Size | `400px` × `225px` (16:9) |
+| Position | Bottom-right of primary display, `24px` margin |
+| Border radius | `12px` (on the WebContentsView) |
+| Background | Transparent (video fills entire area) |
+| Always on top | `true` |
+
+### Overlay / Scrim
+
+| Property | Token/Value |
+|----------|-------------|
+| Background | `oklch(0 0 0 / 0.45)` |
+| Border radius | `12px` |
+| Shadow | `0 8px 32px oklch(0 0 0 / 0.35), 0 2px 8px oklch(0 0 0 / 0.18)` |
+
+### Play/Pause Button
+
+| Property | Token/Value |
+|----------|-------------|
+| Size | `48px` × `48px` |
+| Border radius | `50%` (fully round) |
+| Background | `white` |
+| Icon color | `oklch(0.15 0 0)` |
+| Icon size | `1.125rem` |
+| Box shadow | `0 4px 16px oklch(0 0 0 / 0.3)` |
+| Position | Centered in overlay |
+
+### Corner Buttons (Return, Close)
+
+| Property | Token/Value |
+|----------|-------------|
+| Size | `28px` × `28px` |
+| Border radius | `50%` (fully round) |
+| Background | `oklch(1 0 0 / 0.9)` |
+| Icon color | `oklch(0.25 0 0)` |
+| Icon size | `0.625rem` |
+| Box shadow | `0 2px 8px oklch(0 0 0 / 0.25)` |
+| Return position | `top: 8px; left: 8px` |
+| Close position | `top: 8px; right: 8px` |
+
+---
+
+## States
+
+### Overlay States
+
+| State | Effect |
+|-------|--------|
+| Default (no hover) | Scrim and buttons hidden (opacity 0) |
+| Hover | Scrim and buttons fade in (opacity 1) |
+
+### Button States
+
+| State | Effect |
+|-------|--------|
+| Default | As specified above |
+| Hover | `scale(1.1)` |
+| Active/Pressed | `scale(0.95)` |
+
+---
+
+## Behavior
+
+- **Trigger**: Automatically activates when switching away from a tab playing an HTML5 `<video>` element.
+- **Video continuity**: The WebContentsView is moved (not recreated), so video playback is uninterrupted.
+- **Single instance**: Only one PiP player at a time. Activating PiP for a new tab replaces the previous.
+- **Auto-dismiss**: PiP dismisses when the source tab is reactivated.
+- **Close**: Pauses the video and hides the PiP window.
+- **Return to tab**: Activates the source tab (PiP auto-dismisses).
+- **Tab close**: If the source tab is closed, PiP disappears immediately.
+- **Play/Pause icon**: Toggles between `fa-pause` and `fa-play` based on current state.
+
+---
+
+## Animation & Motion
+
+| Transition | Duration | Easing |
+|-----------|----------|--------|
+| Scrim opacity | `200ms` | `ease-out` |
+| Button opacity | `200ms` | `ease-out` |
+| Button scale (hover) | `150ms` | `ease-out` |
+
+`prefers-reduced-motion`: All transitions should be instant.
+
+---
+
+## Keyboard & Focus
+
+The PiP window is `focusable: false` — it never steals keyboard focus from the current application. All interactions are mouse-only.
+
+---
+
+## Accessibility
+
+- Play/Pause button: `aria-label="Toggle play/pause"`.
+- Return button: `aria-label="Return to tab"`.
+- Close button: `aria-label="Close"`.
+- Play/Pause size 48px exceeds `var(--click-target-min)` (24px).
+- Corner buttons at 28px exceed minimum click target.
+- Window is `skipTaskbar: true` and `focusable: false` — behaves as a non-intrusive overlay.
+
+---
+
+## Layout & Composition
+
+| Property | Value |
+|----------|-------|
+| Parent | None (independent desktop window) |
+| Position | Screen-absolute, bottom-right of primary display |
+| Z-index | Always-on-top (OS level) |
+| Architecture | Two BrowserWindows: content (holds WCV) + overlay (controls) |
+
+---
+
+## Related
+
+- [Tabs](/components/tabs) — tab activation triggers PiP check
+- [Web Content Host](/components/web-content-host) — WCV management
+- [Sub-Tab Overlay](/components/sub-tab-overlay) — similar two-window pattern

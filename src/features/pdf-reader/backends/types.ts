@@ -1,7 +1,3 @@
-export interface PdfBackend {
-  loadDocument(data: Uint8Array): Promise<PdfDocument>;
-}
-
 export interface PdfDocument {
   readonly pageCount: number;
   getOutline(): Promise<OutlineEntry[]>;
@@ -10,7 +6,7 @@ export interface PdfDocument {
   getPageText(pageIndex: number): Promise<string>;
   getPageTextItems(pageIndex: number): Promise<TextItem[]>;
   searchPage(pageIndex: number, term: string): Promise<SearchMatch[]>;
-  destroy(): void;
+  destroy(): Promise<void>;
 }
 
 export interface TextItem {

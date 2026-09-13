@@ -1,3 +1,11 @@
+import type { z } from "zod";
+import type { CommandTypes } from "../../bus/contract";
+import type {
+  CommandPaletteExecutePayloadSchema,
+  CommandPaletteSearchVisitsPayloadSchema,
+  commandContracts,
+  SuggestionSchema,
+} from "./command-palette.contracts";
 // ── Command names ────────────────────────────────────────────────
 export const COMMAND_PALETTE_SHOW = "command-palette:show" as const;
 export const COMMAND_PALETTE_HIDE = "command-palette:hide" as const;
@@ -11,36 +19,20 @@ export const COMMAND_PALETTE_HIDDEN = "command-palette:hidden" as const;
 export const COMMAND_PALETTE_SUGGESTIONS = "command-palette:suggestions" as const;
 
 // ── Payload types ────────────────────────────────────────────────
-export interface CommandPaletteExecutePayload {
-  command: string;
-  inCurrentTab?: boolean;
-}
+export type CommandPaletteExecutePayload = z.infer<typeof CommandPaletteExecutePayloadSchema>;
 
-export interface CommandPaletteSearchVisitsPayload {
-  query: string;
-}
+export type CommandPaletteSearchVisitsPayload = z.infer<
+  typeof CommandPaletteSearchVisitsPayloadSchema
+>;
 
-export interface Suggestion {
-  url: string;
-  title: string;
-  visitCount: number;
-}
+export type Suggestion = z.infer<typeof SuggestionSchema>;
 
 export interface CommandPaletteSuggestionsEvent {
   suggestions: Suggestion[];
 }
 
 // ── Command registry ─────────────────────────────────────────────
-export type CommandPaletteCommands = {
-  [COMMAND_PALETTE_SHOW]: { payload: undefined; response: undefined };
-  [COMMAND_PALETTE_HIDE]: { payload: undefined; response: undefined };
-  [COMMAND_PALETTE_TOGGLE]: { payload: undefined; response: undefined };
-  [COMMAND_PALETTE_EXECUTE]: { payload: CommandPaletteExecutePayload; response: undefined };
-  [COMMAND_PALETTE_SEARCH_VISITS]: {
-    payload: CommandPaletteSearchVisitsPayload;
-    response: Suggestion[];
-  };
-};
+export type CommandPaletteCommands = CommandTypes<typeof commandContracts>;
 
 // ── Event registry ───────────────────────────────────────────────
 export type CommandPaletteEvents = {

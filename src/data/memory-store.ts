@@ -120,7 +120,7 @@ class MemoryCollection<T> implements Collection<T> {
   }
 }
 
-export { MemoryCollection, evaluateQuery };
+export { evaluateQuery, MemoryCollection };
 
 export class MemoryDataStore implements DataStore {
   private collections = new Map<string, MemoryCollection<unknown>>();

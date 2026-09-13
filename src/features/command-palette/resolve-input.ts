@@ -1,12 +1,8 @@
+import type { z } from "zod";
+import type { SearchProviderSchema } from "./resolve-input.contracts";
 // ── Types ───────────────────────────────────────────────────────
 
-export interface SearchProvider {
-  id: string;
-  bang: string;
-  name: string;
-  icon?: string;
-  urlTemplate: string; // e.g. "https://www.google.com/search?q={query}"
-}
+export type SearchProvider = z.infer<typeof SearchProviderSchema>;
 
 export type ResolvedInput =
   | { type: "search"; provider: string; query: string; url: string }

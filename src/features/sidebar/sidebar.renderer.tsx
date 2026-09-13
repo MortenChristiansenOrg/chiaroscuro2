@@ -27,14 +27,14 @@ import type { Workspace } from "../workspaces/workspaces.shared";
 import { useWorkspacesStore } from "../workspaces/workspaces.store";
 import { PinnedTabsStrip } from "./PinnedTabsStrip";
 import { SidebarDragProvider } from "./SidebarContext";
-import { TabSection } from "./TabSection";
 import { useSidebarStore } from "./sidebar.store";
+import { TabSection } from "./TabSection";
 
 // ── Re-exports for external consumers ───────────────────────────
 
-export { hashToHue, Favicon } from "./Favicon";
-export { TabItem } from "./TabItem";
+export { Favicon, hashToHue } from "./Favicon";
 export { PinnedTabsStrip } from "./PinnedTabsStrip";
+export { TabItem } from "./TabItem";
 
 // ── Shared types ────────────────────────────────────────────────
 
@@ -112,10 +112,15 @@ function useExitAnimation(tabs: Map<TabId, Tab>) {
     }
     prevTabsRef.current = new Map(tabs);
     if (removed.length === 0) return;
-    setExitingTabs(removed);
+    setExitingTabs((current) => [...current, ...removed]);
+  }, [tabs]);
+
+  // New tabs and metadata updates must not cancel a closed row's removal.
+  useLayoutEffect(() => {
+    if (exitingTabs.length === 0) return;
     const timer = setTimeout(() => setExitingTabs([]), 200);
     return () => clearTimeout(timer);
-  }, [tabs]);
+  }, [exitingTabs]);
 
   const exitingIds = new Set(exitingTabs.map((t) => t.id));
   return { exitingTabs, exitingIds };
@@ -404,7 +409,7 @@ export function SidebarPanel() {
             />
           </nav>
         </SidebarDragProvider>
-        {/* Invisible resize handle */}
+        {/* biome-ignore lint/a11y/useSemanticElements: interactive window splitter, not a thematic break */}
         <div
           className="absolute top-0 right-0 h-full cursor-col-resize"
           style={{ width: "4px" }}

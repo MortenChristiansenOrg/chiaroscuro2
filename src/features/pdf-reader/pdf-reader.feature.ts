@@ -1,5 +1,5 @@
-import { registerFeature } from "../../renderer/src/Shell";
 import { registerBuiltInPage } from "../../renderer/src/components/BuiltInPage";
+import { registerFeature } from "../../renderer/src/Shell";
 import { subscribeToEvents } from "./pdf-reader.store";
 
 registerBuiltInPage("/pdf-reader", () => import("./pdf-reader.renderer"));

@@ -1,13 +1,14 @@
+import { mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { BrowserWindow, Menu, app, ipcMain, screen } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, powerMonitor, screen } from "electron";
 import { CommandBus } from "../bus/command-bus";
+import { commandContracts } from "../bus/command-contracts";
 import { EventBus } from "../bus/event-bus";
 import { bridgeBusToIpc } from "../bus/ipc-main-bridge";
 import type { CommandRegistry, EventRegistry, MergeRegistries } from "../bus/types";
 import { createDataStore } from "../data/store";
 import type { DataStore } from "../data/types";
-import appState from "../features/app-state/app-state.main";
-import { loadPersistedState, onWindowBoundsChanged } from "../features/app-state/app-state.main";
+import appState, { loadPersistedState } from "../features/app-state/app-state.main";
 import type { AppStateCommands, AppStateEvents } from "../features/app-state/app-state.shared";
 import commandPalette from "../features/command-palette/command-palette.main";
 import type {
@@ -19,8 +20,7 @@ import type {
   ContextMenuCommands,
   ContextMenuEvents,
 } from "../features/context-menu/context-menu.shared";
-import debugServer from "../features/debug-server/debug-server.main";
-import { getActualPort } from "../features/debug-server/debug-server.main";
+import debugServer, { getActualPort } from "../features/debug-server/debug-server.main";
 import type {
   DebugServerCommands,
   DebugServerEvents,
@@ -44,8 +44,7 @@ import type {
 } from "../features/external-link/external-link.shared";
 import findText from "../features/find-text/find-text.main";
 import type { FindTextCommands, FindTextEvents } from "../features/find-text/find-text.shared";
-import folders from "../features/folders/folders.main";
-import {
+import folders, {
   getFoldersForLevel,
   setFolderOrder,
   start as startFolders,
@@ -53,8 +52,9 @@ import {
 import type { FoldersCommands, FoldersEvents } from "../features/folders/folders.shared";
 import installer from "../features/installer/installer.main";
 import type { InstallerCommands, InstallerEvents } from "../features/installer/installer.shared";
-import localWebApp from "../features/local-web-app/local-web-app.main";
-import { start as startLocalWebApp } from "../features/local-web-app/local-web-app.main";
+import localWebApp, {
+  start as startLocalWebApp,
+} from "../features/local-web-app/local-web-app.main";
 import type {
   LocalWebAppCommands,
   LocalWebAppEvents,
@@ -66,12 +66,16 @@ import type {
   PermissionsCommands,
   PermissionsEvents,
 } from "../features/permissions/permissions.shared";
-import pinnedTabs from "../features/pinned-tabs/pinned-tabs.main";
-import { isPinned, start as startPinnedTabs } from "../features/pinned-tabs/pinned-tabs.main";
+import pinnedTabs, {
+  isPinned,
+  start as startPinnedTabs,
+} from "../features/pinned-tabs/pinned-tabs.main";
 import type {
   PinnedTabsCommands,
   PinnedTabsEvents,
 } from "../features/pinned-tabs/pinned-tabs.shared";
+import pip from "../features/pip/pip.main";
+import type { PipCommands, PipEvents } from "../features/pip/pip.shared";
 import settings from "../features/settings/settings.main";
 import {
   SETTINGS_GET,
@@ -80,15 +84,14 @@ import {
 } from "../features/settings/settings.shared";
 import sidebar from "../features/sidebar/sidebar.main";
 import type { SidebarCommands, SidebarEvents } from "../features/sidebar/sidebar.shared";
-import subTabs from "../features/sub-tabs/sub-tabs.main";
+import subTabs, { getSubTabSnapshot } from "../features/sub-tabs/sub-tabs.main";
 import type { SubTabsCommands, SubTabsEvents } from "../features/sub-tabs/sub-tabs.shared";
 import tabContextMenu from "../features/tab-context-menu/tab-context-menu.main";
 import type {
   TabContextMenuCommands,
   TabContextMenuEvents,
 } from "../features/tab-context-menu/tab-context-menu.shared";
-import tabCustomization from "../features/tab-customization/tab-customization.main";
-import {
+import tabCustomization, {
   getCustomization,
   start as startTabCustomization,
 } from "../features/tab-customization/tab-customization.main";
@@ -96,8 +99,7 @@ import type {
   TabCustomizationCommands,
   TabCustomizationEvents,
 } from "../features/tab-customization/tab-customization.shared";
-import tabs from "../features/tabs/tabs.main";
-import {
+import tabs, {
   getAllTabs,
   getTab,
   getTabsForWorkspace,
@@ -123,8 +125,11 @@ import type {
 import zoom from "../features/zoom/zoom.main";
 import type { ZoomCommands, ZoomEvents } from "../features/zoom/zoom.shared";
 import { ElectronPlatform } from "../platform/electron";
+import { GithubSessionDiagnostics } from "../platform/github-session-diagnostics";
+import { APP_CHANNELS, runtimeChannel } from "../shared/app-channel";
 import { logError } from "../shared/log";
 import type { TabId, WindowId, WorkspaceId } from "../shared/types";
+import { configureAppIdentity } from "./app-identity";
 
 // Log uncaught exceptions to stderr for debugging
 process.on("uncaughtException", (err) => {
@@ -134,16 +139,36 @@ process.on("unhandledRejection", (reason) => {
   console.error("[unhandledRejection]", reason);
 });
 
-const iconFile = process.platform === "win32" ? "icon.ico" : "icon.png";
+const isTest = process.env.NODE_ENV === "test";
+const metadata = app.isPackaged
+  ? JSON.parse(readFileSync(path.join(app.getAppPath(), "package.json"), "utf8"))
+  : {};
+const appChannel = runtimeChannel(app.isPackaged, isTest, metadata.releaseChannel);
+const identity = APP_CHANNELS[appChannel];
+const iconFile = `${identity.icon}.${process.platform === "win32" ? "ico" : "png"}`;
 const iconPath = path.join(__dirname, "../../resources", iconFile);
 
 // ── Dev-mode isolation ───────────────────────────────────────────
 // Use a separate app identity so dev instances don't conflict with
 // the production single-instance lock or userData.
-const isDev = !!process.env.ELECTRON_RENDERER_URL;
-if (isDev) {
-  app.setName("Chiaroscuro Dev");
+const isDev = appChannel === "dev";
+const isAutomation = process.env.NODE_ENV === "test" && process.env.CHIAROSCURO_AUTOMATION === "1";
+// Isolate Chromium cookies, caches, sessions and the single-instance lock, not just our JSON data.
+let testProfile: string | undefined;
+if (isTest) {
+  if (!process.env.DATA_DIR || !path.isAbsolute(process.env.DATA_DIR)) {
+    throw new Error("Tests require an absolute DATA_DIR; use the Electron verification fixture.");
+  }
+  testProfile = path.join(process.env.DATA_DIR, "chromium");
+  const downloadsPath = path.join(process.env.DATA_DIR, "downloads");
+  mkdirSync(downloadsPath, { recursive: true });
+  app.setPath("desktop", downloadsPath);
+  app.setPath("downloads", downloadsPath);
 }
+configureAppIdentity(app, appChannel, testProfile);
+console.log(
+  `[app] channel=${appChannel} version=${app.getVersion()} profile=${app.getPath("userData")}`,
+);
 
 // ── Single-instance lock (must run before whenReady) ─────────────
 // Skip in test mode: parallel Playwright workers each launch their own
@@ -184,6 +209,7 @@ type AllCommands = MergeRegistries<
     PermissionsCommands,
     PdfReaderCommands,
     ExtensionsCommands,
+    PipCommands,
   ]
 >;
 
@@ -216,10 +242,11 @@ type AllEvents = MergeRegistries<
     PermissionsEvents,
     PdfReaderEvents,
     ExtensionsEvents,
+    PipEvents,
   ]
 >;
 
-const commands = new CommandBus<AllCommands>();
+const commands = new CommandBus<AllCommands>(commandContracts);
 const events = new EventBus<AllEvents>();
 
 // ── App state ───────────────────────────────────────────────────
@@ -227,14 +254,15 @@ let activeWindowId: WindowId | undefined;
 let activeTabId: TabId | undefined;
 let activeWorkspaceId: WorkspaceId | undefined;
 
-if (isDev) app.setPath("userData", path.join(app.getPath("userData"), "..", "chiaroscuro-dev"));
-const platform = new ElectronPlatform(() => activeWindowId);
-const dataDir = process.env.DATA_DIR ?? path.join(app.getPath("userData"), "data");
+const githubSessions = new GithubSessionDiagnostics();
+const platform = new ElectronPlatform(() => activeWindowId, githubSessions);
+const dataDir =
+  (isDev ? process.env.DATA_DIR : undefined) ?? path.join(app.getPath("userData"), "data");
 const dataStore: DataStore = createDataStore(dataDir);
 
 function initOverlays(): void {
   if (!activeWindowId) return;
-  if (process.env.NODE_ENV !== "test") {
+  if (process.env.NODE_ENV !== "test" || isAutomation) {
     platform.initTooltipOverlay(activeWindowId);
   }
   platform.initCommandPaletteOverlay(activeWindowId);
@@ -248,7 +276,11 @@ function createWindow(windowBounds?: {
 }): BrowserWindow {
   const win = new BrowserWindow({
     ...(windowBounds ?? { width: 1200, height: 800 }),
+    // Stable across process restarts; transient overlay windows remain unnamed.
+    name: "main-window",
+    windowStatePersistence: true,
     icon: iconPath,
+    title: identity.productName,
     titleBarStyle: "hidden",
     backgroundMaterial: "acrylic",
     webPreferences: {
@@ -258,6 +290,7 @@ function createWindow(windowBounds?: {
   });
 
   activeWindowId = String(win.id) as WindowId;
+  win.on("page-title-updated", (event) => event.preventDefault());
 
   // Hook BrowserWindow webContents for shortcut support
   platform.hookWebContents(win.webContents);
@@ -269,20 +302,6 @@ function createWindow(windowBounds?: {
   win.on("unmaximize", () => {
     if (!win.isDestroyed()) events.emit("window:maximized-changed", { maximized: false });
   });
-
-  // Track window bounds for app-state persistence
-  let boundsTimer: ReturnType<typeof setTimeout> | undefined;
-  const trackBounds = () => {
-    if (boundsTimer) clearTimeout(boundsTimer);
-    boundsTimer = setTimeout(() => {
-      if (win.isDestroyed()) return;
-      if (!win.isMaximized() && !win.isMinimized()) {
-        onWindowBoundsChanged(win.getBounds());
-      }
-    }, 200);
-  };
-  win.on("move", trackBounds);
-  win.on("resize", trackBounds);
 
   if (isDev && process.env.ELECTRON_RENDERER_URL) {
     win.loadURL(process.env.ELECTRON_RENDERER_URL);
@@ -298,6 +317,7 @@ const deps = {
   platform,
   dataStore,
   isDev,
+  appChannel,
   getActiveWindowId: () => activeWindowId,
   getActiveTabId: () => activeTabId,
   setActiveTabId: (id: TabId | undefined) => {
@@ -310,6 +330,12 @@ const deps = {
 };
 
 if (gotLock) {
+  app.on("render-process-gone", (_event, contents, details) => {
+    logError("main", "renderer process exited")({ webContentsId: contents.id, ...details });
+  });
+  app.on("child-process-gone", (_event, details) => {
+    logError("main", "child process exited")(details);
+  });
   app.whenReady().then(async () => {
     await dataStore.initialize();
 
@@ -357,7 +383,17 @@ if (gotLock) {
     tooltip.register(deps);
     contextMenu.register(deps);
     folders.register({ ...deps, getTab, getTabsForWorkspace, setTabFolderId, setTabOrder });
-    zoom.register(deps);
+    zoom.register({
+      ...deps,
+      getActiveTabId: () => {
+        const parentId = deps.getActiveTabId();
+        return (
+          getSubTabSnapshot()
+            .filter((tab) => tab.parentTabId === parentId)
+            .at(-1)?.id ?? parentId
+        );
+      },
+    });
     devTools.register(deps);
     domainCss.register({ ...deps, dataDir, getTabsSnapshot: getAllTabs });
     downloads.register(deps);
@@ -374,6 +410,7 @@ if (gotLock) {
     // Set up extension API bridge (preloads + IPC) before extensions are loaded
     platform.setupExtensionBridge();
     extensions.register(deps);
+    pip.register(deps);
 
     // Register debug state providers
     registerDebugState("tabs", () => {
@@ -382,6 +419,7 @@ if (gotLock) {
       return { all, activeTabId };
     });
     registerDebugState("workspaces", () => ({ activeWorkspaceId }));
+    registerDebugState("github-session", () => githubSessions.getState());
     registerDebugState("settings", () => commands.send(SETTINGS_GET, undefined).catch(() => null));
     registerDebugState("window", () => {
       const win =
@@ -394,14 +432,53 @@ if (gotLock) {
         maximized: win && !win.isDestroyed() ? win.isMaximized() : null,
       };
     });
+    powerMonitor.on("suspend", () => void githubSessions.snapshot("suspend"));
+    powerMonitor.on("resume", () => void githubSessions.snapshot("resume"));
     registerDebugState("debug-server", () => ({ actualPort: getActualPort() }));
+    registerDebugState("sub-tabs", getSubTabSnapshot);
+    registerDebugState("targets", () => {
+      const targets = platform.getDebugTargets();
+      const shell = targets.find((target) => target.windowId === Number(activeWindowId));
+      if (shell) shell.kind = "shell";
+      for (const target of targets) {
+        const subTab = getSubTabSnapshot().find((tab) => tab.id === target.tabId);
+        if (subTab) {
+          target.kind = "sub-tab";
+          target.parentId = `tab:${subTab.parentTabId}`;
+        }
+      }
+      for (const [id, tab] of getAllTabs()) {
+        if (tab.builtIn && shell)
+          targets.push({
+            ...shell,
+            id: `tab:${id}`,
+            kind: "built-in",
+            tabId: id,
+            parentId: shell.id,
+            url: tab.url,
+            title: tab.title,
+            visible: activeTabId === id && shell.visible,
+          });
+      }
+      return targets;
+    });
+    if (isAutomation) {
+      Object.assign(globalThis, {
+        __testHooks: { commandBus: commands, getDebugPort: getActualPort, ready: false },
+      });
+    }
 
     // Load persisted layout state before creating the window
     const getDisplayBounds = () => screen.getAllDisplays().map((d) => d.workArea);
     const appStateData = await loadPersistedState(dataStore, getDisplayBounds);
 
     // Bridge bus to IPC (once, before any window creation)
-    bridgeBusToIpc(commands, events, () => BrowserWindow.getAllWindows());
+    bridgeBusToIpc(
+      commands,
+      events,
+      () => BrowserWindow.getAllWindows(),
+      (sender) => platform.isCommandSender(sender),
+    );
 
     // Phase 2: wait for renderer subscriptions, then emit initial state.
     // Register BEFORE createWindow — the renderer sends "renderer:ready" at
@@ -431,6 +508,10 @@ if (gotLock) {
       await externalLink.start?.(deps);
       await permissions.start?.(deps);
       await extensions.start?.(deps);
+      if (isAutomation)
+        Object.assign((globalThis as unknown as { __testHooks: object }).__testHooks, {
+          ready: true,
+        });
     });
 
     const win = createWindow(appStateData.windowBounds);
@@ -456,19 +537,25 @@ if (gotLock) {
     });
   });
 
-  app.on("before-quit", () => {
+  let quitting = false;
+  app.on("before-quit", (event) => {
+    if (quitting) return;
     platform.deactivateShortcuts();
     debugServer.teardown?.();
     localWebApp.teardown?.();
     installer.teardown?.();
     externalLink.teardown?.();
     // Skip expensive persistence in test mode — speeds up Playwright teardown
-    if (process.env.NODE_ENV === "test") return;
+    if (process.env.NODE_ENV === "test" && !isAutomation) return;
+    event.preventDefault();
+    quitting = true;
     // Flush app-state immediately before data store teardown
     commands
       .send("app-state:save", undefined)
       .catch(logError("main", "flush app-state"))
-      .finally(() => dataStore.destroy().catch(logError("main", "destroy datastore")));
+      .then(() => dataStore.destroy())
+      .catch(logError("main", "destroy datastore"))
+      .finally(() => app.quit());
   });
 
   app.on("window-all-closed", () => {

@@ -1,4 +1,3 @@
-export type { FolderId, TabId, WindowId, WorkspaceId } from "./types";
 export type {
   FaBrandsIcon,
   FaIcon,
@@ -7,3 +6,4 @@ export type {
   FaSolidIcon,
   FaStyle,
 } from "./fa-icons.generated";
+export type { FolderId, TabId, WindowId, WorkspaceId } from "./types";

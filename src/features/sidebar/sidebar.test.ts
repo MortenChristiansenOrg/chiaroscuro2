@@ -3,8 +3,8 @@ import { CommandBus } from "../../bus/command-bus";
 import { EventBus } from "../../bus/event-bus";
 import { createMockPlatform } from "../../test-utils";
 import feature from "./sidebar.main";
-import { SIDEBAR_TOGGLE, SIDEBAR_VISIBILITY_CHANGED } from "./sidebar.shared";
 import type { SidebarCommands, SidebarEvents } from "./sidebar.shared";
+import { SIDEBAR_TOGGLE, SIDEBAR_VISIBILITY_CHANGED } from "./sidebar.shared";
 
 function setup() {
   const commands = new CommandBus<SidebarCommands>();

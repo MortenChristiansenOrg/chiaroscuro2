@@ -1,7 +1,11 @@
 {
-  "$schema": "https://biomejs.dev/schemas/1.9.4/schema.json",
-  "organizeImports": {
-    "enabled": true
+  "$schema": "https://biomejs.dev/schemas/2.5.12/schema.json",
+  "assist": {
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
   },
   "formatter": {
     "enabled": true,
@@ -17,12 +21,15 @@
   "linter": {
     "enabled": true,
     "rules": {
-      "recommended": true
+      "preset": "recommended",
+      "a11y": {
+        "noStaticElementInteractions": "off"
+      }
     }
   },
   "overrides": [
     {
-      "include": ["src/renderer/src/DesignMockups.tsx"],
+      "includes": ["**/src/renderer/src/DesignMockups.tsx"],
       "linter": {
         "rules": {
           "a11y": {
@@ -33,16 +40,28 @@
     }
   ],
   "files": {
-    "ignore": [
-      "dist/",
-      "out/",
-      "node_modules/",
-      "src/renderer/src/components/ui/",
-      "design-system/dist/",
-      "**/*.generated.ts",
-      ".agent-project/",
-      ".claude/worktrees/",
-      "test-results/"
+    "includes": [
+      "**",
+      "!!**/dist",
+      "!!**/out",
+      "!!**/node_modules",
+      "!!**/src/renderer/src/components/ui",
+      "!!**/design-system/dist",
+      "!!**/*.generated.ts",
+      "!!**/.agent-project",
+      "!!**/.claude/worktrees",
+      "!!**/test-results"
     ]
+  },
+  "css": {
+    "parser": {
+      "tailwindDirectives": true
+    },
+    "formatter": {
+      "enabled": false
+    },
+    "linter": {
+      "enabled": false
+    }
   }
 }

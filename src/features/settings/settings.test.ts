@@ -176,6 +176,18 @@ describe("settings commands", () => {
       });
     });
 
+    it("ignores retired PDF engine preferences without changing other settings", async () => {
+      const { commands, deps, dataStore } = setup();
+      await dataStore.setSetting("pdf-backend", "mupdf");
+      await dataStore.setSetting("default-search-provider", "!b");
+      await feature.start(deps);
+      const settings = await commands.send(SETTINGS_GET, undefined);
+      expect(settings.defaultSearchProviderId).toBe("!b");
+      expect(settings).not.toHaveProperty("pdfBackend");
+      await commands.send(SETTINGS_SAVE, { ...settings, pdfBackend: "mupdf" } as Settings);
+      expect(await commands.send(SETTINGS_GET, undefined)).not.toHaveProperty("pdfBackend");
+    });
+
     it("uses defaults when no persisted settings", async () => {
       const { events, deps } = setup();
       const listener = vi.fn();

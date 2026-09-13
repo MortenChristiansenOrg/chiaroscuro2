@@ -46,7 +46,7 @@ export interface Platform {
     windowId: WindowId,
     url: string,
     tabId?: TabId,
-    options?: { lazy?: boolean },
+    options?: { lazy?: boolean; cloneFrom?: TabId },
   ): Promise<TabId>;
   closeTab(tabId: TabId): Promise<void>;
   navigateTab(tabId: TabId, url: string): Promise<void>;
@@ -187,8 +187,8 @@ export interface Platform {
   /** Open URL without scheme filtering. Only for user-approved protocol launches. */
   openExternalApproved(url: string): Promise<void>;
   openPath(filePath: string): Promise<void>;
-  readClipboard(): string;
-  writeClipboard(text: string): void;
+  readClipboard(): Promise<string>;
+  writeClipboard(text: string): Promise<void>;
 
   // Tab content actions
   /** Copy the image at (x, y) in the tab to the system clipboard. */
@@ -196,7 +196,7 @@ export interface Platform {
   /** Trigger a download of the given URL in the tab's session. */
   downloadUrl(tabId: TabId, url: string): void;
   /** Execute JavaScript in the tab's webContents and return the result. */
-  executeJavaScript(tabId: TabId, code: string): Promise<unknown>;
+  executeJavaScript(tabId: TabId, code: string, userGesture?: boolean): Promise<unknown>;
 
   // Chrome extensions
 

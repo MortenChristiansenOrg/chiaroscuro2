@@ -1,22 +1,25 @@
 import fs from "node:fs";
 import path from "node:path";
 import {
-  net,
-  BrowserWindow,
-  Menu,
-  WebContentsView,
   app,
+  BrowserWindow,
   clipboard,
   dialog,
   globalShortcut,
   ipcMain,
+  Menu,
+  net,
   screen,
   session,
   shell,
+  systemPreferences,
+  type WebContentsView,
   webContents,
 } from "electron";
-import type { TabId, WindowId } from "../shared/types";
-import type { Bounds } from "../shared/types";
+import type { Bounds, TabId, WindowId } from "../shared/types";
+import type { GithubSessionDiagnostics } from "./github-session-diagnostics";
+import { TabBoundsAnimation } from "./tab-bounds-animation";
+import { closeTabContents, createTabView } from "./tab-view";
 import type { Platform, PlatformDownload } from "./types";
 
 const ALLOWED_SCHEMES_WEB = new Set(["http:", "https:", "about:", "data:"]);
@@ -67,6 +70,7 @@ box-shadow:0 4px 20px oklch(0 0 0/0.25),0 1px 3px oklch(0 0 0/0.15);
 cursor:pointer;display:flex;align-items:center;justify-content:center;
 transition:transform 200ms cubic-bezier(0.34,1.56,0.64,1);-webkit-font-smoothing:antialiased}
 button:hover{transform:scale(1.15)}button:active{transform:scale(0.95)}
+@media(prefers-reduced-motion:reduce){button{transition:none}button:hover,button:active{transform:none}}
 </style></head><body>
 <div id="backdrop"></div>
 <div id="btns" style="display:none">
@@ -75,7 +79,8 @@ button:hover{transform:scale(1.15)}button:active{transform:scale(0.95)}
 </div>
 <script>
 var bd=document.getElementById('backdrop'),btns=document.getElementById('btns');
-var pid=null,animId=null,D=200;
+var pid=null,animId=null,finishAnim=null,D=200;
+var reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
 function setParentTabId(id){pid=id}
 function positionButtons(fx,fy,fw,fh){
   var gap=12,btnH=108;
@@ -83,27 +88,31 @@ function positionButtons(fx,fy,fw,fh){
   btns.style.top=(fy+gap)+'px';
   btns.style.display='flex';
 }
-function cancelAnim(){if(animId){cancelAnimationFrame(animId);animId=null}}
+function cancelAnim(){if(animId){cancelAnimationFrame(animId);animId=null}if(finishAnim){var done=finishAnim;finishAnim=null;done()}}
 function enterAnimation(fx,fy,fw,fh){
   return new Promise(function(resolve){
     cancelAnim();
     positionButtons(fx,fy,fw,fh);
+    if(reducedMotion.matches){bd.style.opacity=1;resolve();return}
+    finishAnim=resolve;
     var start=performance.now();
     function tick(now){
       var t=Math.min((now-start)/D,1);
       bd.style.opacity=1-(1-t)*(1-t);
-      if(t<1){animId=requestAnimationFrame(tick)}else{animId=null;resolve()}
+      if(t<1){animId=requestAnimationFrame(tick)}else{animId=null;finishAnim=null;resolve()}
     }
     animId=requestAnimationFrame(tick);
   });
 }
 function exitAnimation(){
   return new Promise(function(resolve){
-    cancelAnim();var start=performance.now();
+    cancelAnim();
+    if(reducedMotion.matches){bd.style.opacity=0;btns.style.display='none';resolve();return}
+    finishAnim=resolve;var start=performance.now();
     function tick(now){
       var t=Math.min((now-start)/D,1);
       bd.style.opacity=1-t*t;
-      if(t<1){animId=requestAnimationFrame(tick)}else{animId=null;bd.style.opacity=0;btns.style.display='none';resolve()}
+      if(t<1){animId=requestAnimationFrame(tick)}else{animId=null;finishAnim=null;bd.style.opacity=0;btns.style.display='none';resolve()}
     }
     animId=requestAnimationFrame(tick);
   });
@@ -281,6 +290,63 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape')closePalette
 </script></body></html>`;
 
 export class ElectronPlatform implements Platform {
+  /** Read-only native inventory shared by HTTP discovery and Electron verification. */
+  getDebugTargets(): import("../features/debug-server/targets.shared").DebugTarget[] {
+    const windows = BrowserWindow.getAllWindows().filter((win) => !win.isDestroyed());
+    const targets: import("../features/debug-server/targets.shared").DebugTarget[] = windows.map(
+      (win) => ({
+        id: `window:${win.id}`,
+        kind:
+          win === this.paletteWin
+            ? "palette"
+            : win === this.subTabWin
+              ? "sub-tab-frame"
+              : win === this.tooltipWin
+                ? "tooltip"
+                : win.webContents.getURL().includes("/out/renderer/")
+                  ? "shell"
+                  : "window",
+        windowId: win.id,
+        parentId: win.getParentWindow() ? `window:${win.getParentWindow()?.id}` : null,
+        webContentsId: win.webContents.id,
+        cdpTargetId: win.webContents.getOrCreateDevToolsTargetId(),
+        url: win.webContents.getURL(),
+        title: win.getTitle(),
+        bounds: win.getBounds(),
+        visible: win.isVisible() && !win.isMinimized(),
+        focused: win.webContents.isFocused(),
+      }),
+    );
+    for (const [tabId, view] of this.views) {
+      if (view.webContents.isDestroyed()) continue;
+      const owner = windows.find((win) => win.contentView.children.includes(view));
+      const bounds = view.getBounds();
+      targets.push({
+        id: `tab:${tabId}`,
+        kind: "tab",
+        tabId,
+        windowId: owner?.id ?? null,
+        parentId: owner ? `window:${owner.id}` : null,
+        webContentsId: view.webContents.id,
+        cdpTargetId: view.webContents.getOrCreateDevToolsTargetId(),
+        url: view.webContents.getURL(),
+        title: view.webContents.getTitle(),
+        bounds,
+        visible:
+          !!owner?.isVisible() && !owner.isMinimized() && bounds.width > 0 && bounds.height > 0,
+        focused: view.webContents.isFocused(),
+      });
+    }
+    return targets;
+  }
+
+  /** Only app-owned UI renderers may invoke the privileged command bus. */
+  isCommandSender(sender: Electron.WebContents): boolean {
+    return [this.getWin(), this.paletteWin, this.subTabWin].some(
+      (win) => win && !win.isDestroyed() && win.webContents === sender,
+    );
+  }
+
   private shortcuts = new Map<string, () => void>();
   private localShortcuts = new Map<string, () => void>();
   private views = new Map<TabId, WebContentsView>();
@@ -291,7 +357,8 @@ export class ElectronPlatform implements Platform {
   private subTabWinReady = false;
   private subTabWinParentListenersSet = false;
   private subTabWinContentBounds: Bounds | null = null;
-  private tabBoundsAnimations = new Map<string, () => void>();
+  private tabBoundsAnimations = new TabBoundsAnimation();
+  private subTabWindowTransition = 0;
   private pendingPaletteJs: string | null = null;
   private permissionRequestHandler:
     | ((
@@ -326,7 +393,10 @@ export class ElectronPlatform implements Platform {
       ) => boolean)
     | undefined;
 
-  constructor(private getActiveWindowId: () => WindowId | undefined) {}
+  constructor(
+    private getActiveWindowId: () => WindowId | undefined,
+    private readonly sessionDiagnostics?: GithubSessionDiagnostics,
+  ) {}
 
   private getWin(windowId?: WindowId): BrowserWindow | undefined {
     const id = windowId ?? this.getActiveWindowId();
@@ -387,21 +457,20 @@ export class ElectronPlatform implements Platform {
     windowId: WindowId,
     url: string,
     existingTabId?: TabId,
-    options?: { lazy?: boolean },
+    options?: { lazy?: boolean; cloneFrom?: TabId },
   ): Promise<TabId> {
     const win = this.getWin(windowId);
     if (!win) throw new Error("No window found");
 
+    const source = options?.cloneFrom ? this.views.get(options.cloneFrom)?.webContents : undefined;
+    if (options?.cloneFrom && (!source || source.isDestroyed())) {
+      throw new Error("Cannot duplicate a missing tab");
+    }
+    if (!isAllowedUrl(url, "internal")) throw new Error(`Blocked URL scheme: ${url}`);
+    // Prepare identity before construction; clones retain their source session.
+    this.prepareSession(source?.session ?? session.defaultSession);
     const tabId = existingTabId ?? (crypto.randomUUID() as TabId);
-    const view = new WebContentsView({
-      webPreferences: {
-        sandbox: true,
-        contextIsolation: true,
-        nodeIntegration: false,
-        webSecurity: true,
-        preload: path.join(__dirname, "../preload/tab.js"),
-      },
-    });
+    const view = createTabView(source);
 
     // Match the CSS border-radius of the content area (--radius = 0.5rem = 8px)
     view.setBorderRadius(8);
@@ -411,13 +480,6 @@ export class ElectronPlatform implements Platform {
 
     // Hide initially — caller will activate
     view.setBounds({ x: 0, y: 0, width: 0, height: 0 });
-
-    const ses = view.webContents.session;
-    if (!this.sessionsWithHandlers.has(ses)) {
-      this.installPermissionHandlers(ses);
-      this.installDevicePermissionHandlers(ses);
-      this.sessionsWithHandlers.add(ses);
-    }
 
     view.webContents.setWindowOpenHandler(({ url, disposition }) => {
       // Check per-tab navigation blocking for new tabs/windows
@@ -433,13 +495,23 @@ export class ElectronPlatform implements Platform {
       }
 
       if (isAllowedUrl(url)) {
-        // Let registered callback handle it (sub-tabs, etc.)
+        // Let registered callback handle it (sub-tabs for links, etc.)
         if (this.windowOpenCallback?.(url, tabId, disposition)) {
           return { action: "deny" as const };
         }
-        // Fallback: navigate the current tab
-        view.webContents.loadURL(url);
-      } else if (this.protocolRequestCallback) {
+        // Fallback: open as a real popup window so window.opener works
+        // (needed for OAuth flows, payment windows, etc.)
+        const parent = this.getWin();
+        return {
+          action: "allow" as const,
+          overrideBrowserWindowOptions: {
+            parent,
+            autoHideMenuBar: true,
+            webPreferences: { sandbox: true, contextIsolation: true },
+          },
+        };
+      }
+      if (this.protocolRequestCallback) {
         try {
           const parsed = new URL(url);
           if (
@@ -457,6 +529,27 @@ export class ElectronPlatform implements Platform {
         }
       }
       return { action: "deny" as const };
+    });
+
+    // Secure popup windows created by the above handler — guard navigation
+    // and prevent nested popups from escaping to disallowed URLs.
+    view.webContents.on("did-create-window", (popupWin) => {
+      const wc = popupWin.webContents;
+
+      wc.setWindowOpenHandler(({ url: childUrl }) => {
+        if (isAllowedUrl(childUrl)) {
+          wc.loadURL(childUrl);
+        }
+        return { action: "deny" as const };
+      });
+
+      wc.on("will-navigate", (event, navUrl) => {
+        if (!isAllowedUrl(navUrl)) {
+          event.preventDefault();
+        }
+      });
+
+      this.hookWebContents(wc);
     });
 
     view.webContents.on("will-navigate", (event, navUrl) => {
@@ -525,8 +618,10 @@ export class ElectronPlatform implements Platform {
     }
 
     if (!options?.lazy) {
-      if (!isAllowedUrl(url, "internal")) throw new Error(`Blocked URL scheme: ${url}`);
-      view.webContents.loadURL(url);
+      // Reload the cloned controller entry without appending a URL or losing forward history.
+      // A restored, unloaded source has no native history yet.
+      if (source?.getURL()) view.webContents.reload();
+      else view.webContents.loadURL(url);
     }
 
     return tabId;
@@ -535,6 +630,11 @@ export class ElectronPlatform implements Platform {
   async closeTab(tabId: TabId): Promise<void> {
     const view = this.views.get(tabId);
     if (!view) return;
+    this.tabBoundsAnimations.cancel(view);
+
+    // Keep ownership intact if the page vetoes beforeunload. Native close is
+    // synchronous; only the destroyed event establishes completion.
+    await closeTabContents(view.webContents);
 
     // Remove from whichever window owns the view (main or sub-tab child window)
     const win = this.getWin();
@@ -553,7 +653,6 @@ export class ElectronPlatform implements Platform {
       }
     }
 
-    await view.webContents.close({ waitForBeforeUnload: true });
     this.views.delete(tabId);
   }
 
@@ -575,6 +674,7 @@ export class ElectronPlatform implements Platform {
   setTabBounds(tabId: TabId, bounds: Bounds): void {
     const view = this.views.get(tabId);
     if (!view) return;
+    this.tabBoundsAnimations.cancel(view);
     view.setBounds({
       x: Math.round(bounds.x),
       y: Math.round(bounds.y),
@@ -598,6 +698,7 @@ export class ElectronPlatform implements Platform {
   hideTab(tabId: TabId): void {
     const view = this.views.get(tabId);
     if (!view) return;
+    this.tabBoundsAnimations.cancel(view);
     view.setBounds({ x: 0, y: 0, width: 0, height: 0 });
   }
 
@@ -839,13 +940,7 @@ export class ElectronPlatform implements Platform {
     parent.on("resize", () => this.hideTooltip());
   }
 
-  showTooltip(opts: {
-    text: string;
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  }): void {
+  showTooltip(opts: { text: string; x: number; y: number; width: number; height: number }): void {
     const win = this.getWin();
     if (!win || win.isDestroyed() || !this.tooltipWin || this.tooltipWin.isDestroyed()) return;
 
@@ -908,7 +1003,7 @@ export class ElectronPlatform implements Platform {
 
   private ensureSubTabWindow(): void {
     if (this.subTabWin && !this.subTabWin.isDestroyed()) return;
-    if (process.env.NODE_ENV === "test") return;
+    if (process.env.NODE_ENV === "test" && process.env.CHIAROSCURO_AUTOMATION !== "1") return;
 
     const parent = this.getWin();
     if (!parent) return;
@@ -978,6 +1073,7 @@ export class ElectronPlatform implements Platform {
     frameBounds: Bounds,
     parentTabId: string,
   ): Promise<{ originX: number; originY: number }> {
+    const transition = ++this.subTabWindowTransition;
     this.ensureSubTabWindow();
 
     // Click origin relative to the sub-tab frame (for CSS transform-origin)
@@ -1004,6 +1100,7 @@ export class ElectronPlatform implements Platform {
       await this.subTabWin.webContents.executeJavaScript(
         `setParentTabId(${JSON.stringify(parentTabId)})`,
       );
+      if (transition !== this.subTabWindowTransition || this.subTabWin.isDestroyed()) return origin;
       await this.subTabWin.webContents.executeJavaScript(`enterAnimation(${fx},${fy},${fw},${fh})`);
     } catch {
       // window may be destroyed
@@ -1013,6 +1110,7 @@ export class ElectronPlatform implements Platform {
   }
 
   async hideSubTabWindow(): Promise<void> {
+    const transition = ++this.subTabWindowTransition;
     if (!this.subTabWin || this.subTabWin.isDestroyed()) return;
 
     try {
@@ -1020,12 +1118,14 @@ export class ElectronPlatform implements Platform {
     } catch {
       // window may be destroyed
     }
+    if (transition !== this.subTabWindowTransition || this.subTabWin.isDestroyed()) return;
     // Pass through all events so the main window is usable
     this.subTabWin.setIgnoreMouseEvents(true, { forward: true });
     this.subTabWinContentBounds = null;
   }
 
   showSubTabWindowStatic(contentBounds: Bounds, frameBounds: Bounds, parentTabId: string): void {
+    this.subTabWindowTransition++;
     this.ensureSubTabWindow();
     if (!this.subTabWin || this.subTabWin.isDestroyed()) return;
 
@@ -1044,6 +1144,7 @@ export class ElectronPlatform implements Platform {
   }
 
   hideSubTabWindowInstant(): void {
+    this.subTabWindowTransition++;
     if (!this.subTabWin || this.subTabWin.isDestroyed()) return;
     this.subTabWin.webContents.executeJavaScript("hide()").catch(() => {});
     this.subTabWin.setIgnoreMouseEvents(true, { forward: true });
@@ -1065,6 +1166,7 @@ export class ElectronPlatform implements Platform {
   attachTabToSubTabWindow(tabId: TabId, frameBounds: Bounds): void {
     const view = this.views.get(tabId);
     if (!view) return;
+    this.tabBoundsAnimations.cancel(view);
     if (!this.subTabWin || this.subTabWin.isDestroyed()) return;
 
     const mainWin = this.getWin();
@@ -1097,6 +1199,7 @@ export class ElectronPlatform implements Platform {
   detachTabFromSubTabWindow(tabId: TabId): void {
     const view = this.views.get(tabId);
     if (!view) return;
+    this.tabBoundsAnimations.cancel(view);
 
     // Remove from child window
     if (this.subTabWin && !this.subTabWin.isDestroyed()) {
@@ -1120,36 +1223,8 @@ export class ElectronPlatform implements Platform {
     const view = this.views.get(tabId);
     if (!view) return Promise.resolve();
 
-    // Cancel any existing animation on this tab
-    this.tabBoundsAnimations.get(tabId)?.();
-
-    return new Promise<void>((resolve) => {
-      let cancelled = false;
-      this.tabBoundsAnimations.set(tabId, () => {
-        cancelled = true;
-        resolve();
-      });
-
-      const startTime = performance.now();
-      const tick = () => {
-        if (cancelled) return;
-        const t = Math.min((performance.now() - startTime) / duration, 1);
-        const e = 1 - (1 - t) * (1 - t); // ease-out quadratic
-        view.setBounds({
-          x: Math.round(from.x + (to.x - from.x) * e),
-          y: Math.round(from.y + (to.y - from.y) * e),
-          width: Math.max(1, Math.round(from.width + (to.width - from.width) * e)),
-          height: Math.max(1, Math.round(from.height + (to.height - from.height) * e)),
-        });
-        if (t < 1) {
-          setTimeout(tick, 16);
-        } else {
-          this.tabBoundsAnimations.delete(tabId);
-          resolve();
-        }
-      };
-      tick();
-    });
+    const reducedMotion = systemPreferences.getAnimationSettings().prefersReducedMotion;
+    return this.tabBoundsAnimations.animate(view, from, to, reducedMotion ? 0 : duration);
   }
 
   private syncSubTabWinBounds(): void {
@@ -1475,12 +1550,12 @@ export class ElectronPlatform implements Platform {
     }
   }
 
-  readClipboard(): string {
+  async readClipboard(): Promise<string> {
     return clipboard.readText();
   }
 
-  writeClipboard(text: string): void {
-    clipboard.writeText(text);
+  async writeClipboard(text: string): Promise<void> {
+    await clipboard.writeText(text);
   }
 
   // ── Tab content actions ──────────────────────────────────────
@@ -1497,10 +1572,10 @@ export class ElectronPlatform implements Platform {
     view.webContents.downloadURL(url);
   }
 
-  async executeJavaScript(tabId: TabId, code: string): Promise<unknown> {
+  async executeJavaScript(tabId: TabId, code: string, userGesture?: boolean): Promise<unknown> {
     const view = this.views.get(tabId);
     if (!view) return undefined;
-    return view.webContents.executeJavaScript(code);
+    return view.webContents.executeJavaScript(code, userGesture);
   }
 
   // ── Permissions ────────────────────────────────────────────────
@@ -1512,6 +1587,20 @@ export class ElectronPlatform implements Platform {
       }
     }
     return undefined;
+  }
+
+  private prepareSession(ses: Electron.Session): void {
+    if (this.sessionsWithHandlers.has(ses)) return;
+    // Present a consistent standard Chrome identity from the very first tab onward.
+    const chromeIdentity = (ua: string) =>
+      ua.replace(/ Electron\/\S+/g, "").replace(/ \S+\/\S+(?= Chrome\/)/g, "");
+    // Renderer-created window.open contents use the app fallback instead of the session UA.
+    app.userAgentFallback = chromeIdentity(app.userAgentFallback);
+    ses.setUserAgent(chromeIdentity(ses.getUserAgent()));
+    this.installPermissionHandlers(ses);
+    this.installDevicePermissionHandlers(ses);
+    this.sessionsWithHandlers.add(ses);
+    this.sessionDiagnostics?.observe(ses);
   }
 
   private installPermissionHandlers(ses: Electron.Session): void {

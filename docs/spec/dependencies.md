@@ -1,29 +1,48 @@
 # Dependencies & Build
 
+## Installation policy
+
+Use Node.js 24.20.0 LTS (`.node-version`) for build/test tools; jsdom 30 requires at least
+Node 24.15.0 on the 24.x line. CI explicitly installs this runtime.
+
+Use Bun 1.3.11 or newer; `packageManager` and CI pin the verified version to 1.3.11.
+Run `bun install --frozen-lockfile` for a checkout and `bun update --latest` for upgrades.
+
+- `bunfig.toml` requires npm releases to be at least 86,400 seconds (one day) old.
+  This applies to newly resolved direct and transitive dependencies, with no exceptions.
+  Existing lockfile entries are reused; the age gate does not revalidate locked versions.
+- `package.json` explicitly allows dependency lifecycle scripts only for
+  `electron` (runtime download), `esbuild` (binary setup), and `@biomejs/biome`
+  (binary setup). This replaces Bun's default trusted list. Other dependency scripts
+  stay blocked; use `bun pm untrusted` to inspect them and review any allowlist change.
+- Electron 44 downloads its executable on first use instead of during postinstall.
+  `bun run setup:electron` explicitly prepares the locked executable before parallel
+  E2E workers and before native Windows launch; this prevents simultaneous downloads.
+- Windows development also requires Bun on Windows and installs the same lockfile
+  and policy on every launch, so an existing Electron installation is updated.
+  Do not use npm to install this project's dependencies; it does not enforce this policy.
+
+See [Bun's release-age documentation](https://bun.com/docs/pm/cli/install#minimum-release-age)
+and [lifecycle-script documentation](https://bun.com/docs/pm/lifecycle).
+
 ## Key Packages
 
-```json
-{
-  "electron": "^35.0.0",
-  "electron-updater": "^6.x",
-  "electron-chrome-extensions": "^4.9",
-  "electron-chrome-web-store": "^0.13",
-  "@cliqz/adblocker-electron": "^1.34",
-  "rxdb": "^16.x",
-  "rxdb-utils": "^2.x",
-  "react": "^19.x",
-  "babel-plugin-react-compiler": "^19.x",
-  "tailwindcss": "^4.x",
-  "zustand": "^5.x",
-  "zod": "^3.x"
-}
-```
+`package.json` and `bun.lock` are the authoritative dependency list and resolved versions.
 
-**Dev dependencies**: `electron-builder` ^26.x, `electron-vite`
-**Tailwind**: Use `@tailwindcss/vite` plugin (set `"moduleResolution": "bundler"` in tsconfig). Fallback: `@tailwindcss/postcss`.
-**shadcn/ui**: `bunx shadcn@latest init` (supports TW4 natively; may need `vite.config.js` symlink for electron-vite detection)
-**Zustand**: Use inline selectors (`useStore(s => s.field)`), avoid auto-generated selectors. Use `useShallow` for multi-field selections.
-**RxDB**: Free Filesystem RxStorage for main process, Memory RxStorage for tests. No native modules required — pure JS.
+- Electron 44.3.0: includes the native window display-mode persistence fix;
+  adopted after it cleared the 24-hour release-age gate on September 9, 2026.
+- React 19, RxDB 17, Zustand 5, Zod 4, Tailwind CSS 4.
+- PDF rendering: PDF.js 6.
+- Build and validation: electron-builder 26, electron-vite 5, TypeScript 7,
+  Biome 2, Vitest 5, and Playwright 1.63.
+- Vite stays on the latest compatible 7.x release, with `@vitejs/plugin-react` 5.x.
+  electron-vite 5 only supports Vite 5–7; plugin-react 6 requires Vite 8.
+  React Compiler remains enabled through the Babel plugin.
+- The Biome 2 migration preserves the previous CSS checking scope and defers its
+  newly recommended `noStaticElementInteractions` rule for existing drag/hover UI.
+
+**Tailwind**: Use `@tailwindcss/vite` with `moduleResolution: "bundler"`.
+**Zustand**: Use inline selectors (`useStore(s => s.field)`) and `useShallow` for multiple fields.
 
 ## Build & Distribution
 
@@ -32,10 +51,11 @@
 
 ### Default Browser (Windows)
 
-- Register as default browser via `electron-builder` config
+- Register as a default-browser candidate through `resources/installer.nsh`
 - Handle `http://`, `https://` protocol associations
 - Register file associations (`.html`, `.htm`, etc.)
-- Windows registry entries added during install
+- The NSIS include owns edition-specific Windows registry entries and Open With
+  candidates; it preserves the user's selected defaults
 
 ### External Application Protocol Support
 
@@ -63,5 +83,12 @@ Git tag (v1.0.0) → GitHub Actions → Build artifacts → GitHub Releases
 **Required**:
 
 - GitHub Actions workflow (`.github/workflows/release.yml`)
-- `electron-updater` config in `electron-builder.yml`
+- Shared packaging settings in `electron-builder.yml`, channel metadata in
+  `src/shared/app-channel.ts` and `scripts/release-config.ts`
 - Code signing (skipped for personal use)
+
+Stable tags publish on push. Early Access tags such as `v1.2.3-beta.1` publish only
+through a manual Release workflow run and produce a separate installation/update
+channel. See the [installer specification](../features/InstallerFeature.specs.md)
+for publishing commands and isolation behavior. Use `bun run package:win TAG` for
+local Windows packaging without publishing.

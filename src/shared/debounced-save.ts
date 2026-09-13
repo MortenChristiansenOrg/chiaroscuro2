@@ -36,11 +36,11 @@ export class DebouncedSave<T> {
     }, this.debounceMs);
   }
 
-  flush(): void {
+  async flush(): Promise<void> {
     if (this.timer !== undefined) {
       clearTimeout(this.timer);
       this.timer = undefined;
-      this.save(this.value).catch(logError("debounced-save", "persist"));
+      await this.save(this.value);
     }
   }
 }

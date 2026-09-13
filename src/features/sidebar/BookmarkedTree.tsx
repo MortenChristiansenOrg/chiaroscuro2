@@ -2,8 +2,8 @@ import type { FolderId, TabId } from "../../shared/types";
 import type { Tab } from "../tabs/tabs.shared";
 import { FolderGroup } from "./FolderGroup";
 import { useSidebarDrag } from "./SidebarContext";
-import { TabItem } from "./TabItem";
 import type { TreeItem } from "./sidebar.renderer";
+import { TabItem } from "./TabItem";
 
 export function BookmarkedTree({
   tree,

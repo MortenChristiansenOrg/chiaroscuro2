@@ -4,8 +4,12 @@ export const api = {
   platform: "electron" as const,
 
   /** Send a command to main process, returns response */
-  sendCommand: (name: string, payload: unknown): Promise<unknown> =>
-    ipcRenderer.invoke("bus:command", name, payload),
+  sendCommand: async (name: string, payload: unknown): Promise<unknown> => {
+    const result = await ipcRenderer.invoke("bus:command", name, payload);
+    // Electron discards custom Error properties across IPC; reject a structured cloneable object.
+    if (!result.ok) throw result.error;
+    return result.response;
+  },
 
   /** Subscribe to events from main process */
   onEvent: (name: string, callback: (payload: unknown) => void): (() => void) => {

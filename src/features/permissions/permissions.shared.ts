@@ -1,3 +1,13 @@
+import type { z } from "zod";
+import type { CommandTypes } from "../../bus/contract";
+import type {
+  commandContracts,
+  DomainPermissionsSchema,
+  PermissionDecisionSchema,
+  PermissionsGetDomainPayloadSchema,
+  PermissionsRevokePayloadSchema,
+  PermissionsSetPayloadSchema,
+} from "./permissions.contracts";
 // ── Command names ────────────────────────────────────────────────
 export const PERMISSIONS_SET = "permissions:set" as const;
 export const PERMISSIONS_REVOKE = "permissions:revoke" as const;
@@ -7,28 +17,16 @@ export const PERMISSIONS_GET_DOMAIN = "permissions:get-domain-permissions" as co
 export const PERMISSIONS_CHANGED = "permissions:changed" as const;
 
 // ── Data types ───────────────────────────────────────────────────
-export type PermissionDecision = "allow" | "deny";
+export type PermissionDecision = z.infer<typeof PermissionDecisionSchema>;
 
-export interface DomainPermissions {
-  domain: string;
-  permissions: Record<string, PermissionDecision>;
-}
+export type DomainPermissions = z.infer<typeof DomainPermissionsSchema>;
 
 // ── Payload types ────────────────────────────────────────────────
-export interface PermissionsSetPayload {
-  domain: string;
-  permission: string;
-  decision: PermissionDecision;
-}
+export type PermissionsSetPayload = z.infer<typeof PermissionsSetPayloadSchema>;
 
-export interface PermissionsRevokePayload {
-  domain: string;
-  permission: string;
-}
+export type PermissionsRevokePayload = z.infer<typeof PermissionsRevokePayloadSchema>;
 
-export interface PermissionsGetDomainPayload {
-  domain: string;
-}
+export type PermissionsGetDomainPayload = z.infer<typeof PermissionsGetDomainPayloadSchema>;
 
 // ── Event payloads ───────────────────────────────────────────────
 export interface PermissionsChangedEvent {
@@ -37,11 +35,7 @@ export interface PermissionsChangedEvent {
 }
 
 // ── Command registry ─────────────────────────────────────────────
-export type PermissionsCommands = {
-  [PERMISSIONS_SET]: { payload: PermissionsSetPayload; response: undefined };
-  [PERMISSIONS_REVOKE]: { payload: PermissionsRevokePayload; response: undefined };
-  [PERMISSIONS_GET_DOMAIN]: { payload: PermissionsGetDomainPayload; response: DomainPermissions };
-};
+export type PermissionsCommands = CommandTypes<typeof commandContracts>;
 
 // ── Event registry ───────────────────────────────────────────────
 export type PermissionsEvents = {

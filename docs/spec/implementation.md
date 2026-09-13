@@ -5,6 +5,7 @@
 - Use `BrowserWindow` with `WebContentsView` (not deprecated `BrowserView`)
 - Each tab = one `WebContentsView` attached to window
 - Tab switching = show/hide views, not destroy/create
+- Web tabs use `setZoomMode("isolated")`: zoom belongs to each WebContents, including sub-tabs and adopted contents, while cookies/session sharing is unchanged. Keyboard zoom targets the topmost sub-tab when open. PDF reader zoom is independent.
 - Multi-window support from day 1
 - **Per-tab session isolation**: Use `session.fromPartition('persist:tab-{id}')` for isolated tabs
   - Default: shared session
@@ -119,7 +120,9 @@ Main process is authoritative. Each renderer window gets projected Zustand store
 - **Bookmarked tabs**: per-workspace, owned by one window at a time.
 - **Ephemeral tabs**: per-workspace, owned by one window.
 
-**Window state persistence:** `electron-window-state` package. Per-window state stored in RxDB `window-state` collection keyed by `windowId` (x, y, width, height, maximized, activeWorkspaceId). Migrate to native Electron window state API when RFC #16 ships.
+**Window state persistence:** Electron 44 native `windowStatePersistence: true` on the persistent shell, named `main-window`. Native IDs are process-local and must never be used as persistence names. Future independent application windows need durable, distinct names. Electron owns bounds and maximized/fullscreen restoration and adapts to display changes. Legacy `app-state.windowBounds` are validated constructor defaults on migration; native saved state takes precedence. Subsequent application-state saves remove legacy bounds while retaining sidebar width and other fields. Palette, tooltip, sub-tab frame and popup windows are transient and do not enable persistence.
+
+Native restart scenarios wait for Electron's debounced state to reach its preference file before relaunching. Recovery coverage includes off-screen reachability and simulated saved layouts from a removed monitor or larger work area. On an unchanged display Electron preserves partial off-screen positioning while ensuring a reachable area; a changed work area fits the window. These profile fixtures do not replace physical monitor hot-plug or DPI verification.
 
 ## 10. Optimistic UI Updates
 
@@ -162,7 +165,7 @@ export function Sidebar() {
 
 ## 13. Storage (Data Abstraction)
 
-All persistence goes through the `DataStore` interface. Each feature owns its RxDB collection schema and provides migrations. Features never touch RxDB or the filesystem directly.
+Application feature data goes through the `DataStore` interface. Electron manages persistent shell geometry and display mode separately in its profile; transient windows do not enable native persistence. Each feature owns its RxDB collection schema and provides migrations. Features never touch RxDB or the filesystem directly.
 
 **RxDB** runs in the main process using the free Filesystem RxStorage. Provides:
 
@@ -175,8 +178,22 @@ All persistence goes through the `DataStore` interface. Each feature owns its Rx
 
 ```
 RxDB collections: history, downloads, tabs, workspaces, pinned-tabs,
-                  tab-customizations, domain-customizations, window-state
-JSON files:       settings.json, shortcuts.json, extensions.json
+                  tab-customizations, domain-customizations
+JSON files:       settings.json (including sidebar width), shortcuts.json, extensions.json
+Electron profile: named persistent shell bounds and display mode
 ```
 
 **Cloud sync (Convex — optional)**: All data is local-only by default. Convex can be added as a separate optional data store for selective cross-device sync (bookmarks, workspace definitions, user preferences). Convex is not a sync layer for RxDB — it's an independent store for data the user opts to sync. Local RxDB remains the source of truth; synced data is mirrored to/from Convex when connected.
+
+## Session identity and GitHub diagnostics
+
+Prepare each tab session's user-agent and permission handlers before constructing
+its web contents. Electron session user-agent changes do not update existing
+contents; doing this afterward gave the first tab a different identity. New tabs,
+sub-tabs and popup windows now inherit the same prepared identity. Normalize the
+app user-agent fallback too, since renderer-created popup contents use that value.
+
+A bounded, memory-only GitHub authentication timeline is available through the
+existing debug state provider. See [GitHub session diagnostics](../testing/github-session-diagnostics.md)
+for scope, redaction, and how to capture an overnight logout without exporting
+credentials. The confirmed identity fix does not close the unproven logout root cause.

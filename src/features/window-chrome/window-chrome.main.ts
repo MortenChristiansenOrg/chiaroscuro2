@@ -8,8 +8,8 @@ import {
   WINDOW_COPY_ADDRESS,
   WINDOW_GO_BACK,
   WINDOW_GO_FORWARD,
-  WINDOW_MAXIMIZED_CHANGED,
   WINDOW_MAXIMIZE_RESTORE,
+  WINDOW_MAXIMIZED_CHANGED,
   WINDOW_MINIMIZE,
   WINDOW_RELOAD,
   type WindowChromeCommands,
@@ -116,7 +116,7 @@ export default defineFeature<Deps>({
       if (windowId) await platform.closeWindow(windowId);
     });
 
-    commands.handle(WINDOW_COPY_ADDRESS, () => {
+    commands.handle(WINDOW_COPY_ADDRESS, async () => {
       const tabId = getActiveTabId();
       if (!tabId) return;
       let url = getTabUrl(tabId);
@@ -128,7 +128,7 @@ export default defineFeature<Deps>({
         }
       }
       if (url) {
-        platform.writeClipboard(stripTrackingParams(url));
+        await platform.writeClipboard(stripTrackingParams(url));
       }
     });
 

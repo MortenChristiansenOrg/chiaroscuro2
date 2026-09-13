@@ -1,6 +1,6 @@
-import { Icon } from "@/components/Icon";
 import { SubTabFrame } from "@features/sub-tabs/SubTabFrame";
 import { useRef, useState } from "react";
+import { Icon } from "@/components/Icon";
 
 const buttonClass = "sub-tab-action-btn";
 
@@ -50,6 +50,10 @@ export function SubTabOverlayDemo() {
         }
         .${buttonClass}:active {
           transform: scale(0.95);
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .${buttonClass} { transition: none; }
+          .${buttonClass}:hover, .${buttonClass}:active { transform: none; }
         }
       `}</style>
 

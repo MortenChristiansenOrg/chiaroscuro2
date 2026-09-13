@@ -1,8 +1,15 @@
+import type { CommandContract } from "./contract";
 import type { CommandRegistry } from "./types";
 
 type Handler<P, R> = (payload: P) => R | Promise<R> | void | Promise<void>;
 
 export class CommandBus<TRegistry extends CommandRegistry> {
+  constructor(private readonly contracts: Readonly<Record<string, CommandContract>> = {}) {}
+
+  getContract(name: string): CommandContract | undefined {
+    return Object.hasOwn(this.contracts, name) ? this.contracts[name] : undefined;
+  }
+
   private handlers = new Map<string, Handler<unknown, unknown>>();
 
   handle<K extends string & keyof TRegistry>(

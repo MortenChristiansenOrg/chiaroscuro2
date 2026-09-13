@@ -1,4 +1,16 @@
-import type { FolderId, WorkspaceId } from "../../shared/types";
+import type { z } from "zod";
+import type { CommandTypes } from "../../bus/contract";
+import type { FolderId } from "../../shared/types";
+import type {
+  commandContracts,
+  FolderSchema,
+  FoldersCreatePayloadSchema,
+  FoldersRemovePayloadSchema,
+  FoldersRenamePayloadSchema,
+  FoldersReorderPayloadSchema,
+  FoldersToggleCollapsePayloadSchema,
+  FoldersTogglePayloadSchema,
+} from "./folders.contracts";
 
 // ── Command names ────────────────────────────────────────────────
 export const FOLDERS_TOGGLE = "folders:toggle" as const;
@@ -15,14 +27,7 @@ export const FOLDERS_CHANGED = "folders:changed" as const;
 export const FOLDERS_RENAME_REQUESTED = "folders:rename-requested" as const;
 
 // ── Data types ───────────────────────────────────────────────────
-export interface Folder {
-  id: FolderId;
-  workspaceId: WorkspaceId;
-  name: string;
-  parentFolderId: FolderId | null;
-  collapsed: boolean;
-  order: number;
-}
+export type Folder = z.infer<typeof FolderSchema>;
 
 /** Shape persisted to DataStore. */
 export interface PersistedFolder {
@@ -35,42 +40,17 @@ export interface PersistedFolder {
 }
 
 // ── Payload types ────────────────────────────────────────────────
-export interface FoldersTogglePayload {
-  /** Tab to toggle folder membership for. Uses active tab if omitted. */
-  tabId?: string;
-}
+export type FoldersTogglePayload = z.infer<typeof FoldersTogglePayloadSchema>;
 
-export interface FoldersRenamePayload {
-  folderId: FolderId;
-  name: string;
-}
+export type FoldersRenamePayload = z.infer<typeof FoldersRenamePayloadSchema>;
 
-export interface FoldersToggleCollapsePayload {
-  folderId: FolderId;
-}
+export type FoldersToggleCollapsePayload = z.infer<typeof FoldersToggleCollapsePayloadSchema>;
 
-export interface FoldersRemovePayload {
-  folderId: FolderId;
-}
+export type FoldersRemovePayload = z.infer<typeof FoldersRemovePayloadSchema>;
 
-export interface FoldersReorderPayload {
-  folderId: FolderId;
-  /** Target folder to insert relative to (sibling). Omit to append. */
-  targetFolderId?: FolderId;
-  /** Target tab to insert relative to. Used when dragging folders over tabs. */
-  targetTabId?: string;
-  /** Position relative to target. Defaults to "before". */
-  position?: "before" | "after";
-  /** Parent folder to nest into. null = root level. */
-  parentFolderId?: FolderId | null;
-}
+export type FoldersReorderPayload = z.infer<typeof FoldersReorderPayloadSchema>;
 
-export interface FoldersCreatePayload {
-  /** Parent folder to create inside. null = root level. */
-  parentFolderId?: FolderId | null;
-  /** Workspace to create in. Uses active workspace if omitted. */
-  workspaceId?: WorkspaceId;
-}
+export type FoldersCreatePayload = z.infer<typeof FoldersCreatePayloadSchema>;
 
 export interface FoldersChangedEvent {
   folders: Folder[];
@@ -81,19 +61,7 @@ export interface FoldersRenameRequestedEvent {
 }
 
 // ── Command registry ─────────────────────────────────────────────
-export type FoldersCommands = {
-  [FOLDERS_TOGGLE]: { payload: FoldersTogglePayload; response: undefined };
-  [FOLDERS_RENAME]: { payload: FoldersRenamePayload; response: undefined };
-  [FOLDERS_TOGGLE_COLLAPSE]: { payload: FoldersToggleCollapsePayload; response: undefined };
-  [FOLDERS_REMOVE]: { payload: FoldersRemovePayload; response: undefined };
-  [FOLDERS_REORDER]: { payload: FoldersReorderPayload; response: undefined };
-  [FOLDERS_CREATE]: { payload: FoldersCreatePayload; response: undefined };
-  [FOLDERS_GET_FOR_LEVEL]: {
-    payload: { workspaceId: WorkspaceId; parentFolderId: FolderId | null };
-    response: Folder[];
-  };
-  [FOLDERS_SET_ORDER]: { payload: { folderId: FolderId; order: number }; response: undefined };
-};
+export type FoldersCommands = CommandTypes<typeof commandContracts>;
 
 // ── Event registry ───────────────────────────────────────────────
 export type FoldersEvents = {

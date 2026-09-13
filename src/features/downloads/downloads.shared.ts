@@ -1,3 +1,6 @@
+import type { z } from "zod";
+import type { CommandTypes } from "../../bus/contract";
+import type { commandContracts, DownloadIdPayloadSchema } from "./downloads.contracts";
 // ── Command names ────────────────────────────────────────────────
 export const DOWNLOADS_CANCEL = "downloads:cancel" as const;
 export const DOWNLOADS_PAUSE = "downloads:pause" as const;
@@ -20,9 +23,7 @@ export interface Download {
 }
 
 // ── Command payloads ─────────────────────────────────────────────
-export interface DownloadIdPayload {
-  downloadId: string;
-}
+export type DownloadIdPayload = z.infer<typeof DownloadIdPayloadSchema>;
 
 // ── Event payloads ───────────────────────────────────────────────
 export interface DownloadsStartedEvent {
@@ -46,11 +47,7 @@ export interface DownloadsStateChangedEvent {
 }
 
 // ── Command registry ─────────────────────────────────────────────
-export type DownloadsCommands = {
-  [DOWNLOADS_CANCEL]: { payload: DownloadIdPayload; response: undefined };
-  [DOWNLOADS_PAUSE]: { payload: DownloadIdPayload; response: undefined };
-  [DOWNLOADS_RESUME]: { payload: DownloadIdPayload; response: undefined };
-};
+export type DownloadsCommands = CommandTypes<typeof commandContracts>;
 
 // ── Event registry ───────────────────────────────────────────────
 export type DownloadsEvents = {

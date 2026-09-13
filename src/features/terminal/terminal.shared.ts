@@ -1,4 +1,7 @@
+import type { z } from "zod";
+import type { CommandTypes } from "../../bus/contract";
 import type { TabId } from "../../shared/types";
+import type { commandContracts, TerminalWritePayloadSchema } from "./terminal.contracts";
 
 // ── Command names ────────────────────────────────────────────────
 export const TERMINAL_TOGGLE = "terminal:toggle" as const;
@@ -18,11 +21,7 @@ export interface TerminalLine {
 }
 
 // ── Command payloads ─────────────────────────────────────────────
-export interface TerminalWritePayload {
-  tabId: TabId;
-  data: string;
-  type: "stdout" | "stderr";
-}
+export type TerminalWritePayload = z.infer<typeof TerminalWritePayloadSchema>;
 
 // ── Event payloads ───────────────────────────────────────────────
 export interface TerminalVisibilityChangedEvent {
@@ -39,11 +38,7 @@ export interface TerminalClearedEvent {
 }
 
 // ── Command registry ─────────────────────────────────────────────
-export type TerminalCommands = {
-  [TERMINAL_TOGGLE]: { payload: undefined; response: undefined };
-  [TERMINAL_CLEAR]: { payload: undefined; response: undefined };
-  [TERMINAL_WRITE]: { payload: TerminalWritePayload; response: undefined };
-};
+export type TerminalCommands = CommandTypes<typeof commandContracts>;
 
 // ── Event registry ───────────────────────────────────────────────
 export type TerminalEvents = {

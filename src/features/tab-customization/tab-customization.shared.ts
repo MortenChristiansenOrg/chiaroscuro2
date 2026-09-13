@@ -1,4 +1,15 @@
+import type { z } from "zod";
+import type { CommandTypes } from "../../bus/contract";
 import type { TabId } from "../../shared/types";
+import type {
+  commandContracts,
+  TabCustomizationClosePayloadSchema,
+  TabCustomizationGetStatePayloadSchema,
+  TabCustomizationOpenPayloadSchema,
+  TabCustomizationSchema,
+  TabCustomizationSetFixedAddressDisabledPayloadSchema,
+  TabCustomizationSetTitlePayloadSchema,
+} from "./tab-customization.contracts";
 
 // ── Command names ────────────────────────────────────────────────
 export const TAB_CUSTOMIZATION_OPEN = "tab-customization:open" as const;
@@ -15,33 +26,20 @@ export const TAB_CUSTOMIZATION_CHANGED = "tab-customization:changed" as const;
 export const TAB_CUSTOMIZATION_REMOVED = "tab-customization:removed" as const;
 
 // ── Data types ───────────────────────────────────────────────────
-export interface TabCustomization {
-  title: string | null;
-  fixedAddressDisabled: boolean;
-}
+export type TabCustomization = z.infer<typeof TabCustomizationSchema>;
 
 // ── Payload types ────────────────────────────────────────────────
-export interface TabCustomizationOpenPayload {
-  tabId: TabId;
-}
+export type TabCustomizationOpenPayload = z.infer<typeof TabCustomizationOpenPayloadSchema>;
 
-export interface TabCustomizationClosePayload {
-  tabId: TabId;
-}
+export type TabCustomizationClosePayload = z.infer<typeof TabCustomizationClosePayloadSchema>;
 
-export interface TabCustomizationSetTitlePayload {
-  tabId: TabId;
-  title: string | null;
-}
+export type TabCustomizationSetTitlePayload = z.infer<typeof TabCustomizationSetTitlePayloadSchema>;
 
-export interface TabCustomizationSetFixedAddressDisabledPayload {
-  tabId: TabId;
-  disabled: boolean;
-}
+export type TabCustomizationSetFixedAddressDisabledPayload = z.infer<
+  typeof TabCustomizationSetFixedAddressDisabledPayloadSchema
+>;
 
-export interface TabCustomizationGetStatePayload {
-  tabId: TabId;
-}
+export type TabCustomizationGetStatePayload = z.infer<typeof TabCustomizationGetStatePayloadSchema>;
 
 // ── Event payloads ───────────────────────────────────────────────
 export interface TabCustomizationOpenedEvent {
@@ -62,22 +60,7 @@ export interface TabCustomizationRemovedEvent {
 }
 
 // ── Command registry ─────────────────────────────────────────────
-export type TabCustomizationCommands = {
-  [TAB_CUSTOMIZATION_OPEN]: { payload: TabCustomizationOpenPayload; response: undefined };
-  [TAB_CUSTOMIZATION_CLOSE]: { payload: TabCustomizationClosePayload; response: undefined };
-  [TAB_CUSTOMIZATION_SET_TITLE]: {
-    payload: TabCustomizationSetTitlePayload;
-    response: undefined;
-  };
-  [TAB_CUSTOMIZATION_SET_FIXED_ADDRESS_DISABLED]: {
-    payload: TabCustomizationSetFixedAddressDisabledPayload;
-    response: undefined;
-  };
-  [TAB_CUSTOMIZATION_GET_STATE]: {
-    payload: TabCustomizationGetStatePayload;
-    response: TabCustomization;
-  };
-};
+export type TabCustomizationCommands = CommandTypes<typeof commandContracts>;
 
 // ── Event registry ───────────────────────────────────────────────
 export type TabCustomizationEvents = {

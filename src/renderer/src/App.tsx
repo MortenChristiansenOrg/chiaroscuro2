@@ -19,9 +19,11 @@ import "../../features/sub-tabs/sub-tabs.feature";
 import "../../features/permissions/permissions.feature";
 import "../../features/pdf-reader/pdf-reader.feature";
 import "../../features/extensions/extensions.feature";
+import "../../features/pip/pip.feature";
 
 // All subscriptions wired — tell main process to start emitting events (phase 2)
 import { Shell, signalReady } from "./Shell";
+
 signalReady();
 
 export default function App() {

@@ -1,4 +1,15 @@
+import type { z } from "zod";
+import type { CommandTypes } from "../../bus/contract";
 import type { TabId } from "../../shared/types";
+import type {
+  commandContracts,
+  SubTabSchema,
+  SubTabsCloseAllPayloadSchema,
+  SubTabsClosePayloadSchema,
+  SubTabsGetStackPayloadSchema,
+  SubTabsOpenPayloadSchema,
+  SubTabsPromotePayloadSchema,
+} from "./sub-tabs.contracts";
 
 // ── Command names ────────────────────────────────────────────────
 export const SUB_TABS_OPEN = "sub-tabs:open" as const;
@@ -15,36 +26,18 @@ export const SUB_TABS_STACK_CHANGED = "sub-tabs:stack-changed" as const;
 export const SUB_TABS_UPDATED = "sub-tabs:updated" as const;
 
 // ── Data types ───────────────────────────────────────────────────
-export interface SubTab {
-  id: TabId;
-  parentTabId: TabId;
-  url: string;
-  title: string;
-  favicon: string;
-  loading: boolean;
-}
+export type SubTab = z.infer<typeof SubTabSchema>;
 
 // ── Payload types ────────────────────────────────────────────────
-export interface SubTabsOpenPayload {
-  parentTabId: TabId;
-  url: string;
-}
+export type SubTabsOpenPayload = z.infer<typeof SubTabsOpenPayloadSchema>;
 
-export interface SubTabsClosePayload {
-  parentTabId: TabId;
-}
+export type SubTabsClosePayload = z.infer<typeof SubTabsClosePayloadSchema>;
 
-export interface SubTabsCloseAllPayload {
-  parentTabId: TabId;
-}
+export type SubTabsCloseAllPayload = z.infer<typeof SubTabsCloseAllPayloadSchema>;
 
-export interface SubTabsPromotePayload {
-  parentTabId: TabId;
-}
+export type SubTabsPromotePayload = z.infer<typeof SubTabsPromotePayloadSchema>;
 
-export interface SubTabsGetStackPayload {
-  parentTabId: TabId;
-}
+export type SubTabsGetStackPayload = z.infer<typeof SubTabsGetStackPayloadSchema>;
 
 // ── Event payloads ───────────────────────────────────────────────
 export interface SubTabsOpenedEvent {
@@ -74,13 +67,7 @@ export interface SubTabsUpdatedEvent {
 }
 
 // ── Command registry ─────────────────────────────────────────────
-export type SubTabsCommands = {
-  [SUB_TABS_OPEN]: { payload: SubTabsOpenPayload; response: TabId };
-  [SUB_TABS_CLOSE]: { payload: SubTabsClosePayload; response: undefined };
-  [SUB_TABS_CLOSE_ALL]: { payload: SubTabsCloseAllPayload; response: undefined };
-  [SUB_TABS_PROMOTE]: { payload: SubTabsPromotePayload; response: TabId };
-  [SUB_TABS_GET_STACK]: { payload: SubTabsGetStackPayload; response: SubTab[] };
-};
+export type SubTabsCommands = CommandTypes<typeof commandContracts>;
 
 // ── Event registry ───────────────────────────────────────────────
 export type SubTabsEvents = {

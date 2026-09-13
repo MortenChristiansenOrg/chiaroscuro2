@@ -11,8 +11,10 @@ import {
 import { useTabCustomizationStore } from "../tab-customization/tab-customization.store";
 import type { Tab, TabsCommands } from "../tabs/tabs.shared";
 import {
+  canDuplicateTab,
   TABS_ACTIVATE,
   TABS_CLOSE,
+  TABS_DUPLICATE,
   TABS_NAVIGATE,
   TABS_REORDER,
   TABS_TOGGLE_BOOKMARK,
@@ -25,6 +27,7 @@ import { useSidebarDrag } from "./SidebarContext";
 type TabItemUsedCommands = Pick<
   TabsCommands,
   | typeof TABS_ACTIVATE
+  | typeof TABS_DUPLICATE
   | typeof TABS_CLOSE
   | typeof TABS_NAVIGATE
   | typeof TABS_REORDER
@@ -97,7 +100,14 @@ export function TabItem({
 
   const handleContextMenu = (e: React.MouseEvent) => {
     if (!onContextMenu) return;
-    const items: ContextMenuItem[] = [];
+    const items: ContextMenuItem[] = [
+      {
+        label: "Duplicate tab",
+        icon: "copy",
+        disabled: !canDuplicateTab(tab),
+        onSelect: () => sendCommand(TABS_DUPLICATE, { tabId: tab.id }),
+      },
+    ];
     if (isEphemeral) {
       items.push({
         label: "Bookmark",

@@ -1,4 +1,15 @@
-import type { TabId, WorkspaceId } from "../../shared/types";
+import type { z } from "zod";
+import type { CommandTypes } from "../../bus/contract";
+import type { WorkspaceId } from "../../shared/types";
+import type {
+  commandContracts,
+  WorkspaceSchema,
+  WorkspacesCreatePayloadSchema,
+  WorkspacesDeletePayloadSchema,
+  WorkspacesMoveTabPayloadSchema,
+  WorkspacesSwitchPayloadSchema,
+  WorkspacesUpdatePayloadSchema,
+} from "./workspaces.contracts";
 
 // ── Command names ────────────────────────────────────────────────
 export const WORKSPACES_SWITCH = "workspaces:switch" as const;
@@ -16,14 +27,7 @@ export const WORKSPACES_DELETED = "workspaces:deleted" as const;
 export const WORKSPACES_LIST_CHANGED = "workspaces:list-changed" as const;
 
 // ── Data types ───────────────────────────────────────────────────
-export interface Workspace {
-  id: WorkspaceId;
-  name: string;
-  color: string;
-  icon: string;
-  privacyMode: boolean;
-  activeTabId: TabId | null;
-}
+export type Workspace = z.infer<typeof WorkspaceSchema>;
 
 /** Shape persisted to DataStore. */
 export interface PersistedWorkspace {
@@ -36,29 +40,15 @@ export interface PersistedWorkspace {
 }
 
 // ── Payload types ────────────────────────────────────────────────
-export interface WorkspacesSwitchPayload {
-  workspaceId: WorkspaceId;
-}
+export type WorkspacesSwitchPayload = z.infer<typeof WorkspacesSwitchPayloadSchema>;
 
-export interface WorkspacesCreatePayload {
-  name: string;
-  color: string;
-  icon: string;
-  privacyMode: boolean;
-}
+export type WorkspacesCreatePayload = z.infer<typeof WorkspacesCreatePayloadSchema>;
 
-export interface WorkspacesUpdatePayload {
-  workspaceId: WorkspaceId;
-  changes: Partial<Pick<Workspace, "name" | "color" | "icon" | "privacyMode">>;
-}
+export type WorkspacesUpdatePayload = z.infer<typeof WorkspacesUpdatePayloadSchema>;
 
-export interface WorkspacesDeletePayload {
-  workspaceId: WorkspaceId;
-}
+export type WorkspacesDeletePayload = z.infer<typeof WorkspacesDeletePayloadSchema>;
 
-export interface WorkspacesMoveTabPayload {
-  targetWorkspaceId: WorkspaceId;
-}
+export type WorkspacesMoveTabPayload = z.infer<typeof WorkspacesMoveTabPayloadSchema>;
 
 export interface WorkspacesSwitchedEvent {
   workspaceId: WorkspaceId;
@@ -83,14 +73,7 @@ export interface WorkspacesListChangedEvent {
 }
 
 // ── Command registry ─────────────────────────────────────────────
-export type WorkspacesCommands = {
-  [WORKSPACES_SWITCH]: { payload: WorkspacesSwitchPayload; response: undefined };
-  [WORKSPACES_CREATE]: { payload: WorkspacesCreatePayload; response: WorkspaceId };
-  [WORKSPACES_UPDATE]: { payload: WorkspacesUpdatePayload; response: undefined };
-  [WORKSPACES_DELETE]: { payload: WorkspacesDeletePayload; response: undefined };
-  [WORKSPACES_MOVE_TAB]: { payload: WorkspacesMoveTabPayload; response: undefined };
-  [WORKSPACES_RESTORE_TAB]: { payload: undefined; response: undefined };
-};
+export type WorkspacesCommands = CommandTypes<typeof commandContracts>;
 
 // ── Event registry ───────────────────────────────────────────────
 export type WorkspacesEvents = {
