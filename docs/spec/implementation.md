@@ -42,6 +42,9 @@ has no dependency on `electron-chrome-extensions`.
 - Verify official CWS CRX3 signatures and safely extract into staging before approval/activation. Install into a stable unpacked path in the shared persistent Electron session.
 - Open extension UI at `chrome-extension://<runtimeId>/...`, with sandboxing and
   context isolation enabled. Never serve extension UI as a local website.
+- Reset only the extension origin’s service-worker/code caches during package activation
+  and rollback. Electron can otherwise execute persisted scripts from the previous release.
+  Preserve native vault storage, IndexedDB and cookies.
 - Keep vendor JavaScript unchanged. Loading an older installation removes only
   the identifiable bootstrap prepended by the original experiment.
 - Retain native runtime messaging, scripting, local storage and session storage.
@@ -63,6 +66,8 @@ Validation on 2026-09-13 used Electron 44.3.0 and the unmodified CWS Bitwarden
 Windows. Password/authenticator-code login, sync, editing an existing password,
 generation, creating a login, popup filling on two hosts and in a same-origin
 iframe, no suggestions on an unrelated host, and restart/lock/unlock/fill passed.
+An actual 2026.3.0 → 2026.8.0 upgrade also passed expanded-permission approval,
+stable runtime identity, retained account/vault, unlock and fill.
 Cloud accounts and cross-origin iframe variants have not been exercised with this
 fixture. Passkeys and biometrics are outside the supported boundary.
 

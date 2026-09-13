@@ -369,6 +369,7 @@ export class ExtensionManager {
         if (transaction.hadCurrent)
           await fs.rename(this.directory(record.id), this.backup(record.id));
         await fs.rename(stage, this.directory(record.id));
+        await this.platform.clearExtensionCodeCache(this.directory(record.id));
         Object.assign(record, next);
         await this.load(record);
         await this.persist();
@@ -395,6 +396,7 @@ export class ExtensionManager {
       await fs.rename(this.backup(id), this.directory(id));
     } else if (!transaction.hadCurrent)
       await fs.rm(this.directory(id), { recursive: true, force: true });
+    if (transaction.hadCurrent) await this.platform.clearExtensionCodeCache(this.directory(id));
     const restored = {
       ...transaction.previous,
       pending: undefined,

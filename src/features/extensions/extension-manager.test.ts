@@ -38,9 +38,11 @@ async function setup() {
     };
   });
   const remove = vi.fn();
+  const clear = vi.fn(async () => {});
   const platform = createMockPlatform({
     getUserDataPath: () => root,
     loadExtension: load,
+    clearExtensionCodeCache: clear,
     removeExtension: remove,
   });
   const fetch = vi.fn(async () => archive({ "manifest.json": JSON.stringify(manifest("1.0")) }));
@@ -58,7 +60,7 @@ async function setup() {
   };
   const manager = make();
   await manager.start();
-  return { root, store, manager, make, fetch, load, remove };
+  return { root, store, manager, make, fetch, load, remove, clear };
 }
 async function install(manager: ExtensionManager) {
   await manager.check(id);
@@ -84,7 +86,7 @@ describe("extension lifecycle", () => {
     });
   });
   it("stages updates without interrupting the vault and activates at the same path on restart", async () => {
-    const { manager, fetch, load, make, root } = await setup();
+    const { manager, fetch, load, make, root, clear } = await setup();
     await install(manager);
     await fs.writeFile(path.join(root, "vault-sentinel"), "durable vault");
     fetch.mockImplementation(async () =>
@@ -99,6 +101,8 @@ describe("extension lifecycle", () => {
     await restarted.start();
     expect(restarted.records[0]?.version).toBe("2.0");
     expect(load.mock.calls[0]?.[0]).toBe(load.mock.calls[1]?.[0]);
+    expect(clear.mock.calls).toHaveLength(2);
+    expect(clear.mock.invocationCallOrder[1]).toBeLessThan(load.mock.invocationCallOrder[1] ?? 0);
     expect(await fs.readFile(path.join(root, "vault-sentinel"), "utf8")).toBe("durable vault");
     await restarted.setEnabled(id, false); // drains startup check
   });

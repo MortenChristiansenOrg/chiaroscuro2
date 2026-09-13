@@ -3,6 +3,7 @@ import http from "node:http";
 import os from "node:os";
 import path from "node:path";
 import { expect, test } from "@playwright/test";
+import { unpackedExtensionId } from "../../src/platform/extension-identity";
 import { AppSession } from "../automation/session";
 
 test("MV3 worker observes vault state, fills the active tab and retains only durable state on restart", async ({
@@ -94,6 +95,9 @@ test("MV3 worker observes vault state, fills the active tab and retains only dur
           (target) =>
             target.url.startsWith("chrome-extension:") && target.url.endsWith("/popup.html"),
         ),
+      );
+      expect(new URL(popup.url()).hostname).toBe(
+        unpackedExtensionId(path.join(app.profile, "chromium/extensions", extensionId)),
       );
       const contexts = await popup.evaluate(async () => {
         const api = (

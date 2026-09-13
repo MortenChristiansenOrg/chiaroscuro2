@@ -152,12 +152,16 @@ export async function downloadPackage(
     response: "redirect",
     prodversion: chromeVersion,
     acceptformat: "crx3",
-    x: `id=${id}&uc`,
+    x: `id=${id}&installsource=ondemand&uc`,
   }).toString();
   if (currentVersion) {
     const check = new URL(url);
     check.searchParams.set("response", "updatecheck");
-    check.searchParams.set("x", `id=${id}&v=${version.parse(currentVersion)}&uc`);
+    // The store can return noupdate for this browser without an explicit on-demand source.
+    check.searchParams.set(
+      "x",
+      `id=${id}&v=${version.parse(currentVersion)}&installsource=ondemand&uc`,
+    );
     const response = await fetch(check, { signal: AbortSignal.timeout(20_000) });
     if (!response.ok) throw new Error(`Update check failed (${response.status})`);
     const xml = (await readBounded(response, 64 * 1024)).toString("utf8");

@@ -7,6 +7,7 @@ import { AppSession } from "../automation/session";
 
 // Opt-in acceptance against a disposable local Vaultwarden account. Never use a personal vault.
 const extensionDirectory = process.env.BITWARDEN_TEST_EXTENSION;
+const previousDirectory = process.env.BITWARDEN_TEST_PREVIOUS_EXTENSION;
 const certificate = process.env.BITWARDEN_TEST_CERT;
 const email = "extension-test@example.test";
 const password = "Disposable extension test password 2026!";
@@ -52,11 +53,12 @@ test("official Bitwarden password lifecycle", async ({ playwright: _playwright }
   };
   try {
     app.profile = await fs.mkdtemp(path.join(os.tmpdir(), "chiaroscuro-verify-bitwarden-"));
-    await fs.cp(extensionDirectory, path.join(app.profile, "chromium/extensions", id), {
+    const initialDirectory = previousDirectory ?? extensionDirectory;
+    await fs.cp(initialDirectory, path.join(app.profile, "chromium/extensions", id), {
       recursive: true,
     });
     const manifest = JSON.parse(
-      await fs.readFile(path.join(extensionDirectory, "manifest.json"), "utf8"),
+      await fs.readFile(path.join(initialDirectory, "manifest.json"), "utf8"),
     );
     await fs.writeFile(
       path.join(app.profile, "settings.json"),
@@ -91,12 +93,40 @@ test("official Bitwarden password lifecycle", async ({ playwright: _playwright }
     await popup.getByRole("textbox", { name: /Email address/ }).fill(email);
     await popup.getByRole("button", { name: "Continue", exact: true }).click();
     await popup.getByLabel("Master password", { exact: false }).fill(password);
-    await popup.getByRole("button", { name: "Log in", exact: true }).click();
+    await popup.getByRole("button", { name: /^Log in(?: with master password)?$/ }).click();
     if (process.env.BITWARDEN_TEST_TOTP === "1") {
       await popup.getByRole("textbox", { name: /Verification code/ }).fill(totp());
       await popup.getByRole("button", { name: "Continue logging in", exact: true }).click();
     }
     await popup.getByText("Fixture Alpha", { exact: true }).first().waitFor({ timeout: 20_000 });
+    if (previousDirectory) {
+      const identity = new URL(popup.url()).hostname;
+      const current = JSON.parse(
+        await fs.readFile(path.join(extensionDirectory, "manifest.json"), "utf8"),
+      );
+      await popup.close();
+      await app.command("extensions:open");
+      const card = app.shell.getByRole("article", { name: "Bitwarden", exact: true });
+      await card.getByRole("button", { name: "Check now", exact: true }).click();
+      await card
+        .getByRole("button", { name: "Approve permissions", exact: true })
+        .waitFor({ timeout: 60_000 });
+      await card.getByRole("button", { name: "Approve permissions", exact: true }).click();
+      await expect(card).toContainText(`Version ${current.version} is ready`);
+      await app.restart();
+      await app.command("extensions:open");
+      await expect(
+        app.shell.getByRole("article", { name: "Bitwarden", exact: true }),
+      ).toContainText(`v${current.version} · Enabled`);
+      await app.command("tabs:create", { url: "http://127.0.0.1:18328/alpha?upgrade" });
+      popup = undefined;
+      popup = await openPopup();
+      expect(new URL(popup.url()).hostname).toBe(identity);
+      await popup.getByLabel("Master password", { exact: false }).fill(password);
+      await popup.getByRole("button", { name: "Unlock", exact: true }).click();
+      await popup.getByText("Fixture Alpha", { exact: true }).first().waitFor();
+    }
+
     await popup
       .getByRole("button", { name: "View item - Fixture Alpha - alpha-user", exact: true })
       .first()

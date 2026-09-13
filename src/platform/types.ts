@@ -202,6 +202,7 @@ export interface Platform {
   // Chrome extensions
 
   /** Load an unpacked Chrome extension from a directory path. */
+  clearExtensionCodeCache(extensionPath: string): Promise<void>;
   loadExtension(extensionPath: string): Promise<LoadedExtension>;
   /** Remove a loaded Chrome extension by its ID. */
   removeExtension(extensionId: string): void;

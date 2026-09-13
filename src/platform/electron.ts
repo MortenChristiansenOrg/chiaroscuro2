@@ -17,6 +17,7 @@ import {
   webContents,
 } from "electron";
 import type { Bounds, TabId, WindowId } from "../shared/types";
+import { unpackedExtensionId } from "./extension-identity";
 import { migrateExtensionBootstrap } from "./extension-migration";
 import { ExtensionRuntime } from "./extension-runtime";
 import type { GithubSessionDiagnostics } from "./github-session-diagnostics";
@@ -1833,6 +1834,17 @@ export class ElectronPlatform implements Platform {
 
   private get extensions() {
     return session.defaultSession.extensions;
+  }
+
+  async clearExtensionCodeCache(extensionPath: string): Promise<void> {
+    const manifest = JSON.parse(fs.readFileSync(path.join(extensionPath, "manifest.json"), "utf8"));
+    const id = unpackedExtensionId(extensionPath, manifest.key);
+    // A persisted MV3 registration can otherwise run the previous package's script
+    // against the new files. Leave native vault storage, IndexedDB and cookies intact.
+    await session.defaultSession.clearStorageData({
+      origin: `chrome-extension://${id}`,
+      storages: ["serviceworkers", "cachestorage"],
+    });
   }
 
   async loadExtension(extensionPath: string) {

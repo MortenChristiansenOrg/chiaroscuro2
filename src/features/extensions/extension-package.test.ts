@@ -2,8 +2,15 @@ import { createHash, generateKeyPairSync, sign } from "node:crypto";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
-import { compareVersions, extractPackage, idForKey, verifyCRX } from "./extension-package";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  BITWARDEN_ID,
+  compareVersions,
+  downloadPackage,
+  extractPackage,
+  idForKey,
+  verifyCRX,
+} from "./extension-package";
 import { archive } from "./extension-test-utils";
 
 function integer(n: number): Buffer {
@@ -86,5 +93,37 @@ describe("extension package trust and extraction", () => {
     } finally {
       await fs.rm(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe("store update protocol", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  it("requests an on-demand update and downloads the offered package", async () => {
+    const fetch = vi.fn(async (input: URL) => {
+      const url = new URL(input);
+      expect(url.searchParams.get("prodversion")).toBe("152.0.7977.78");
+      expect(url.searchParams.get("x")).toContain("installsource=ondemand");
+      if (url.searchParams.get("response") === "updatecheck") {
+        expect(url.searchParams.get("x")).toContain("v=2026.3.0");
+        return new Response(
+          `<app appid="${BITWARDEN_ID}"><updatecheck status="ok" version="2026.8.0"/></app>`,
+        );
+      }
+      return new Response("signed-package");
+    });
+    vi.stubGlobal("fetch", fetch);
+    expect(await downloadPackage(BITWARDEN_ID, "152.0.7977.78", "2026.3.0")).toEqual(
+      Buffer.from("signed-package"),
+    );
+    expect(fetch).toHaveBeenCalledTimes(2);
+  });
+  it("does not download the package when the store reports no update", async () => {
+    const fetch = vi.fn(
+      async () =>
+        new Response(`<app appid="${BITWARDEN_ID}"><updatecheck status="noupdate"/></app>`),
+    );
+    vi.stubGlobal("fetch", fetch);
+    expect(await downloadPackage(BITWARDEN_ID, "152.0.7977.78", "2026.8.0")).toBeUndefined();
+    expect(fetch).toHaveBeenCalledTimes(1);
   });
 });

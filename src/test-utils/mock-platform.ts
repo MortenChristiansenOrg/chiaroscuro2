@@ -80,6 +80,7 @@ export function createMockPlatform(overrides: Partial<Platform> = {}): Platform 
     copyImageAt: vi.fn(),
     downloadUrl: vi.fn(),
     executeJavaScript: vi.fn(async () => undefined),
+    clearExtensionCodeCache: vi.fn(async () => {}),
     loadExtension: vi.fn(async (p: string) => ({
       id: p.split("/").pop() ?? "mock-ext",
       name: "Mock Extension",

@@ -239,3 +239,8 @@ after building. The same scenario can run with native Windows paths/environment
 variables in the Windows verification deployment. This proves self-hosted account
 workflows; selecting cloud endpoints is supported but it is not a test of a real
 Bitwarden cloud account.
+
+Set `BITWARDEN_TEST_PREVIOUS_EXTENSION` to an unpacked official 2026.3.0 package to
+exercise the signed store update to the current fixture version after login,
+including expanded permission review, restart, identity and vault retention. This
+optional scenario uses the real store; it expects a newer release with added permissions.
