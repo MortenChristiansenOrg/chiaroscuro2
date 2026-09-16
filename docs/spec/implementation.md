@@ -73,13 +73,14 @@ stable runtime identity, retained account/vault, unlock and fill.
 Cloud accounts and cross-origin iframe variants have not been exercised with this
 fixture. Passkeys and biometrics are outside the supported boundary.
 
-A narrow navigation limitation remains: editing an item immediately after creating
-it in the same popup session saves the change but can leave the popup on the Edit
-screen. Closing the popup and changing tabs restores ordinary navigation. Tracing
-shows the write completes and Bitwarden's popup route cache redirects back to Edit;
-this has not been reproduced in stock Chrome, so its origin remains unconfirmed.
-Vendor code is unchanged. Ordinary existing-item editing and creation pass the
-acceptance scenario in `e2e/scenarios/bitwarden.spec.ts`.
+A known navigation issue remains: editing an item immediately after creating it
+in the same popup session saves the change but can leave the popup on the Edit
+screen. On 2026-09-16 the identical failure was reproduced with unmodified
+Bitwarden in Chrome for Testing, without Chiaroscuro's compatibility layer.
+See [Known issues](../../KNOWN_ISSUES.md) for reproduction steps, the workaround,
+the tested versions and the limits of that comparison. Vendor code is unchanged.
+Ordinary existing-item editing and creation pass the acceptance scenario in
+`e2e/scenarios/bitwarden.spec.ts`.
 
 The sandbox is required for service-worker preloads. Playwright normally adds
 `--no-sandbox`; extension tests explicitly use `AppSession(..., [], true)`.
