@@ -27,6 +27,37 @@ function fixture() {
 }
 
 describe("external commands", () => {
+  it("accepts built-in page paths through the navigation contract", async () => {
+    const bus = new CommandBus(commandContracts);
+    const handler = vi.fn(() => "tab-built-in");
+    bus.handle("tabs:create", handler);
+    expect(await executeExternalCommand(bus, "tabs:create", { url: "/extensions" })).toMatchObject({
+      ok: true,
+    });
+    expect(handler).toHaveBeenCalledWith({ url: "/extensions" });
+    handler.mockClear();
+    expect(
+      await executeExternalCommand(bus, "tabs:create", { url: "//untrusted.example" }),
+    ).toMatchObject({ ok: false, error: { code: "INVALID_PAYLOAD" } });
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it("exposes extension commands and rejects invalid extension IDs before dispatch", async () => {
+    const bus = new CommandBus(commandContracts);
+    const handler = vi.fn();
+    bus.handle("extensions:open-popup", handler);
+    expect(
+      await executeExternalCommand(bus, "extensions:open-popup", {
+        extensionId: "nngceckbapebfimnlniiiahkandclblb",
+      }),
+    ).toMatchObject({ ok: true });
+    handler.mockClear();
+    expect(
+      await executeExternalCommand(bus, "extensions:open-popup", { extensionId: "../outside" }),
+    ).toMatchObject({ ok: false, error: { code: "INVALID_PAYLOAD" } });
+    expect(handler).not.toHaveBeenCalled();
+  });
+
   it("validates and normalizes optional fields before invoking a handler", async () => {
     const { bus, handler } = fixture();
     expect(await executeExternalCommand(bus, "update", { count: 3, label: undefined })).toEqual({

@@ -5,6 +5,7 @@ import { commandContracts as debugServerContracts } from "../features/debug-serv
 import { commandContracts as devToolsContracts } from "../features/dev-tools/dev-tools.contracts";
 import { commandContracts as domainCssContracts } from "../features/domain-css/domain-css.contracts";
 import { commandContracts as downloadsContracts } from "../features/downloads/downloads.contracts";
+import { commandContracts as extensionsContracts } from "../features/extensions/extensions.contracts";
 import { commandContracts as externalLinkContracts } from "../features/external-link/external-link.contracts";
 import { commandContracts as findTextContracts } from "../features/find-text/find-text.contracts";
 import { commandContracts as foldersContracts } from "../features/folders/folders.contracts";
@@ -34,6 +35,7 @@ export const commandContracts = {
   ...devToolsContracts,
   ...domainCssContracts,
   ...downloadsContracts,
+  ...extensionsContracts,
   ...externalLinkContracts,
   ...findTextContracts,
   ...foldersContracts,

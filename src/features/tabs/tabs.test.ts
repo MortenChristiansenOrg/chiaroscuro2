@@ -87,6 +87,31 @@ describe("tabs commands", () => {
     vi.useRealTimers();
   });
 
+  it.each(["/unknown", "/pdf-reader-old", "/pdf-reader-old?url=file.pdf"])(
+    "treats unregistered route %s as a platform tab on creation and restore",
+    async (url) => {
+      const { commands, platform, dataStore, deps } = setup();
+      const id = await commands.send(TABS_CREATE, { url });
+      expect(platform.createTab).toHaveBeenCalledWith(WIN_ID, url);
+      expect((await commands.send(TABS_GET, { tabId: id }))?.builtIn).not.toBe(true);
+      expect(await dataStore.collection("tabs").findMany({})).toEqual(
+        expect.arrayContaining([expect.objectContaining({ url })]),
+      );
+      vi.mocked(platform.createTab).mockClear();
+      const restoredDeps = {
+        ...deps,
+        commands: new CommandBus<AllCommands>(),
+        events: new EventBus<AllEvents>(),
+      };
+      feature.register(restoredDeps);
+      const changed = vi.fn();
+      restoredDeps.events.on(TABS_LIST_CHANGED, changed);
+      await start(restoredDeps);
+      expect(platform.createTab).toHaveBeenCalledWith(WIN_ID, url, id, { lazy: true });
+      expect(changed.mock.calls.at(-1)?.[0].tabs[0]?.builtIn).not.toBe(true);
+    },
+  );
+
   describe("TABS_DUPLICATE", () => {
     it("creates a background copy in an inactive source workspace without changing its bookmark", async () => {
       const { commands, platform, getActiveTabId } = setup();
@@ -130,7 +155,7 @@ describe("tabs commands", () => {
 
     it("ignores missing, built-in and PDF sources without creating contents", async () => {
       const { commands, platform } = setup();
-      for (const url of ["app:settings", "app:pdf?file=fixture.pdf"]) {
+      for (const url of ["/settings", "/pdf-reader?file=fixture.pdf"]) {
         const tabId = await commands.send(TABS_CREATE, { url });
         expect(await commands.send(TABS_DUPLICATE, { tabId })).toBeUndefined();
       }
@@ -605,7 +630,7 @@ describe("start()", () => {
     await tabsColl.insert({
       id: "builtin-1",
       workspaceId: WS_ID,
-      url: "app:pdf-reader?url=file%3A%2F%2F%2Fhome%2Fuser%2Fdoc.pdf",
+      url: "/pdf-reader?url=file%3A%2F%2F%2Fhome%2Fuser%2Fdoc.pdf",
       title: "doc",
       favicon: "",
       bookmarked: false,
@@ -672,22 +697,22 @@ describe("start()", () => {
     const pdfTab = emitted?.tabs.find((t: Tab) => t.id === ("builtin-1" as TabId));
     expect(pdfTab).toBeDefined();
     expect(pdfTab?.builtIn).toBe(true);
-    expect(pdfTab?.url).toContain("app:pdf-reader");
+    expect(pdfTab?.url).toContain("/pdf-reader");
   });
 
   it("persists PDF reader tabs", async () => {
     const { commands, events, dataStore } = setup();
     const tabsColl = dataStore.collection("tabs");
 
-    // Create a PDF reader tab (app: URL → built-in)
+    // Create a PDF reader tab (built-in page)
     await commands.send(TABS_CREATE, {
-      url: "app:pdf-reader?url=file%3A%2F%2F%2Fhome%2Fuser%2Fdoc.pdf",
+      url: "/pdf-reader?url=file%3A%2F%2F%2Fhome%2Fuser%2Fdoc.pdf",
     });
 
     // Should be persisted despite being built-in
     const persisted = await tabsColl.findMany({});
     expect(persisted).toHaveLength(1);
-    expect(persisted[0]?.url).toContain("app:pdf-reader");
+    expect(persisted[0]?.url).toContain("/pdf-reader");
   });
 
   it("removes persisted PDF reader tab on close", async () => {
@@ -695,7 +720,7 @@ describe("start()", () => {
     const tabsColl = dataStore.collection("tabs");
 
     const tabId = await commands.send(TABS_CREATE, {
-      url: "app:pdf-reader?url=file%3A%2F%2F%2Fhome%2Fuser%2Fdoc.pdf",
+      url: "/pdf-reader?url=file%3A%2F%2F%2Fhome%2Fuser%2Fdoc.pdf",
     });
     expect(await tabsColl.findMany({})).toHaveLength(1);
 

@@ -28,6 +28,7 @@ export class AppSession {
   constructor(
     readonly artifactDir: string,
     private readonly launchArgs: string[] = [],
+    private readonly chromiumSandbox = false,
   ) {}
 
   record(kind: string, data: unknown): void {
@@ -46,7 +47,7 @@ export class AppSession {
             "--ozone-platform=headless",
             "--ozone-override-screen-size=1920,1080",
             "--disable-gpu",
-            "--no-sandbox",
+            ...(this.chromiumSandbox ? [] : ["--no-sandbox"]),
           ]
         : []),
       ...this.launchArgs,
@@ -69,6 +70,7 @@ export class AppSession {
       delete env.ELECTRON_RUN_AS_NODE;
       this.app = await electron.launch({
         args,
+        chromiumSandbox: this.chromiumSandbox,
         env: Object.fromEntries(
           Object.entries(env).filter((entry): entry is [string, string] => entry[1] !== undefined),
         ),

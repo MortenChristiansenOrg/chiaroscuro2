@@ -19,4 +19,5 @@ export const WindowIdSchema = z.string().min(1) as unknown as z.ZodType<WindowId
 /** URLs accepted by app navigation, including built-in pages and local documents. */
 export const NavigationUrlSchema = z
   .url()
-  .regex(/^(https?|file|about|data|app):/i, "Unsupported navigation protocol");
+  .regex(/^(https?|file|about|data|app):/i, "Unsupported navigation protocol")
+  .or(z.string().regex(/^\/(?!\/)[a-z][a-z0-9-]*(?:\?[^\s]*)?$/, "Invalid built-in page path"));

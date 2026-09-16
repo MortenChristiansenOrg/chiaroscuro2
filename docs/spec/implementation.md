@@ -35,30 +35,66 @@ See `docs/features/SidebarFeature.specs.md`, `docs/features/TabsFeature.specs.md
 
 ## 6. Chrome Extension Support
 
-Extensions are **opt-in/experimental**. Don't rely on them for critical functionality — the ecosystem is not mature enough (~30-40% Chrome API coverage).
+Bitwarden is the supported extension. See `docs/features/ExtensionsFeature.specs.md` for the release boundary, permission review, staged automatic updates and recovery contract.
+The browser uses Electron's native extension runtime plus an in-house adapter; it
+has no dependency on `electron-chrome-extensions`.
 
-**Native alternatives for critical needs:**
+- Verify official CWS CRX3 signatures and safely extract into staging before approval/activation. Install into a stable unpacked path in the shared persistent Electron session.
+- Open extension UI at `chrome-extension://<runtimeId>/...`, with sandboxing and
+  context isolation enabled. Never serve extension UI as a local website.
+- Reset only the extension origin’s service-worker/code caches during package activation
+  and rollback. Electron can otherwise execute persisted scripts from the previous release.
+  Preserve native vault storage, IndexedDB and cookies.
+- Keep vendor JavaScript unchanged. Loading an older installation removes only
+  the identifiable bootstrap prepended by the original experiment.
+- Adapt native API objects in place: Chromium can refresh namespace getters after
+  startup, and replacement objects would lose the browser adapter.
+- Retain native runtime messaging, scripting, local storage and session storage.
+  Session keys remain in memory and disappear on browser restart.
+- Supply browser tab/window operations and selected navigation, menu, permission
+  and notification APIs through `src/platform/extension-runtime.ts`. Only loaded
+  extension frames/workers in the shared session can invoke these operations.
+- Use native WebContents IDs for extension tabs, and the browser's selected tab
+  for active-tab queries. Redact URLs/titles without tabs or matching host permissions.
+- Relay native storage invalidations to MV3 workers, whose storage events are
+  missing in the tested Electron runtime. Workers re-read native values and
+  deduplicate invalidations; the adapter never creates a separate vault store.
+- Implement empty, read-only managed storage; additional optional permissions
+  are not granted. Cloud `storage.sync`, native messaging/biometrics, extension
+  keyboard shortcuts and full Chrome API parity are outside the current scope.
 
-- **Ad blocking**: `@cliqz/adblocker-electron` (Ghostery). Native, fast, uses uBlock/EasyList filter lists. No extension needed.
-- **Password managers**: 1Password/Bitwarden have OS-level autofill via accessibility APIs. Browser extensions for these don't work in Electron.
-- **DevTools extensions**: React DevTools works natively via `session.loadExtension()`.
+Validation on 2026-09-13 used Electron 44.3.0 and the unmodified CWS Bitwarden
+2026.8.0 against a disposable local Vaultwarden 1.37.2 account on Linux and native
+Windows. Password/authenticator-code login, sync, editing an existing password,
+generation, creating a login, popup filling on two hosts and in a same-origin
+iframe, no suggestions on an unrelated host, and restart/lock/unlock/fill passed.
+An actual 2026.3.0 → 2026.8.0 upgrade also passed expanded-permission approval,
+stable runtime identity, retained account/vault, unlock and fill.
+Cloud accounts and cross-origin iframe variants have not been exercised with this
+fixture. Passkeys and biometrics are outside the supported boundary.
 
-**Optional extension support** (via `electron-chrome-extensions` ^4.9 + `electron-chrome-web-store`):
+A known navigation issue remains: editing an item immediately after creating it
+in the same popup session saves the change but can leave the popup on the Edit
+screen. On 2026-09-16 the identical failure was reproduced with unmodified
+Bitwarden in Chrome for Testing, without Chiaroscuro's compatibility layer.
+See [Known issues](../../KNOWN_ISSUES.md) for reproduction steps, the workaround,
+the tested versions and the limits of that comparison. Vendor code is unchanged.
+Ordinary existing-item editing and creation pass the acceptance scenario in
+`e2e/scenarios/bitwarden.spec.ts`.
 
-- Load unpacked extensions
-- CWS integration for `.crx` downloads + auto-updates
-- Extension popup windows
-- Content scripts injection
-- Basic MV3 service workers (Electron 35+)
+The sandbox is required for service-worker preloads. Playwright normally adds
+`--no-sandbox`; extension tests explicitly use `AppSession(..., [], true)`.
+Run the deterministic MV3 storage/active-tab/restart/permission regression with:
 
-**Known limitations:**
+```bash
+bun run build
+bunx playwright test --config playwright.verification.config.ts e2e/scenarios/extensions.spec.ts
+```
 
-- `declarativeNetRequest` not supported (MV3 ad blockers won't work)
-- `chrome.storage.sync/managed` not supported
-- `chrome.commands` (keyboard shortcuts) not supported
-- Service workers are kept persistent (no idle/wake lifecycle)
-- uBlock Origin (MV2 and Lite/MV3): does not work
-- 1Password, Bitwarden: do not work
+Electron still documents a [limited extension API](https://www.electronjs.org/docs/latest/api/extensions).
+Its [service-worker startup fix](https://releases.electronjs.org/pr/50611) is
+relevant to this branch, but upgrading Electron alone does not supply browser
+semantics or repair storage-event delivery to workers.
 
 ## 7. Fixed URL & Tab Customization
 

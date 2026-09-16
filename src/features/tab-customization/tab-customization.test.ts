@@ -56,7 +56,7 @@ function setup() {
   tabs.set("tab-1" as TabId, makeTab("tab-1", { bookmarked: true }));
   tabs.set("tab-2" as TabId, makeTab("tab-2", { bookmarked: true }));
   tabs.set("ephemeral-1" as TabId, makeTab("ephemeral-1"));
-  tabs.set("builtin-1" as TabId, makeTab("builtin-1", { builtIn: true, url: "app:settings" }));
+  tabs.set("builtin-1" as TabId, makeTab("builtin-1", { builtIn: true, url: "/settings" }));
 
   const deps: TabCustomizationDeps = {
     commands,

@@ -203,6 +203,7 @@ export default defineFeature<Deps>({
       // but the overlay expects window-content-area coordinates.
       const menuItems = items.map((it) => ({ label: it.label, icon: it.icon }));
       const selectedIndex = await commands.send(CONTEXT_MENU_SHOW, {
+        tabId,
         items: menuItems,
         x: params.x + contentBounds.x,
         y: params.y + contentBounds.y,

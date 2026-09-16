@@ -104,7 +104,7 @@ export default defineFeature<Deps>({
       if (!url) return;
 
       // Built-in pages always open via tabs:create (handles singleton + builtIn flag)
-      if (url.startsWith("app:")) {
+      if (url.startsWith("/")) {
         await commands.send("tabs:create", { url });
       } else if (payload.inCurrentTab) {
         const tabId = getActiveTabId();

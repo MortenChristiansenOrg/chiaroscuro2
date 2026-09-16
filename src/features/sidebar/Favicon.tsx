@@ -16,7 +16,7 @@ export function hashToHue(str: string): number {
 // ── Built-in page icons ─────────────────────────────────────────
 
 const builtInIcons: Record<string, FaSolidIcon> = {
-  "app:settings": "gear",
+  "/settings": "gear",
 };
 
 // ── Components ──────────────────────────────────────────────────

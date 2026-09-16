@@ -109,7 +109,7 @@ describe("window-chrome commands", () => {
     const pdfUrl = "https://example.com/doc.pdf";
     const { commands, platform } = setup(
       {},
-      { getTabUrl: () => `app:pdf-reader?url=${encodeURIComponent(pdfUrl)}` },
+      { getTabUrl: () => `/pdf-reader?url=${encodeURIComponent(pdfUrl)}` },
     );
     await commands.send(WINDOW_COPY_ADDRESS, undefined);
     expect(platform.writeClipboard).toHaveBeenCalledWith(pdfUrl);
@@ -119,7 +119,7 @@ describe("window-chrome commands", () => {
     const fileUrl = "file:///home/user/doc.pdf";
     const { commands, platform } = setup(
       {},
-      { getTabUrl: () => `app:pdf-reader?url=${encodeURIComponent(fileUrl)}` },
+      { getTabUrl: () => `/pdf-reader?url=${encodeURIComponent(fileUrl)}` },
     );
     await commands.send(WINDOW_COPY_ADDRESS, undefined);
     expect(platform.writeClipboard).toHaveBeenCalledWith(fileUrl);

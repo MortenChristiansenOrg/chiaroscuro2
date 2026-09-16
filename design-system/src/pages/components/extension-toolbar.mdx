@@ -1,0 +1,130 @@
+---
+title: Extension Toolbar
+---
+
+# Extension Toolbar
+
+Compact toolbar in the title bar that gives access to installed Chrome extension actions. A toggle button (puzzle-piece icon) sits next to the window controls; clicking it slides extension action buttons in from the right.
+
+## Anatomy
+
+1. **Toggle button** — puzzle-piece icon, always visible when extensions with actions are installed
+2. **Extension buttons** — one per enabled extension that has a browser action; slide in/out horizontally
+3. **Extension popup** — frameless floating window opened when clicking an extension button with a popup
+
+---
+
+## Visual Specs
+
+### Toggle Button
+
+| Property | Token/Value |
+|----------|-------------|
+| Width | `28px` |
+| Height | `26px` |
+| Border radius | `var(--radius-md)` |
+| Background | `transparent` |
+| Icon | `puzzle-piece` (solid) |
+| Icon size | `var(--icon-size-default)` |
+| Color (rest) | `var(--glass-text-muted)` |
+| Color (hover) | `var(--glass-text-hover)` |
+| Background (hover) | `var(--glass-hover)` |
+| Background (active) | `var(--glass-pressed)` |
+| Transition | `background-color` + `color`, `var(--duration-fast) var(--ease-out)` |
+
+### Extension Button
+
+| Property | Token/Value |
+|----------|-------------|
+| Width | `28px` |
+| Height | `26px` |
+| Border radius | `var(--radius-md)` |
+| Icon size | `14px x 14px` (extension icon image) |
+| Fallback icon | `puzzle-piece`, `var(--icon-size-default)` |
+| Styling | Same glass button pattern as toggle |
+
+### Slide Animation
+
+| Property | Token/Value |
+|----------|-------------|
+| Animated properties | `max-width`, `opacity` |
+| Duration | `var(--duration-normal)` |
+| Easing | `var(--ease-out)` |
+| Collapsed `max-width` | `0` |
+| Expanded `max-width` | `{count * 29}px` |
+| Gap between buttons | `0.0625rem` |
+| Overflow | `hidden` (clips during animation) |
+
+### Extension Popup Window
+
+| Property | Value |
+|----------|-------|
+| Width | `400px` |
+| Height | `600px` |
+| Frame | None (frameless) |
+| Position | Top-right of parent window, offset 8px from right, 40px from top |
+| Dismiss | Closes on blur (losing focus) |
+
+---
+
+## States
+
+### No Extensions with Actions
+Toolbar is not rendered at all (returns null).
+
+### Collapsed (default)
+Only the toggle button is visible. Extension buttons have `max-width: 0` and `opacity: 0`.
+
+### Expanded
+Extension buttons slide in from the right. Toggle button has `aria-expanded="true"`.
+
+### Extension Icon Fallback
+If the extension icon fails to load, falls back to a puzzle-piece icon.
+
+---
+
+## Behavior
+
+- **Toggle**: Clicking the puzzle-piece button toggles visibility of extension action buttons.
+- **Extension click**: Clicking an extension button with a popup opens the extension's popup HTML in a floating window.
+- **Auto-dismiss popup**: The popup window closes when it loses focus (click elsewhere).
+- **Reactive**: The toolbar updates automatically when extensions are installed, uninstalled, enabled, or disabled.
+
+---
+
+## Keyboard & Focus
+
+| Key | Action |
+|-----|--------|
+| Tab / Shift+Tab | Focus the disclosure button; expanded actions join the tab order. Collapsed actions are hidden from focus and assistive technology. |
+| Enter / Space | Toggle the disclosure or open the focused extension popup. |
+
+---
+
+## Accessibility
+
+- Toggle button has `aria-label="Extensions"` and `aria-expanded` state
+- Extension buttons have `aria-label` set to the extension's action title or name
+- All buttons have `data-tip` for tooltip display
+- Extension icon images have `alt=""` (decorative)
+
+---
+
+## Layout & Composition
+
+```
+ExtensionToolbar                    # flex row, gap 0.0625rem
+  [slide container]                 # overflow hidden, animated max-width/opacity
+    ExtensionButton[]               # one per enabled extension with action
+  toggle button                     # puzzle-piece icon, always rightmost
+```
+
+Positioned in the TitleBar between the flexible spacer and the window controls (min/max/close).
+
+---
+
+## Related
+
+- [Extensions Page](/components/extensions-page) — management page for installing and configuring extensions
+- [Address Bar](/components/address-bar) — adjacent title bar component
+- [Buttons](/components/buttons) — glass button styling pattern

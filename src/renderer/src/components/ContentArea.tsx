@@ -100,7 +100,7 @@ export function ContentArea() {
         style={showTerminal ? { background: "var(--content-bg)" } : undefined}
       >
         {isBuiltIn && activeTab && <BuiltInPage url={activeTab.url} />}
-        {isCustomizing && <BuiltInPage url={`app:tab-customization?tabId=${editingTabId}`} />}
+        {isCustomizing && <BuiltInPage url={`/tab-customization?tabId=${editingTabId}`} />}
         {!activeTabId && (
           <div
             className="absolute inset-0 flex items-center justify-center select-none"

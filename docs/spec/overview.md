@@ -14,5 +14,5 @@ Personal TypeScript browser built on Electron with Chrome extension support, Rea
 - **Styling**: Tailwind CSS 4
 - **Storage**: RxDB (free filesystem storage) for structured data, JSON for settings
 - **Ad blocking**: `@cliqz/adblocker-electron` (Ghostery) — native, no extension needed
-- **Extensions**: `electron-chrome-extensions` ^4.9 (opt-in/experimental, ~30-40% Chrome API coverage)
+- **Extensions**: Native Electron runtime with an in-house compatibility adapter; experimental, with Bitwarden as the validated target
 - **IPC**: Command bus + event bus with typed registries (bridges IPC transparently)

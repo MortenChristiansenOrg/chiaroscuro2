@@ -51,6 +51,10 @@ if (process.argv.includes("--help")) {
       {
         description:
           "JSONL stdin/stdout controller using the shared Playwright Electron fixture. Starts an isolated app and local fixture site. EOF or stop cleans up.",
+        options: {
+          "--sandbox":
+            "Keep Chromium sandboxing enabled; required for MV3 extension worker preloads.",
+        },
         requests: z.toJSONSchema(requestSchema),
         examples: [
           { action: "targets" },
@@ -62,7 +66,11 @@ if (process.argv.includes("--help")) {
     ),
   );
 } else {
-  const session = new AppSession(path.resolve("test-results", `interactive-${Date.now()}`));
+  const session = new AppSession(
+    path.resolve("test-results", `interactive-${Date.now()}`),
+    [],
+    process.argv.includes("--sandbox"),
+  );
   let failureCount = 0;
   const site = await startSite();
   const lines = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });

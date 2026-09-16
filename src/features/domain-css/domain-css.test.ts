@@ -236,7 +236,7 @@ describe("domain-css commands", () => {
       await commands.send(DOMAIN_SETTINGS_OPEN, { domain: "example.com" });
 
       expect(createSpy).toHaveBeenCalledWith({
-        url: "app:domain-settings?domain=example.com",
+        url: "/domain-settings?domain=example.com",
       });
     });
 
@@ -263,7 +263,7 @@ describe("domain-css commands", () => {
 
       // Simulate tab close
       events.emit("tabs:closed", {
-        tabId: "mock-tab-app:domain-settings?domain=example.com" as TabId,
+        tabId: "mock-tab-/domain-settings?domain=example.com" as TabId,
         activatedTabId: null,
       });
 

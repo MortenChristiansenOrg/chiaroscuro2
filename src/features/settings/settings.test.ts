@@ -108,7 +108,7 @@ describe("settings commands", () => {
 
       await commands.send(SETTINGS_OPEN, undefined);
 
-      expect(createSpy).toHaveBeenCalledWith({ url: "app:settings" });
+      expect(createSpy).toHaveBeenCalledWith({ url: "/settings" });
     });
 
     it("reactivates existing settings tab (singleton)", async () => {
@@ -135,7 +135,7 @@ describe("settings commands", () => {
 
       // Simulate tab close
       events.emit("tabs:closed", {
-        tabId: "mock-tab-app:settings" as TabId,
+        tabId: "mock-tab-/settings" as TabId,
         activatedTabId: null,
       } as TabsClosedEvent);
 
