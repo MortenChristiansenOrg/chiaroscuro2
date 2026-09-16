@@ -78,7 +78,9 @@ test("official Bitwarden installation review, cancellation and enable switch", a
     await page.review();
     await expect(page.permissions).toBeVisible({ timeout: 60_000 });
     await page.approve();
-    const toggle = page.installedCard.getByRole("switch", { name: "Enable extension" });
+    const toggle = page.installedCard.getByRole("switch", {
+      name: "Enable Bitwarden Password Manager",
+    });
     await expect(toggle).toBeChecked();
     await app.capture("extensions-installed");
     await toggle.focus();

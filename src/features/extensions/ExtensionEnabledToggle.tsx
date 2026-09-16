@@ -3,10 +3,12 @@ import "./extensions.css";
 
 export function ExtensionEnabledToggle({
   id,
+  name,
   enabled,
   busy,
 }: {
   id: string;
+  name: string;
   enabled: boolean;
   busy?: boolean;
 }) {
@@ -14,11 +16,11 @@ export function ExtensionEnabledToggle({
     <label className="extension-enabled-toggle">
       <input
         type="checkbox"
+        // biome-ignore lint/a11y/useAriaPropsForRole: native checkbox checked supplies the switch state.
         role="switch"
-        aria-checked={enabled}
         checked={enabled}
         disabled={busy}
-        aria-label="Enable extension"
+        aria-label={`Enable ${name}`}
         onChange={(event) =>
           void extensionCommand("extensions:set-enabled", {
             extensionId: id,

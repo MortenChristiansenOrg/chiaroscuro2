@@ -19,6 +19,7 @@ export function InstalledExtensionCard({ extension }: { extension: InstalledExte
       >
         <ExtensionEnabledToggle
           id={extension.id}
+          name={extension.name}
           enabled={extension.enabled}
           busy={extension.busy}
         />

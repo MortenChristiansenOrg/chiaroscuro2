@@ -10,15 +10,15 @@ import { ExtensionEnabledToggle } from "@features/extensions/ExtensionEnabledTog
 Implementation: `src/features/extensions/ExtensionEnabledToggle.tsx`.
 
 A native checkbox with switch semantics, a stable accessible name (**Enable
-extension**), and a visible Enabled/Disabled state label. The 2.25rem × 1.25rem
+Bitwarden Password Manager**), and a visible Enabled/Disabled state label. The 2.25rem × 1.25rem
 track uses a pill radius, not the circular `--radius-full` token. A 0.75rem thumb
 moves by 1rem. Primary colors mark the enabled state; muted colors mark disabled.
 
 <LivePreview label="Enabled, disabled, and busy">
   <div style={{ display: "flex", gap: "2rem", flexWrap: "wrap" }}>
-    <ExtensionEnabledToggle id="preview-enabled" enabled={true} />
-    <ExtensionEnabledToggle id="preview-disabled" enabled={false} />
-    <ExtensionEnabledToggle id="preview-busy" enabled={true} busy={true} />
+    <ExtensionEnabledToggle name="Bitwarden Password Manager" id="preview-enabled" enabled={true} />
+    <ExtensionEnabledToggle name="Bitwarden Password Manager" id="preview-disabled" enabled={false} />
+    <ExtensionEnabledToggle name="Bitwarden Password Manager" id="preview-busy" enabled={true} busy={true} />
   </div>
 </LivePreview>
 

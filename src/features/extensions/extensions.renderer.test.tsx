@@ -78,10 +78,17 @@ it("exposes an accessible enable switch and opens the installed extension", () =
         review: undefined,
         action: { popup: "popup.html", title: "Bitwarden", iconUrl: "" },
       },
+      { id: "legacy", name: "Legacy extension", version: "1", enabled: false, installed: true },
     ],
   });
   render(<ExtensionsPage />);
-  const toggle = screen.getByRole("switch", { name: "Enable extension", checked: true });
+  expect(
+    screen.getByRole("switch", { name: "Enable Legacy extension", checked: false }),
+  ).toBeTruthy();
+  const toggle = screen.getByRole("switch", {
+    name: "Enable Bitwarden Password Manager",
+    checked: true,
+  });
   fireEvent.click(toggle);
   expect(window.chiaroscuro.sendCommand).toHaveBeenLastCalledWith("extensions:set-enabled", {
     extensionId: BITWARDEN_ID,
