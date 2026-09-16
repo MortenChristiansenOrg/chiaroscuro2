@@ -14,7 +14,12 @@ import type { SettingsChangedEvent, SettingsEvents } from "../settings/settings.
 import { SETTINGS_CHANGED } from "../settings/settings.shared";
 import type { DebugServerCommands } from "./debug-server.shared";
 import { DEBUG_SERVER_START, DEBUG_SERVER_STOP } from "./debug-server.shared";
-import { clearHistory, getHistory, register as registerRecorder } from "./recorder";
+import {
+  clearHistory,
+  getHistory,
+  register as registerRecorder,
+  setRecordingEnabled,
+} from "./recorder";
 import { getDebugState, getDebugStateNames } from "./state-providers";
 
 const startTime = Date.now();
@@ -32,6 +37,7 @@ interface Deps {
   commandBus: CommandBus<CommandRegistry>;
   eventBus: EventBus<EventRegistry>;
   isDev: boolean;
+  recordingEnabled?: boolean;
 }
 
 function parseTimestamp(value: string): number {
@@ -393,9 +399,9 @@ function stopServer(): Promise<void> {
 }
 
 export default defineFeature<Deps>({
-  register({ commands, events, commandBus, eventBus, isDev }) {
+  register({ commands, events, commandBus, eventBus, isDev, recordingEnabled }) {
     // Register recorder early to capture all subsequent registrations
-    registerRecorder(commandBus, eventBus);
+    registerRecorder(commandBus, eventBus, automation || isDev || recordingEnabled === true);
 
     let configuredPort = automation ? 0 : 19400;
     let enabled = false;
@@ -403,15 +409,18 @@ export default defineFeature<Deps>({
     commands.handle(DEBUG_SERVER_START, async () => {
       if (server) return;
       await startServer(configuredPort, commandBus, eventBus);
+      setRecordingEnabled(true);
     });
 
     commands.handle(DEBUG_SERVER_STOP, async () => {
       await stopServer();
+      setRecordingEnabled(automation || isDev);
     });
 
     events.on(SETTINGS_CHANGED, (payload) => {
       const { settings } = payload as SettingsChangedEvent;
       const newEnabled = automation || isDev || settings.debugServer.enabled;
+      setRecordingEnabled(newEnabled);
       const newPort = automation ? 0 : settings.debugServer.port;
 
       const needsRestart = newEnabled !== enabled || (newEnabled && newPort !== configuredPort);
@@ -431,6 +440,7 @@ export default defineFeature<Deps>({
   },
 
   teardown() {
+    setRecordingEnabled(false);
     if (server) {
       server.close();
       server = null;

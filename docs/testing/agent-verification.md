@@ -189,6 +189,30 @@ no reproduction, and a failed positive control. Missing desktop screenshots are
 reported as partial evidence with a nonzero exit; renderer screenshots do not
 establish desktop composition. The diagnostic remains optional. `e2e/scenarios/address-bar.spec.ts` is the Windows regression for #51: icon/padding native clicks, hit tests, hover and command effects in restored and maximized windows, including after opening and closing Find.
 
+### Startup diagnostics
+
+`bun run diagnose:startup LABEL` records five fresh-profile launches each with
+0, 20 and 100 bookmarked tabs against a local fixture, including launch-to-ready
+time, native WebContents count, working set and a separate first-load measurement
+of the updater module. Results go to `test-results/startup/LABEL.json`.
+`bun run verify:app:win --startup LABEL` runs the same diagnostic natively on
+Windows and copies the results back. Compare builds on the same host without
+concurrent builds/tests; these are warm-filesystem development/test launches,
+not cold-boot packaged startup numbers. Test mode keeps diagnostic recording on
+and skips the production updater and palette prewarm.
+
+For the recorder independently, build and run
+`bun build e2e/diagnostics/recording.ts --target=node --packages=external --outfile=out/verification/recording.mjs`
+then `node out/verification/recording.mjs`. It compares enabled/disabled recording
+with 1,000 events each containing 100 tabs; this measures serialization overhead,
+not end-to-end startup. See [measured results](startup-and-distribution.md).
+
+`e2e/scenarios/startup.spec.ts` verifies restored tabs through a full restart,
+first UI activation, closing an unvisited tab, duplication and enabling an
+extension. Dormant views are materialized before extension loading because the
+current extension API identifies tabs by native WebContents IDs. Profiles with
+enabled extensions retain eager native tab inventories for compatibility.
+
 ### Remaining gaps
 
 Ozone headless has no desktop compositor and Electron 44's native popup path

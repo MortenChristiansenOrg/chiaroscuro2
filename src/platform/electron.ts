@@ -353,6 +353,16 @@ export class ElectronPlatform implements Platform {
   private shortcuts = new Map<string, () => void>();
   private localShortcuts = new Map<string, () => void>();
   private views = new Map<TabId, WebContentsView>();
+  // Restored tabs need no native renderer until their first navigation. Keep
+  // subscriptions here so all feature listeners precede that navigation.
+  private pendingTabs = new Map<
+    TabId,
+    {
+      windowId: WindowId;
+      url: string;
+      listeners: Set<{ event: string; callback: (...args: unknown[]) => void }>;
+    }
+  >();
   private tooltipWin: BrowserWindow | null = null;
   private paletteWin: BrowserWindow | null = null;
   private paletteParentListenersSet = false;
@@ -462,6 +472,35 @@ export class ElectronPlatform implements Platform {
     existingTabId?: TabId,
     options?: { lazy?: boolean; cloneFrom?: TabId },
   ): Promise<TabId> {
+    if (!this.getWin(windowId)) throw new Error("No window found");
+    if (!isAllowedUrl(url, "internal")) throw new Error(`Blocked URL scheme: ${url}`);
+    if (options?.cloneFrom) this.materializeTab(options.cloneFrom);
+    // Extension APIs currently identify tabs by native WebContents IDs. Preserve
+    // their complete tab inventory whenever an extension is loaded.
+    if (options?.lazy && !options.cloneFrom && this.extensions.getAllExtensions().length === 0) {
+      const tabId = existingTabId ?? (crypto.randomUUID() as TabId);
+      this.pendingTabs.set(tabId, { windowId, url, listeners: new Set() });
+      return tabId;
+    }
+    return this.createNativeTab(windowId, url, existingTabId, options);
+  }
+
+  private materializeTab(tabId: TabId): void {
+    const pending = this.pendingTabs.get(tabId);
+    if (!pending) return;
+    // Native construction is synchronous: no concurrent activation can create
+    // a second view, and subscriptions are attached before loadURL is called.
+    this.createNativeTab(pending.windowId, pending.url, tabId, { lazy: true });
+    this.pendingTabs.delete(tabId);
+    for (const { event, callback } of pending.listeners) this.onTabEvent(tabId, event, callback);
+  }
+
+  private createNativeTab(
+    windowId: WindowId,
+    url: string,
+    existingTabId?: TabId,
+    options?: { lazy?: boolean; cloneFrom?: TabId },
+  ): TabId {
     const win = this.getWin(windowId);
     if (!win) throw new Error("No window found");
 
@@ -632,6 +671,7 @@ export class ElectronPlatform implements Platform {
   }
 
   async closeTab(tabId: TabId): Promise<void> {
+    this.pendingTabs.delete(tabId);
     const view = this.views.get(tabId);
     if (!view) return;
     this.tabBoundsAnimations.cancel(view);
@@ -661,9 +701,10 @@ export class ElectronPlatform implements Platform {
   }
 
   async navigateTab(tabId: TabId, url: string): Promise<void> {
+    if (!isAllowedUrl(url, "internal")) return;
+    this.materializeTab(tabId);
     const view = this.views.get(tabId);
     if (!view) return;
-    if (!isAllowedUrl(url, "internal")) return;
     view.webContents.loadURL(url);
   }
 
@@ -713,6 +754,17 @@ export class ElectronPlatform implements Platform {
   }
 
   onTabEvent(tabId: TabId, event: string, callback: (...args: unknown[]) => void): () => void {
+    const pending = this.pendingTabs.get(tabId);
+    if (pending) {
+      const listener = { event, callback };
+      pending.listeners.add(listener);
+      return () => {
+        pending.listeners.delete(listener);
+        // The tab may have been materialized since subscription.
+        // biome-ignore lint/suspicious/noExplicitAny: Electron event names are dynamic
+        this.views.get(tabId)?.webContents.removeListener(event as any, callback as any);
+      };
+    }
     const view = this.views.get(tabId);
     if (!view) return () => {};
 
@@ -1849,6 +1901,9 @@ export class ElectronPlatform implements Platform {
 
   async loadExtension(extensionPath: string) {
     migrateExtensionBootstrap(extensionPath);
+    // Do this before extension workers can enumerate tabs. Deferring native
+    // views must not change chrome.tabs IDs or hide restored tabs from extensions.
+    for (const tabId of this.pendingTabs.keys()) this.materializeTab(tabId);
     const ext = await this.extensions.loadExtension(extensionPath);
     return {
       id: ext.id,

@@ -32,13 +32,24 @@ function push(entry: RecordedEntry): void {
 }
 
 let registered = false;
+let enabled = false;
+let generation = 0;
+
+export function setRecordingEnabled(value: boolean): void {
+  if (enabled === value) return;
+  enabled = value;
+  generation++;
+  if (!enabled) clearHistory();
+}
 
 export function register<C extends CommandRegistry, E extends EventRegistry>(
   commandBus: CommandBus<C>,
   eventBus: EventBus<E>,
+  initiallyEnabled = false,
 ): void {
   if (registered) return;
   registered = true;
+  setRecordingEnabled(initiallyEnabled);
 
   // Patch commandBus.handle to record registrations
   const originalHandle = commandBus.handle.bind(commandBus);
@@ -46,12 +57,13 @@ export function register<C extends CommandRegistry, E extends EventRegistry>(
     name: K,
     handler: (payload: C[K]["payload"]) => C[K]["response"] | Promise<C[K]["response"]>,
   ) => {
-    push({
-      id: nextId++,
-      timestamp: Date.now(),
-      type: "registration",
-      name: name as string,
-    });
+    if (enabled)
+      push({
+        id: nextId++,
+        timestamp: Date.now(),
+        type: "registration",
+        name: name as string,
+      });
     return originalHandle(name, handler);
   }) as typeof commandBus.handle;
 
@@ -61,6 +73,8 @@ export function register<C extends CommandRegistry, E extends EventRegistry>(
     name: K,
     payload: C[K]["payload"],
   ): Promise<C[K]["response"]> => {
+    if (!enabled) return originalSend(name, payload);
+    const startedGeneration = generation;
     const entry: RecordedEntry = {
       id: nextId++,
       timestamp: Date.now(),
@@ -72,13 +86,15 @@ export function register<C extends CommandRegistry, E extends EventRegistry>(
     try {
       const response = await originalSend(name, payload);
       entry.durationMs = Math.round((performance.now() - start) * 100) / 100;
-      entry.response = safeCopy(response);
-      push(entry);
+      if (enabled && generation === startedGeneration) {
+        entry.response = safeCopy(response);
+        push(entry);
+      }
       return response;
     } catch (err) {
       entry.durationMs = Math.round((performance.now() - start) * 100) / 100;
       entry.error = err instanceof Error ? err.message : String(err);
-      push(entry);
+      if (enabled && generation === startedGeneration) push(entry);
       throw err;
     }
   }) as typeof commandBus.send;
@@ -86,13 +102,14 @@ export function register<C extends CommandRegistry, E extends EventRegistry>(
   // Patch eventBus.emit to record events
   const originalEmit = eventBus.emit.bind(eventBus);
   eventBus.emit = (<K extends string & keyof E>(name: K, payload: E[K]): void => {
-    push({
-      id: nextId++,
-      timestamp: Date.now(),
-      type: "event",
-      name: name as string,
-      payload: safeCopy(payload),
-    });
+    if (enabled)
+      push({
+        id: nextId++,
+        timestamp: Date.now(),
+        type: "event",
+        name: name as string,
+        payload: safeCopy(payload),
+      });
     originalEmit(name, payload);
   }) as typeof eventBus.emit;
 }
