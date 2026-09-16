@@ -1,10 +1,14 @@
 import { PageHeader } from "../../renderer/src/components/SettingsLayout";
+import { BITWARDEN_ID } from "./extensions.shared";
 import { useExtensionsStore } from "./extensions.store";
 import { InstalledExtensionCard } from "./InstalledExtensionCard";
 import { SupportedExtensionCard } from "./SupportedExtensionCard";
+import "./extensions.css";
+
 export default function ExtensionsPage() {
   const extensions = useExtensionsStore((state) => state.extensions);
   const error = useExtensionsStore((state) => state.error);
+  const bitwarden = extensions.find((extension) => extension.id === BITWARDEN_ID);
   return (
     <div
       className="dark"
@@ -17,31 +21,31 @@ export default function ExtensionsPage() {
       }}
     >
       <PageHeader title="Extensions" icon="puzzle-piece" />
-      <div
-        style={{
-          padding: "1.5rem 2rem",
-          overflowY: "auto",
-          display: "flex",
-          flexDirection: "column",
-          gap: "1rem",
-        }}
-      >
-        <p style={{ fontSize: "var(--text-sm)", color: "var(--content-text-secondary)" }}>
-          Bitwarden is the supported extension. Password sign-in, vault management and popup filling
-          are supported. Passkeys, biometric unlock, inline suggestions, automatic filling and
-          extension shortcuts are not supported.
+      <div className="extensions-content">
+        <p className="extension-secondary">
+          Add Bitwarden to manage your passwords and fill logins across your tabs.
         </p>
-        {error && (
-          <p role="alert" style={{ color: "var(--destructive-foreground)" }}>
+        {error && !extensions.some((extension) => extension.error === error) && (
+          <p role="alert" className="extension-error">
             {error}
           </p>
         )}
-        {!extensions.some((extension) => extension.id === "nngceckbapebfimnlniiiahkandclblb") && (
-          <SupportedExtensionCard />
+        {(!bitwarden || bitwarden.installed === false) && (
+          <SupportedExtensionCard extension={bitwarden} />
         )}
-        {extensions.map((extension) => (
-          <InstalledExtensionCard key={extension.id} extension={extension} />
-        ))}
+        {extensions
+          .filter((extension) => extension.installed !== false)
+          .map((extension) => (
+            <InstalledExtensionCard key={extension.id} extension={extension} />
+          ))}
+        <details className="extensions-compatibility">
+          <summary>Supported Bitwarden features</summary>
+          <p>
+            Password sign-in, vault management, password generation, and filling from the toolbar
+            popup are supported. Passkeys, biometric unlock, inline suggestions, automatic filling,
+            and extension shortcuts are not supported.
+          </p>
+        </details>
       </div>
     </div>
   );

@@ -2,12 +2,24 @@
 title: Extension Permissions
 ---
 
+import { LivePreview } from "../../components/LivePreview"
+import { ExtensionPermissions } from "@features/extensions/ExtensionPermissions"
+
 # Extension Permissions
 
 Implementation: `src/features/extensions/ExtensionPermissions.tsx`.
 
-Displays the exact permission review tied to a staged package or installed manifest. Approval is disabled while busy. Declining leaves new code inactive. Access details expand through a native details element.
+Requested access is visible by default in plain language, grouped by website access, tabs, clipboard, background activity, network requests and browser integration. Groups use two columns when space permits and one column in narrow content. **Exact permission
+names** expands the original manifest entries, including unknown permissions.
+The reviewed version and extension name remain visible. Updates label their added
+access separately from a first install. Approval uses the exact reviewed package
+token and is disabled during an operation.
 
-Uses existing card, border, background, foreground and muted text tokens. Buttons use the settings button dimensions and disabled semantics. Content wraps within the settings page.
+<LivePreview label="Permission review">
+  <ExtensionPermissions extension={{ id: "preview", name: "Bitwarden Password Manager", version: "", updateVersion: "2026.8.0", installed: false, enabled: false, review: { token: "preview", permissions: ["*://*/*", "tabs", "clipboardRead", "clipboardWrite", "storage"] } }} />
+</LivePreview>
 
-[Extensions page](/components/extensions-page) provides the complete composition.
+Uses the shared card's border and surface tokens, a 1rem inset, 0.75rem section
+gaps, and a 1rem group gap. The approval button is a primary action. The owning
+installation card provides cancellation; leaving an update unapproved grants no
+new access.

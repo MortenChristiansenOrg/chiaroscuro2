@@ -2,12 +2,28 @@
 title: Supported Extension Card
 ---
 
+import { LivePreview } from "../../components/LivePreview"
+import { SupportedExtensionCard } from "@features/extensions/SupportedExtensionCard"
+
 # Supported Extension Card
 
 Implementation: `src/features/extensions/SupportedExtensionCard.tsx`.
 
-Offers the official Bitwarden package for review. Downloading never executes unapproved code. The button has a busy state and errors appear in the owning settings page.
+The same branded card covers discovery, download, permission review, and errors.
+**Review and install** downloads the official package without running it. Progress
+explains that approval is still required. The permission review appears inline;
+**Approve and install** is the only action that installs it. **Cancel installation**
+discards a staged package directly. Failed downloads expose **Retry download**.
 
-Uses existing card, border, background, foreground and muted text tokens. Buttons use the settings button dimensions and disabled semantics. Content wraps within the settings page.
+<LivePreview label="Before installation">
+  <SupportedExtensionCard />
+</LivePreview>
 
-[Extensions page](/components/extensions-page) provides the complete composition.
+<LivePreview label="Downloading">
+  <SupportedExtensionCard extension={{ id: "nngceckbapebfimnlniiiahkandclblb", name: "Bitwarden Password Manager", version: "", installed: false, enabled: false, busy: true }} />
+</LivePreview>
+
+Cards use a 1.25rem inset, 1rem vertical gaps, and the shared
+[ExtensionCardHeader](/components/extension-card-header). The action and explanation
+wrap together without crowding the title. Status changes use `role=status`;
+errors use `role=alert`. Installation never proceeds without explicit approval.

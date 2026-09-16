@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Icon } from "../../renderer/src/components/Icon";
-import type { FaSolidIcon } from "../../shared/fa-icons.generated";
+import { getBuiltInPage } from "../../shared/built-in-pages";
 import type { Tab } from "../tabs/tabs.shared";
 
 // ── Helpers ─────────────────────────────────────────────────────
@@ -12,12 +12,6 @@ export function hashToHue(str: string): number {
   }
   return Math.abs(hash) % 360;
 }
-
-// ── Built-in page icons ─────────────────────────────────────────
-
-const builtInIcons: Record<string, FaSolidIcon> = {
-  "/settings": "gear",
-};
 
 // ── Components ──────────────────────────────────────────────────
 
@@ -71,6 +65,15 @@ export function Favicon({ tab }: { tab: Pick<Tab, "favicon" | "title" | "url"> }
   const letter = tab.title?.[0]?.toUpperCase() || tab.url?.[0]?.toUpperCase() || "?";
   const hue = hashToHue(tab.url || tab.title || "");
 
+  const builtInIcon = getBuiltInPage(tab.url)?.icon;
+  if (builtInIcon) {
+    return (
+      <div className="shrink-0 flex items-center justify-center" style={{ width: 16, height: 16 }}>
+        <Icon name={builtInIcon} css={{ fontSize: 12, color: "var(--glass-text-muted)" }} />
+      </div>
+    );
+  }
+
   if (tab.favicon && !imgFailed) {
     return (
       <img
@@ -80,15 +83,6 @@ export function Favicon({ tab }: { tab: Pick<Tab, "favicon" | "title" | "url"> }
         style={{ width: 16, height: 16 }}
         onError={() => setImgFailed(true)}
       />
-    );
-  }
-
-  const builtInIcon = builtInIcons[tab.url];
-  if (builtInIcon) {
-    return (
-      <div className="shrink-0 flex items-center justify-center" style={{ width: 16, height: 16 }}>
-        <Icon name={builtInIcon} css={{ fontSize: 12, color: "var(--glass-text-muted)" }} />
-      </div>
     );
   }
 

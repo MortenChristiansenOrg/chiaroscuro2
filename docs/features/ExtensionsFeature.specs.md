@@ -44,3 +44,9 @@ Other exclusions: general Chrome extension compatibility, alternate stores/sidel
 Package and lifecycle tests cover trust, traversal, permission approval, stable identity, staged updates, disabled updates, recovery and vault retention. The sandboxed Electron scenario runs on Linux and Windows and verifies native worker storage, active-tab scripting, metadata denial and restart behavior. See implementation.md section 6 for real Bitwarden acceptance evidence and limits.
 
 References: [Electron extension support](https://www.electronjs.org/docs/latest/api/extensions/), [Chrome update lifecycle](https://developer.chrome.com/docs/extensions/develop/concepts/extensions-update-lifecycle), [CRX3 format](https://github.com/chromium/chromium/blob/main/components/crx_file/crx3.proto).
+
+## Built-in page and installation UI
+
+Extensions follows Settings' built-in page identity: a human-readable title and custom favicon, one tab per workspace, and a single named palette entry. Internal page URLs are never recorded as visits; historic internal entries are excluded from search results. Shared metadata lives in `src/shared/built-in-pages.ts`.
+
+Bitwarden has a bundled icon before installation. “Review and install” starts a download into the same card, explains that approval is required, and presents readable permission descriptions with expandable exact names. “Approve and install” explicitly grants the reviewed access; “Cancel installation” discards the staged package. Failures offer retry. Installed cards provide Open Bitwarden, a keyboard-accessible enable switch, automatic update status and removal confirmation.

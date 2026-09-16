@@ -55,6 +55,20 @@ function setup(overrides: { activeTabId?: TabId | undefined } = {}) {
 }
 
 describe("command-palette commands", () => {
+  it("offers one named Extensions result despite old internal history", async () => {
+    const { commands, dataStore } = setup();
+    await dataStore.collection("visits").insert({
+      id: "/extensions",
+      url: "/extensions",
+      title: "/extensions",
+      visitCount: 3,
+      visitedAt: Date.now(),
+    });
+    expect(await commands.send(COMMAND_PALETTE_SEARCH_VISITS, { query: "/ex" })).toEqual([
+      { url: "/extensions", title: "Extensions", visitCount: 0 },
+    ]);
+  });
+
   describe("SHOW", () => {
     it("shows palette overlay and emits SHOWN", async () => {
       const { commands, events, platform } = setup();

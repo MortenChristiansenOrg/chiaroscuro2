@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import { BUILT_IN_PAGES } from "../../shared/built-in-pages";
 import type { SearchProviderSchema } from "./resolve-input.contracts";
 // ── Types ───────────────────────────────────────────────────────
 
@@ -66,10 +67,7 @@ export interface BuiltInPage {
   title: string; // e.g. "Settings"
 }
 
-const builtInPages: BuiltInPage[] = [
-  { route: "/settings", title: "Settings" },
-  { route: "/extensions", title: "Extensions" },
-];
+const builtInPages: BuiltInPage[] = BUILT_IN_PAGES.filter((page) => page.navigable);
 
 const builtInRouteSet = new Set(builtInPages.map((p) => p.route));
 

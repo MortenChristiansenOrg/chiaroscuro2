@@ -66,7 +66,13 @@ export default defineFeature<Deps>({
     // Track tab navigations for visit history (skip privacy-mode workspaces)
     events.on(TABS_UPDATED, (payload) => {
       const { tab } = payload;
-      if (!tab.loading && tab.url && tab.title && !isPrivacyWorkspace(tab.workspaceId)) {
+      if (
+        !tab.builtIn &&
+        !tab.loading &&
+        tab.url &&
+        tab.title &&
+        !isPrivacyWorkspace(tab.workspaceId)
+      ) {
         recordVisit(tab.url, tab.title).catch(logWarn("command-palette", "record visit"));
       }
     });

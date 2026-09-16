@@ -104,7 +104,7 @@ test("official Bitwarden password lifecycle", async ({ playwright: _playwright }
         .getByRole("button", { name: "Approve permissions", exact: true })
         .waitFor({ timeout: 60_000 });
       await card.getByRole("button", { name: "Approve permissions", exact: true }).click();
-      await expect(card).toContainText(`Version ${current.version} is ready`);
+      await expect(card).toContainText(`Update ready · Version ${current.version}`);
       await app.restart();
       await app.command("extensions:open");
       await expect(

@@ -2,10 +2,26 @@
 title: Extension Enabled Toggle
 ---
 
+import { LivePreview } from "../../components/LivePreview"
+import { ExtensionEnabledToggle } from "@features/extensions/ExtensionEnabledToggle"
+
 # Extension Enabled Toggle
 
 Implementation: `src/features/extensions/ExtensionEnabledToggle.tsx`.
 
-Uses the extension management switch dimensions: 2rem × 1.125rem track, 0.875rem thumb, full rounding and primary/muted state colors. A native checkbox covers the control for mouse, touch and keyboard input. Focus outlines the track; disabled state prevents actions and reduces opacity. The visible Enabled label names the control.
+A native checkbox with switch semantics, a stable accessible name (**Enable
+extension**), and a visible Enabled/Disabled state label. The 2.25rem × 1.25rem
+track uses a pill radius, not the circular `--radius-full` token. A 0.75rem thumb
+moves by 1rem. Primary colors mark the enabled state; muted colors mark disabled.
 
-Used by [InstalledExtensionCard](/components/installed-extension-card).
+<LivePreview label="Enabled, disabled, and busy">
+  <div style={{ display: "flex", gap: "2rem", flexWrap: "wrap" }}>
+    <ExtensionEnabledToggle id="preview-enabled" enabled={true} />
+    <ExtensionEnabledToggle id="preview-disabled" enabled={false} />
+    <ExtensionEnabledToggle id="preview-busy" enabled={true} busy={true} />
+  </div>
+</LivePreview>
+
+Space toggles the focused switch. Focus outlines the track. Busy state blocks
+input and reduces opacity. Reduced-motion preferences disable the thumb transition.
+The enclosing label supplies a larger click target than the visual track.

@@ -211,6 +211,12 @@ export const routes: Route[] = [
     component: lazy(() => import("./pages/components/extension-toolbar.mdx")),
   },
   {
+    path: "/components/extension-card-header",
+    title: "Extension Card Header",
+    group: "Components",
+    component: lazy(() => import("./pages/components/extension-card-header.mdx")),
+  },
+  {
     path: "/components/supported-extension-card",
     title: "Supported Extension Card",
     group: "Components",
