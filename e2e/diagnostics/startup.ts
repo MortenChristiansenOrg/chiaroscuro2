@@ -42,11 +42,13 @@ try {
       try {
         const start = performance.now();
         await session.launch();
+        const readyMs = performance.now() - start;
+        let firstTabReadyMs: number | undefined;
         if (count) {
           const target = await session.target((t) => t.tabId === "benchmark-0");
           await (await session.page(target)).waitForLoadState("domcontentloaded");
+          firstTabReadyMs = Math.round(performance.now() - start);
         }
-        const readyMs = performance.now() - start;
         const metrics = await session.app.evaluate(({ app, webContents }) => ({
           webContents: webContents.getAllWebContents().length,
           workingSetKiB: app.getAppMetrics().reduce((sum, p) => sum + p.memory.workingSetSize, 0),
@@ -58,7 +60,14 @@ try {
           void require("electron-updater");
           return Math.round(performance.now() - start);
         });
-        results.push({ count, run, readyMs: Math.round(readyMs), updaterLoadMs, ...metrics });
+        results.push({
+          count,
+          run,
+          readyMs: Math.round(readyMs),
+          firstTabReadyMs,
+          updaterLoadMs,
+          ...metrics,
+        });
         console.log(JSON.stringify(results.at(-1)));
       } finally {
         await session.close();

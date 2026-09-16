@@ -32,6 +32,10 @@ Five fresh isolated profiles per tab count, local fixture site, warm filesystem
 caches, WSL/Linux Ozone headless. Controller launch and observation overhead is
 included. This harness keeps debug recording enabled and does not initialize the
 production updater or palette window, so it isolates native tab restoration.
+The historical tables below use first-tab DOM readiness for nonempty profiles
+and shell readiness for empty profiles. Compare before/after within the same
+row, not different tab counts. The diagnostic now records shell readiness in
+`readyMs` for every count and first-tab readiness separately in `firstTabReadyMs`.
 
 | Saved tabs | Baseline median | Optimized median | Repeat baseline | Repeat optimized |
 | --- | ---: | ---: | ---: | ---: |

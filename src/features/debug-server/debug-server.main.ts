@@ -400,8 +400,9 @@ function stopServer(): Promise<void> {
 
 export default defineFeature<Deps>({
   register({ commands, events, commandBus, eventBus, isDev, recordingEnabled }) {
+    let configuredRecording = recordingEnabled === true;
     // Register recorder early to capture all subsequent registrations
-    registerRecorder(commandBus, eventBus, automation || isDev || recordingEnabled === true);
+    registerRecorder(commandBus, eventBus, automation || isDev || configuredRecording);
 
     let configuredPort = automation ? 0 : 19400;
     let enabled = false;
@@ -414,12 +415,13 @@ export default defineFeature<Deps>({
 
     commands.handle(DEBUG_SERVER_STOP, async () => {
       await stopServer();
-      setRecordingEnabled(automation || isDev);
+      setRecordingEnabled(automation || isDev || configuredRecording);
     });
 
     events.on(SETTINGS_CHANGED, (payload) => {
       const { settings } = payload as SettingsChangedEvent;
-      const newEnabled = automation || isDev || settings.debugServer.enabled;
+      configuredRecording = settings.debugServer.enabled;
+      const newEnabled = automation || isDev || configuredRecording;
       setRecordingEnabled(newEnabled);
       const newPort = automation ? 0 : settings.debugServer.port;
 

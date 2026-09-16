@@ -193,7 +193,9 @@ establish desktop composition. The diagnostic remains optional. `e2e/scenarios/a
 
 `bun run diagnose:startup LABEL` records five fresh-profile launches each with
 0, 20 and 100 bookmarked tabs against a local fixture, including launch-to-ready
-time, native WebContents count, working set and a separate first-load measurement
+time (`readyMs`, immediately after shell/feature readiness), separate end-to-end
+first-tab DOM readiness (`firstTabReadyMs`, absent for zero tabs), native
+WebContents count, working set and a separate first-load measurement
 of the updater module. Results go to `test-results/startup/LABEL.json`.
 `bun run verify:app:win --startup LABEL` runs the same diagnostic natively on
 Windows and copies the results back. Compare builds on the same host without
