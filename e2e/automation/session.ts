@@ -201,11 +201,15 @@ export class AppSession {
     return this.lastTargets;
   }
 
-  async target(predicate: (target: DebugTarget) => boolean): Promise<DebugTarget> {
+  async target(
+    predicate: (target: DebugTarget) => boolean,
+    timeoutMs = 5_000,
+  ): Promise<DebugTarget> {
     const targets = await waitUntil(
       "matching target",
       () => this.targets(),
       (targets) => targets.some(predicate),
+      timeoutMs,
     );
     const target = targets.find(predicate);
     if (!target) throw new Error("Target disappeared");
