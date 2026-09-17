@@ -244,3 +244,11 @@ Set `BITWARDEN_TEST_PREVIOUS_EXTENSION` to an unpacked official 2026.3.0 package
 exercise the signed store update to the current fixture version after login,
 including expanded permission review, restart, identity and vault retention. This
 optional scenario uses the real store; it expects a newer release with added permissions.
+
+For the installation UI alone, run
+`BITWARDEN_INSTALL_UI_TEST=1 bun run verify:app e2e/scenarios/extensions-ui.spec.ts`
+after building. It downloads the official Chrome Web Store package into an isolated
+profile and exercises review, cancellation, installation, disable/restart/enable,
+and opening the login popup. No vault or account is needed. On Windows, set the
+environment variable in the Windows process running the scenario. The same file's
+built-in page identity/history scenario runs without network access in normal CI.

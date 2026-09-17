@@ -1,7 +1,13 @@
 import { useState } from "react";
 import { Icon } from "../../renderer/src/components/Icon";
-export function ExtensionIcon({ url }: { url?: string }) {
-  const [failedUrl, setFailedUrl] = useState<string>();
+import bitwardenIcon from "./assets/bitwarden.png";
+import { BITWARDEN_ID } from "./extensions.shared";
+
+export function ExtensionIcon({ url, id }: { url?: string; id?: string }) {
+  const [failedUrls, setFailedUrls] = useState<string[]>([]);
+  const source = [url, id === BITWARDEN_ID ? bitwardenIcon : undefined].find(
+    (candidate) => candidate && !failedUrls.includes(candidate),
+  );
   return (
     <span
       style={{
@@ -16,12 +22,12 @@ export function ExtensionIcon({ url }: { url?: string }) {
         overflow: "hidden",
       }}
     >
-      {url && failedUrl !== url ? (
+      {source ? (
         <img
-          src={url}
+          src={source}
           alt=""
           style={{ width: "100%", height: "100%", objectFit: "contain" }}
-          onError={() => setFailedUrl(url)}
+          onError={() => setFailedUrls((urls) => [...urls, source])}
         />
       ) : (
         <Icon

@@ -50,8 +50,11 @@ export class VerificationPage {
     const input = palette.getByRole("textbox", { name: "Search or enter URL" });
     await input.fill(url);
     await input.press("Enter");
+    // A fresh renderer can take longer than an ordinary UI update on hosted Windows.
+    // Wait for the original navigation; never repeat the input or create another tab.
     const target = await session.target(
       (target) => target.kind === "tab" && target.url === url && target.visible,
+      15_000,
     );
     return new VerificationPage(await session.page(target));
   }

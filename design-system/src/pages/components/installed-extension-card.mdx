@@ -8,6 +8,8 @@ Implementation: `src/features/extensions/InstalledExtensionCard.tsx`.
 
 Displays icon, running state, version, enable control, update status, permission review and removal confirmation. Disabled extensions retain their branding and receive updates. Errors use role=alert; progress and restart notices use role=status.
 
+Uses ExtensionCardHeader, a pill-shaped accessible enable switch, and explicit Open Bitwarden, Check now, and Remove actions. Removal confirmation explains retained vault data. Updates awaiting restart have a separate notice.
+
 Uses existing card, border, background, foreground and muted text tokens. Buttons use the settings button dimensions and disabled semantics. Content wraps within the settings page.
 
 [Extensions page](/components/extensions-page) provides the complete composition.

@@ -2,6 +2,7 @@ import type { CommandBus } from "../../bus/command-bus";
 import type { EventBus } from "../../bus/event-bus";
 import type { Collection, DataStore } from "../../data/types";
 import type { Bounds, Platform } from "../../platform/types";
+import { getBuiltInPage, isBuiltInUrl, routeBase } from "../../shared/built-in-pages";
 import { defineFeature } from "../../shared/define-feature";
 import { featureState } from "../../shared/feature-state";
 import { logError, logWarn } from "../../shared/log";
@@ -79,22 +80,7 @@ interface Deps {
   isPrivacyWorkspace: (id: WorkspaceId) => boolean;
 }
 
-const builtInRoutes = new Set([
-  "/settings",
-  "/tab-customization",
-  "/domain-settings",
-  "/pdf-reader",
-  "/extensions",
-]);
-const routeBase = (url: string) => url.split("?", 1)[0] ?? url;
-const isBuiltInUrl = (url: string) => builtInRoutes.has(routeBase(url));
-
 function resolveBuiltInTitle(url: string): string {
-  const titles: Record<string, string> = {
-    "/settings": "Settings",
-    "/tab-customization": "Tab Customization",
-  };
-  if (titles[url]) return titles[url];
   // Handle parameterized URLs like /domain-settings?domain=github.com
   const qIndex = url.indexOf("?");
   if (qIndex !== -1) {
@@ -123,7 +109,7 @@ function resolveBuiltInTitle(url: string): string {
       return "PDF";
     }
   }
-  return url;
+  return getBuiltInPage(url)?.title ?? url;
 }
 
 const _state = featureState<{
@@ -337,6 +323,18 @@ export default defineFeature<Deps>({
 
       const workspaceId = payload.workspaceId ?? getActiveWorkspaceId();
       if (!workspaceId) throw new Error("No active workspace");
+
+      // Settings and Extensions are singleton pages within each workspace.
+      if (getBuiltInPage(payload.url)?.navigable) {
+        const existing = [...tabs.values()].find(
+          (tab) => tab.workspaceId === workspaceId && routeBase(tab.url) === routeBase(payload.url),
+        );
+        if (existing) {
+          if (payload.activate !== false)
+            await commands.send(TABS_ACTIVATE, { tabId: existing.id });
+          return existing.id;
+        }
+      }
 
       const isBuiltIn = isBuiltInUrl(payload.url);
       const tabId = isBuiltIn

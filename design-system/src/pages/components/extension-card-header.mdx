@@ -1,0 +1,18 @@
+---
+title: Extension Card Header
+---
+
+import { LivePreview } from "../../components/LivePreview"
+import { ExtensionCardHeader } from "@features/extensions/ExtensionCardHeader"
+
+# Extension Card Header
+
+Implementation: `src/features/extensions/ExtensionCardHeader.tsx`.
+
+A shared identity row for available and installed extensions. The 40px icon stays
+visible, the title and description wrap, and an optional control wraps onto a new
+row when space is limited. Bitwarden's bundled icon works before installation.
+
+<LivePreview label="Bitwarden identity">
+  <ExtensionCardHeader name="Bitwarden Password Manager" description="Official extension · Chrome Web Store" />
+</LivePreview>

@@ -47,7 +47,6 @@
     "../src/bus/types.ts",
     "../src/features/**/*.contracts.ts",
     "../src/bus/contract.ts",
-    "../src/features/extensions/*.tsx",
-    "../src/features/extensions/extensions.styles.ts"
+    "../src/features/extensions/*.tsx"
   ]
 }

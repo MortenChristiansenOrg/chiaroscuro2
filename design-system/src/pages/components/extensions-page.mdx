@@ -11,15 +11,17 @@ The built-in Extensions page opens through the command palette. It offers offici
 ## Composition
 
 - `PageHeader`: existing settings heading with puzzle-piece icon.
-- [SupportedExtensionCard](/components/supported-extension-card): shown before installation.
-- [InstalledExtensionCard](/components/installed-extension-card): installed or pending package, state, updates and removal confirmation.
+- [SupportedExtensionCard](/components/supported-extension-card): shown throughout discovery, download and permission review.
+- [InstalledExtensionCard](/components/installed-extension-card): installed package, state, updates and removal confirmation.
 - [ExtensionPermissions](/components/extension-permissions): initial and expanded permission review.
-- [ExtensionIcon](/components/extension-icon): installed branding, including while disabled.
+- [ExtensionIcon](/components/extension-icon): bundled Bitwarden branding before installation and installed branding while disabled.
 
 ## Layout and states
 
-Uses the settings page's dark content background, 1.5rem by 2rem content padding, 1rem card spacing and scrolling content. Cards use `--card`, `--border`, `--radius-sm`, and `--text-sm`. Secondary information uses `--content-text-secondary`.
+Uses the settings page's dark content background, 1.5rem by 2rem content padding, 1.25rem card spacing and scrolling content. Cards use `--card`, `--border`, `--radius-lg`, and `--text-sm`. Secondary information uses `--content-text-secondary`.
 
 Installation downloads a package for review. Approval installs it; updates activate on the next complete browser start. Status shows busy, not running, enabled, disabled, pending review, ready after restart, last successful update check, or an actionable error. Removal requires confirmation and explains retention of local vault data.
+
+Settings and Extensions share the built-in identity registry for title, favicon and palette entries. Internal URLs are excluded from visit history, including previously saved entries. Reopening either page in the current workspace activates its existing tab.
 
 All controls are native buttons, labels, checkboxes and details elements. Icons are decorative. Errors use alerts and changing progress uses status announcements. Keyboard focus follows visual order.

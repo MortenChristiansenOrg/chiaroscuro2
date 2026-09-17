@@ -87,6 +87,40 @@ describe("tabs commands", () => {
     vi.useRealTimers();
   });
 
+  it.each([
+    ["/settings", "Settings"],
+    ["/extensions", "Extensions"],
+  ])("uses the built-in title and reactivates %s within its workspace", async (url, title) => {
+    const { commands, platform, getActiveTabId } = setup();
+    const id = await commands.send(TABS_CREATE, { url });
+    expect(await commands.send(TABS_GET, { tabId: id })).toMatchObject({ title, builtIn: true });
+    expect(await commands.send(TABS_CREATE, { url })).toBe(id);
+    expect(getActiveTabId()).toBe(id);
+    expect(platform.createTab).not.toHaveBeenCalled();
+  });
+
+  it("repairs the title of an Extensions tab restored from an older release", async () => {
+    const { commands, platform, dataStore, deps } = setup();
+    await dataStore.collection("tabs").insert({
+      id: "builtin-9",
+      workspaceId: WS_ID,
+      url: "/extensions",
+      title: "/extensions",
+      favicon: "",
+      bookmarked: true,
+      lastAccessedAt: Date.now(),
+      createdAt: Date.now(),
+      order: 0,
+      folderId: null,
+    });
+    await start(deps);
+    expect(await commands.send(TABS_GET, { tabId: "builtin-9" as TabId })).toMatchObject({
+      title: "Extensions",
+      builtIn: true,
+    });
+    expect(platform.createTab).not.toHaveBeenCalled();
+  });
+
   it.each(["/unknown", "/pdf-reader-old", "/pdf-reader-old?url=file.pdf"])(
     "treats unregistered route %s as a platform tab on creation and restore",
     async (url) => {

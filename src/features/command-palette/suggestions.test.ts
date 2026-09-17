@@ -110,3 +110,40 @@ describe("suggestions", () => {
     });
   });
 });
+
+describe("internal page history", () => {
+  it("does not record built-in pages, including parameterized and legacy routes", async () => {
+    const store = new MemoryDataStore();
+    initVisitTracking(store);
+    for (const url of [
+      "/extensions",
+      "/settings",
+      "/tab-customization?tab=1",
+      "/domain-settings?domain=example.test",
+      "/pdf-reader?url=file.pdf",
+      "app:extensions",
+    ]) {
+      await recordVisit(url, url);
+    }
+    expect(await store.collection("visits").findMany({})).toEqual([]);
+  });
+
+  it("filters old internal visits before limiting results and retains real pages", async () => {
+    const store = new MemoryDataStore();
+    initVisitTracking(store);
+    for (const [index, url] of [
+      "/extensions",
+      "/settings",
+      "/domain-settings?domain=example.test",
+      "app:extensions",
+      "https://example.test/extensions",
+    ].entries()) {
+      await store
+        .collection("visits")
+        .insert({ id: url, url, title: "extensions", visitCount: 1, visitedAt: 10 - index });
+    }
+    expect(await searchVisits("extensions", 1)).toEqual([
+      expect.objectContaining({ url: "https://example.test/extensions" }),
+    ]);
+  });
+});

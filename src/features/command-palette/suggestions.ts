@@ -1,4 +1,5 @@
 import type { Collection, DataStore } from "../../data/types";
+import { isBuiltInUrl } from "../../shared/built-in-pages";
 
 export interface Visit {
   id: string; // URL as primary key
@@ -21,7 +22,14 @@ export async function recordVisit(url: string, title: string): Promise<void> {
   if (!_visitsCollection) return;
 
   // Skip empty/internal URLs
-  if (!url || url === "about:blank" || url.startsWith("data:")) return;
+  if (
+    !url ||
+    url === "about:blank" ||
+    url.startsWith("data:") ||
+    isBuiltInUrl(url) ||
+    url.startsWith("app:")
+  )
+    return;
 
   const id = url;
   const existing = await _visitsCollection.findOne(id);
@@ -54,7 +62,11 @@ export async function searchVisits(query: string, limit = 8): Promise<Visit[]> {
     sort: [{ field: "visitedAt", direction: "desc" }],
   });
 
-  return all
-    .filter((v) => v.url.toLowerCase().includes(q) || v.title.toLowerCase().includes(q))
-    .slice(0, limit);
+  return (
+    all
+      // Hide internal visits saved by older releases before applying the result limit.
+      .filter((visit) => !isBuiltInUrl(visit.url) && !visit.url.startsWith("app:"))
+      .filter((v) => v.url.toLowerCase().includes(q) || v.title.toLowerCase().includes(q))
+      .slice(0, limit)
+  );
 }

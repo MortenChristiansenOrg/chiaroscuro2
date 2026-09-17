@@ -1,37 +1,26 @@
 import { extensionCommand } from "./extensions.store";
+import "./extensions.css";
+
 export function ExtensionEnabledToggle({
   id,
+  name,
   enabled,
   busy,
 }: {
   id: string;
+  name: string;
   enabled: boolean;
   busy?: boolean;
 }) {
   return (
-    <label
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: "0.5rem",
-        cursor: busy ? "default" : "pointer",
-        position: "relative",
-      }}
-    >
+    <label className="extension-enabled-toggle">
       <input
-        className="peer"
         type="checkbox"
+        // biome-ignore lint/a11y/useAriaPropsForRole: native checkbox checked supplies the switch state.
+        role="switch"
         checked={enabled}
         disabled={busy}
-        aria-label="Enabled"
-        style={{
-          position: "absolute",
-          opacity: 0,
-          width: "100%",
-          height: "100%",
-          margin: 0,
-          cursor: "inherit",
-        }}
+        aria-label={`Enable ${name}`}
         onChange={(event) =>
           void extensionCommand("extensions:set-enabled", {
             extensionId: id,
@@ -39,31 +28,10 @@ export function ExtensionEnabledToggle({
           })
         }
       />
-      <span
-        className="peer-focus-visible:outline peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2"
-        style={{
-          display: "inline-block",
-          width: "2rem",
-          height: "1.125rem",
-          borderRadius: "var(--radius-full)",
-          background: enabled ? "var(--primary)" : "var(--muted)",
-          position: "relative",
-          opacity: busy ? 0.5 : 1,
-        }}
-      >
-        <span
-          style={{
-            position: "absolute",
-            top: "0.125rem",
-            left: enabled ? "1rem" : "0.125rem",
-            width: "0.875rem",
-            height: "0.875rem",
-            borderRadius: "var(--radius-full)",
-            background: enabled ? "var(--primary-foreground)" : "var(--foreground)",
-          }}
-        />
+      <span className="extension-switch-track" aria-hidden="true">
+        <span />
       </span>
-      <span>Enabled</span>
+      <span>{enabled ? "Enabled" : "Disabled"}</span>
     </label>
   );
 }
