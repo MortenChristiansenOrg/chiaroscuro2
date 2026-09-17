@@ -344,6 +344,7 @@ if (gotLock) {
     // Debug server first — recorder patches capture all subsequent registrations
     debugServer.register({
       ...deps,
+      recordingEnabled: (await dataStore.getSetting<{ enabled: boolean }>("debug-server"))?.enabled,
       commandBus: commands as unknown as CommandBus<CommandRegistry>,
       eventBus: events as unknown as EventBus<EventRegistry>,
     });

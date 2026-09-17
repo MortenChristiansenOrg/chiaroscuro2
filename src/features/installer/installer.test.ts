@@ -242,6 +242,7 @@ describe("installer feature", () => {
     it("blocks a mislabeled prerelease before downloading on stable", async () => {
       const { deps } = setup({ appChannel: "stable" });
       await feature.start(deps);
+      await vi.advanceTimersByTimeAsync(3_000);
       const { autoUpdater } = await import("electron-updater");
       expect(autoUpdater.allowPrerelease).toBe(false);
       expect(autoUpdater.allowDowngrade).toBe(false);
@@ -317,6 +318,7 @@ describe("installer feature", () => {
         events.on(INSTALLER_UPDATE_NOT_AVAILABLE, onNotAvailable);
         await feature.start(deps);
         const pending = commands.send(INSTALLER_CHECK_FOR_UPDATES, undefined);
+        await vi.waitFor(() => expect(fetch).toHaveBeenCalled());
         feature.teardown();
         complete(
           result === "failure"
@@ -348,6 +350,7 @@ describe("installer feature", () => {
     it("triggers download when update is available", async () => {
       const { deps } = setup({ isDev: false });
       await feature.start(deps);
+      await vi.advanceTimersByTimeAsync(3_000);
 
       const { autoUpdater } = await import("electron-updater");
       // biome-ignore lint/suspicious/noExplicitAny: test mock helper
@@ -363,8 +366,35 @@ describe("installer feature", () => {
       const { autoUpdater } = await import("electron-updater");
       expect(autoUpdater.checkForUpdates).not.toHaveBeenCalled();
 
-      vi.advanceTimersByTime(3_000);
+      expect(autoUpdater.on).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(3_000);
       expect(autoUpdater.checkForUpdates).toHaveBeenCalledOnce();
+    });
+
+    it("coalesces early manual checks and cancels the pending automatic check", async () => {
+      const { deps, commands } = setup({ isDev: false });
+      await feature.start(deps);
+      const { autoUpdater } = await import("electron-updater");
+      expect(autoUpdater.on).not.toHaveBeenCalled();
+      await Promise.all([
+        commands.send(INSTALLER_CHECK_FOR_UPDATES, undefined),
+        commands.send(INSTALLER_CHECK_FOR_UPDATES, undefined),
+      ]);
+      expect(autoUpdater.checkForUpdates).toHaveBeenCalledOnce();
+      await vi.advanceTimersByTimeAsync(3_000);
+      expect(autoUpdater.checkForUpdates).toHaveBeenCalledOnce();
+      await vi.advanceTimersByTimeAsync(4 * 60 * 60 * 1000);
+      expect(autoUpdater.checkForUpdates).toHaveBeenCalledTimes(2);
+    });
+
+    it("does not initialize after quitting during the startup delay", async () => {
+      const { deps } = setup({ isDev: false });
+      await feature.start(deps);
+      feature.teardown();
+      await vi.advanceTimersByTimeAsync(4 * 60 * 60 * 1000);
+      const { autoUpdater } = await import("electron-updater");
+      expect(autoUpdater.on).not.toHaveBeenCalled();
+      expect(autoUpdater.checkForUpdates).not.toHaveBeenCalled();
     });
   });
 
@@ -382,6 +412,7 @@ describe("installer feature", () => {
     it("check-for-updates emits error event on failure via error listener", async () => {
       const { deps, events } = setup({ isDev: false });
       await feature.start(deps);
+      await vi.advanceTimersByTimeAsync(3_000);
 
       const { autoUpdater } = await import("electron-updater");
 
@@ -414,6 +445,7 @@ describe("installer feature", () => {
     it("apply-update command calls autoUpdater.quitAndInstall", async () => {
       const { commands, deps } = setup({ isDev: false });
       await feature.start(deps);
+      await vi.advanceTimersByTimeAsync(3_000);
 
       const { autoUpdater } = await import("electron-updater");
       await commands.send(INSTALLER_APPLY_UPDATE, undefined);

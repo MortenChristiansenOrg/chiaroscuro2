@@ -49,6 +49,17 @@ and [lifecycle-script documentation](https://bun.com/docs/pm/lifecycle).
 - `electron-builder` for packaging
 - Target: Windows only (NSIS installer)
 
+Renderer-only dependencies (React, Zustand, Font Awesome and PDF.js) belong in
+`devDependencies`: Vite emits their runtime code/fonts/PDF worker into
+`out/renderer`. Shipping their full npm trees duplicates those assets and pulls
+in unused native PDF canvas binaries. Their license notices are copied separately.
+RxDB remains a production dependency. Zod, yauzl and electron-updater also remain
+external main-process runtime dependencies.
+
+`electronLanguages` retains `en-US`, `en-GB` and `da`. This trims Chromium UI
+translations, not website languages or ICU data. `scripts/check-distribution.cjs`
+checks the actual archive and locale directory after packaging on every release.
+
 ### Default Browser (Windows)
 
 - Register as a default-browser candidate through `resources/installer.nsh`
