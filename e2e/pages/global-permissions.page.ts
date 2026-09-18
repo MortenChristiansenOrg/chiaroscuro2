@@ -7,6 +7,28 @@ export class GlobalPermissionsPage {
     return this.page.getByPlaceholder("Search settings...");
   }
 
+  get permissionPicker() {
+    return this.page.getByRole("combobox", { name: "Permission to configure", exact: true });
+  }
+
+  get unknownExplanation() {
+    return this.page.getByText("Applies to requests Electron could not identify.", {
+      exact: false,
+    });
+  }
+
+  get configuredChoices() {
+    return this.page.getByRole("combobox", { name: /^Global .+ permission$/ });
+  }
+
+  async add(permission: string, decision: "allow" | "deny") {
+    await this.permissionPicker.selectOption(permission);
+    await this.page
+      .getByRole("combobox", { name: "Global choice", exact: true })
+      .selectOption(decision);
+    await this.page.getByRole("button", { name: "Add permission", exact: true }).click();
+  }
+
   get emptySearch() {
     return this.page.getByText("No settings match", { exact: false });
   }

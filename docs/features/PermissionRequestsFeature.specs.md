@@ -101,7 +101,9 @@ Also renames the existing `app:domain-css` built-in page to `app:domain-settings
 ## Global permission choices
 
 - Application Settings contains a searchable Global permissions section covering every supported permission and any additional permission names stored for a domain.
-- Each permission offers No global choice, Allow everywhere, and Deny everywhere. Changes save immediately; Reset removes that global choice.
+- Only configured global choices appear as compact individual rows. An alphabetical dropdown offers unconfigured permissions; choose Allow everywhere or Deny everywhere, then Add permission. Editing an existing row saves immediately. Reset removes the global choice and row, returning the permission to the dropdown.
+- Search filters both configured rows and available dropdown options, with copy/paste aliases for clipboard permissions.
+- Electron’s `unknown` fallback is not offered for new global choices. Existing saved `unknown` choices remain visible and resettable, with an explanation that the requested permission was not identified.
 - No global choices are applied implicitly. Users can allow clipboard and fullscreen once for every site.
 - Choices persist separately from domain decisions across browser restarts. Reset preserves and restores the prior domain choice, or prompts on the next request if none exists.
 - Global choices take precedence in both permission requests and synchronous checks, including normalized camera/microphone permissions. A combined media request with any effective denial is denied without another prompt.

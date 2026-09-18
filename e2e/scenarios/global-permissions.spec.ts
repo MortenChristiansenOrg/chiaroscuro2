@@ -15,18 +15,24 @@ test("global permission choices persist and appear read only in domain settings"
   let settings = new GlobalPermissionsPage(session.shell);
 
   await settings.navigateToPermissions();
+  await expect(settings.configuredChoices).toHaveCount(0);
+  await expect(settings.permissionPicker.locator('option[value="unknown"]')).toHaveCount(0);
   await settings.search.fill("fullscreen");
-  await expect(settings.choice("Fullscreen")).toHaveValue("");
-  await settings.choice("Fullscreen").selectOption("allow");
+  await settings.add("fullscreen", "allow");
   await expect(settings.choice("Fullscreen")).toHaveValue("allow");
   await expect(settings.emptySearch).toHaveCount(0);
+  await expect(settings.permissionPicker.locator('option[value="fullscreen"]')).toHaveCount(0);
   expect((await session.capture("global-fullscreen")).status).toBe("complete");
 
   await settings.search.fill("copy");
   const clipboard = settings.choice("Clipboard Write");
-  await clipboard.selectOption("allow");
+  await settings.add("clipboard-sanitized-write", "allow");
   await expect(clipboard).toHaveValue("allow");
   await expect(settings.choice("Fullscreen")).toHaveCount(0);
+  await settings.search.fill("");
+  await settings.navigateToPermissions();
+  await expect(settings.configuredChoices).toHaveCount(2);
+  expect((await session.capture("compact-global-permissions")).status).toBe("complete");
 
   await session.command("domain-settings:open", { domain: "example.com" });
   await settings.navigateToPermissions();
@@ -51,7 +57,8 @@ test("global permission choices persist and appear read only in domain settings"
   await settings.openGlobalSettings();
   await settings.search.fill("fullscreen");
   await settings.reset("Fullscreen");
-  await expect(settings.choice("Fullscreen")).toHaveValue("");
+  await expect(settings.choice("Fullscreen")).toHaveCount(0);
+  await expect(settings.permissionPicker.locator('option[value="fullscreen"]')).toHaveCount(1);
 
   await session.command("domain-settings:open", { domain: "example.com" });
   await settings.navigateToPermissions();
@@ -63,5 +70,21 @@ test("global permission choices persist and appear read only in domain settings"
   settings = new GlobalPermissionsPage(session.shell);
   await session.command("settings:open");
   await settings.search.fill("fullscreen");
-  await expect(settings.choice("Fullscreen")).toHaveValue("");
+  await expect(settings.choice("Fullscreen")).toHaveCount(0);
+  await expect(settings.permissionPicker.locator('option[value="fullscreen"]')).toHaveCount(1);
+});
+
+test("an existing unknown permission choice stays visible and resettable", async ({
+  appSession: session,
+}) => {
+  await session.command("permissions:set-global", { permission: "unknown", decision: "deny" });
+  await session.command("settings:open");
+  const settings = new GlobalPermissionsPage(session.shell);
+  await settings.navigateToPermissions();
+  await expect(settings.choice("Unknown Permission")).toHaveValue("deny");
+  await expect(settings.unknownExplanation).toBeVisible();
+  await expect(settings.permissionPicker.locator('option[value="unknown"]')).toHaveCount(0);
+  await settings.reset("Unknown Permission");
+  await expect(settings.configuredChoices).toHaveCount(0);
+  await expect(settings.permissionPicker.locator('option[value="unknown"]')).toHaveCount(0);
 });

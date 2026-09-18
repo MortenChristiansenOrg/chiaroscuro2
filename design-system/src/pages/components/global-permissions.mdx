@@ -13,11 +13,14 @@ The actual `GlobalPermissionsSection` component appears in application Settings,
   <GlobalPermissionsSection />
 </LivePreview>
 
-- Lists all supported permissions, plus additional stored permission names.
+- Only configured global permissions appear as compact individual rows.
+- The add form offers unconfigured permissions in an alphabetical dropdown; select Allow/Deny and explicitly add the choice.
+- Reset removes the configured row and returns its permission to the dropdown.
+- Electron’s `unknown` fallback is omitted from the add dropdown. Existing saved choices remain visible and resettable, with explanatory text.
 - Search matches permission names and labels; copy/paste matches clipboard permissions.
 - Choices save immediately and persist across restarts.
 - Global choices take precedence over site decisions. Reset removes the global choice and restores site behavior.
 - Loading and load-error states replace the editable rows until choices are available.
 - Uses `section#settings-permissions`, an `h2`, and standard keyboard-accessible controls.
 
-Each editable row is a [Global Permission Row](/components/global-permission-row). Inherited domain rows appear in [Permission Prompt](/components/permission-prompt).
+The add controls are a [Global Permission Add Form](/components/global-permission-add-form). Each editable row is a [Global Permission Row](/components/global-permission-row). Inherited domain rows appear in [Permission Prompt](/components/permission-prompt).

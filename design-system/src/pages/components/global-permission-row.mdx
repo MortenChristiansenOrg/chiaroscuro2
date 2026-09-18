@@ -7,21 +7,23 @@ import { GlobalPermissionRow } from "@features/permissions/global-permissions.re
 
 # Global Permission Row
 
-The actual `GlobalPermissionRow` component uses `SettingItem` for the permission name, current scope, and choice controls.
+The actual `GlobalPermissionRow` component shows a configured permission in a compact, wrapping row: label, Allow/Deny select, and Reset button. It uses `--text-sm`, a `--border` bottom divider and `py-2` spacing.
 
 <LivePreview label="Allowed globally">
   <GlobalPermissionRow permission="fullscreen" decision="allow" />
 </LivePreview>
 
-<LivePreview label="No global choice">
-  <GlobalPermissionRow permission="clipboard-sanitized-write" />
+<LivePreview label="Denied globally">
+  <GlobalPermissionRow permission="clipboard-read" decision="deny" />
 </LivePreview>
 
 | Element | Treatment |
 | --- | --- |
-| Choice select | Shared `settingsSelectStyle`; No global choice / Allow everywhere / Deny everywhere |
-| Reset | Shared `settingsAddButtonStyle`, visible when a global choice exists |
+| Choice select | Shared `settingsSelectStyle`; Allow everywhere / Deny everywhere |
+| Reset | Shared `settingsAddButtonStyle`, removes the global choice and its row |
 | Saving | Controls disabled until the save completes |
 | Save error | Inline `role="alert"` with `--destructive` text |
 
 Select and Reset have permission-specific accessible names. Tab reaches the controls, arrow keys select a choice, and Enter/Space activates Reset. Reset preserves any existing domain decisions.
+
+Unconfigured permissions have no row. Existing `unknown` choices include an explanation that Electron could not identify the requested permission; they remain resettable.

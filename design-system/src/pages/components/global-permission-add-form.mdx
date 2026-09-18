@@ -1,0 +1,22 @@
+---
+title: Global Permission Add Form
+---
+
+import { LivePreview } from "../../components/LivePreview"
+import { GlobalPermissionAddForm } from "@features/permissions/global-permissions.renderer"
+
+# Global Permission Add Form
+
+The actual `GlobalPermissionAddForm` component adds a global choice without rendering every available permission as a row.
+
+<LivePreview label="Add a global permission">
+  <GlobalPermissionAddForm permissions={["clipboard-read", "clipboard-sanitized-write", "fullscreen"]} />
+</LivePreview>
+
+- Permission dropdown, Allow/Deny dropdown, and Add permission button share a wrapping row.
+- The parent supplies alphabetically sorted, unconfigured permissions matching the settings search.
+- No permission is preselected. Add is disabled until a permission is selected.
+- Choosing an option does not change access; submitting Add saves the choice.
+- The controls use shared `settingsSelectStyle` and `settingsAddButtonStyle` tokens, visible labels, and standard keyboard behavior.
+- Controls are disabled during saving. Failures appear in an inline alert and preserve the selection for retry.
+- A successful add clears the selection; the configured permission appears as a [Global Permission Row](/components/global-permission-row).
