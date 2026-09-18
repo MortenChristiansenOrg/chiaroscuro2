@@ -17,7 +17,7 @@ export class GlobalPermissionsPage {
 
   get domainEditButtons() {
     return this.domainPermissions.getByRole("button", {
-      name: /Revoke|Deny Fullscreen|Allow Fullscreen/,
+      name: /^(?:Allow|Deny|Revoke) /,
     });
   }
 
