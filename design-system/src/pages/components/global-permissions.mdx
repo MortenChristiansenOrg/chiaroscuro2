@@ -1,0 +1,23 @@
+---
+title: Global Permissions
+---
+
+import { LivePreview } from "../../components/LivePreview"
+import { GlobalPermissionsSection } from "@features/permissions/global-permissions.renderer"
+
+# Global Permissions
+
+The actual `GlobalPermissionsSection` component appears in application Settings, under Permissions. It uses the shared settings heading, description and form tokens.
+
+<LivePreview label="Global permissions" stores={{ permissions: { domainPermissions: new Map(), globalPermissions: { fullscreen: "allow", "clipboard-read": "deny" }, globalLoaded: true, availablePermissions: ["fullscreen", "clipboard-read", "clipboard-sanitized-write"] } }}>
+  <GlobalPermissionsSection />
+</LivePreview>
+
+- Lists all supported permissions, plus additional stored permission names.
+- Search matches permission names and labels; copy/paste matches clipboard permissions.
+- Choices save immediately and persist across restarts.
+- Global choices take precedence over site decisions. Reset removes the global choice and restores site behavior.
+- Loading and load-error states replace the editable rows until choices are available.
+- Uses `section#settings-permissions`, an `h2`, and standard keyboard-accessible controls.
+
+Each editable row is a [Global Permission Row](/components/global-permission-row). Inherited domain rows appear in [Permission Prompt](/components/permission-prompt).

@@ -14,6 +14,11 @@ export const PERMISSIONS_REVOKE = "permissions:revoke" as const;
 export const PERMISSIONS_GET_DOMAIN = "permissions:get-domain-permissions" as const;
 
 // ── Event names ──────────────────────────────────────────────────
+export const PERMISSIONS_GET_GLOBAL = "permissions:get-global";
+export const PERMISSIONS_SET_GLOBAL = "permissions:set-global";
+export const PERMISSIONS_RESET_GLOBAL = "permissions:reset-global";
+export const PERMISSIONS_GLOBAL_CHANGED = "permissions:global-changed";
+
 export const PERMISSIONS_CHANGED = "permissions:changed" as const;
 
 // ── Data types ───────────────────────────────────────────────────
@@ -38,7 +43,13 @@ export interface PermissionsChangedEvent {
 export type PermissionsCommands = CommandTypes<typeof commandContracts>;
 
 // ── Event registry ───────────────────────────────────────────────
+export type GlobalPermissions = {
+  permissions: Record<string, PermissionDecision>;
+  availablePermissions: string[];
+};
+
 export type PermissionsEvents = {
+  [PERMISSIONS_GLOBAL_CHANGED]: GlobalPermissions;
   [PERMISSIONS_CHANGED]: PermissionsChangedEvent;
 };
 
@@ -69,6 +80,28 @@ export const PERMISSION_INFO: Record<string, { label: string; icon: string }> = 
   fileSystem: { label: "File System Access", icon: "folder-open" },
   "persistent-storage": { label: "Persistent Storage", icon: "hard-drive" },
   openExternal: { label: "Open External Links", icon: "arrow-up-right-from-square" },
+  ar: { label: "Augmented Reality", icon: "eye" },
+  vr: { label: "Virtual Reality", icon: "eye" },
+  "automatic-fullscreen": { label: "Automatic Fullscreen", icon: "expand" },
+  "background-fetch": { label: "Background Fetch", icon: "download" },
+  "background-sync": { label: "Background Sync", icon: "rotate" },
+  "captured-surface-control": { label: "Captured Surface Control", icon: "display" },
+  "deprecated-sync-clipboard-read": { label: "Synchronous Clipboard Read", icon: "clipboard" },
+  "geolocation-approximate": { label: "Approximate Location", icon: "location-dot" },
+  "hand-tracking": { label: "Hand Tracking", icon: "hand" },
+  "local-fonts": { label: "Local Fonts", icon: "font" },
+  "local-network": { label: "Local Network", icon: "network-wired" },
+  "local-network-access": { label: "Local Network Access", icon: "network-wired" },
+  "loopback-network": { label: "Loopback Network", icon: "network-wired" },
+  nfc: { label: "NFC", icon: "wifi" },
+  "payment-handler": { label: "Payment Handler", icon: "credit-card" },
+  "periodic-background-sync": { label: "Periodic Background Sync", icon: "rotate" },
+  "screen-wake-lock": { label: "Screen Wake Lock", icon: "display" },
+  sensors: { label: "Sensors", icon: "gauge" },
+  "smart-card": { label: "Smart Card", icon: "credit-card" },
+  "system-wake-lock": { label: "System Wake Lock", icon: "power-off" },
+  "web-app-installation": { label: "Web App Installation", icon: "download" },
+  "web-printing": { label: "Web Printing", icon: "print" },
   unknown: { label: "Unknown Permission", icon: "question" },
 };
 

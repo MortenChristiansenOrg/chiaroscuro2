@@ -11,6 +11,7 @@ import {
   useScrollSpy,
 } from "../../renderer/src/components/SettingsLayout";
 import type { SearchProvider } from "../command-palette/resolve-input";
+import { GlobalPermissionsSection } from "../permissions/global-permissions.renderer";
 import type { Settings } from "./settings.shared";
 import { saveSettings, useSettingsStore } from "./settings.store";
 
@@ -149,20 +150,7 @@ function SearchSettings({
     "default search".includes(lowerQuery) ||
     "bang".includes(lowerQuery);
 
-  if (searchQuery && !showSearch) {
-    return (
-      <div
-        style={{
-          padding: "2rem",
-          textAlign: "center",
-          color: "var(--muted-foreground)",
-          fontSize: "var(--text-sm)",
-        }}
-      >
-        No settings match &ldquo;{searchQuery}&rdquo;
-      </div>
-    );
-  }
+  if (searchQuery && !showSearch) return null;
 
   return (
     <section id="settings-search">
@@ -298,6 +286,7 @@ function DeveloperSettings({
 
 const categories = [
   { id: "search", label: "Search" },
+  { id: "permissions", label: "Permissions" },
   { id: "developer", label: "Developer" },
 ];
 
@@ -339,6 +328,15 @@ export default function SettingsPage(_props: { params: Record<string, string> })
       activeCategory={activeCategory}
     >
       <SearchSettings settings={settings} onSettingsChange={handleSettingsChange} />
+      <GlobalPermissionsSection
+        searchQuery={searchQuery}
+        showEmptyState={
+          !!searchQuery &&
+          !["search providers default search bang", "developer debug server port"].some((text) =>
+            text.includes(searchQuery.toLowerCase()),
+          )
+        }
+      />
       <DeveloperSettings settings={settings} onSettingsChange={handleSettingsChange} />
     </SettingsLayout>
   );

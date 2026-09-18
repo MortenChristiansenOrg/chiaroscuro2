@@ -5,6 +5,7 @@ import {
   settingsAddButtonStyle,
   settingsCategoryHeadingStyle,
 } from "../../renderer/src/components/SettingsLayout";
+import { SETTINGS_OPEN } from "../settings/settings.shared";
 import {
   getPermissionInfo,
   PERMISSIONS_GET_DOMAIN,
@@ -12,7 +13,7 @@ import {
   PERMISSIONS_SET,
   type PermissionDecision,
 } from "./permissions.shared";
-import { usePermissionsStore } from "./permissions.store";
+import { loadGlobalPermissions, usePermissionsStore } from "./permissions.store";
 
 function sendCommand(name: string, payload: unknown) {
   void window.chiaroscuro.sendCommand(name, payload).catch(console.error);
@@ -24,10 +25,12 @@ function PermissionRow({
   domain,
   permission,
   decision,
+  inherited = false,
 }: {
   domain: string;
   permission: string;
   decision: PermissionDecision;
+  inherited?: boolean;
 }) {
   const info = getPermissionInfo(permission);
   const isAllowed = decision === "allow";
@@ -43,6 +46,19 @@ function PermissionRow({
   const handleRevoke = () => {
     sendCommand(PERMISSIONS_REVOKE, { domain, permission });
   };
+
+  if (inherited) {
+    return (
+      <SettingItem
+        label={info.label}
+        description={`${isAllowed ? "Allowed" : "Denied"} — inherited from global Settings`}
+      >
+        <span style={{ color: "var(--muted-foreground)", fontSize: "var(--text-sm)" }}>
+          Read only here. Change or reset this choice in Settings.
+        </span>
+      </SettingItem>
+    );
+  }
 
   return (
     <SettingItem label={info.label} description={isAllowed ? "Allowed" : "Denied"}>
@@ -89,13 +105,20 @@ function PermissionRow({
 }
 
 export function PermissionsSection({ domain }: { domain: string }) {
+  const globalPermissions = usePermissionsStore((s) => s.globalPermissions);
+  const globalLoaded = usePermissionsStore((s) => s.globalLoaded);
   const permissions = usePermissionsStore((s) => s.domainPermissions.get(domain));
+
+  useEffect(() => {
+    void loadGlobalPermissions().catch(console.error);
+  }, []);
 
   // Fetch initial state from main process
   useEffect(() => {
     window.chiaroscuro
       .sendCommand(PERMISSIONS_GET_DOMAIN, { domain })
       .then((result: unknown) => {
+        if (!result) return;
         const r = result as { domain: string; permissions: Record<string, PermissionDecision> };
         usePermissionsStore.setState((prev) => {
           const next = new Map(prev.domainPermissions);
@@ -110,13 +133,23 @@ export function PermissionsSection({ domain }: { domain: string }) {
       .catch(console.error);
   }, [domain]);
 
-  const entries = permissions ? Object.entries(permissions) : [];
+  const entries = Object.entries({ ...permissions, ...globalPermissions });
 
   return (
     <section id="domain-settings-permissions">
       <h2 style={settingsCategoryHeadingStyle}>Permissions</h2>
 
-      {entries.length === 0 ? (
+      <button
+        type="button"
+        onClick={() => sendCommand(SETTINGS_OPEN, undefined)}
+        style={settingsAddButtonStyle}
+      >
+        Manage global permissions in Settings
+      </button>
+
+      {!globalLoaded ? (
+        <p>Loading permissions...</p>
+      ) : entries.length === 0 ? (
         <div
           style={{
             padding: "1rem 0",
@@ -133,6 +166,7 @@ export function PermissionsSection({ domain }: { domain: string }) {
             domain={domain}
             permission={permission}
             decision={decision}
+            inherited={Object.hasOwn(globalPermissions, permission)}
           />
         ))
       )}

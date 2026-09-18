@@ -281,6 +281,7 @@ export function SettingsLayout({
   searchPlaceholder,
   scrollRef,
   activeCategory,
+  idPrefix,
   children,
 }: {
   icon: FaIconForStyle<"solid">;
@@ -291,9 +292,10 @@ export function SettingsLayout({
   searchPlaceholder?: string;
   scrollRef: RefObject<HTMLDivElement | null>;
   activeCategory: string;
+  idPrefix?: string;
   children: ReactNode;
 }) {
-  const idPrefix = title.toLowerCase().replace(/\s+/g, "-");
+  const sectionPrefix = idPrefix ?? title.toLowerCase().replace(/\s+/g, "-");
 
   return (
     <div
@@ -318,7 +320,7 @@ export function SettingsLayout({
           <CategoryNav
             categories={categories}
             activeCategory={activeCategory}
-            idPrefix={idPrefix}
+            idPrefix={sectionPrefix}
           />
         )}
         <div

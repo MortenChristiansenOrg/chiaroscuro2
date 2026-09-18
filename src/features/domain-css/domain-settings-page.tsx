@@ -34,6 +34,7 @@ export default function DomainSettingsPage({ params }: BuiltInPageProps) {
     <SettingsLayout
       icon="sliders"
       title={domain}
+      idPrefix="domain-settings"
       categories={categories}
       scrollRef={scrollRef}
       activeCategory={activeCategory}

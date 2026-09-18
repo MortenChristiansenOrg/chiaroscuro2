@@ -2,7 +2,7 @@
 
 ## Overview
 
-Handles browser permission requests from websites (geolocation, camera, microphone, notifications, etc.). When a site requests a permission, a native prompt dialog is shown. Decisions persist per-domain via DataStore and are reviewable/revocable in the domain settings page. Default policy: deny all unless explicitly allowed.
+Handles browser permission requests from websites (geolocation, camera, microphone, notifications, etc.). When a site requests a permission, a native prompt dialog is shown. Decisions persist per-domain via DataStore and are reviewable/revocable in the domain settings page. Global choices in application Settings take precedence over per-domain decisions. Without a global choice, existing per-domain prompting and persistence apply.
 
 Also renames the existing `app:domain-css` built-in page to `app:domain-settings`, making it a general-purpose domain customization page with sections for CSS and permissions.
 
@@ -96,3 +96,22 @@ Also renames the existing `app:domain-css` built-in page to `app:domain-settings
 ## Unresolved Issues
 
 - Should there be a way to bulk-revoke all permissions for a domain?
+
+
+## Global permission choices
+
+- Application Settings contains a searchable Global permissions section covering every supported permission and any additional permission names stored for a domain.
+- Each permission offers No global choice, Allow everywhere, and Deny everywhere. Changes save immediately; Reset removes that global choice.
+- No global choices are applied implicitly. Users can allow clipboard and fullscreen once for every site.
+- Choices persist separately from domain decisions across browser restarts. Reset preserves and restores the prior domain choice, or prompts on the next request if none exists.
+- Global choices take precedence in both permission requests and synchronous checks, including normalized camera/microphone permissions. A combined media request with any effective denial is denied without another prompt.
+- Domain Settings shows the union of domain decisions and global choices. Inherited global rows show the effective value and source, are read only, and offer navigation to application Settings. Domain mutation commands reject edits to globally managed permissions.
+- Global permissions do not replace device selection: hardware access still requires selection of a device; globally denied device permissions cannot reuse saved device grants.
+- Open settings pages update through the global change event. Save failures are shown without changing the effective global choice.
+
+### Additional commands and events
+
+- `permissions:get-global` — returns `{ permissions, availablePermissions }`.
+- `permissions:set-global` — accepts `{ permission, decision }`.
+- `permissions:reset-global` — accepts `{ permission }`.
+- `permissions:global-changed` — emits `{ permissions, availablePermissions }` after persistence.

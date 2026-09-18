@@ -9,8 +9,12 @@ import feature from "./permissions.main";
 import {
   PERMISSIONS_CHANGED,
   PERMISSIONS_GET_DOMAIN,
+  PERMISSIONS_GET_GLOBAL,
+  PERMISSIONS_GLOBAL_CHANGED,
+  PERMISSIONS_RESET_GLOBAL,
   PERMISSIONS_REVOKE,
   PERMISSIONS_SET,
+  PERMISSIONS_SET_GLOBAL,
   type PermissionsCommands,
   type PermissionsEvents,
 } from "./permissions.shared";
@@ -615,5 +619,216 @@ describe("permissions", () => {
       expect(result).toBe(true);
       expect(platform.showPermissionPrompt).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe("global permissions", () => {
+  afterEach(cleanup);
+
+  it.each(["fullscreen", "clipboard-read", "clipboard-sanitized-write", "notifications"])(
+    "applies global %s to new domains and overrides saved decisions",
+    async (permission) => {
+      const { commands, platform } = setup();
+      await commands.send(PERMISSIONS_SET, { domain: "example.com", permission, decision: "deny" });
+      await commands.send(PERMISSIONS_SET_GLOBAL, { permission, decision: "allow" });
+      for (const domain of ["example.com", "new.com"]) {
+        expect(
+          await permissionRequestHandler?.("tab-1" as TabId, permission, {
+            requestingUrl: `https://${domain}/`,
+            isMainFrame: true,
+          }),
+        ).toBe(true);
+        expect(
+          permissionCheckHandler?.("tab-1" as TabId, permission, `https://${domain}`, {}),
+        ).toBe(true);
+      }
+      expect(platform.showPermissionPrompt).not.toHaveBeenCalled();
+      await commands.send(PERMISSIONS_SET_GLOBAL, { permission, decision: "deny" });
+      expect(
+        await permissionRequestHandler?.("tab-1" as TabId, permission, {
+          requestingUrl: "https://new.com/",
+          isMainFrame: true,
+        }),
+      ).toBe(false);
+      expect(permissionCheckHandler?.("tab-1" as TabId, permission, "https://new.com", {})).toBe(
+        false,
+      );
+      expect(platform.showPermissionPrompt).not.toHaveBeenCalled();
+    },
+  );
+
+  it("resets to the prior site decision, or prompts for an undecided site", async () => {
+    const { commands, platform } = setup(true);
+    await commands.send(PERMISSIONS_SET, {
+      domain: "example.com",
+      permission: "fullscreen",
+      decision: "deny",
+    });
+    await commands.send(PERMISSIONS_SET_GLOBAL, { permission: "fullscreen", decision: "allow" });
+    await expect(
+      commands.send(PERMISSIONS_SET, {
+        domain: "example.com",
+        permission: "fullscreen",
+        decision: "deny",
+      }),
+    ).rejects.toThrow("managed in Settings");
+    await expect(
+      commands.send(PERMISSIONS_REVOKE, { domain: "example.com", permission: "fullscreen" }),
+    ).rejects.toThrow("managed in Settings");
+    await commands.send(PERMISSIONS_RESET_GLOBAL, { permission: "fullscreen" });
+    expect(
+      await permissionRequestHandler?.("tab-1" as TabId, "fullscreen", {
+        requestingUrl: "https://example.com/",
+        isMainFrame: true,
+      }),
+    ).toBe(false);
+    expect(platform.showPermissionPrompt).not.toHaveBeenCalled();
+    expect(
+      await permissionRequestHandler?.("tab-1" as TabId, "fullscreen", {
+        requestingUrl: "https://new.com/",
+        isMainFrame: true,
+      }),
+    ).toBe(true);
+    expect(platform.showPermissionPrompt).toHaveBeenCalledOnce();
+  });
+
+  it("persists choices and resets across a fresh registration and startup", async () => {
+    const { commands, deps, dataStore, events } = setup();
+    const changed = vi.fn();
+    events.on(PERMISSIONS_GLOBAL_CHANGED, changed);
+    await commands.send(PERMISSIONS_SET_GLOBAL, { permission: "fullscreen", decision: "allow" });
+    await commands.send(PERMISSIONS_SET_GLOBAL, { permission: "clipboard-read", decision: "deny" });
+    await commands.send(PERMISSIONS_RESET_GLOBAL, { permission: "clipboard-read" });
+    expect(changed).toHaveBeenLastCalledWith(
+      expect.objectContaining({ permissions: { fullscreen: "allow" } }),
+    );
+    expect(await dataStore.getSetting("permissions-global-decisions")).toEqual({
+      fullscreen: "allow",
+    });
+    feature.teardown?.();
+    const restarted = new CommandBus<PermissionsCommands>();
+    feature.register({ ...deps, commands: restarted });
+    await feature.start?.({ ...deps, commands: restarted });
+    expect((await restarted.send(PERMISSIONS_GET_GLOBAL, {})).permissions).toEqual({
+      fullscreen: "allow",
+    });
+    expect(permissionCheckHandler?.("tab-1" as TabId, "fullscreen", "https://new.com", {})).toBe(
+      true,
+    );
+  });
+
+  it("rejects a failed save without changing the effective choice and can retry", async () => {
+    const { commands, dataStore } = setup();
+    const save = vi.spyOn(dataStore, "setSetting").mockRejectedValueOnce(new Error("disk full"));
+    await expect(
+      commands.send(PERMISSIONS_SET_GLOBAL, { permission: "fullscreen", decision: "allow" }),
+    ).rejects.toThrow("disk full");
+    expect((await commands.send(PERMISSIONS_GET_GLOBAL, {})).permissions).toEqual({});
+    save.mockRestore();
+    await commands.send(PERMISSIONS_SET_GLOBAL, { permission: "fullscreen", decision: "allow" });
+    expect((await commands.send(PERMISSIONS_GET_GLOBAL, {})).permissions).toEqual({
+      fullscreen: "allow",
+    });
+  });
+
+  it("serializes rapid global edits and preserves all choices", async () => {
+    const { commands, dataStore } = setup();
+    await Promise.all([
+      commands.send(PERMISSIONS_SET_GLOBAL, { permission: "fullscreen", decision: "allow" }),
+      commands.send(PERMISSIONS_SET_GLOBAL, { permission: "notifications", decision: "deny" }),
+      commands.send(PERMISSIONS_RESET_GLOBAL, { permission: "fullscreen" }),
+    ]);
+    expect(await dataStore.getSetting("permissions-global-decisions")).toEqual({
+      notifications: "deny",
+    });
+  });
+
+  it("denies combined media immediately when one global choice denies access", async () => {
+    const { commands, platform } = setup(true);
+    await commands.send(PERMISSIONS_SET_GLOBAL, { permission: "microphone", decision: "deny" });
+    expect(
+      await permissionRequestHandler?.("tab-1" as TabId, "media", {
+        requestingUrl: "https://meet.com/",
+        isMainFrame: true,
+        mediaTypes: ["video", "audio"],
+      }),
+    ).toBe(false);
+    expect(platform.showPermissionPrompt).not.toHaveBeenCalled();
+    expect(
+      permissionCheckHandler?.("tab-1" as TabId, "media", "https://meet.com", {
+        mediaType: "audio",
+      }),
+    ).toBe(false);
+  });
+
+  it("uses global camera allow and asks only for an undecided microphone", async () => {
+    const { commands, platform } = setup(true);
+    await commands.send(PERMISSIONS_SET_GLOBAL, { permission: "camera", decision: "allow" });
+    expect(
+      await permissionRequestHandler?.("tab-1" as TabId, "media", {
+        requestingUrl: "https://meet.com/",
+        isMainFrame: true,
+        mediaTypes: ["video", "audio"],
+      }),
+    ).toBe(true);
+    expect(platform.showPermissionPrompt).toHaveBeenCalledWith("meet.com", "Microphone");
+    expect(
+      (await commands.send(PERMISSIONS_GET_DOMAIN, { domain: "meet.com" })).permissions,
+    ).toEqual({ microphone: "allow" });
+  });
+
+  it("applies a global denial even if an existing prompt is accepted afterwards", async () => {
+    const { commands, platform } = setup();
+    let resolvePrompt!: (value: boolean) => void;
+    vi.mocked(platform.showPermissionPrompt).mockReturnValue(
+      new Promise((resolve) => {
+        resolvePrompt = resolve;
+      }),
+    );
+    const request = permissionRequestHandler?.("tab-1" as TabId, "fullscreen", {
+      requestingUrl: "https://example.com/",
+      isMainFrame: true,
+    });
+    await commands.send(PERMISSIONS_SET_GLOBAL, { permission: "fullscreen", decision: "deny" });
+    resolvePrompt(true);
+    expect(await request).toBe(false);
+  });
+
+  it("includes previously encountered permission names in the global catalog", async () => {
+    const { commands } = setup();
+    await commands.send(PERMISSIONS_SET, {
+      domain: "example.com",
+      permission: "future-permission",
+      decision: "deny",
+    });
+    expect((await commands.send(PERMISSIONS_GET_GLOBAL, {})).availablePermissions).toContain(
+      "future-permission",
+    );
+  });
+});
+
+describe("global device and ambiguous media checks", () => {
+  afterEach(cleanup);
+
+  it("does not overwrite domain choices when a device is selected under a global choice", async () => {
+    const { commands } = setup();
+    await commands.send(PERMISSIONS_SET, {
+      domain: "device.com",
+      permission: "usb",
+      decision: "deny",
+    });
+    await commands.send(PERMISSIONS_SET_GLOBAL, { permission: "usb", decision: "allow" });
+    deviceSelectedCallback?.("usb", "https://device.com");
+    expect(permissionCheckHandler?.("tab-1" as TabId, "usb", "https://device.com", {})).toBe(true);
+    await commands.send(PERMISSIONS_RESET_GLOBAL, { permission: "usb" });
+    expect(permissionCheckHandler?.("tab-1" as TabId, "usb", "https://device.com", {})).toBe(false);
+  });
+
+  it("requires both media choices for checks with no media type", async () => {
+    const { commands } = setup();
+    await commands.send(PERMISSIONS_SET_GLOBAL, { permission: "camera", decision: "allow" });
+    expect(permissionCheckHandler?.("tab-1" as TabId, "media", "https://meet.com", {})).toBe(false);
+    await commands.send(PERMISSIONS_SET_GLOBAL, { permission: "microphone", decision: "allow" });
+    expect(permissionCheckHandler?.("tab-1" as TabId, "media", "https://meet.com", {})).toBe(true);
   });
 });

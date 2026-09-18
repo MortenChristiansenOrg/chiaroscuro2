@@ -1,0 +1,27 @@
+---
+title: Global Permission Row
+---
+
+import { LivePreview } from "../../components/LivePreview"
+import { GlobalPermissionRow } from "@features/permissions/global-permissions.renderer"
+
+# Global Permission Row
+
+The actual `GlobalPermissionRow` component uses `SettingItem` for the permission name, current scope, and choice controls.
+
+<LivePreview label="Allowed globally">
+  <GlobalPermissionRow permission="fullscreen" decision="allow" />
+</LivePreview>
+
+<LivePreview label="No global choice">
+  <GlobalPermissionRow permission="clipboard-sanitized-write" />
+</LivePreview>
+
+| Element | Treatment |
+| --- | --- |
+| Choice select | Shared `settingsSelectStyle`; No global choice / Allow everywhere / Deny everywhere |
+| Reset | Shared `settingsAddButtonStyle`, visible when a global choice exists |
+| Saving | Controls disabled until the save completes |
+| Save error | Inline `role="alert"` with `--destructive` text |
+
+Select and Reset have permission-specific accessible names. Tab reaches the controls, arrow keys select a choice, and Enter/Space activates Reset. Reset preserves any existing domain decisions.

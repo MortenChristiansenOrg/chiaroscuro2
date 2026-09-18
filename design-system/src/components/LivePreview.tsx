@@ -33,6 +33,9 @@ interface StoreOverrides {
     protocolRequest: ProtocolLaunchRequestedEvent | null;
   };
   permissions?: {
+    globalPermissions?: Record<string, PermissionDecision>;
+    globalLoaded?: boolean;
+    availablePermissions?: string[];
     domainPermissions: Map<string, Record<string, PermissionDecision>>;
   };
   folders?: { folders: Map<FolderId, Folder> };
@@ -77,7 +80,12 @@ export function LivePreview({
           updateDismissed: false,
           protocolRequest: null,
         });
-      if (stores?.permissions) usePermissionsStore.setState({ domainPermissions: new Map() });
+      if (stores?.permissions)
+        usePermissionsStore.setState({
+          domainPermissions: new Map(),
+          globalPermissions: {},
+          globalLoaded: false,
+        });
       if (stores?.folders) useFoldersStore.setState({ folders: new Map(), renamingFolderId: null });
     };
   }, []);
