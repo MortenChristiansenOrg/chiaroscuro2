@@ -21,6 +21,7 @@ import { unpackedExtensionId } from "./extension-identity";
 import { migrateExtensionBootstrap } from "./extension-migration";
 import { ExtensionRuntime } from "./extension-runtime";
 import type { GithubSessionDiagnostics } from "./github-session-diagnostics";
+import { checkPermission, matchesGrantedDevice } from "./permission-check";
 import { TabBoundsAnimation } from "./tab-bounds-animation";
 import { closeTabContents, createTabView } from "./tab-view";
 import type { ExtensionTabActions, Platform, PlatformDownload } from "./types";
@@ -1643,12 +1644,14 @@ export class ElectronPlatform implements Platform {
     });
 
     ses.setPermissionCheckHandler((wc, permission, requestingOrigin, details) => {
-      if (!this.permissionCheckHandler) return false;
-      if (!wc) return false;
-      const tabId = this.findTabIdByWebContents(wc);
-      if (!tabId) return false;
-      const mediaType = (details as { mediaType?: string })?.mediaType;
-      return this.permissionCheckHandler(tabId, permission, requestingOrigin, { mediaType });
+      return checkPermission(
+        wc,
+        permission,
+        requestingOrigin,
+        details,
+        (contents) => this.findTabIdByWebContents(contents),
+        this.permissionCheckHandler,
+      );
     });
   }
 
@@ -1663,7 +1666,11 @@ export class ElectronPlatform implements Platform {
       return (
         !!deviceType &&
         this.permissionCheckHandler?.(null, deviceType, origin, {}) === true &&
-        granted.some((g) => g.deviceType === deviceType)
+        granted.some(
+          (g) =>
+            g.deviceType === deviceType &&
+            matchesGrantedDevice(deviceType, g.device, details.device),
+        )
       );
     });
 

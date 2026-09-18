@@ -5,7 +5,7 @@ import type { Folder } from "@features/folders/folders.shared";
 import { useFoldersStore } from "@features/folders/folders.store";
 import type { ProtocolLaunchRequestedEvent } from "@features/installer/installer.shared";
 import { useInstallerStore } from "@features/installer/installer.store";
-import type { PermissionDecision } from "@features/permissions/permissions.shared";
+import { PERMISSION_INFO, type PermissionDecision } from "@features/permissions/permissions.shared";
 import { usePermissionsStore } from "@features/permissions/permissions.store";
 import type { PinnedTab } from "@features/pinned-tabs/pinned-tabs.shared";
 import { usePinnedTabsStore } from "@features/pinned-tabs/pinned-tabs.store";
@@ -85,6 +85,7 @@ export function LivePreview({
           domainPermissions: new Map(),
           globalPermissions: {},
           globalLoaded: false,
+          availablePermissions: Object.keys(PERMISSION_INFO),
         });
       if (stores?.folders) useFoldersStore.setState({ folders: new Map(), renamingFolderId: null });
     };
