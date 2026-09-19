@@ -170,7 +170,7 @@ export interface Platform {
   ): void;
   onPermissionCheck(
     handler: (
-      tabId: TabId,
+      tabId: TabId | null,
       permission: string,
       requestingOrigin: string,
       details: { mediaType?: string },

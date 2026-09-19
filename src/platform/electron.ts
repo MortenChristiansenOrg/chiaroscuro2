@@ -21,6 +21,7 @@ import { unpackedExtensionId } from "./extension-identity";
 import { migrateExtensionBootstrap } from "./extension-migration";
 import { ExtensionRuntime } from "./extension-runtime";
 import type { GithubSessionDiagnostics } from "./github-session-diagnostics";
+import { checkPermission, matchesGrantedDevice } from "./permission-check";
 import { TabBoundsAnimation } from "./tab-bounds-animation";
 import { closeTabContents, createTabView } from "./tab-view";
 import type { ExtensionTabActions, Platform, PlatformDownload } from "./types";
@@ -372,7 +373,7 @@ export class ElectronPlatform implements Platform {
     | undefined;
   private permissionCheckHandler:
     | ((
-        tabId: TabId,
+        tabId: TabId | null,
         permission: string,
         requestingOrigin: string,
         details: { mediaType?: string },
@@ -1643,12 +1644,14 @@ export class ElectronPlatform implements Platform {
     });
 
     ses.setPermissionCheckHandler((wc, permission, requestingOrigin, details) => {
-      if (!this.permissionCheckHandler) return false;
-      if (!wc) return false;
-      const tabId = this.findTabIdByWebContents(wc);
-      if (!tabId) return false;
-      const mediaType = (details as { mediaType?: string })?.mediaType;
-      return this.permissionCheckHandler(tabId, permission, requestingOrigin, { mediaType });
+      return checkPermission(
+        wc,
+        permission,
+        requestingOrigin,
+        details,
+        (contents) => this.findTabIdByWebContents(contents),
+        this.permissionCheckHandler,
+      );
     });
   }
 
@@ -1660,7 +1663,15 @@ export class ElectronPlatform implements Platform {
       const granted = this.grantedDevices.get(origin);
       if (!granted) return false;
       const deviceType = (details as { deviceType?: string }).deviceType;
-      return granted.some((g) => g.deviceType === deviceType);
+      return (
+        !!deviceType &&
+        this.permissionCheckHandler?.(null, deviceType, origin, {}) === true &&
+        granted.some(
+          (g) =>
+            g.deviceType === deviceType &&
+            matchesGrantedDevice(deviceType, g.device, details.device),
+        )
+      );
     });
 
     // Device selection events — show native picker dialogs
@@ -1692,7 +1703,11 @@ export class ElectronPlatform implements Platform {
             this.grantedDevices.set(origin, list);
             this.deviceSelectedCallback?.(type, origin);
           }
-          callback(selectedId ?? "");
+          callback(
+            selectedId && this.permissionCheckHandler?.(null, type, origin, {}) === true
+              ? selectedId
+              : "",
+          );
         })
         .catch(() => callback(""));
     };
@@ -1781,7 +1796,7 @@ export class ElectronPlatform implements Platform {
 
   onPermissionCheck(
     handler: (
-      tabId: TabId,
+      tabId: TabId | null,
       permission: string,
       requestingOrigin: string,
       details: { mediaType?: string },

@@ -5,11 +5,17 @@ import type { Platform } from "../../platform/types";
 import { defineFeature } from "../../shared/define-feature";
 import type { TabId } from "../../shared/types";
 import {
+  type GlobalPermissions,
   getPermissionInfo,
+  PERMISSION_INFO,
   PERMISSIONS_CHANGED,
   PERMISSIONS_GET_DOMAIN,
+  PERMISSIONS_GET_GLOBAL,
+  PERMISSIONS_GLOBAL_CHANGED,
+  PERMISSIONS_RESET_GLOBAL,
   PERMISSIONS_REVOKE,
   PERMISSIONS_SET,
+  PERMISSIONS_SET_GLOBAL,
   type PermissionDecision,
   type PermissionsCommands,
   type PermissionsEvents,
@@ -24,6 +30,9 @@ export interface PermissionsDeps {
   platform: Platform;
   dataStore: DataStore;
 }
+
+const GLOBAL_SETTINGS_KEY = "permissions-global-decisions";
+let globalDecisions = new Map<string, PermissionDecision>();
 
 const SETTINGS_KEY = "permissions-decisions";
 
@@ -48,7 +57,20 @@ function getDomainFromUrl(url: string): string | null {
 }
 
 function getDecision(domain: string, permission: string): PermissionDecision | undefined {
-  return decisions.get(domain)?.get(permission);
+  return globalDecisions.get(permission) ?? decisions.get(domain)?.get(permission);
+}
+
+function getGlobalPermissions(): GlobalPermissions {
+  return {
+    permissions: Object.fromEntries(globalDecisions),
+    availablePermissions: [
+      ...new Set([
+        ...Object.keys(PERMISSION_INFO),
+        ...globalDecisions.keys(),
+        ...[...decisions.values()].flatMap((perms) => [...perms.keys()]),
+      ]),
+    ],
+  };
 }
 
 function setDecision(domain: string, permission: string, decision: PermissionDecision): void {
@@ -103,12 +125,6 @@ function normalizeMediaKeys(mediaTypes?: string[]): string[] {
   return keys.length > 0 ? keys : ["camera", "microphone"];
 }
 
-function mediaCheckKey(mediaType?: string): string {
-  if (mediaType === "video") return "camera";
-  if (mediaType === "audio") return "microphone";
-  return "camera"; // fallback
-}
-
 /** Build the prompt label for one or more media keys. */
 function mediaLabel(keys: string[]): string {
   if (keys.length >= 2) return "Camera & Microphone";
@@ -119,6 +135,7 @@ export default defineFeature<PermissionsDeps>({
   register(d_) {
     deps = d_;
     decisions = new Map();
+    globalDecisions = new Map();
 
     const { commands, platform } = d_;
 
@@ -133,6 +150,7 @@ export default defineFeature<PermissionsDeps>({
 
         // If all keys have stored decisions, use them
         const storedAll = keys.map((k) => getDecision(domain, k));
+        if (storedAll.includes("deny")) return false;
         if (storedAll.every((d) => d !== undefined)) {
           return storedAll.every((d) => d === "allow");
         }
@@ -142,7 +160,9 @@ export default defineFeature<PermissionsDeps>({
         const label = mediaLabel(undecided);
         const allowed = await platform.showPermissionPrompt(domain, label);
         const decision: PermissionDecision = allowed ? "allow" : "deny";
-        for (const k of undecided) setDecision(domain, k, decision);
+        for (const k of undecided) {
+          if (!globalDecisions.has(k)) setDecision(domain, k, decision);
+        }
         persistDecisions().catch(console.error);
         emitChanged(domain);
 
@@ -157,21 +177,21 @@ export default defineFeature<PermissionsDeps>({
       const info = getPermissionInfo(permission);
       const allowed = await platform.showPermissionPrompt(domain, info.label);
       const decision: PermissionDecision = allowed ? "allow" : "deny";
-      setDecision(domain, permission, decision);
+      if (!globalDecisions.has(permission)) setDecision(domain, permission, decision);
       persistDecisions().catch(console.error);
       emitChanged(domain);
-      return allowed;
+      return getDecision(domain, permission) === "allow";
     });
 
     // ── Permission check handler (sync — stored decisions only) ──
     platform.onPermissionCheck(
-      (_tabId: TabId, permission: string, requestingOrigin: string, details) => {
+      (_tabId: TabId | null, permission: string, requestingOrigin: string, details) => {
         const domain = getDomainFromUrl(requestingOrigin);
         if (!domain) return false;
 
         if (permission === "media") {
-          const key = mediaCheckKey(details?.mediaType);
-          return getDecision(domain, key) === "allow";
+          const keys = normalizeMediaKeys(details?.mediaType ? [details.mediaType] : undefined);
+          return keys.every((key) => getDecision(domain, key) === "allow");
         }
 
         return getDecision(domain, permission) === "allow";
@@ -181,7 +201,7 @@ export default defineFeature<PermissionsDeps>({
     // ── Device selection callback ─────────────────────────────────
     platform.onDeviceSelected((deviceType: string, origin: string) => {
       const domain = getDomainFromUrl(origin);
-      if (!domain) return;
+      if (!domain || globalDecisions.has(deviceType)) return;
       setDecision(domain, deviceType, "allow");
       persistDecisions().catch(console.error);
       emitChanged(domain);
@@ -189,8 +209,31 @@ export default defineFeature<PermissionsDeps>({
 
     // ── Commands ──────────────────────────────────────────────────
 
+    // Serialize global writes so rapid changes cannot persist an older snapshot last.
+    let globalWrite: Promise<void> = Promise.resolve();
+    function changeGlobal(permission: string, decision?: PermissionDecision): Promise<void> {
+      const write = globalWrite.then(async () => {
+        const next = new Map(globalDecisions);
+        if (decision) next.set(permission, decision);
+        else next.delete(permission);
+        await deps.dataStore.setSetting(GLOBAL_SETTINGS_KEY, Object.fromEntries(next));
+        globalDecisions = next;
+        deps.events.emit(PERMISSIONS_GLOBAL_CHANGED, getGlobalPermissions());
+      });
+      globalWrite = write.catch(() => {});
+      return write;
+    }
+
+    commands.handle(PERMISSIONS_GET_GLOBAL, async () => getGlobalPermissions());
+    commands.handle(PERMISSIONS_SET_GLOBAL, ({ permission, decision }) =>
+      changeGlobal(permission, decision),
+    );
+    commands.handle(PERMISSIONS_RESET_GLOBAL, ({ permission }) => changeGlobal(permission));
+
     commands.handle(PERMISSIONS_SET, async (payload) => {
       const { domain, permission, decision } = payload;
+      if (globalDecisions.has(permission))
+        throw new Error("This permission is managed in Settings.");
       setDecision(domain, permission, decision);
       await persistDecisions();
       emitChanged(domain);
@@ -198,6 +241,8 @@ export default defineFeature<PermissionsDeps>({
 
     commands.handle(PERMISSIONS_REVOKE, async (payload) => {
       const { domain, permission } = payload;
+      if (globalDecisions.has(permission))
+        throw new Error("This permission is managed in Settings.");
       removeDecision(domain, permission);
       await persistDecisions();
       // Clear platform-side device grants when revoking a device permission
@@ -217,6 +262,9 @@ export default defineFeature<PermissionsDeps>({
   },
 
   async start({ dataStore }) {
+    const global =
+      await dataStore.getSetting<Record<string, PermissionDecision>>(GLOBAL_SETTINGS_KEY);
+    globalDecisions = new Map(Object.entries(global ?? {}));
     const stored =
       await dataStore.getSetting<Record<string, Record<string, PermissionDecision>>>(SETTINGS_KEY);
     if (stored) {
@@ -232,5 +280,6 @@ export default defineFeature<PermissionsDeps>({
 
   teardown() {
     decisions.clear();
+    globalDecisions.clear();
   },
 });

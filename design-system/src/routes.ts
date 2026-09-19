@@ -229,6 +229,24 @@ export const routes: Route[] = [
     component: lazy(() => import("./pages/components/installed-extension-card.mdx")),
   },
   {
+    path: "/components/global-permissions",
+    title: "Global Permissions",
+    group: "Components",
+    component: lazy(() => import("./pages/components/global-permissions.mdx")),
+  },
+  {
+    path: "/components/global-permission-add-form",
+    title: "Global Permission Add Form",
+    group: "Components",
+    component: lazy(() => import("./pages/components/global-permission-add-form.mdx")),
+  },
+  {
+    path: "/components/global-permission-row",
+    title: "Global Permission Row",
+    group: "Components",
+    component: lazy(() => import("./pages/components/global-permission-row.mdx")),
+  },
+  {
     path: "/components/extension-permissions",
     title: "Extension Permissions",
     group: "Components",

@@ -19,17 +19,17 @@ The dialog is modal to the app window — no interaction with the browser is pos
 
 ## Domain Settings — Permissions Section
 
-Stored permission decisions appear in the domain settings page (`app:domain-settings`), alongside the Custom CSS section. Each permission shows its current state and can be toggled or revoked.
+Stored permission decisions appear in the domain settings page (`app:domain-settings`), alongside the Custom CSS section. Domain decisions can be toggled or revoked. Global choices take priority and appear as read-only rows marked “inherited from global Settings”, even for domains with no saved decisions. The “Manage global permissions in Settings” button opens application Settings.
 
 ### Preview
 
-<LivePreview label="Permissions for example.com" stores={{ permissions: { domainPermissions: new Map([["example.com", { geolocation: "allow", notifications: "deny", camera: "allow", microphone: "allow" }]]) } }}>
+<LivePreview label="Permissions for example.com" stores={{ permissions: { globalLoaded: true, globalPermissions: { fullscreen: "allow", "clipboard-sanitized-write": "allow" }, domainPermissions: new Map([["example.com", { geolocation: "allow", notifications: "deny", camera: "allow", microphone: "allow" }]]) } }}>
   <div style={{ padding: "1rem", background: "var(--content-bg)", borderRadius: "var(--radius-lg)" }}>
     <PermissionsSection domain="example.com" />
   </div>
 </LivePreview>
 
-<LivePreview label="No stored permissions" stores={{ permissions: { domainPermissions: new Map() } }}>
+<LivePreview label="No stored permissions" stores={{ permissions: { globalLoaded: true, globalPermissions: { fullscreen: "allow", "clipboard-sanitized-write": "allow" }, domainPermissions: new Map() } }}>
   <div style={{ padding: "1rem", background: "var(--content-bg)", borderRadius: "var(--radius-lg)" }}>
     <PermissionsSection domain="new-site.com" />
   </div>
@@ -83,3 +83,8 @@ Stored permission decisions appear in the domain settings page (`app:domain-sett
 ## Related
 
 - [Settings Page](/components/settings-page) — shared SettingsLayout scaffold
+
+
+### Inherited state
+
+An inherited row displays the effective Allowed/Denied choice and its global source as text. It has no toggle or revoke action. Reset the global choice in [Global Permissions](/components/global-permissions) to restore any saved domain decision.
