@@ -25,27 +25,9 @@ import { checkPermission, matchesGrantedDevice } from "./permission-check";
 import { TabBoundsAnimation } from "./tab-bounds-animation";
 import { closeTabContents, createTabView } from "./tab-view";
 import type { ExtensionTabActions, Platform, PlatformDownload } from "./types";
+import { isAllowedNavigation, isAllowedUrl } from "./url-policy";
 
-const ALLOWED_SCHEMES_WEB = new Set(["http:", "https:", "about:", "data:"]);
-const ALLOWED_SCHEMES_INTERNAL = new Set([
-  "http:",
-  "https:",
-  "about:",
-  "data:",
-  "file:",
-  "chrome-extension:",
-]);
 const ALLOWED_EXTERNAL_SCHEMES = new Set(["http:", "https:", "mailto:"]);
-
-function isAllowedUrl(url: string, source: "web" | "internal" = "web"): boolean {
-  try {
-    const parsed = new URL(url);
-    const allow = source === "internal" ? ALLOWED_SCHEMES_INTERNAL : ALLOWED_SCHEMES_WEB;
-    return allow.has(parsed.protocol);
-  } catch {
-    return false;
-  }
-}
 
 function isAllowedExternalUrl(url: string): boolean {
   try {
@@ -538,7 +520,7 @@ export class ElectronPlatform implements Platform {
         }
       }
 
-      if (isAllowedUrl(url)) {
+      if (isAllowedNavigation(url, view.webContents.getURL())) {
         // Let registered callback handle it (sub-tabs for links, etc.)
         if (this.windowOpenCallback?.(url, tabId, disposition)) {
           return { action: "deny" as const };
@@ -581,14 +563,14 @@ export class ElectronPlatform implements Platform {
       const wc = popupWin.webContents;
 
       wc.setWindowOpenHandler(({ url: childUrl }) => {
-        if (isAllowedUrl(childUrl)) {
+        if (isAllowedNavigation(childUrl, wc.getURL())) {
           wc.loadURL(childUrl);
         }
         return { action: "deny" as const };
       });
 
       wc.on("will-navigate", (event, navUrl) => {
-        if (!isAllowedUrl(navUrl)) {
+        if (!isAllowedNavigation(navUrl, event.initiator?.url ?? "")) {
           event.preventDefault();
         }
       });
@@ -597,7 +579,7 @@ export class ElectronPlatform implements Platform {
     });
 
     view.webContents.on("will-navigate", (event, navUrl) => {
-      if (!isAllowedUrl(navUrl)) {
+      if (!isAllowedNavigation(navUrl, event.initiator?.url ?? "")) {
         event.preventDefault();
         try {
           const parsed = new URL(navUrl);
