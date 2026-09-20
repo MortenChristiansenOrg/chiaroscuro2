@@ -90,7 +90,8 @@ export default defineFeature<Deps>({
     });
 
     commands.handle(INSTALLER_APPLY_UPDATE, async () => {
-      cachedAutoUpdater?.quitAndInstall();
+      if (!cachedAutoUpdater) throw new Error("Auto-updater not initialized");
+      cachedAutoUpdater.quitAndInstall();
     });
 
     commands.handle(INSTALLER_DISMISS_UPDATE, async () => {

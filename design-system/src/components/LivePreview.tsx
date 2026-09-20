@@ -29,6 +29,9 @@ interface StoreOverrides {
   downloads?: { downloads: Map<string, Download> };
   installer?: {
     pendingUpdateVersion: string | null;
+    updateDownloaded?: boolean;
+    updateApplying?: boolean;
+    updateError?: string | null;
     updateDismissed: boolean;
     protocolRequest: ProtocolLaunchRequestedEvent | null;
   };
@@ -77,6 +80,9 @@ export function LivePreview({
       if (stores?.installer)
         useInstallerStore.setState({
           pendingUpdateVersion: null,
+          updateDownloaded: false,
+          updateApplying: false,
+          updateError: null,
           updateDismissed: false,
           protocolRequest: null,
         });
