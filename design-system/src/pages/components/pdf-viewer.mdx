@@ -12,6 +12,11 @@ the actual `PdfReaderPage` and `PdfToolbar` with
 trace in `test-results/verification/`. A design-system preview alone does not
 verify persistence or Electron's native view composition.
 
+Each PDF URL mounts its own reader state before the viewport restores its saved
+scroll position. Switching directly between PDF tabs preserves each document's
+position and zoom, as does switching through a web tab. Verify this with
+`bun run verify:app --grep 'PDF scroll position'`.
+
 ---
 
 ## Anatomy
