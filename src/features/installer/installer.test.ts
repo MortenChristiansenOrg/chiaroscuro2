@@ -442,6 +442,14 @@ describe("installer feature", () => {
       );
     });
 
+    it("apply-update rejects when the updater is unavailable", async () => {
+      const { commands, deps } = setup({ isDev: true });
+      await feature.start(deps);
+      await expect(commands.send(INSTALLER_APPLY_UPDATE, undefined)).rejects.toThrow(
+        "Auto-updater not initialized",
+      );
+    });
+
     it("apply-update command calls autoUpdater.quitAndInstall", async () => {
       const { commands, deps } = setup({ isDev: false });
       await feature.start(deps);

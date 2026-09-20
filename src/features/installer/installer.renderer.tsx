@@ -2,18 +2,16 @@ import { useEffect, useRef } from "react";
 import { Icon } from "../../renderer/src/components/Icon";
 import {
   INSTALLER_ALLOW_PROTOCOL,
-  INSTALLER_APPLY_UPDATE,
   INSTALLER_CHECK_FOR_UPDATES,
   INSTALLER_DENY_PROTOCOL,
   INSTALLER_DISMISS_UPDATE,
   type InstallerCommands,
 } from "./installer.shared";
-import { useInstallerStore } from "./installer.store";
+import { applyUpdate, useInstallerStore } from "./installer.store";
 
 type UsedCommands = Pick<
   InstallerCommands,
   | typeof INSTALLER_CHECK_FOR_UPDATES
-  | typeof INSTALLER_APPLY_UPDATE
   | typeof INSTALLER_DISMISS_UPDATE
   | typeof INSTALLER_ALLOW_PROTOCOL
   | typeof INSTALLER_DENY_PROTOCOL
@@ -29,12 +27,13 @@ function sendCommand<K extends keyof UsedCommands>(
 export function UpdateNotification() {
   const version = useInstallerStore((s) => s.pendingUpdateVersion);
   const downloaded = useInstallerStore((s) => s.updateDownloaded);
+  const applying = useInstallerStore((s) => s.updateApplying);
   const dismissed = useInstallerStore((s) => s.updateDismissed);
   const error = useInstallerStore((s) => s.updateError);
 
   if (!version || dismissed) return null;
 
-  const hasError = !downloaded && error !== null;
+  const hasError = error !== null;
 
   return (
     <div
@@ -52,18 +51,35 @@ export function UpdateNotification() {
       }}
     >
       <Icon
-        name={hasError ? "circle-exclamation" : downloaded ? "arrow-up-from-bracket" : "download"}
-        className="text-glass-text-default shrink-0"
+        name={
+          applying
+            ? "spinner"
+            : hasError
+              ? "circle-exclamation"
+              : downloaded
+                ? "arrow-up-from-bracket"
+                : "download"
+        }
+        className={`text-glass-text-default shrink-0${applying ? " motion-safe:animate-spin" : ""}`}
         css={{ fontSize: "var(--icon-size-default)" }}
       />
-      <span className="text-glass-text-default flex-1 min-w-0 truncate">
-        {hasError
-          ? `v${version} update failed`
-          : downloaded
-            ? `v${version} ready`
-            : `Downloading v${version}…`}
-      </span>
-      {hasError && (
+      <div className="text-glass-text-default flex-1 min-w-0">
+        <span role="status" className="block truncate">
+          {applying
+            ? "Restarting…"
+            : hasError
+              ? `v${version} update failed`
+              : downloaded
+                ? `v${version} ready`
+                : `Downloading v${version}…`}
+        </span>
+        {hasError && (
+          <span role="alert" className="block break-words" style={{ fontSize: "var(--text-xs)" }}>
+            {error}
+          </span>
+        )}
+      </div>
+      {hasError && !downloaded && (
         <button
           type="button"
           className="cursor-pointer text-glass-text-default hover:text-glass-text-hover hover:bg-glass-hover active:bg-glass-pressed active:text-glass-text-pressed"
@@ -91,7 +107,7 @@ export function UpdateNotification() {
       {downloaded && (
         <button
           type="button"
-          className="cursor-pointer text-glass-text-default hover:text-glass-text-hover hover:bg-glass-hover active:bg-glass-pressed active:text-glass-text-pressed"
+          className="cursor-pointer text-glass-text-default hover:text-glass-text-hover hover:bg-glass-hover active:bg-glass-pressed active:text-glass-text-pressed disabled:cursor-wait disabled:opacity-60"
           style={{
             fontSize: "var(--text-xs)",
             fontFamily: "inherit",
@@ -104,16 +120,18 @@ export function UpdateNotification() {
             transition: "color var(--duration-fast), background-color var(--duration-fast)",
           }}
           tabIndex={-1}
-          onClick={() => void sendCommand(INSTALLER_APPLY_UPDATE, undefined).catch(console.error)}
-          aria-label="Restart to apply update"
-          data-tip="Restart to apply update"
+          onClick={() => void applyUpdate()}
+          disabled={applying}
+          aria-busy={applying}
+          aria-label={applying ? "Restarting to apply update" : "Restart to apply update"}
+          data-tip={applying ? "Restarting to apply update" : "Restart to apply update"}
         >
-          Restart
+          {applying ? "Restarting…" : "Restart"}
         </button>
       )}
       <button
         type="button"
-        className="flex items-center justify-center bg-transparent text-glass-text-hint hover:text-glass-text-hover hover:bg-glass-hover active:bg-glass-pressed cursor-pointer"
+        className="flex items-center justify-center bg-transparent text-glass-text-hint hover:text-glass-text-hover hover:bg-glass-hover active:bg-glass-pressed cursor-pointer disabled:cursor-wait disabled:opacity-60"
         style={{
           width: "var(--click-target-min)",
           height: "var(--click-target-min)",
@@ -122,6 +140,7 @@ export function UpdateNotification() {
           transition: "color var(--duration-fast), background-color var(--duration-fast)",
         }}
         tabIndex={-1}
+        disabled={applying}
         onClick={() => void sendCommand(INSTALLER_DISMISS_UPDATE, undefined).catch(console.error)}
         aria-label="Dismiss update notification"
         data-tip="Dismiss"

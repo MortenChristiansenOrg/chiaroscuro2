@@ -17,20 +17,20 @@ Compact inline notification in the sidebar indicating a new version is downloade
 
 ### Anatomy
 
-- **Update icon** — `download` while downloading, `arrow-up-from-bracket` when ready; default text color
+- **Update icon** — `download` while downloading, `arrow-up-from-bracket` when ready, `spinner` while applying, `circle-exclamation` on failure; default text color
 - **Version label** — "Downloading v\{version\}…" or "v\{version\} ready", truncated, `--text-sm`
-- **Restart button** — bordered ghost button, only shown when downloaded, triggers `installer:apply-update`
+- **Restart button** — bordered ghost button, only shown when downloaded, triggers `installer:apply-update`; disables immediately and reads "Restarting…" while applying
 - **Dismiss button** — icon-only `xmark`, triggers `installer:dismiss-update`
 
 ### Preview
 
-<LivePreview label="Downloading (v2.1.0)" stores={{ installer: { pendingUpdateVersion: "2.1.0", updateDownloaded: false, updateDismissed: false, protocolRequest: null } }}>
+<LivePreview label="Downloading (v2.1.0)" stores={{ installer: { pendingUpdateVersion: "2.1.0", updateDownloaded: false, updateApplying: false, updateError: null, updateDismissed: false, protocolRequest: null } }}>
   <div style={{ width: 230 }}>
     <UpdateNotification />
   </div>
 </LivePreview>
 
-<LivePreview label="Update ready (v2.1.0)" stores={{ installer: { pendingUpdateVersion: "2.1.0", updateDownloaded: true, updateDismissed: false, protocolRequest: null } }}>
+<LivePreview label="Update ready (v2.1.0)" stores={{ installer: { pendingUpdateVersion: "2.1.0", updateDownloaded: true, updateApplying: false, updateError: null, updateDismissed: false, protocolRequest: null } }}>
   <div style={{ width: 230 }}>
     <UpdateNotification />
   </div>
@@ -62,6 +62,8 @@ When dismissed (`updateDismissed: true`) or no pending update, the component ret
 | No update | No | Returns null |
 | Downloading | Yes | Download icon + "Downloading v…" + Dismiss |
 | Update ready | Yes | Upload icon + "v… ready" + Restart + Dismiss |
+| Applying | Yes | Spinner + "Restarting…" + disabled Restarting and Dismiss buttons |
+| Apply failed | Yes | Error icon + failure message + enabled Restart for retry |
 | Dismissed | No | Returns null (until next update) |
 
 #### Button States
@@ -90,7 +92,7 @@ Modal overlay shown when a web page requests to open an external protocol (e.g.,
 
 ### Preview
 
-<LivePreview label="Protocol request from github.com (vscode://)" stores={{ installer: { pendingUpdateVersion: "2.1.0", updateDownloaded: false, updateDismissed: false, protocolRequest: { protocol: "vscode", origin: "https://github.com", url: "vscode://vscode.git/clone?url=https://github.com/user/repo" } } }}>
+<LivePreview label="Protocol request from github.com (vscode://)" stores={{ installer: { pendingUpdateVersion: "2.1.0", updateDownloaded: false, updateApplying: false, updateError: null, updateDismissed: false, protocolRequest: { protocol: "vscode", origin: "https://github.com", url: "vscode://vscode.git/clone?url=https://github.com/user/repo" } } }}>
   <div style={{ transform: "scale(1)", height: 240, overflow: "hidden" }}>
     <ProtocolDialog />
   </div>
@@ -141,6 +143,7 @@ Modal overlay shown when a web page requests to open an external protocol (e.g.,
 ## Behavior
 
 - **Update notification** — appears when `installer:update-available` event fires (showing download progress); transitions to "ready" when `installer:update-downloaded` fires. Re-appears on each new update even if previously dismissed.
+- **Applying an update** — Restart and Dismiss disable immediately. Pending state survives command acknowledgement and component remounts until the app exits. Command rejection or an updater error restores Restart, displays the error, and allows retrying the downloaded installer. The spinner respects reduced-motion preferences. Verify the UI/IPC flow with `bun run verify:app --grep 'downloaded update'`; the scenario simulates updater outcomes without installing software.
 - **Protocol dialog** — blocks interaction with the app until user responds; dismisses on any action (deny/allow).
 - **"Always allow"** — persists the protocol+origin pair so future requests from the same origin are auto-allowed.
 
@@ -167,7 +170,8 @@ Modal overlay shown when a web page requests to open an external protocol (e.g.,
 
 ## Accessibility
 
-- Restart button: `aria-label="Restart to apply update"`, `data-tip="Restart to apply update"`.
+- Restart button: `aria-label="Restart to apply update"`, `data-tip="Restart to apply update"`. While pending it is disabled, has `aria-busy="true"`, and is labelled "Restarting to apply update".
+- Status changes use a live status region; failure details use `role="alert"`.
 - Dismiss button: `aria-label="Dismiss update notification"`, `data-tip="Dismiss"`.
 - Protocol dialog buttons use semantic text labels (no icon-only buttons).
 - Dialog origin hostname extracted from URL for readable display.

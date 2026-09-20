@@ -73,6 +73,9 @@ acquiring the single-instance lock or creating Chromium sessions.
 - Download update silently in background.
 - After download completes, emit event so renderer shows "Update ready — restart to apply" notification.
 - User clicks restart: app quits and installs update.
+- Restart disables immediately and shows a loading indicator until exit. Dismiss
+  is disabled while applying so feedback remains visible. If starting the update
+  fails, show the error and re-enable Restart to retry the downloaded installer.
 - User can dismiss notification; it reappears on next app start if update still pending.
 - Manual check via command (exposed in command palette).
 - Stable explicitly disallows prereleases and checks the manifest version's channel
@@ -189,7 +192,7 @@ None — this feature is background/config only, no keyboard shortcuts.
 - `installer:update-available` — New version found. Payload: `{ version: string }`.
 - `installer:update-downloaded` — Update ready to install. Payload: `{ version: string }`.
 - `installer:update-not-available` — Already on latest. Payload: `undefined`.
-- `installer:update-error` — Update check/download failed. Payload: `{ message: string }`.
+- `installer:update-error` — Update check, download, or installation failed. Payload: `{ message: string }`.
 - `installer:protocol-launch-requested` — External protocol intercepted, needs user decision. Payload: `{ protocol: string; origin: string; url: string }`.
 - `installer:update-dismissed` — User dismissed update notification. Payload: `undefined`.
 
