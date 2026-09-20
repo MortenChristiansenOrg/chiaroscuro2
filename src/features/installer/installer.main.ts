@@ -62,6 +62,7 @@ let stopProtocolAllowedListener: (() => void) | undefined;
 // across ESM/CJS boundary, so we cache the reference after the first successful import.
 let cachedAutoUpdater: Awaited<typeof import("electron-updater")>["autoUpdater"] | undefined;
 let checkForUpdates: (() => Promise<void>) | undefined;
+let initializeUpdates: (() => Promise<void>) | undefined;
 let restoreUpdateSupport: (() => void) | undefined;
 let updateGeneration = 0;
 
@@ -73,6 +74,13 @@ function protocolKey(protocol: string, origin: string): string {
 export default defineFeature<Deps>({
   register({ commands, events, platform, dataStore }) {
     commands.handle(INSTALLER_CHECK_FOR_UPDATES, async () => {
+      const generation = updateGeneration;
+      if (initialCheckTimer) {
+        clearTimeout(initialCheckTimer);
+        initialCheckTimer = undefined;
+      }
+      await initializeUpdates?.();
+      if (generation !== updateGeneration) return;
       if (!checkForUpdates) {
         events.emit(INSTALLER_UPDATE_ERROR, { message: "Auto-updater not initialized" });
         return;
@@ -163,102 +171,111 @@ export default defineFeature<Deps>({
     const generation = ++updateGeneration;
     const isCurrent = () => generation === updateGeneration;
 
-    try {
-      const mod = await import("electron-updater");
-      if (!isCurrent()) return;
-      // ESM/CJS interop: getter-defined exports may be on mod directly or mod.default
-      // biome-ignore lint/suspicious/noExplicitAny: CJS interop fallback
-      const autoUpdater = mod.autoUpdater ?? (mod as any).default?.autoUpdater;
-      if (!autoUpdater) throw new Error("electron-updater: autoUpdater not found");
-      cachedAutoUpdater = autoUpdater;
-      autoUpdater.channel = APP_CHANNELS[appChannel].updateChannel;
-      autoUpdater.allowPrerelease = appChannel === "early-access";
-      // Setting channel enables downgrades in electron-updater; reset explicitly.
-      autoUpdater.allowDowngrade = false;
-      const supportsUpdate = autoUpdater.isUpdateSupported.bind(autoUpdater);
-      restoreUpdateSupport = () => {
-        autoUpdater.isUpdateSupported = supportsUpdate;
-      };
-      autoUpdater.isUpdateSupported = (info) =>
-        isChannelVersion(appChannel, info.version) && supportsUpdate(info);
-      autoUpdater.autoInstallOnAppQuit = true;
-      // Manual download so we own the promise chain and avoid unhandled rejections
-      autoUpdater.autoDownload = false;
-
-      autoUpdater.on("update-available", (info) => {
-        if (!isCurrent() || !isChannelVersion(appChannel, info.version)) return;
-        console.log("[installer] Update available:", info.version);
-        events.emit(INSTALLER_UPDATE_AVAILABLE, { version: info.version });
-        autoUpdater.downloadUpdate().catch(() => {
-          // Swallow — the "error" event handler already emits INSTALLER_UPDATE_ERROR
-        });
-      });
-
-      autoUpdater.on("update-downloaded", (info) => {
-        if (!isCurrent()) return;
-        console.log("[installer] Update downloaded:", info.version);
-        events.emit(INSTALLER_UPDATE_DOWNLOADED, { version: info.version });
-      });
-
-      autoUpdater.on("update-not-available", (info) => {
-        if (!isCurrent()) return;
-        console.log("[installer] No update available. Latest:", info?.version);
-        events.emit(INSTALLER_UPDATE_NOT_AVAILABLE, undefined);
-      });
-
-      autoUpdater.on("error", (err) => {
-        if (!isCurrent()) return;
-        // electron-updater emits "error" AND rejects the checkForUpdates() promise
-        // for the same failure. We handle it here; callers swallow the rejection.
-        console.error("[installer] Update error:", err);
-        events.emit(INSTALLER_UPDATE_ERROR, {
-          message: err instanceof Error ? err.message : String(err),
-        });
-      });
-
-      let pendingCheck: Promise<void> | undefined;
-      checkForUpdates = () => {
-        pendingCheck ??= (async () => {
-          if (appChannel === "early-access") {
-            try {
-              const url = await earlyAccessFeed();
-              if (!isCurrent()) return;
-              if (!url) {
-                events.emit(INSTALLER_UPDATE_NOT_AVAILABLE, undefined);
-                return;
-              }
-              autoUpdater.setFeedURL({
-                provider: "generic",
-                url,
-                channel: APP_CHANNELS[appChannel].updateChannel,
-                useMultipleRangeRequest: false,
-              });
-            } catch (error) {
-              if (isCurrent()) events.emit(INSTALLER_UPDATE_ERROR, { message: String(error) });
-              return;
-            }
-          }
+    // Keep module loading off the critical path. A manual check shares the same
+    // initialization promise with the delayed and periodic checks.
+    let initialization: Promise<void> | undefined;
+    initializeUpdates = () => {
+      initialization ??= (async () => {
+        try {
+          const mod = await import("electron-updater");
           if (!isCurrent()) return;
-          await autoUpdater.checkForUpdates().catch(logWarn("installer", "check for updates"));
-        })().finally(() => {
-          pendingCheck = undefined;
-        });
-        return pendingCheck;
-      };
+          // ESM/CJS interop: getter-defined exports may be on mod directly or mod.default
+          // biome-ignore lint/suspicious/noExplicitAny: CJS interop fallback
+          const autoUpdater = mod.autoUpdater ?? (mod as any).default?.autoUpdater;
+          if (!autoUpdater) throw new Error("electron-updater: autoUpdater not found");
+          cachedAutoUpdater = autoUpdater;
+          autoUpdater.channel = APP_CHANNELS[appChannel].updateChannel;
+          autoUpdater.allowPrerelease = appChannel === "early-access";
+          // Setting channel enables downgrades in electron-updater; reset explicitly.
+          autoUpdater.allowDowngrade = false;
+          const supportsUpdate = autoUpdater.isUpdateSupported.bind(autoUpdater);
+          restoreUpdateSupport = () => {
+            autoUpdater.isUpdateSupported = supportsUpdate;
+          };
+          autoUpdater.isUpdateSupported = (info) =>
+            isChannelVersion(appChannel, info.version) && supportsUpdate(info);
+          autoUpdater.autoInstallOnAppQuit = true;
+          // Manual download so we own the promise chain and avoid unhandled rejections
+          autoUpdater.autoDownload = false;
 
-      // Initial check after delay
-      initialCheckTimer = setTimeout(() => {
-        initialCheckTimer = undefined;
-        void checkForUpdates?.();
-      }, INITIAL_CHECK_DELAY_MS);
+          autoUpdater.on("update-available", (info) => {
+            if (!isCurrent() || !isChannelVersion(appChannel, info.version)) return;
+            console.log("[installer] Update available:", info.version);
+            events.emit(INSTALLER_UPDATE_AVAILABLE, { version: info.version });
+            autoUpdater.downloadUpdate().catch(() => {
+              // Swallow — the "error" event handler already emits INSTALLER_UPDATE_ERROR
+            });
+          });
 
-      // Periodic checks
-      checkTimer = setInterval(() => {
-        void checkForUpdates?.();
-      }, CHECK_INTERVAL_MS);
-    } catch (err) {
-      console.error("[installer] Failed to initialize auto-updater:", err);
-    }
+          autoUpdater.on("update-downloaded", (info) => {
+            if (!isCurrent()) return;
+            console.log("[installer] Update downloaded:", info.version);
+            events.emit(INSTALLER_UPDATE_DOWNLOADED, { version: info.version });
+          });
+
+          autoUpdater.on("update-not-available", (info) => {
+            if (!isCurrent()) return;
+            console.log("[installer] No update available. Latest:", info?.version);
+            events.emit(INSTALLER_UPDATE_NOT_AVAILABLE, undefined);
+          });
+
+          autoUpdater.on("error", (err) => {
+            if (!isCurrent()) return;
+            // electron-updater emits "error" AND rejects the checkForUpdates() promise
+            // for the same failure. We handle it here; callers swallow the rejection.
+            console.error("[installer] Update error:", err);
+            events.emit(INSTALLER_UPDATE_ERROR, {
+              message: err instanceof Error ? err.message : String(err),
+            });
+          });
+
+          let pendingCheck: Promise<void> | undefined;
+          checkForUpdates = () => {
+            pendingCheck ??= (async () => {
+              if (appChannel === "early-access") {
+                try {
+                  const url = await earlyAccessFeed();
+                  if (!isCurrent()) return;
+                  if (!url) {
+                    events.emit(INSTALLER_UPDATE_NOT_AVAILABLE, undefined);
+                    return;
+                  }
+                  autoUpdater.setFeedURL({
+                    provider: "generic",
+                    url,
+                    channel: APP_CHANNELS[appChannel].updateChannel,
+                    useMultipleRangeRequest: false,
+                  });
+                } catch (error) {
+                  if (isCurrent()) events.emit(INSTALLER_UPDATE_ERROR, { message: String(error) });
+                  return;
+                }
+              }
+              if (!isCurrent()) return;
+              await autoUpdater.checkForUpdates().catch(logWarn("installer", "check for updates"));
+            })().finally(() => {
+              pendingCheck = undefined;
+            });
+            return pendingCheck;
+          };
+        } catch (err) {
+          if (isCurrent()) {
+            console.error("[installer] Failed to initialize auto-updater:", err);
+          }
+        }
+      })();
+      return initialization;
+    };
+    const runCheck = async () => {
+      if (!isCurrent()) return;
+      await initializeUpdates?.();
+      if (isCurrent()) await checkForUpdates?.();
+    };
+    initialCheckTimer = setTimeout(() => {
+      initialCheckTimer = undefined;
+      void runCheck();
+    }, INITIAL_CHECK_DELAY_MS);
+    checkTimer = setInterval(() => void runCheck(), CHECK_INTERVAL_MS);
   },
 
   teardown() {
@@ -283,6 +300,7 @@ export default defineFeature<Deps>({
     pendingRequests.clear();
     cachedAutoUpdater = undefined;
     checkForUpdates = undefined;
+    initializeUpdates = undefined;
     restoreUpdateSupport?.();
     restoreUpdateSupport = undefined;
   },

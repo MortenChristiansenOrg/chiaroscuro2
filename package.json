@@ -32,22 +32,18 @@
     "verify:app:win": "bash scripts/verify-app-win.sh",
     "agent:app": "bun run setup:electron && bun build e2e/automation/cli.ts --target=node --packages=external --outfile=out/verification/cli.mjs && node out/verification/cli.mjs",
     "diagnose:native-views": "bun run setup:electron && bun build e2e/diagnostics/native-views.ts --target=node --packages=external --outfile=out/verification/native-views.mjs && node out/verification/native-views.mjs",
-    "diagnose:address-bar": "bun run setup:electron && bun build e2e/diagnostics/address-bar.ts --target=node --packages=external --outfile=out/verification/address-bar.mjs && node out/verification/address-bar.mjs"
+    "diagnose:address-bar": "bun run setup:electron && bun build e2e/diagnostics/address-bar.ts --target=node --packages=external --outfile=out/verification/address-bar.mjs && node out/verification/address-bar.mjs",
+    "diagnose:startup": "bun run setup:electron && bun build e2e/diagnostics/startup.ts --target=node --packages=external --outfile=out/verification/startup.mjs && node out/verification/startup.mjs"
   },
   "dependencies": {
-    "@fortawesome/fontawesome-free": "^7.3.1",
     "electron-updater": "^6.8.9",
-    "pdfjs-dist": "^6.3.289",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "react-error-boundary": "^6.1.5",
     "rxdb": "^17.5.0",
     "yauzl": "^3.4.0",
-    "zod": "^4.5.4",
-    "zustand": "^5.0.15"
+    "zod": "^4.5.4"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.12",
+    "@fortawesome/fontawesome-free": "^7.3.1",
     "@mdx-js/react": "^3.1.1",
     "@mdx-js/rollup": "^3.1.1",
     "@playwright/test": "^1.63.0",
@@ -64,6 +60,10 @@
     "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
     "jsdom": "^30.0.1",
+    "pdfjs-dist": "^6.3.289",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-error-boundary": "^6.1.5",
     "rehype-pretty-code": "^0.14.5",
     "remark-frontmatter": "^5.0.0",
     "remark-gfm": "^4.0.1",
@@ -74,7 +74,8 @@
     "typescript": "^7.0.2",
     "vite": "^7.3.6",
     "vitest": "^5.0.0",
-    "wouter": "^3.11.0"
+    "wouter": "^3.11.0",
+    "zustand": "^5.0.15"
   },
   "packageManager": "bun@1.3.11",
   "engines": {

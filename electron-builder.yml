@@ -1,5 +1,8 @@
 # Shared settings; channel identity is supplied by scripts/release-config.ts.
 beforePack: scripts/check-package.cjs
+afterPack: scripts/check-distribution.cjs
+# Keep Chromium's English fallback and the languages used by this browser.
+electronLanguages: [en-US, en-GB, da]
 directories:
   buildResources: resources
   output: dist
@@ -10,6 +13,12 @@ files:
   - out/renderer/**/*
   - resources/**/*
   - "!**/*.map"
+  # These dependencies are bundled into renderer assets. Retain their notices
+  # without distributing a second copy of their implementation and native deps.
+  - from: node_modules
+    to: resources/bundled-licenses
+    filter:
+      - "{react,react-dom,react-error-boundary,zustand,pdfjs-dist,scheduler,@fortawesome/fontawesome-free}/LICENSE*"
 
 # Windows-only — no macOS or Linux targets
 win:

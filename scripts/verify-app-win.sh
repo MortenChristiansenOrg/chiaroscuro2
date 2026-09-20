@@ -13,6 +13,7 @@ MODE=verify:app
 if [[ "${1:-}" == "--interactive" ]]; then MODE=agent:app; shift; fi
 if [[ "${1:-}" == "--address-bar" ]]; then MODE=diagnose:address-bar; shift; fi
 if [[ "${1:-}" == "--native-views" ]]; then MODE=diagnose:native-views; shift; fi
+if [[ "${1:-}" == "--startup" ]]; then MODE=diagnose:startup; shift; fi
 bun run build
 rsync -a --delete out e2e src resources "$VERIFY_DIR/"
 cp package.json bun.lock bunfig.toml playwright.verification.config.ts "$VERIFY_DIR/"
