@@ -12,6 +12,8 @@ test("PDF scroll position survives switching workspace tabs", async ({ appSessio
     });
     await expect(session.shell.locator("canvas").first()).toBeVisible();
     await session.shell.getByRole("button", { name: "Zoom in", exact: true }).click();
+    const zoom = session.shell.getByRole("button", { name: "Reset zoom", exact: true });
+    await expect(zoom).toHaveText("125%");
     const viewport = session.shell.locator("canvas").first().locator("../../../..");
     await viewport.hover();
     await session.shell.mouse.wheel(0, 180);
@@ -23,12 +25,15 @@ test("PDF scroll position survives switching workspace tabs", async ({ appSessio
     await session.shell.locator(`[data-tab-id="${first}"]`).click();
     await expect(session.shell.locator("canvas").first()).toBeVisible();
     await expect.poll(() => viewport.evaluate((el) => el.scrollTop)).toBeCloseTo(firstPosition, 0);
+    await expect(zoom).toHaveText("125%");
 
     const second = await session.command<string>("tabs:create", {
       url: `/pdf-reader?url=${encodeURIComponent(`${site.url}/sample.pdf?document=second`)}`,
     });
     await expect(session.shell.locator("canvas").first()).toBeVisible();
     await expect.poll(() => viewport.evaluate((el) => el.scrollTop)).toBe(0);
+    await zoom.click();
+    await expect(zoom).toHaveText("100%");
     await viewport.hover();
     await session.shell.mouse.wheel(0, 50);
     await expect.poll(() => viewport.evaluate((el) => el.scrollTop)).toBeGreaterThan(20);
@@ -38,10 +43,12 @@ test("PDF scroll position survives switching workspace tabs", async ({ appSessio
       await expect
         .poll(() => viewport.evaluate((el) => el.scrollTop))
         .toBeCloseTo(firstPosition, 0);
+      await expect(zoom).toHaveText("125%");
       await session.shell.locator(`[data-tab-id="${second}"]`).click();
       await expect
         .poll(() => viewport.evaluate((el) => el.scrollTop))
         .toBeCloseTo(secondPosition, 0);
+      await expect(zoom).toHaveText("100%");
     }
     expect((await session.capture("pdf-scroll-restored")).status).toBe("complete");
   } finally {
