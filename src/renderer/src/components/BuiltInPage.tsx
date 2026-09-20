@@ -39,7 +39,7 @@ export function BuiltInPage({ url }: { url: string }) {
   if (!Component) return null;
   return (
     <Suspense fallback={null}>
-      <Component params={params} />
+      <Component key={url} params={params} />
     </Suspense>
   );
 }
