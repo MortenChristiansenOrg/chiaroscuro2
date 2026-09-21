@@ -96,9 +96,11 @@ export default defineFeature<Deps>({
       workspaceId: WorkspaceId;
       builtIn?: boolean;
     }) {
-      if (tab.builtIn || !isPdfUrl(tab.url) || processing.has(tab.id)) return;
+      if (tab.builtIn || processing.has(tab.id)) return;
+      const sourceUrl = isPdfUrl(tab.url) ? tab.url : platform.getPdfResponseUrl(tab.id);
+      if (!sourceUrl) return;
       processing.add(tab.id);
-      const pdfUrl = `/pdf-reader?url=${encodeURIComponent(tab.url)}`;
+      const pdfUrl = `/pdf-reader?url=${encodeURIComponent(sourceUrl)}`;
       const workspaceId = tab.workspaceId;
       const activate = getActiveTabId() === tab.id;
 

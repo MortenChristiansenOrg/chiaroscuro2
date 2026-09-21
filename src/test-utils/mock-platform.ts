@@ -17,6 +17,7 @@ export function createMockPlatform(overrides: Partial<Platform> = {}): Platform 
     navigateTab: vi.fn(),
     getTabUrl: vi.fn(() => undefined),
     getTabTitle: vi.fn(() => undefined),
+    getPdfResponseUrl: vi.fn(() => undefined),
     setTabBounds: vi.fn(),
     setTabBorderRadius: vi.fn(),
     setTabBackgroundColor: vi.fn(),

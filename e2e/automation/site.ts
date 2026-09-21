@@ -30,7 +30,12 @@ export async function startSite(onRequest?: (request: http.IncomingMessage) => v
   const server = http.createServer((request, response) => {
     onRequest?.(request);
     const url = new URL(request.url ?? "/", "http://localhost");
-    if (url.pathname === "/sample.pdf") {
+    if (url.pathname === "/pdf-redirect") {
+      response.writeHead(302, { Location: "/pdf-document?redirected=1" });
+      response.end();
+      return;
+    }
+    if (url.pathname === "/sample.pdf" || url.pathname === "/pdf-document") {
       response.writeHead(200, { "Content-Type": "application/pdf" });
       response.end(samplePdf());
       return;
@@ -52,7 +57,7 @@ export async function startSite(onRequest?: (request: http.IncomingMessage) => v
     response.end(`<!doctype html><html lang="en"><meta charset="utf-8"><title>Verification ${url.pathname.replace(/[^a-z/-]/gi, "")}</title>
       <style>body{font:20px system-ui;background:#e7edf5;color:#172a42;padding:32px}button,input,a{font:inherit;margin:12px;padding:8px}#scroll{height:180px;overflow:auto;border:2px solid}#spacer{height:600px}</style>
       <h1>Local verification page</h1><label>Message <input aria-label="Message"></label><button id="apply">Apply</button><output id="result"></output>
-      <p><a href="/child" target="_blank">Open sub-tab</a><button id="popup">Open popup</button><a href="/sample.pdf">Read PDF</a><a href="/download">Download fixture</a></p>
+      <p><a href="/child" target="_blank">Open sub-tab</a><button id="popup">Open popup</button><a href="/sample.pdf">Read PDF</a><a href="/pdf-document">Read extensionless document</a><a href="/pdf-redirect">Read redirected document</a><a href="/download">Download fixture</a></p>
       <label>Upload fixture <input type="file" aria-label="Upload fixture"></label><output id="file"></output>
       <button id="permission">Request notification permission</button><output id="permission-result"></output>
       <div id="scroll" aria-label="Scrollable fixture"><div id="spacer">Scroll down</div><button>Bottom button</button></div>

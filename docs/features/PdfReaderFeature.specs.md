@@ -14,6 +14,7 @@ Custom PDF reader replacing Chromium's built-in PDF viewer. Uses PDF.js as its s
 ## Requirements
 
 - All PDFs (local files and remote URLs) must be intercepted and rendered using the custom reader instead of Chromium's built-in viewer.
+- Remote PDF detection also uses the main-frame `application/pdf` response type, including URLs without a `.pdf` extension and redirects. Response-based detection ignores attachment downloads and embedded responses.
 - PDF.js is the sole engine. Legacy `pdf-backend` preferences are ignored, including saved experimental-engine selections.
 - PDF pages render to `<canvas>` elements with virtual scrolling (only visible pages + buffer rendered).
 - Text selection and copy must work on rendered pages.

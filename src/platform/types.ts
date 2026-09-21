@@ -52,6 +52,8 @@ export interface Platform {
   navigateTab(tabId: TabId, url: string): Promise<void>;
   getTabUrl(tabId: TabId): string | undefined;
   getTabTitle(tabId: TabId): string | undefined;
+  /** Current main-frame PDF response, including URLs without a .pdf extension. */
+  getPdfResponseUrl(tabId: TabId): string | undefined;
   setTabBounds(tabId: TabId, bounds: Bounds): void;
   setTabBorderRadius(tabId: TabId, radius: number): void;
   setTabBackgroundColor(tabId: TabId, color: string): void;

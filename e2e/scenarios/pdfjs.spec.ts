@@ -4,6 +4,26 @@ import { startSite } from "../automation/site";
 import { expect, test } from "../fixtures/electron-app";
 import { VerificationPage } from "../pages/verification.page";
 
+for (const link of ["Read extensionless document", "Read redirected document"]) {
+  test(`PDF response opens in the custom PDF.js reader: ${link}`, async ({
+    appSession: session,
+  }) => {
+    const site = await startSite();
+    try {
+      const parent = await VerificationPage.navigate(session, `${site.url}/pdfjs`);
+      await parent.page.getByRole("link", { name: link, exact: true }).click();
+      await expect(session.shell.locator("canvas").first()).toBeVisible();
+      await expect(
+        session.shell.getByText("Chiaroscuro verification PDF", { exact: true }),
+      ).toBeVisible();
+      await expect(session.shell.getByText("Fixture outline", { exact: true })).toBeVisible();
+      expect((await session.capture("pdfjs-response")).status).toBe("complete");
+    } finally {
+      await site.close();
+    }
+  });
+}
+
 test("PDF.js opens legacy engine preferences with selectable text, search and index", async ({
   appSession: session,
 }) => {
