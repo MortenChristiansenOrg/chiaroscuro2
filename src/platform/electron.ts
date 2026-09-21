@@ -927,6 +927,7 @@ export class ElectronPlatform implements Platform {
           return;
         }
       }
+      if (this.extensionRuntime?.handleCommand(wc, input)) _event.preventDefault();
     });
   }
 
@@ -1954,7 +1955,10 @@ export class ElectronPlatform implements Platform {
   private extensionRuntime: ExtensionRuntime | undefined;
 
   setupExtensionBridge(actions: ExtensionTabActions): void {
-    this.extensionRuntime = new ExtensionRuntime(actions, () => this.getWin());
+    this.extensionRuntime = new ExtensionRuntime(actions, () => this.getWin(), {
+      reserved: () => [...this.shortcuts.keys(), ...this.localShortcuts.keys()],
+      openPopup: (id, popup) => this.openExtensionPopup(id, popup),
+    });
   }
 
   setExtensionActiveTab(tabId: TabId | undefined): void {

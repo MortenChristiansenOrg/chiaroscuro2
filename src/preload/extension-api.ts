@@ -43,9 +43,12 @@ if (typeof extensionId === "string" && /^[a-p]{32}$/.test(extensionId)) {
         return {
           addListener: (callback: (...args: unknown[]) => void) => {
             callbacks.add(callback);
+            if (name === "commands.onCommand") void bridge.invoke("commands.listen", [true]);
           },
           removeListener: (callback: (...args: unknown[]) => void) => {
             callbacks.delete(callback);
+            if (name === "commands.onCommand" && !callbacks.size)
+              void bridge.invoke("commands.listen", [false]);
           },
           hasListener: (callback: (...args: unknown[]) => void) => callbacks.has(callback),
           hasListeners: () => callbacks.size > 0,
@@ -168,6 +171,7 @@ if (typeof extensionId === "string" && /^[a-p]{32}$/.test(extensionId)) {
         ["onClicked", "onClosed", "onButtonClicked"],
       );
       api("commands", ["getAll"], ["onCommand"]);
+      api("action", ["openPopup"], []);
       // Electron does not deliver native storage change events to MV3 workers.
       // Keep Chromium's storage, including in-memory session keys, and forward
       // invalidations. Workers re-read authoritative values to deduplicate signals.
@@ -364,6 +368,7 @@ if (typeof extensionId === "string" && /^[a-p]{32}$/.test(extensionId)) {
           "permissions",
           "notifications",
           "commands",
+          "action",
           "privacy",
         ]) {
           root.browser[name] = chrome[name];

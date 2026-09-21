@@ -51,6 +51,9 @@ has no dependency on `electron-chrome-extensions`.
   startup, and replacement objects would lose the browser adapter.
 - Retain native runtime messaging, scripting, local storage and session storage.
   Session keys remain in memory and disappear on browser restart.
+- Resolve manifest keyboard commands locally with browser-shortcut priority, worker wake-up,
+  listener readiness, and cancellation when the selected document changes. Route action
+  shortcuts and `action.openPopup` through the existing native extension popup.
 - Supply browser tab/window operations and selected navigation, menu, permission
   and notification APIs through `src/platform/extension-runtime.ts`. Only loaded
   extension frames/workers in the shared session can invoke these operations.
@@ -61,7 +64,7 @@ has no dependency on `electron-chrome-extensions`.
   deduplicate invalidations; the adapter never creates a separate vault store.
 - Implement empty, read-only managed storage; additional optional permissions
   are not granted. Cloud `storage.sync`, native messaging/biometrics, extension
-  keyboard shortcuts and full Chrome API parity are outside the current scope.
+  shortcut customization and full Chrome API parity are outside the current scope.
 
 Validation on 2026-09-13 used Electron 44.3.0 and the unmodified CWS Bitwarden
 2026.8.0 against a disposable local Vaultwarden 1.37.2 account on Linux and native
@@ -72,6 +75,15 @@ An actual 2026.3.0 → 2026.8.0 upgrade also passed expanded-permission approval
 stable runtime identity, retained account/vault, unlock and fill.
 Cloud accounts and cross-origin iframe variants have not been exercised with this
 fixture. Passkeys and biometrics are outside the supported boundary.
+
+Issue #64 acceptance on 2026-09-21 used the same Electron/Bitwarden/Vaultwarden
+versions on Linux and native Windows. Inline selection in top-level and embedded
+forms, the fill shortcut, opt-in page-load filling on both fixture hosts and an
+embedded form, no page-load credentials in a cross-origin frame or unrelated
+host, and restart locking / shortcut-triggered unlock all passed. The sandboxed
+CI fixture also explicitly verifies native scripting denial on an ungranted frame.
+Bitwarden completes its fill state asynchronously; acceptance waits for stable
+filled values before navigating away.
 
 A known navigation issue remains: editing an item immediately after creating it
 in the same popup session saves the change but can leave the popup on the Edit

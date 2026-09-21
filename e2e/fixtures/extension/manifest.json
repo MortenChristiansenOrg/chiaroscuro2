@@ -4,6 +4,30 @@
   "version": "1.0.0",
   "permissions": ["storage", "tabs", "scripting", "webNavigation"],
   "host_permissions": ["http://127.0.0.1/*"],
-  "background": { "service_worker": "worker.js" },
-  "action": { "default_popup": "popup.html" }
+  "background": {
+    "service_worker": "worker.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  },
+  "commands": {
+    "fill": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+L"
+      },
+      "description": "fill"
+    },
+    "browser-conflict": {
+      "suggested_key": {
+        "default": "Ctrl+T"
+      },
+      "description": "browser-conflict"
+    },
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+Y"
+      },
+      "description": "_execute_action"
+    }
+  }
 }

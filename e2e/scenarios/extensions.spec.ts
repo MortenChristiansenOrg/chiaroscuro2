@@ -11,13 +11,25 @@ test("MV3 worker observes vault state, fills the active tab and retains only dur
 }, testInfo) => {
   test.setTimeout(60_000);
   const app = new AppSession(testInfo.outputPath("app"), [], true);
-  const server = http.createServer((_request, response) => {
+  const server = http.createServer((request, response) => {
     response.setHeader("Content-Type", "text/html");
+    if (request.url === "/frames") {
+      response.end(
+        '<!doctype html><title>Frames</title><iframe src="/nested"></iframe><iframe src="http://localhost:' +
+          (server.address() as { port: number }).port +
+          '/denied"></iframe>',
+      );
+      return;
+    }
+    if (request.url === "/nested") {
+      response.end('<!doctype html><iframe src="/login"></iframe>');
+      return;
+    }
     response.end(
       '<!doctype html><title>Extension fixture</title><label>Username<input id="username"></label><label>Password<input id="password" type="password"></label>',
     );
   });
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  await new Promise<void>((resolve) => server.listen(0, "0.0.0.0", resolve));
   const address = server.address();
   if (!address || typeof address === "string") throw new Error("Missing fixture listener");
   const base = `http://127.0.0.1:${address.port}`;
@@ -121,6 +133,20 @@ test("MV3 worker observes vault state, fills the active tab and retains only dur
       ),
     );
     await workerReady(initialPopup);
+    const shortcuts = await initialPopup.evaluate(async () => {
+      const api = (
+        globalThis as unknown as {
+          chrome: { commands: { getAll(): Promise<{ name: string; shortcut: string }[]> } };
+        }
+      ).chrome;
+      return api.commands.getAll();
+    });
+    expect(shortcuts).toContainEqual(
+      expect.objectContaining({ name: "fill", shortcut: "Ctrl+Shift+L" }),
+    );
+    expect(shortcuts).toContainEqual(
+      expect.objectContaining({ name: "browser-conflict", shortcut: "" }),
+    );
     // Loading another extension may refresh Chromium’s lazy API namespaces.
     await app.command("extensions:set-enabled", { extensionId: restrictedId, enabled: false });
     await app.command("extensions:set-enabled", { extensionId: restrictedId, enabled: true });
@@ -193,6 +219,72 @@ test("MV3 worker observes vault state, fills the active tab and retains only dur
     };
     const first = await fill("first", 1);
     await fill("second", 2);
+    await app.command("tabs:create", { url: `${base}/frames` });
+    const framesTarget = await app.target((target) => target.url === `${base}/frames`);
+    const framesPage = await app.page(framesTarget);
+    const nested = framesPage.frameLocator('iframe[src="/nested"]').frameLocator("iframe");
+    await expect(nested.getByLabel("Password")).toBeVisible();
+    await nested.getByLabel("Password").click();
+    await app.app.evaluate(({ webContents, BrowserWindow }, id) => {
+      if (id === null) throw new Error("Missing target ID");
+      const wc = webContents.fromId(id);
+      if (!wc) throw new Error("Missing frame tab");
+      const win = BrowserWindow.getAllWindows().find((window) => !window.getParentWindow());
+      win?.focus();
+      wc.focus();
+      wc.sendInputEvent({ type: "keyDown", keyCode: "L", modifiers: ["control", "shift"] });
+      wc.sendInputEvent({ type: "keyUp", keyCode: "L", modifiers: ["control", "shift"] });
+    }, framesTarget.webContentsId);
+    await expect(nested.getByLabel("Password")).toHaveValue("command-fixture");
+    await expect(
+      framesPage.frameLocator('iframe[src*="localhost"]').getByLabel("Password"),
+    ).toHaveValue("");
+    await app.command("extensions:open-popup", { extensionId });
+    const framePopup = await app.page(
+      await app.target(
+        (target) =>
+          target.url.startsWith("chrome-extension:") && target.url.endsWith("/popup.html"),
+      ),
+    );
+    const denied = await framePopup.evaluate(async (tabId) => {
+      const api = (
+        globalThis as unknown as {
+          chrome: {
+            webNavigation: {
+              getAllFrames(options: { tabId: number }): Promise<{ frameId: number; url: string }[]>;
+            };
+            scripting: {
+              executeScript(options: {
+                target: { tabId: number; frameIds: number[] };
+                func: () => void;
+              }): Promise<unknown>;
+            };
+          };
+        }
+      ).chrome;
+      const frame = (await api.webNavigation.getAllFrames({ tabId })).find((frame) =>
+        frame.url.includes("localhost"),
+      );
+      if (!frame) throw new Error("Missing denied fixture frame");
+      try {
+        await api.scripting.executeScript({
+          target: { tabId, frameIds: [frame.frameId] },
+          func: () => {
+            document
+              .querySelector<HTMLInputElement>("#password")
+              ?.setAttribute("value", "forbidden");
+          },
+        });
+        return false;
+      } catch {
+        return true;
+      }
+    }, framesTarget.webContentsId);
+    expect(denied).toBe(true);
+    await expect(
+      framesPage.frameLocator('iframe[src*="localhost"]').getByLabel("Password"),
+    ).toHaveValue("");
+    await framePopup.close();
     await expect(first.getByLabel("Username")).toHaveValue("first");
     await app.command("extensions:open-popup", { extensionId: restrictedId });
     const restricted = await app.page(
