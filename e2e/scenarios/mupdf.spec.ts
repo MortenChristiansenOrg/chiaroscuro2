@@ -97,3 +97,34 @@ test("MuPDF opens legacy engine preferences with selectable text, search and ind
     await site.close();
   }
 });
+
+test("MuPDF retains browser authentication after interception and restart", async ({
+  appSession: session,
+}) => {
+  test.setTimeout(60_000);
+  const cookies: string[] = [];
+  const site = await startSite((request) => {
+    if (request.url === "/private-document") cookies.push(request.headers.cookie ?? "");
+  });
+  try {
+    const parent = await VerificationPage.navigate(session, `${site.url}/pdf-login`);
+    await parent.page.getByRole("link", { name: "Read private document", exact: true }).click();
+    await expect(session.shell.locator("canvas").first()).toBeVisible();
+    await expect(
+      session.shell.getByText("Chiaroscuro verification PDF", { exact: true }),
+    ).toBeVisible();
+    expect(cookies.length).toBeGreaterThanOrEqual(2);
+    expect(cookies.every((cookie) => cookie.includes("pdf-session=verified"))).toBe(true);
+    const beforeRestart = cookies.length;
+    await session.restart();
+    await expect(session.shell.locator("canvas").first()).toBeVisible();
+    await expect(
+      session.shell.getByText("Chiaroscuro verification PDF", { exact: true }),
+    ).toBeVisible();
+    expect(cookies.length).toBeGreaterThan(beforeRestart);
+    expect(cookies.every((cookie) => cookie.includes("pdf-session=verified"))).toBe(true);
+    expect((await session.capture("mupdf-authenticated")).status).toBe("complete");
+  } finally {
+    await site.close();
+  }
+});

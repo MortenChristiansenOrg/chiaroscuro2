@@ -53,13 +53,13 @@ function setup() {
 
 describe("pdf-reader commands", () => {
   it("restores zoom by document identity after feature recreation", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => new Response("%PDF-1.4 test document")),
+    const { commands, deps, dataStore } = setup();
+    vi.mocked(deps.platform.fetchBytes).mockResolvedValue(
+      new TextEncoder().encode("%PDF-1.4 test document"),
     );
     try {
-      const { commands, deps, dataStore } = setup();
       const pdf = await commands.send(PDF_READER_FETCH, { url: "https://fixture.test/sample.pdf" });
+      expect(deps.platform.fetchBytes).toHaveBeenCalledWith("https://fixture.test/sample.pdf");
       expect(pdf.zoom).toBe(1);
       const pdfKey = `${pdf.filename}:${pdf.hash}`;
       await commands.send(PDF_READER_SET_ZOOM, { pdfKey, zoom: 1.25 });
@@ -81,7 +81,7 @@ describe("pdf-reader commands", () => {
         (await restored.send(PDF_READER_FETCH, { url: "https://fixture.test/sample.pdf" })).zoom,
       ).toBe(1.25);
     } finally {
-      vi.unstubAllGlobals();
+      feature.teardown?.();
     }
   });
 

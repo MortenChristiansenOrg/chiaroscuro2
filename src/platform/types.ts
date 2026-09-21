@@ -142,6 +142,8 @@ export interface Platform {
   showOpenDialog(options: { title?: string; properties?: string[] }): Promise<string[]>;
 
   // Network
+  /** Fetch bytes using the persistent session shared by browser tabs, including cookies. */
+  fetchBytes(url: string): Promise<Uint8Array>;
   fetchAsDataUrl(url: string): Promise<string | undefined>;
 
   // Window-open interception (target="_blank", window.open)

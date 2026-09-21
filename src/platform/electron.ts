@@ -1535,6 +1535,13 @@ export class ElectronPlatform implements Platform {
 
   // ── Network ─────────────────────────────────────────────────────
 
+  async fetchBytes(url: string): Promise<Uint8Array> {
+    // All browser tabs use defaultSession; it survives source-tab closure and restarts.
+    const response = await session.defaultSession.fetch(url, { credentials: "include" });
+    if (!response.ok) throw new Error(`Failed to fetch document: ${response.status}`);
+    return new Uint8Array(await response.arrayBuffer());
+  }
+
   async fetchAsDataUrl(url: string): Promise<string | undefined> {
     try {
       const res = await net.fetch(url);

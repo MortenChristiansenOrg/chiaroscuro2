@@ -67,6 +67,7 @@ export function createMockPlatform(overrides: Partial<Platform> = {}): Platform 
     onDownload: vi.fn(() => () => {}),
     getDesktopPath: vi.fn(() => "/mock/desktop"),
     showOpenDialog: vi.fn(async () => []),
+    fetchBytes: vi.fn(async () => new Uint8Array()),
     fetchAsDataUrl: vi.fn(async () => undefined),
     onPermissionRequest: vi.fn(),
     onPermissionCheck: vi.fn(),

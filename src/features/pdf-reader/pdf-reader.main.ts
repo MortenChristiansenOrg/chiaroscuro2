@@ -67,16 +67,12 @@ function computeHash(data: Buffer | Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex").slice(0, 16);
 }
 
-async function fetchPdfData(url: string): Promise<Buffer> {
+async function fetchPdfData(url: string, platform: Platform): Promise<Buffer> {
   if (url.startsWith("file://") || url.startsWith("file:\\")) {
     const filePath = fileURLToPath(url);
     return readFile(filePath);
   }
-  // HTTP(S) fetch
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`Failed to fetch PDF: ${response.status}`);
-  const arrayBuffer = await response.arrayBuffer();
-  return Buffer.from(arrayBuffer);
+  return Buffer.from(await platform.fetchBytes(url));
 }
 
 export default defineFeature<Deps>({
@@ -127,7 +123,7 @@ export default defineFeature<Deps>({
     // ── PDF data fetching ─────────────────────────────────────────
 
     commands.handle(PDF_READER_FETCH, async ({ url }) => {
-      const data = await fetchPdfData(url);
+      const data = await fetchPdfData(url, platform);
       const hash = computeHash(data);
       const filename = extractFilename(url);
       const savedZoom = await dataStore.getSetting<number>(`pdf-zoom:${filename}:${hash}`);
