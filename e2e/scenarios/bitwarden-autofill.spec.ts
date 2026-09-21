@@ -12,13 +12,14 @@ const extensionDirectory = process.env.BITWARDEN_TEST_EXTENSION;
 const certificate = process.env.BITWARDEN_TEST_CERT;
 const email = "extension-test@example.test";
 const password = "Disposable extension test password 2026!";
+/** Generate the disposable fixture account's RFC test authenticator code. */
 function totp() {
   const counter = Buffer.alloc(8);
   counter.writeBigUInt64BE(BigInt(Math.floor(Date.now() / 30_000)));
   const mac = createHmac("sha1", Buffer.from("12345678901234567890")).update(counter).digest();
   return String((mac.readUInt32BE((mac[19] ?? 0) & 15) & 0x7fffffff) % 1_000_000).padStart(6, "0");
 }
-// Observe the entire autofill debounce window; an immediate empty-field assertion can race a fill.
+/** Observe the autofill settling window so empty-field checks cannot race a delayed fill. */
 async function remainsValue(field: Locator, expected = "") {
   const until = Date.now() + 2_000;
   let supplied = false;
@@ -33,6 +34,7 @@ async function remainsValue(field: Locator, expected = "") {
     .toBe(true);
 }
 
+/** Select the official closed-shadow menu through visible input, retaining screenshot evidence. */
 async function fillInline(page: Page, username: Locator, screenshot: string) {
   await username.click();
   await expect.poll(() => page.frames().some((f) => f.url().includes("menu-list.html"))).toBe(true);
