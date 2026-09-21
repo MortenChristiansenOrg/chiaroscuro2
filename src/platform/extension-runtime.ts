@@ -324,6 +324,7 @@ export class ExtensionRuntime {
     if (tab) this.emit("tabs.onActivated", [{ tabId: tab.contents.id, windowId: tab.window.id }]);
   }
 
+  /** Share native scripting frame IDs and real ancestry across lookup and navigation events. */
   private frameDetails(contents: WebContents, frame: WebFrameMain) {
     return {
       frameId: frame === contents.mainFrame ? 0 : frame.frameTreeNodeId,
@@ -338,6 +339,7 @@ export class ExtensionRuntime {
     };
   }
 
+  /** Publish a resolved frame's URL and identity; callers discard missing frame events. */
   private navigation(
     name: string,
     contents: WebContents,
@@ -726,6 +728,7 @@ export class ExtensionRuntime {
     }
   }
 
+  /** Reserve browser chords first, then resolve extension conflicts in stable ID order. */
   private commands() {
     const reserved = new Set((this.commandHost?.reserved() ?? []).map((key) => commandChord(key)));
     return session.defaultSession.extensions
@@ -744,6 +747,7 @@ export class ExtensionRuntime {
       );
   }
 
+  /** Worker startup can finish before asynchronous extension code registers its listener. */
   private waitForCommandListener(host: Host): Promise<void> {
     if (this.commandListeners.has(host)) return Promise.resolve();
     return new Promise((resolve, reject) => {
@@ -767,6 +771,7 @@ export class ExtensionRuntime {
     });
   }
 
+  /** Keep action shortcuts and extension unlock requests on the existing native popup host. */
   private openAction(extension: Electron.Extension) {
     const popup = (extension.manifest as { action?: { default_popup?: string } }).action
       ?.default_popup;

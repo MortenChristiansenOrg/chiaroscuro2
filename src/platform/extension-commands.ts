@@ -33,6 +33,7 @@ export function commandChord(shortcut: string, platform = process.platform): str
   return [...modifiers].sort().concat(key).join("+");
 }
 
+/** Resolve the platform override, preserving Chrome's special Ctrl/MacCtrl semantics. */
 export function suggestedShortcut(command: ExtensionCommand, platform = process.platform): string {
   const keys = command.suggested_key;
   const shortcut =
@@ -45,6 +46,7 @@ export function suggestedShortcut(command: ExtensionCommand, platform = process.
     : shortcut;
 }
 
+/** Normalize native key input without losing shifted digits or extra modifiers. */
 export function inputChord(input: Input): string | undefined {
   // Shift+9 is reported as '(' on many layouts. Chrome commands use the digit key.
   const key = /^Digit[0-9]$/.test(input.code) ? input.code.slice(5) : input.key;
