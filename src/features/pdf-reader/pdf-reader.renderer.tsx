@@ -160,7 +160,7 @@ export default function PdfReaderPage({ params }: BuiltInPageProps) {
         const key = `${filename}:${hash}`;
         setPdfKey(key);
 
-        const { loadPdfDocument } = await import("./backends/pdfjs-backend");
+        const { loadPdfDocument } = await import("./backends/mupdf-backend");
         if (cancelled) return;
 
         const data = base64ToUint8Array(dataBase64);

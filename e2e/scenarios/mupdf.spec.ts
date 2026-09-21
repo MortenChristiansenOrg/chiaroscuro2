@@ -5,26 +5,26 @@ import { expect, test } from "../fixtures/electron-app";
 import { VerificationPage } from "../pages/verification.page";
 
 for (const link of ["Read extensionless document", "Read redirected document"]) {
-  test(`PDF response opens in the custom PDF.js reader: ${link}`, async ({
+  test(`PDF response opens in the custom MuPDF reader: ${link}`, async ({
     appSession: session,
   }) => {
     const site = await startSite();
     try {
-      const parent = await VerificationPage.navigate(session, `${site.url}/pdfjs`);
+      const parent = await VerificationPage.navigate(session, `${site.url}/mupdf`);
       await parent.page.getByRole("link", { name: link, exact: true }).click();
       await expect(session.shell.locator("canvas").first()).toBeVisible();
       await expect(
         session.shell.getByText("Chiaroscuro verification PDF", { exact: true }),
       ).toBeVisible();
       await expect(session.shell.getByText("Fixture outline", { exact: true })).toBeVisible();
-      expect((await session.capture("pdfjs-response")).status).toBe("complete");
+      expect((await session.capture("mupdf-response")).status).toBe("complete");
     } finally {
       await site.close();
     }
   });
 }
 
-test("PDF.js opens legacy engine preferences with selectable text, search and index", async ({
+test("MuPDF opens legacy engine preferences with selectable text, search and index", async ({
   appSession: session,
 }) => {
   test.setTimeout(60_000);
@@ -33,14 +33,14 @@ test("PDF.js opens legacy engine preferences with selectable text, search and in
     await session.stop();
     const settingsPath = path.join(session.profile, "settings.json");
     const settings = JSON.parse(await fs.readFile(settingsPath, "utf8").catch(() => "{}"));
-    await fs.writeFile(settingsPath, JSON.stringify({ ...settings, "pdf-backend": "mupdf" }));
+    await fs.writeFile(settingsPath, JSON.stringify({ ...settings, "pdf-backend": "pdfjs" }));
     await session.launch();
     await session.command("settings:open");
     await expect(session.shell.getByRole("heading", { name: "Search" })).toBeVisible();
     await expect(session.shell.getByText("PDF Rendering Backend", { exact: true })).toHaveCount(0);
     await session.capture("settings-without-engine-selector");
 
-    const parent = await VerificationPage.navigate(session, `${site.url}/pdfjs`);
+    const parent = await VerificationPage.navigate(session, `${site.url}/mupdf`);
     await parent.pdf.click();
     await expect(session.shell.locator("canvas").first()).toBeVisible();
     const text = session.shell.getByText("Chiaroscuro verification PDF", { exact: true });
@@ -92,7 +92,7 @@ test("PDF.js opens legacy engine preferences with selectable text, search and in
           }),
       )
       .toBe(true);
-    expect((await session.capture("pdfjs-search-index")).status).toBe("complete");
+    expect((await session.capture("mupdf-search-index")).status).toBe("complete");
   } finally {
     await site.close();
   }

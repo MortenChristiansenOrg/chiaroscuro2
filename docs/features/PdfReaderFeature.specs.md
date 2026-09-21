@@ -2,11 +2,11 @@
 
 ## Overview
 
-Custom PDF reader replacing Chromium's built-in PDF viewer. Uses PDF.js as its sole rendering engine. Provides a custom index/outline sidebar that users can edit and extend, stored by PDF name + content hash for portability. Optimized for large, graphics-heavy PDFs.
+Custom PDF reader replacing Chromium's built-in PDF viewer. Uses MuPDF as its sole rendering engine. Provides a custom index/outline sidebar that users can edit and extend, stored by PDF name + content hash for portability. Optimized for large, graphics-heavy PDFs.
 
 ## Terminology
 
-- **PDF backend**: The rendering engine used to display PDF pages (PDF.js).
+- **PDF backend**: The rendering engine used to display PDF pages (MuPDF).
 - **Custom index**: A user-editable table of contents for a PDF, initially populated from the PDF's built-in outline.
 - **PDF hash**: A lightweight hash computed from the first 64KB + file size, used with the filename to identify a PDF across locations.
 - **Page viewport**: The visible area showing rendered PDF pages with virtual scrolling.
@@ -15,7 +15,7 @@ Custom PDF reader replacing Chromium's built-in PDF viewer. Uses PDF.js as its s
 
 - All PDFs (local files and remote URLs) must be intercepted and rendered using the custom reader instead of Chromium's built-in viewer.
 - Remote PDF detection also uses the main-frame `application/pdf` response type, including URLs without a `.pdf` extension and redirects. Response-based detection ignores attachment downloads and embedded responses.
-- PDF.js is the sole engine. Legacy `pdf-backend` preferences are ignored, including saved experimental-engine selections.
+- MuPDF is the sole engine. Legacy `pdf-backend` preferences are ignored, including saved PDF.js selections.
 - PDF pages render to `<canvas>` elements with virtual scrolling (only visible pages + buffer rendered).
 - Text selection and copy must work on rendered pages.
 - In-PDF search (Ctrl+F integration) must highlight matches and navigate between them.
@@ -25,7 +25,7 @@ Custom PDF reader replacing Chromium's built-in PDF viewer. Uses PDF.js as its s
 - Users can rename, reorder, delete, and add index entries. Each entry has a label and page number.
 - Custom index data is persisted locally, keyed by `{filename}:{hash}`.
 - Moving or copying a PDF preserves the custom index (same content = same hash).
-- Performance: lazy page rendering, off-screen page cleanup, web worker for parsing.
+- Performance: lazy page rendering, off-screen page cleanup, and explicit release of temporary WASM page, text and pixmap allocations.
 
 ## Workflows
 
@@ -33,7 +33,7 @@ Custom PDF reader replacing Chromium's built-in PDF viewer. Uses PDF.js as its s
 
 - Navigate to a PDF URL or open a local PDF file.
 - The main process intercepts the PDF response/navigation.
-- The PDF data is loaded and passed to the PDF.js.
+- The PDF data is loaded and passed to MuPDF.
 - Pages render in a scrollable viewport with the index sidebar visible.
 
 ### Edit custom index
@@ -79,7 +79,7 @@ Custom PDF reader replacing Chromium's built-in PDF viewer. Uses PDF.js as its s
 ### Cross-feature interactions
 
 - **Tabs**: PDF reader renders as a built-in page when a PDF tab is active. The tab title shows the PDF filename.
-- **Settings**: Legacy `pdf-backend` values are ignored. All documents use PDF.js.
+- **Settings**: Legacy `pdf-backend` values are ignored. All documents use MuPDF.
 - **Find Text**: PDF reader handles search internally since the content is canvas-based, not DOM text. The existing find-text feature is suppressed for PDF tabs.
 - **Zoom**: PDF reader manages its own zoom, independent of the tab zoom feature.
 
@@ -111,7 +111,7 @@ Custom PDF reader replacing Chromium's built-in PDF viewer. Uses PDF.js as its s
 ## Resolved Decisions
 
 - Index entries are flat (no nesting), even if the PDF outline is hierarchical.
-- Search and zoom use native functionality from the rendering backend (PDF.js APIs).
+- Search and zoom use native functionality from the rendering backend (MuPDF APIs).
 - No annotation support planned.
 
 ## Unresolved Issues
