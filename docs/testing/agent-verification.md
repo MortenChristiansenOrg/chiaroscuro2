@@ -16,6 +16,12 @@ bun run e2e                                # existing fast Ozone headless suite
 bun run verify:app:win                      # from WSL, run natively on Windows
 ```
 
+To exercise an unpacked release executable and its `app.asar`, set
+`CHIAROSCURO_PACKAGED_EXECUTABLE` to its absolute path when running `verify:app`.
+The same isolated profile and scenarios are used, without passing the local
+`out/main/index.js` entry point. For PDF engine regressions, run
+`bun run verify:app e2e/scenarios/mupdf.spec.ts` with that variable set.
+
 Linux's full suite uses Xvfb at 1920×1080 and Openbox. Install `xvfb`, `xauth` and
 `openbox` and `xcompmgr`; the launcher checks window-manager readiness and saves its log in
 `test-results/desktop.log`. An existing desktop can be used with

@@ -93,7 +93,7 @@ export default defineFeature<Deps>({
     const debugServer = await dataStore.getSetting<Settings["debugServer"]>("debug-server");
     if (debugServer) currentSettings.debugServer = debugServer;
 
-    // Legacy pdf-backend settings are intentionally ignored: PDF.js is the sole engine.
+    // Legacy pdf-backend settings are intentionally ignored: MuPDF is the sole engine.
 
     events.emit(SETTINGS_CHANGED, { settings: { ...currentSettings } });
   },

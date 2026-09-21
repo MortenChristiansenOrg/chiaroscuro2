@@ -41,6 +41,7 @@ export class AppSession {
     this.profile ||= await fs.mkdtemp(path.join(os.tmpdir(), "chiaroscuro-verify-"));
     this.generation++;
     this.pages.clear();
+    const packagedExecutable = process.env.CHIAROSCURO_PACKAGED_EXECUTABLE;
     const args = [
       ...(this.headless
         ? [
@@ -51,12 +52,16 @@ export class AppSession {
           ]
         : []),
       ...this.launchArgs,
-      path.resolve("out/main/index.js"),
+      ...(packagedExecutable ? [] : [path.resolve("out/main/index.js")]),
     ];
     this.record("launch", { args, profile: this.profile });
     try {
-      await fs.access("out/main/index.js").catch(() => {
-        throw new Error("Missing build. Run bun run build and bun run setup:electron first.");
+      await fs.access(packagedExecutable ?? "out/main/index.js").catch(() => {
+        throw new Error(
+          packagedExecutable
+            ? `Missing packaged executable: ${packagedExecutable}`
+            : "Missing build. Run bun run build and bun run setup:electron first.",
+        );
       });
       const env: NodeJS.ProcessEnv = {
         ...process.env,
@@ -69,6 +74,7 @@ export class AppSession {
       delete env.ELECTRON_RENDERER_URL;
       delete env.ELECTRON_RUN_AS_NODE;
       this.app = await electron.launch({
+        executablePath: packagedExecutable,
         args,
         chromiumSandbox: this.chromiumSandbox,
         env: Object.fromEntries(

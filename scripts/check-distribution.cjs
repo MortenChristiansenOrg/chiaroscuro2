@@ -17,6 +17,7 @@ exports.default = async function checkDistribution(context) {
     "react-error-boundary",
     "zustand",
     "pdfjs-dist",
+    "mupdf",
     "@fortawesome/fontawesome-free",
     "@napi-rs/canvas",
   ]) {
@@ -30,8 +31,16 @@ exports.default = async function checkDistribution(context) {
     "Native PDF canvas binaries must not ship with the browser renderer",
   );
   assert(
-    files.some((file) => /\/out\/renderer\/assets\/pdf\.worker.*\.mjs$/.test(file)),
-    "Missing bundled PDF worker",
+    files.some((file) => /\/out\/renderer\/assets\/mupdf-wasm.*\.wasm$/.test(file)),
+    "Missing bundled MuPDF WASM engine",
+  );
+  assert(
+    !files.some((file) => /\/out\/renderer\/assets\/(pdfjs-backend|pdf\.worker)/.test(file)),
+    "Obsolete PDF.js assets must not ship with the MuPDF reader",
+  );
+  assert(
+    files.some((file) => file.startsWith("/resources/bundled-licenses/mupdf/")),
+    "Missing MuPDF license notice",
   );
   assert(
     files.some((file) => file.endsWith(".woff2")),

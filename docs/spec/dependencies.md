@@ -32,7 +32,7 @@ and [lifecycle-script documentation](https://bun.com/docs/pm/lifecycle).
 - Electron 44.3.0: includes the native window display-mode persistence fix;
   adopted after it cleared the 24-hour release-age gate on September 9, 2026.
 - React 19, RxDB 17, Zustand 5, Zod 4, Tailwind CSS 4.
-- PDF rendering: PDF.js 6.
+- PDF rendering: MuPDF 1.28.1 (WebAssembly).
 - Build and validation: electron-builder 26, electron-vite 5, TypeScript 7,
   Biome 2, Vitest 5, and Playwright 1.63.
 - Vite stays on the latest compatible 7.x release, with `@vitejs/plugin-react` 5.x.
@@ -49,8 +49,8 @@ and [lifecycle-script documentation](https://bun.com/docs/pm/lifecycle).
 - `electron-builder` for packaging
 - Target: Windows only (NSIS installer)
 
-Renderer-only dependencies (React, Zustand, Font Awesome and PDF.js) belong in
-`devDependencies`: Vite emits their runtime code/fonts/PDF worker into
+Renderer-only dependencies (React, Zustand, Font Awesome and MuPDF) belong in
+`devDependencies`: Vite emits their runtime code, fonts and MuPDF WASM asset into
 `out/renderer`. Shipping their full npm trees duplicates those assets and pulls
 in unused native PDF canvas binaries. Their license notices are copied separately.
 RxDB remains a production dependency. Zod, yauzl and electron-updater also remain

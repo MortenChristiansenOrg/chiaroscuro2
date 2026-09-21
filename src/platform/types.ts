@@ -52,6 +52,8 @@ export interface Platform {
   navigateTab(tabId: TabId, url: string): Promise<void>;
   getTabUrl(tabId: TabId): string | undefined;
   getTabTitle(tabId: TabId): string | undefined;
+  /** Current main-frame PDF response, including URLs without a .pdf extension. */
+  getPdfResponseUrl(tabId: TabId): string | undefined;
   setTabBounds(tabId: TabId, bounds: Bounds): void;
   setTabBorderRadius(tabId: TabId, radius: number): void;
   setTabBackgroundColor(tabId: TabId, color: string): void;
@@ -140,6 +142,8 @@ export interface Platform {
   showOpenDialog(options: { title?: string; properties?: string[] }): Promise<string[]>;
 
   // Network
+  /** Fetch bytes using the persistent session shared by browser tabs, including cookies. */
+  fetchBytes(url: string): Promise<Uint8Array>;
   fetchAsDataUrl(url: string): Promise<string | undefined>;
 
   // Window-open interception (target="_blank", window.open)

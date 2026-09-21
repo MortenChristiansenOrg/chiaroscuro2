@@ -21,6 +21,7 @@ import { unpackedExtensionId } from "./extension-identity";
 import { migrateExtensionBootstrap } from "./extension-migration";
 import { ExtensionRuntime } from "./extension-runtime";
 import type { GithubSessionDiagnostics } from "./github-session-diagnostics";
+import { PdfResponses } from "./pdf-responses";
 import { checkPermission, matchesGrantedDevice } from "./permission-check";
 import { TabBoundsAnimation } from "./tab-bounds-animation";
 import { closeTabContents, createTabView } from "./tab-view";
@@ -372,6 +373,7 @@ export class ElectronPlatform implements Platform {
       ) => boolean)
     | undefined;
   private sessionsWithHandlers = new WeakSet<Electron.Session>();
+  private pdfResponses = new PdfResponses();
   private deviceSelectedCallback: ((deviceType: string, origin: string) => void) | undefined;
   // origin → Array<{deviceType, device}> for setDevicePermissionHandler
   private grantedDevices = new Map<string, Array<{ deviceType: string; device: unknown }>>();
@@ -697,6 +699,11 @@ export class ElectronPlatform implements Platform {
 
   getTabTitle(tabId: TabId): string | undefined {
     return this.views.get(tabId)?.webContents.getTitle() || undefined;
+  }
+
+  getPdfResponseUrl(tabId: TabId): string | undefined {
+    const contents = this.views.get(tabId)?.webContents;
+    return contents && !contents.isDestroyed() ? this.pdfResponses.getUrl(contents) : undefined;
   }
 
   setTabBounds(tabId: TabId, bounds: Bounds): void {
@@ -1528,6 +1535,13 @@ export class ElectronPlatform implements Platform {
 
   // ── Network ─────────────────────────────────────────────────────
 
+  async fetchBytes(url: string): Promise<Uint8Array> {
+    // All browser tabs use defaultSession; it survives source-tab closure and restarts.
+    const response = await session.defaultSession.fetch(url, { credentials: "include" });
+    if (!response.ok) throw new Error(`Failed to fetch document: ${response.status}`);
+    return new Uint8Array(await response.arrayBuffer());
+  }
+
   async fetchAsDataUrl(url: string): Promise<string | undefined> {
     try {
       const res = await net.fetch(url);
@@ -1645,6 +1659,7 @@ export class ElectronPlatform implements Platform {
     ses.setUserAgent(chromeIdentity(ses.getUserAgent()));
     this.installPermissionHandlers(ses);
     this.installDevicePermissionHandlers(ses);
+    this.pdfResponses.observe(ses);
     this.sessionsWithHandlers.add(ses);
     this.sessionDiagnostics?.observe(ses);
   }

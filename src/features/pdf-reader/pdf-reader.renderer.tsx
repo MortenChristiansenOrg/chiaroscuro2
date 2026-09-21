@@ -4,6 +4,7 @@ import type { PdfDocument, SearchMatch } from "./backends/types";
 import { IndexSidebar } from "./components/IndexSidebar";
 import { PdfToolbar } from "./components/PdfToolbar";
 import { PdfViewport } from "./components/PdfViewport";
+import { documentCache } from "./document-cache";
 import type { IndexEntry, PdfFetchResponse } from "./pdf-reader.shared";
 import { usePdfReaderStore } from "./pdf-reader.store";
 
@@ -12,9 +13,6 @@ const ZOOM_MIN = 0.25;
 const ZOOM_MAX = 5;
 const DEFAULT_ZOOM = 1;
 const SEARCH_YIELD_PAGE_INTERVAL = 1;
-
-// Cache loaded PDF documents so tab switches don't re-fetch/re-parse
-const documentCache = new Map<string, { document: PdfDocument; pdfKey: string }>();
 
 interface PdfViewState {
   currentPage: number;
@@ -132,47 +130,31 @@ export default function PdfReaderPage({ params }: BuiltInPageProps) {
 
     const url = pdfUrl;
 
-    // Check cache first
-    const cached = documentCache.get(url);
-    if (cached) {
-      documentRef.current = cached.document;
-      setDocument(cached.document);
-      setPdfKey(cached.pdfKey);
-      setLoading(false);
-      return;
-    }
-
     let cancelled = false;
+    const lease = documentCache.acquire(url, async () => {
+      const response = (await window.chiaroscuro.sendCommand("pdf-reader:fetch", {
+        url,
+      })) as PdfFetchResponse;
+      const { dataBase64, hash, filename, zoom: savedZoom } = response;
+      const { loadPdfDocument } = await import("./backends/mupdf-backend");
+      return {
+        document: await loadPdfDocument(base64ToUint8Array(dataBase64)),
+        pdfKey: `${filename}:${hash}`,
+        savedZoom,
+      };
+    });
 
     async function load() {
       try {
         setLoading(true);
         setError(null);
-
-        // Fetch PDF data from main process
-        const response = await window.chiaroscuro.sendCommand("pdf-reader:fetch", { url });
+        const { document: doc, pdfKey: key, savedZoom } = await lease.value;
         if (cancelled) return;
-
-        const { dataBase64, hash, filename, zoom: savedZoom } = response as PdfFetchResponse;
-        updateViewState(url, { zoom: savedZoom });
-        setZoom(savedZoom);
-
-        const key = `${filename}:${hash}`;
+        if (!viewStateCache.has(url)) updateViewState(url, { zoom: savedZoom });
+        setZoom(getViewState(url).zoom);
         setPdfKey(key);
-
-        const { loadPdfDocument } = await import("./backends/pdfjs-backend");
-        if (cancelled) return;
-
-        const data = base64ToUint8Array(dataBase64);
-        const doc = await loadPdfDocument(data);
-        if (cancelled) {
-          await doc.destroy();
-          return;
-        }
-
         documentRef.current = doc;
         setDocument(doc);
-        documentCache.set(url, { document: doc, pdfKey: key });
 
         // Load existing index or populate from outline
         const existingIndex = (await window.chiaroscuro.sendCommand("pdf-reader:get-index", {
@@ -213,8 +195,9 @@ export default function PdfReaderPage({ params }: BuiltInPageProps) {
 
     return () => {
       cancelled = true;
-      // Don't destroy — document stays in cache for tab re-activation
+      searchRunIdRef.current++;
       documentRef.current = null;
+      lease.release();
     };
   }, [pdfUrl]);
 

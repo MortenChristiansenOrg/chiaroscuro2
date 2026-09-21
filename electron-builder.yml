@@ -18,7 +18,7 @@ files:
   - from: node_modules
     to: resources/bundled-licenses
     filter:
-      - "{react,react-dom,react-error-boundary,zustand,pdfjs-dist,scheduler,@fortawesome/fontawesome-free}/LICENSE*"
+      - "{react,react-dom,react-error-boundary,zustand,mupdf,scheduler,@fortawesome/fontawesome-free}/LICENSE*"
 
 # Windows-only — no macOS or Linux targets
 win:

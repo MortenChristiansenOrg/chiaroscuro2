@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { typedOnEvent } from "../../shared/typed-on-event";
+import { documentCache } from "./document-cache";
 import type { IndexEntry, PdfReaderEvents } from "./pdf-reader.shared";
 import { PDF_READER_INDEX_CHANGED } from "./pdf-reader.shared";
 
@@ -30,5 +31,6 @@ export function subscribeToEvents(
 
   return () => {
     for (const unsub of unsubs) unsub();
+    documentCache.clear();
   };
 }
