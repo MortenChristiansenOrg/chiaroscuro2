@@ -42,3 +42,19 @@ api.runtime.onMessage.addListener((message, _sender, respond) => {
   })().catch((error) => respond({ error: String(error), stage, queriedTab }));
   return true;
 });
+
+// Exercise browser command delivery through native scripting, including child frames.
+api.commands.onCommand.addListener(async (command, tab) => {
+  if (command !== "fill" || !(await api.storage.session.get("unlock")).unlock) return;
+  const frames = await api.webNavigation.getAllFrames({ tabId: tab.id });
+  for (const frame of frames) {
+    if (!frame.url.startsWith("http://127.0.0.1:")) continue;
+    await api.scripting.executeScript({
+      target: { tabId: tab.id, frameIds: [frame.frameId] },
+      func: () => {
+        const field = document.querySelector("#password");
+        if (field) field.value = "command-fixture";
+      },
+    });
+  }
+});

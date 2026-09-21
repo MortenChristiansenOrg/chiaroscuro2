@@ -1,4 +1,4 @@
-# Extensions: Bitwarden password support
+# Extensions: Bitwarden password support and autofill
 
 ## Release boundary
 
@@ -33,9 +33,16 @@ Supported workflows are password/authenticator-code sign-in to cloud and self-ho
 - Optional permissions are denied unless already granted; required new grants use the management page. Managed policy storage is empty and read-only.
 - Future Bitwarden releases can require maintenance. Visible failures, disable/removal and retry are part of this release, not deferred features.
 
-## Deferred
+## Inline autofill and keyboard commands
 
-Inline suggestions, automatic filling on page load and extension keyboard shortcuts are tracked in [issue #64](https://github.com/MortenChristiansenOrg/chiaroscuro2/issues/64).
+- Bitwarden owns inline suggestions, login matching, locked-vault prompts and optional page-load filling. Enable these in Bitwarden's Autofill settings; the browser never turns them on or stores/copies credentials itself.
+- Keep Chromium's native content scripts, messaging, sandboxed inline-menu frames and scripting permission enforcement. Navigation events and frame lookup use matching native frame IDs and actual parent relationships, including nested frames and in-page navigation. Detached/missing frames are never substituted with the top-level site.
+- Resolve extension manifest command suggestions for the running platform. Bitwarden's fill shortcut is `Ctrl+Shift+L` on Windows/Linux; its popup shortcut is `Ctrl+Shift+Y` on Windows and `Ctrl+Shift+U` on Linux. Commands remain local to the focused browser, even if a manifest requests a global shortcut.
+- Browser shortcuts take priority. For duplicate extension shortcuts, the first runtime extension ID in sorted order wins. `commands.getAll` reports unassigned/conflicting shortcuts as empty. Disabling/unloading an extension removes its shortcuts immediately. Shortcut customization and Chrome's `chrome://extensions/shortcuts` page are not implemented.
+- Wake MV3 workers and wait for command-listener registration. Drop queued commands if the selected tab, document navigation or window focus changes during startup. Ignore key repeats; route `_execute_action` and `action.openPopup` to the existing native popup.
+- Acceptance covers inline selection, shortcuts, opt-in page-load filling, same-origin embedded forms, absence of credentials on unrelated hosts/cross-origin frames, and restart/locked-vault/unlock behavior. No new browser UI is added.
+
+## Deferred
 
 Other exclusions: general Chrome extension compatibility, alternate stores/sideloading, passkeys, native messaging/biometrics, enterprise SSO, side panels/browser overrides/themes, browser-level extension settings sync and a custom Bitwarden client.
 

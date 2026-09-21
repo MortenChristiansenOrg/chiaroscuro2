@@ -12,6 +12,12 @@ import {
 } from "electron";
 import { z } from "zod";
 import type { TabId } from "../shared/types";
+import {
+  commandChord,
+  type ExtensionCommand,
+  inputChord,
+  suggestedShortcut,
+} from "./extension-commands";
 import { matchesUrl } from "./extension-match-pattern";
 import type { ExtensionTabActions } from "./types";
 
@@ -38,6 +44,7 @@ type ExtensionMenu = z.infer<typeof menuSchema>;
 export class ExtensionRuntime {
   private tabs = new Map<number, Tab>();
   private activeId: number | undefined;
+  private navigationVersions = new WeakMap<WebContents, number>();
   private popupContents = new Set<number>();
   private contextIds = new WeakMap<WebFrameMain, string>();
 
@@ -106,11 +113,17 @@ export class ExtensionRuntime {
   private notifications = new Map<string, Notification>();
   private contextParams = new Map<number, Electron.ContextMenuParams>();
   private workerHandlers = new WeakSet<ServiceWorkerMain>();
+  private commandListeners = new WeakSet<Host>();
+  private commandWaiters = new Map<Host, Set<() => void>>();
   private extensionWindows = new Map<number, { extensionId: string; window: BrowserWindow }>();
 
   constructor(
     private readonly actions: ExtensionTabActions,
     private readonly getWindow: () => BrowserWindow | undefined,
+    private readonly commandHost?: {
+      reserved(): string[];
+      openPopup(extensionId: string, popup: string): void;
+    },
   ) {
     const ses = session.defaultSession;
     const caller = (event: Electron.IpcMainInvokeEvent | Electron.IpcMainEvent): Caller => {
@@ -133,8 +146,9 @@ export class ExtensionRuntime {
     ses.serviceWorkers.on("running-status-changed", (details) => {
       if (details.runningStatus !== "starting") return;
       const worker = ses.serviceWorkers.getWorkerFromVersionID(details.versionId);
-      if (!worker?.scope.startsWith("chrome-extension://") || this.workerHandlers.has(worker))
-        return;
+      if (!worker?.scope.startsWith("chrome-extension://")) return;
+      this.commandListeners.delete(worker);
+      if (this.workerHandlers.has(worker)) return;
       this.workerHandlers.add(worker);
       worker.ipc.handle("extension-browser:call", (_event, method, args) =>
         this.reply(() => this.dispatch(this.identify(worker.scope, worker), method, args)),
@@ -249,39 +263,48 @@ export class ExtensionRuntime {
         { url: contents.getURL(), status: contents.isLoading() ? "loading" : "complete" },
         this.tabDetails(contents.id),
       ]);
+    contents.on("did-start-navigation", (_event, _url, inPlace) => {
+      if (!inPlace)
+        this.navigationVersions.set(contents, (this.navigationVersions.get(contents) ?? 0) + 1);
+    });
     contents.on("did-start-loading", updated);
     contents.on("did-stop-loading", updated);
     contents.on("page-title-updated", updated);
     contents.on("context-menu", (_event, params) => this.contextParams.set(contents.id, params));
-    contents.on("did-frame-navigate", (_event, url, _code, _status, main, processId, routingId) => {
-      const frame = contents.mainFrame.framesInSubtree.find(
+    const findFrame = (processId: number, routingId: number) =>
+      contents.mainFrame.framesInSubtree.find(
         (frame) => frame.processId === processId && frame.routingId === routingId,
       );
-      this.navigation("onCommitted", contents.id, url, main ? 0 : (frame?.frameTreeNodeId ?? -1));
+    const watchFrame = (frame: WebFrameMain) => {
+      frame.on("dom-ready", () => {
+        if (!contents.isDestroyed() && !frame.detached)
+          this.navigation("onDOMContentLoaded", contents, frame);
+      });
+    };
+    for (const frame of contents.mainFrame.framesInSubtree) watchFrame(frame);
+    contents.on("frame-created", (_event, { frame }) => {
+      if (frame) watchFrame(frame);
     });
-    contents.on("dom-ready", () =>
-      this.navigation("onDOMContentLoaded", contents.id, contents.getURL(), 0),
+    contents.on(
+      "did-frame-navigate",
+      (_event, _url, _code, _status, _main, processId, routingId) => {
+        const frame = findFrame(processId, routingId);
+        if (frame) this.navigation("onCommitted", contents, frame);
+      },
     );
-    contents.on("did-frame-finish-load", (_event, main, processId, routingId) => {
-      const frame = contents.mainFrame.framesInSubtree.find(
-        (frame) => frame.processId === processId && frame.routingId === routingId,
-      );
-      this.navigation(
-        "onCompleted",
-        contents.id,
-        frame?.url ?? contents.getURL(),
-        main ? 0 : (frame?.frameTreeNodeId ?? -1),
-      );
+    contents.on("did-frame-finish-load", (_event, _main, processId, routingId) => {
+      const frame = findFrame(processId, routingId);
+      if (frame) this.navigation("onCompleted", contents, frame);
     });
-    contents.on("did-navigate-in-page", (_event, url, main) => {
-      if (main) {
-        updated();
-        this.navigation("onHistoryStateUpdated", contents.id, url, 0);
-      }
+    contents.on("did-navigate-in-page", (_event, _url, main, processId, routingId) => {
+      if (main) updated();
+      const frame = findFrame(processId, routingId);
+      if (frame) this.navigation("onHistoryStateUpdated", contents, frame);
     });
-    contents.on("did-fail-load", (_event, _code, description, url, main) =>
-      this.navigation("onErrorOccurred", contents.id, url, main ? 0 : -1, description),
-    );
+    contents.on("did-fail-load", (_event, _code, description, url, _main, processId, routingId) => {
+      const frame = findFrame(processId, routingId);
+      if (frame) this.navigation("onErrorOccurred", contents, frame, description, url);
+    });
     contents.once("destroyed", () => {
       this.tabs.delete(contents.id);
       this.contextParams.delete(contents.id);
@@ -301,16 +324,36 @@ export class ExtensionRuntime {
     if (tab) this.emit("tabs.onActivated", [{ tabId: tab.contents.id, windowId: tab.window.id }]);
   }
 
-  private navigation(name: string, tabId: number, url: string, frameId: number, error?: string) {
+  private frameDetails(contents: WebContents, frame: WebFrameMain) {
+    return {
+      frameId: frame === contents.mainFrame ? 0 : frame.frameTreeNodeId,
+      parentFrameId:
+        frame === contents.mainFrame
+          ? -1
+          : frame.parent === contents.mainFrame
+            ? 0
+            : (frame.parent?.frameTreeNodeId ?? -1),
+      url: frame.url,
+      errorOccurred: false,
+    };
+  }
+
+  private navigation(
+    name: string,
+    contents: WebContents,
+    frame: WebFrameMain,
+    error?: string,
+    url = frame.url,
+  ) {
     this.emit(`webNavigation.${name}`, [
       {
-        tabId,
+        ...this.frameDetails(contents, frame),
+        tabId: contents.id,
         url,
-        frameId,
-        parentFrameId: frameId === 0 ? -1 : 0,
         timeStamp: Date.now(),
-        transitionType: "link",
-        transitionQualifiers: [],
+        ...(name === "onCommitted" || name === "onHistoryStateUpdated"
+          ? { transitionType: "link", transitionQualifiers: [] }
+          : {}),
         ...(error ? { error } : {}),
       },
     ]);
@@ -549,17 +592,9 @@ export class ExtensionRuntime {
           .object({ tabId: idSchema, frameId: z.number().int().optional() })
           .parse(args[0]);
         const wc = this.tab(data.tabId).contents;
-        const frames = wc.mainFrame.framesInSubtree.map((frame) => ({
-          frameId: frame === wc.mainFrame ? 0 : frame.frameTreeNodeId,
-          parentFrameId:
-            frame === wc.mainFrame
-              ? -1
-              : frame.parent === wc.mainFrame
-                ? 0
-                : (frame.parent?.frameTreeNodeId ?? -1),
-          url: frame.url,
-          errorOccurred: false,
-        }));
+        const frames = wc.mainFrame.framesInSubtree
+          .filter((frame) => !frame.detached)
+          .map((frame) => this.frameDetails(wc, frame));
         return name.endsWith("getFrame")
           ? (frames.find((frame) => frame.frameId === data.frameId) ?? null)
           : frames;
@@ -635,15 +670,20 @@ export class ExtensionRuntime {
         return { value: false, levelOfControl: "not_controllable" };
       case "privacy.set":
         throw new Error("This browser has no built-in autofill setting to change");
+      case "commands.listen":
+        if (z.boolean().parse(args[0])) {
+          this.commandListeners.add(caller.host);
+          for (const resolve of this.commandWaiters.get(caller.host) ?? []) resolve();
+        } else this.commandListeners.delete(caller.host);
+        return;
       case "commands.getAll":
-        return Object.entries(
-          (caller.extension.manifest as { commands?: Record<string, { description?: string }> })
-            .commands ?? {},
-        ).map(([name, details]) => ({
-          name,
-          description: details.description ?? "",
-          shortcut: "",
-        }));
+        return this.commands()
+          .filter((command) => command.extension.id === extId)
+          .map(({ name, description, shortcut }) => ({ name, description, shortcut }));
+      case "action.openPopup": {
+        this.openAction(caller.extension);
+        return;
+      }
       case "notifications.getPermissionLevel":
         return Notification.isSupported() ? "granted" : "denied";
       case "notifications.getAll":
@@ -684,6 +724,114 @@ export class ExtensionRuntime {
       default:
         throw new Error(`Unsupported extension browser API: ${name}`);
     }
+  }
+
+  private commands() {
+    const reserved = new Set((this.commandHost?.reserved() ?? []).map((key) => commandChord(key)));
+    return session.defaultSession.extensions
+      .getAllExtensions()
+      .sort((a, b) => a.id.localeCompare(b.id))
+      .flatMap((extension) =>
+        Object.entries(
+          (extension.manifest as { commands?: Record<string, ExtensionCommand> }).commands ?? {},
+        ).map(([name, details]) => {
+          let shortcut = suggestedShortcut(details);
+          const chord = commandChord(shortcut);
+          if (!chord || reserved.has(chord)) shortcut = "";
+          else reserved.add(chord);
+          return { extension, name, description: details.description ?? "", shortcut, chord };
+        }),
+      );
+  }
+
+  private waitForCommandListener(host: Host): Promise<void> {
+    if (this.commandListeners.has(host)) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const ready = () => {
+        cleanup();
+        resolve();
+      };
+      const timer = setTimeout(() => {
+        cleanup();
+        reject(new Error("Extension command listener unavailable"));
+      }, 5_000);
+      const cleanup = () => {
+        clearTimeout(timer);
+        const waiters = this.commandWaiters.get(host);
+        waiters?.delete(ready);
+        if (!waiters?.size) this.commandWaiters.delete(host);
+      };
+      const waiters = this.commandWaiters.get(host) ?? new Set();
+      waiters.add(ready);
+      this.commandWaiters.set(host, waiters);
+    });
+  }
+
+  private openAction(extension: Electron.Extension) {
+    const popup = (extension.manifest as { action?: { default_popup?: string } }).action
+      ?.default_popup;
+    if (!popup || !this.commandHost) throw new Error("Extension has no action popup");
+    this.commandHost.openPopup(extension.id, popup);
+  }
+
+  /** Called only after browser shortcuts, and only for the focused browser's content/shell. */
+  handleCommand(contents: WebContents, input: Electron.Input): boolean {
+    if (input.type !== "keyDown" || input.isAutoRepeat) return false;
+    const tab = this.activeId === undefined ? undefined : this.tabs.get(this.activeId);
+    const window = tab?.window ?? this.getWindow();
+    if (
+      !window ||
+      window.isDestroyed() ||
+      !window.isFocused() ||
+      (contents !== tab?.contents && contents !== window.webContents) ||
+      contents.isDestroyed()
+    )
+      return false;
+    const command = this.commands().find(
+      (command) => command.shortcut && command.chord === inputChord(input),
+    );
+    if (!command) return false;
+    if (command.name === "_execute_action") {
+      try {
+        this.openAction(command.extension);
+      } catch {
+        return false;
+      }
+    } else {
+      if (!tab) return false;
+      // Capture the selected document, never retarget a queued command after navigation/tab changes.
+      const frame = tab.contents.mainFrame;
+      const url = tab.contents.getURL();
+      const version = this.navigationVersions.get(tab.contents);
+      void (async () => {
+        const worker = (command.extension.manifest as { background?: { service_worker?: string } })
+          .background?.service_worker;
+        if (worker) {
+          const host = await session.defaultSession.serviceWorkers.startWorkerForScope(
+            `chrome-extension://${command.extension.id}/`,
+          );
+          await this.waitForCommandListener(host);
+        }
+        if (
+          this.activeId !== tab.contents.id ||
+          tab.contents.isDestroyed() ||
+          !tab.window.isFocused() ||
+          this.navigationVersions.get(tab.contents) !== version ||
+          tab.contents.mainFrame !== frame ||
+          tab.contents.getURL() !== url ||
+          !session.defaultSession.extensions.getExtension(command.extension.id)
+        )
+          return;
+        this.emit(
+          "commands.onCommand",
+          [command.name, this.visibleTab(this.tabDetails(tab.contents.id), command.extension)],
+          command.extension.id,
+        );
+      })().catch(() => {
+        /* A stopped or unloaded worker cannot receive commands. */
+      });
+    }
+    return true;
   }
 
   private navigationUrl(value: string, extension: Electron.Extension): string {

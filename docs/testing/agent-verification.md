@@ -278,3 +278,27 @@ profile and exercises review, cancellation, installation, disable/restart/enable
 and opening the login popup. No vault or account is needed. On Windows, set the
 environment variable in the Windows process running the scenario. The same file's
 built-in page identity/history scenario runs without network access in normal CI.
+
+### Inline autofill and command acceptance (#64)
+
+`e2e/scenarios/bitwarden-autofill.spec.ts` uses the same disposable account,
+`BITWARDEN_TEST_EXTENSION` and `BITWARDEN_TEST_CERT`. It starts its own form server
+on an ephemeral port, so only the Vaultwarden TLS endpoint at
+`https://localhost:18329` must already be running. Reset the seeded Alpha/Beta
+passwords before running it; the older lifecycle scenario edits Alpha.
+
+The scenario enables inline suggestions through Bitwarden's UI, selects its
+sandboxed inline suggestion with pointer input, sends the fill shortcut through
+Electron's native input path, checks that page-load filling stays off until enabled,
+and enables both the page-load switch and the default item setting. It checks two
+hosts, an embedded form, cross-origin/unmatched negative cases over the autofill
+settling window, restart locking, the shortcut's unlock popup and filling after unlock.
+`inline.png` captures the official menu; no replacement React component is involved.
+Run it with `bun run verify:app e2e/scenarios/bitwarden-autofill.spec.ts`.
+
+The normal CI extension scenario requires no vault or downloads. It checks assigned
+and conflicting shortcuts, native command delivery into nested frames, inaccessible
+host exclusion, storage lifetime and restart on Linux and native Windows. Unit tests
+cover modifier mapping, repeats/focus, delayed commands across same-URL navigation,
+nested parent IDs and detached-frame lookup. OS-global shortcut conflicts and
+arbitrary site/iframe combinations remain outside this fixture's evidence.
