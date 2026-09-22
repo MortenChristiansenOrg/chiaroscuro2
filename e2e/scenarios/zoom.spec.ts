@@ -123,8 +123,7 @@ test("Windows zoom indicator receives native clicks after closing Find", async (
   test.setTimeout(120_000);
   const site = await startSite();
   try {
-    // Keep native titlebar input in a fresh session: the lifecycle scenario above
-    // opens child windows and uses CDP focus, which does not establish OS foreground ownership.
+    // Exercise native titlebar input separately from the tab/sub-tab lifecycle flow.
     for (const maximized of [false, true]) {
       if (maximized) {
         await session.app.evaluate(({ BrowserWindow }) => {
