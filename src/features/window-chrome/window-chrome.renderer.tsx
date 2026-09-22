@@ -5,6 +5,7 @@ import { ExtensionToolbar } from "../extensions/ExtensionToolbar";
 import { FindBar } from "../find-text/find-text.renderer";
 import { useFindTextStore } from "../find-text/find-text.store";
 import { useTabsStore } from "../tabs/tabs.store";
+import { ActiveZoomIndicator } from "../zoom/zoom.renderer";
 import type { WindowChromeCommands } from "./window-chrome.shared";
 import {
   WINDOW_CLOSE,
@@ -183,6 +184,7 @@ export function UrlPill({ hidden }: { hidden?: boolean }) {
   return (
     <div
       className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2"
+      inert={hidden}
       style={{
         transition:
           "opacity var(--duration-normal) var(--ease-out), scale var(--duration-normal) var(--ease-out)",
@@ -191,6 +193,11 @@ export function UrlPill({ hidden }: { hidden?: boolean }) {
         pointerEvents: hidden ? "none" : "auto",
       }}
     >
+      {!hidden && (
+        <div className="absolute left-full top-1/2 -translate-y-1/2" style={{ marginLeft: 6 }}>
+          <ActiveZoomIndicator />
+        </div>
+      )}
       {/* Loading spinner ring — conic-gradient masked to border edge */}
       {isLoading && (
         <div

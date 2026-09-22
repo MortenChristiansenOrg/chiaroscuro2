@@ -1,6 +1,7 @@
 // Feature registrations — each import subscribes to events synchronously (phase 1)
 import "../../features/app-state/app-state.feature";
 import "../../features/window-chrome/window-chrome.feature";
+import "../../features/zoom/zoom.feature";
 import "../../features/tabs/tabs.feature";
 import "../../features/workspaces/workspaces.feature";
 import "../../features/sidebar/sidebar.feature";

@@ -18,7 +18,8 @@ The inactive Find bar is removed from layout. Opacity and `pointer-events: none`
 2. **URL text** — monospace text with select-all behavior
 3. **Copy button** — icon-only button to copy URL to clipboard
 4. **Domain customization button** — sliders icon opening settings for the active web domain
-5. **Loading ring** — conic-gradient border animation shown during page load
+5. **Zoom indicator** — adjacent percentage reset button, visible when web zoom differs from 100%; see [Zoom Indicator](/components/zoom-indicator)
+6. **Loading ring** — conic-gradient border animation shown during page load
 
 ---
 
@@ -108,7 +109,7 @@ Uses `@property --url-angle` with a `conic-gradient` masked to the border edge. 
 
 ## Keyboard & Focus
 
-- **Not keyboard-navigable.** All address bar elements use `tabIndex={-1}`. Interaction is mouse/trackpad only; URL copying is available via command palette or keyboard shortcut.
+- **Pill controls are not keyboard-navigable.** The URL pill elements use `tabIndex={-1}`. Interaction is mouse/trackpad only; URL copying is available via command palette or keyboard shortcut. The adjacent zoom indicator is keyboard-navigable and supports Enter/Space to reset.
 
 ---
 
