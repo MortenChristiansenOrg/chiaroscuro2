@@ -1,3 +1,6 @@
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { CommandBus } from "../../bus/command-bus";
 import { EventBus } from "../../bus/event-bus";
@@ -242,5 +245,31 @@ describe("start() queue drain", () => {
     expect(platform.focusWindow).toHaveBeenCalled();
 
     feature.teardown?.();
+  });
+});
+
+describe("dropped local files", () => {
+  it("opens supported files in order and ignores directories and unsupported paths", async () => {
+    const directory = await mkdtemp(path.join(tmpdir(), "chiaroscuro-drop-"));
+    try {
+      const html = path.join(directory, "page #1.HTML");
+      const pdf = path.join(directory, "document.pdf");
+      const folder = path.join(directory, "folder.html");
+      await writeFile(html, "<h1>Page</h1>");
+      await writeFile(pdf, "%PDF-1.7");
+      await mkdir(folder);
+      const { commands, platform } = setup();
+      const send = vi.spyOn(commands, "send");
+      const callback = vi.mocked(platform.onFilesDropped).mock.calls[0]![0];
+      callback(["relative.html", path.join(directory, "code.js"), folder, html, pdf]);
+      await vi.waitFor(() => expect(platform.focusWindow).toHaveBeenCalledTimes(2));
+      expect(send.mock.calls.filter(([name]) => name === "tabs:create")).toEqual([
+        ["tabs:create", { url: filePathToUrl(html), activate: true }],
+        ["tabs:create", { url: filePathToUrl(pdf), activate: true }],
+      ]);
+    } finally {
+      feature.teardown?.();
+      await rm(directory, { recursive: true, force: true });
+    }
   });
 });

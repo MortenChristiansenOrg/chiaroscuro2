@@ -1,4 +1,5 @@
-import { contextBridge, ipcRenderer } from "electron";
+/// <reference lib="dom" />
+import { contextBridge, ipcRenderer, webUtils } from "electron";
 
 export const api = {
   platform: "electron" as const,
@@ -34,3 +35,31 @@ export const api = {
 export type PreloadApi = typeof api;
 
 contextBridge.exposeInMainWorld("chiaroscuro", api);
+
+// Keep shell handling here so sandboxed preload bundles need no shared require().
+// Capture file drops before sidebar reorder handlers. Main validates supported paths.
+window.addEventListener(
+  "dragover",
+  (event) => {
+    if (!event.dataTransfer?.types.includes("Files")) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    event.dataTransfer.dropEffect = "copy";
+  },
+  { capture: true },
+);
+window.addEventListener(
+  "drop",
+  (event) => {
+    if (!event.isTrusted) return;
+    const files = Array.from(event.dataTransfer?.files ?? []);
+    if (!files.length) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    ipcRenderer.send(
+      "files:dropped",
+      files.map((file) => webUtils.getPathForFile(file)),
+    );
+  },
+  { capture: true },
+);

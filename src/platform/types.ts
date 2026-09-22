@@ -30,6 +30,9 @@ export interface LoadedExtension {
 }
 
 export interface Platform {
+  /** Native local files dropped on the shell or an unhandled page area. */
+  onFilesDropped(callback: (paths: string[]) => void): () => void;
+
   // Window management
   createWindow(): Promise<WindowId>;
   closeWindow(windowId: WindowId): Promise<void>;

@@ -3,6 +3,7 @@ import type { Platform } from "../platform/types";
 
 export function createMockPlatform(overrides: Partial<Platform> = {}): Platform {
   return {
+    onFilesDropped: vi.fn(() => () => {}),
     createWindow: vi.fn(),
     closeWindow: vi.fn(),
     minimizeWindow: vi.fn(),
