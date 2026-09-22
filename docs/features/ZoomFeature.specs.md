@@ -18,6 +18,9 @@ Zoom is applied to the active tab's `WebContentsView` using Electron's `webConte
 - Built-in PDF reader zoom remains a separate document-level setting.
 - Zoom changes must be possible using Ctrl + mouse wheel.
 - Zoom level must be resettable via keyboard.
+- Show the active tab or topmost sub-tab zoom percentage to the right of the URL bar when zoom differs from 100%; hide it at 100%.
+- Clicking or keyboard-activating the indicator resets that content to 100%. The indicator updates on tab switches, sub-tab changes, navigation and all zoom inputs.
+- Hide the indicator while Find replaces the URL bar. Built-in PDF zoom remains in its own toolbar.
 - Zoom level must be clamped to a reasonable range.
 
 ## Workflows

@@ -1,0 +1,66 @@
+---
+title: Zoom Indicator
+---
+
+import { useState } from "react"
+import { ZoomIndicator } from "@features/zoom/zoom.renderer"
+import { ComponentPreview } from "../../components/ComponentPreview"
+
+# Zoom Indicator
+
+`ZoomIndicator` shows the current web content zoom percentage to the right of the URL bar. `ActiveZoomIndicator` connects it to the zoom event store and reset command. The topmost sub-tab takes precedence over its parent.
+
+export function ZoomDemo() {
+  const [level, setLevel] = useState(1);
+  return (
+    <div className="flex items-center gap-3" style={{ padding: 16, background: "var(--window-bg)", borderRadius: "var(--radius-lg)" }}>
+      <button type="button" onClick={() => setLevel(-1)}>Zoom out</button>
+      <button type="button" onClick={() => setLevel(1)}>Zoom in</button>
+      <ZoomIndicator zoomLevel={level} onReset={() => setLevel(0)} />
+    </div>
+  );
+}
+
+<ComponentPreview label="Change zoom, then click the percentage to reset">
+  <ZoomDemo />
+</ComponentPreview>
+
+## Appearance and states
+
+- At 100% the button is absent. Other levels use the rounded percentage of `1.2 ** zoomLevel * 100` (for example 83%, 120%, 144%).
+- The button sits 6px to the right of the centered URL pill, without moving the URL when it appears.
+- Height: 26px; horizontal padding: 0.5rem; radius: `--radius-md`.
+- Typography: `--font-mono`, `--text-sm`, tabular numerals.
+- Default: `--glass-subtle` background and `--glass-text-default` text. Hover and pressed states use the matching glass tokens.
+- Background and text transitions use `--duration-fast` and `--ease-out`; transitions are disabled for reduced motion.
+- Hidden and removed from keyboard navigation while Find replaces the address bar.
+
+## Visual specs
+
+| Property | Token/Value |
+|----------|-------------|
+| Height | 26px (exceeds `--click-target-min`) |
+| Horizontal padding / adjacent gap | 0.5rem / 6px |
+| Radius | `--radius-md` |
+| Typography | `--font-mono`, `--text-sm`, tabular numerals |
+| Default background / text | `--glass-subtle` / `--glass-text-default` |
+| Hover background / text | `--glass-hover` / `--glass-text-hover` |
+| Pressed background / text | `--glass-pressed` / `--glass-text-pressed` |
+| Focus | 2px accent outline, 2px offset |
+| Shadow / border | None |
+
+There are no selected, disabled or loading variants. Zoom changes update the text without taking focus. Reset removes the button when the main process confirms 100%. Its width follows the percentage, without truncation.
+
+## Keyboard and accessibility
+
+A native button supports Tab focus, Enter and Space. The focus-visible ring uses the standard 2px accent outline with a 2px offset. Its accessible name includes both the current percentage and the reset action; its tooltip says “Reset zoom to 100%”. The control explicitly excludes itself from Electron's draggable titlebar region.
+
+## Verification
+
+`e2e/scenarios/zoom.spec.ts` checks visibility, percentages, tab/sub-tab switches, wheel and shortcut updates, and reset activation in the actual Electron app. The PDF reader's document zoom is separate.
+
+## Related
+
+- [Address Bar](/components/address-bar)
+- [Buttons](/components/buttons)
+- [Accessibility](/accessibility)

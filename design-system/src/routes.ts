@@ -109,6 +109,12 @@ export const routes: Route[] = [
     component: lazy(() => import("./pages/components/address-bar.mdx")),
   },
   {
+    path: "/components/zoom-indicator",
+    title: "Zoom Indicator",
+    group: "Components",
+    component: lazy(() => import("./pages/components/zoom-indicator.mdx")),
+  },
+  {
     path: "/components/context-menu",
     title: "Context Menu",
     group: "Components",
