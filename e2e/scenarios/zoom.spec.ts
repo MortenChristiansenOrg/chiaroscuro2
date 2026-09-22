@@ -106,20 +106,60 @@ test("same-origin tabs and sub-tabs keep independent zoom and shared sessions", 
     await expect(indicator).not.toBeVisible();
     await findInput.press("Escape");
     await expect(indicator).toBeVisible();
-    if (process.platform === "win32") {
-      const box = await indicator.boundingBox();
-      if (!box) throw new Error("Missing zoom indicator geometry");
-      const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
-      expect((await windowsPointer(session, point)).hitTest).toBe(1);
-      await windowsPointer(session, point, true);
-    } else {
-      await indicator.click();
-    }
+    await indicator.click();
     await expect.poll(() => level(firstTarget)).toBe(0);
     expect(await level(secondTarget)).toBe(2);
     await expect(indicator).toHaveCount(0);
     expect((await session.capture("isolated-zoom")).status).toBe("complete");
   } finally {
     await Promise.all([site.close(), otherSite.close()]);
+  }
+});
+
+test("Windows zoom indicator receives native clicks after closing Find", async ({
+  appSession: session,
+}) => {
+  test.skip(process.platform !== "win32", "Requires Windows desktop hit testing");
+  test.setTimeout(120_000);
+  const site = await startSite();
+  try {
+    // Keep native titlebar input in a fresh session: the lifecycle scenario above
+    // opens child windows and uses CDP focus, which does not establish OS foreground ownership.
+    for (const maximized of [false, true]) {
+      if (maximized) {
+        await session.app.evaluate(({ BrowserWindow }) => {
+          BrowserWindow.getAllWindows()
+            .find((win) => !win.getParentWindow())
+            ?.maximize();
+        });
+      }
+      await VerificationPage.navigate(session, `${site.url}/native-zoom-${maximized}`);
+      const target = await session.target(
+        (t) => t.kind === "tab" && t.url.endsWith(`/native-zoom-${maximized}`),
+      );
+      await session.command("zoom:in");
+      const indicator = session.shell.getByRole("button", { name: /Reset zoom to 100%/ });
+      await expect(indicator).toHaveText("120%");
+      await session.command("find:start");
+      const findInput = session.shell.getByPlaceholder("Find in page", { exact: true });
+      await expect(findInput).toBeFocused();
+      await findInput.press("Escape");
+      await expect(findInput).toHaveCount(0);
+      const box = await indicator.boundingBox();
+      if (!box) throw new Error("Missing zoom indicator geometry");
+      const point = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+      expect((await windowsPointer(session, point)).hitTest).toBe(1);
+      await expect.poll(() => indicator.evaluate((button) => button.matches(":hover"))).toBe(true);
+      await windowsPointer(session, point, true);
+      await expect(indicator).toHaveCount(0);
+      const level = await session.app.evaluate(({ webContents }, id) => {
+        const contents = webContents.fromId(id);
+        if (!contents) throw new Error("Missing target");
+        return contents.getZoomLevel();
+      }, target.webContentsId);
+      expect(level).toBe(0);
+    }
+  } finally {
+    await site.close();
   }
 });
