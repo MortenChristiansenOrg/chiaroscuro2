@@ -334,6 +334,17 @@ export class ElectronPlatform implements Platform {
     );
   }
 
+  onFilesDropped(callback: (paths: string[]) => void): () => void {
+    const listener = (event: Electron.IpcMainEvent, paths: unknown) => {
+      if (event.senderFrame !== event.sender.mainFrame) return;
+      if (!this.isCommandSender(event.sender) && !this.findTabIdByWebContents(event.sender)) return;
+      if (!Array.isArray(paths) || !paths.every((value) => typeof value === "string")) return;
+      callback(paths);
+    };
+    ipcMain.on("files:dropped", listener);
+    return () => ipcMain.removeListener("files:dropped", listener);
+  }
+
   private shortcuts = new Map<string, () => void>();
   private localShortcuts = new Map<string, () => void>();
   private views = new Map<TabId, WebContentsView>();

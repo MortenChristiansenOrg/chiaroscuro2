@@ -1,6 +1,8 @@
 /// <reference lib="dom" />
+
 import { ipcRenderer, webFrame } from "electron";
 import { ZOOM_MAX, ZOOM_MIN, ZOOM_STEP } from "../features/zoom/zoom.shared";
+import { installFileDrop } from "./file-drop";
 
 // Disable FedCM (Federated Credential Management) in the page context.
 // Electron doesn't implement the FedCM account-chooser UI for WebContentsView,
@@ -39,3 +41,5 @@ document.addEventListener(
   },
   { passive: false, capture: true },
 );
+
+installFileDrop();

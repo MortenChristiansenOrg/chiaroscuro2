@@ -1,7 +1,10 @@
+import { stat } from "node:fs/promises";
+import { isAbsolute } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { CommandBus } from "../../bus/command-bus";
 import type { EventBus } from "../../bus/event-bus";
 import type { Platform } from "../../platform/types";
+import { isBrowserFile } from "../../shared/browser-files";
 import { defineFeature } from "../../shared/define-feature";
 import { logError } from "../../shared/log";
 import type { WindowId } from "../../shared/types";
@@ -15,9 +18,6 @@ import {
 } from "./external-link.shared";
 
 // ── URL parsing (exported for testing) ───────────────────────────
-
-/** File extensions the browser can open (from spec). */
-const BROWSER_FILE_EXTENSIONS = new Set([".html", ".htm", ".mhtml", ".svg", ".pdf"]);
 
 /** Validate a URL string; returns normalized URL or null. */
 export function validateUrl(raw: string): string | null {
@@ -56,9 +56,7 @@ export function extractUrls(argv: readonly string[]): string[] {
     }
 
     // Treat as file path — only accept browser-relevant extensions
-    const dotIdx = arg.lastIndexOf(".");
-    const ext = dotIdx >= 0 ? arg.slice(dotIdx).toLowerCase() : "";
-    if (BROWSER_FILE_EXTENSIONS.has(ext)) {
+    if (isBrowserFile(arg)) {
       const asFile = validateUrl(filePathToUrl(arg));
       if (asFile) urls.push(asFile);
     }
@@ -77,6 +75,7 @@ export interface ElectronAppSubset {
   on(event: "open-file", cb: (event: { preventDefault(): void }, path: string) => void): void;
 }
 
+let unsubscribeDrops: (() => void) | undefined;
 let urlQueue: string[] = [];
 let flushCallback: ((urls: string[]) => void) | undefined;
 
@@ -139,6 +138,19 @@ interface Deps {
 
 export default defineFeature<Deps>({
   register({ commands, events, platform, getActiveWindowId }) {
+    unsubscribeDrops = platform.onFilesDropped((paths) => {
+      void (async () => {
+        for (const filePath of paths) {
+          if (!isAbsolute(filePath) || !isBrowserFile(filePath)) continue;
+          try {
+            if (!(await stat(filePath)).isFile()) continue;
+            await commands.send(EXTERNAL_LINK_OPEN, { url: filePathToUrl(filePath) });
+          } catch (error) {
+            logError("external-link", "open dropped file")(error);
+          }
+        }
+      })();
+    });
     commands.handle(EXTERNAL_LINK_OPEN, async ({ url }) => {
       const validated = validateUrl(url);
       if (!validated) return;
@@ -171,6 +183,8 @@ export default defineFeature<Deps>({
   },
 
   teardown() {
+    unsubscribeDrops?.();
+    unsubscribeDrops = undefined;
     urlQueue = [];
     flushCallback = undefined;
   },
