@@ -68,21 +68,24 @@ test("native file drops open documents from shell and tabs without replacing the
   expect((await session.capture("file-drops")).status).toBe("complete");
 });
 
-test("page upload handlers keep supported file drops", async ({ appSession: session }) => {
-  const file = path.join(session.profile, "upload.html");
-  await fs.writeFile(file, "<h1>Upload only</h1>");
-  const { page } = await VerificationPage.navigate(session, pathToFileURL(file).href);
-  await page.evaluate(() => {
-    document.addEventListener("drop", (event) => {
-      event.preventDefault();
-      document.body.textContent = `Uploaded ${event.dataTransfer?.files[0]?.name}`;
-    });
+for (const target of ["document", "window"] as const) {
+  test(`${target} upload handlers keep supported file drops`, async ({ appSession: session }) => {
+    const file = path.join(session.profile, "upload.html");
+    await fs.writeFile(file, "<h1>Upload only</h1>");
+    const { page } = await VerificationPage.navigate(session, pathToFileURL(file).href);
+    await page.evaluate((target) => {
+      (target === "document" ? document : window).addEventListener("drop", (event) => {
+        if (!(event instanceof DragEvent)) return;
+        event.preventDefault();
+        document.body.textContent = `Uploaded ${event.dataTransfer?.files[0]?.name}`;
+      });
+    }, target);
+    await dropFiles(page, [file]);
+    await expect(page.getByText("Uploaded upload.html")).toBeVisible();
+    expect(
+      (await session.targets()).filter(
+        (target) => target.kind === "tab" && target.url === pathToFileURL(file).href,
+      ),
+    ).toHaveLength(1);
   });
-  await dropFiles(page, [file]);
-  await expect(page.getByText("Uploaded upload.html")).toBeVisible();
-  expect(
-    (await session.targets()).filter(
-      (target) => target.kind === "tab" && target.url === pathToFileURL(file).href,
-    ),
-  ).toHaveLength(1);
-});
+}
