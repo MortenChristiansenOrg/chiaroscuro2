@@ -81,6 +81,14 @@ See also: `TabsFeature.specs.md` for details on the tab list UI (persistent vs e
 - Use the move shortcut to send the current tab to the target workspace.
 - The app switches to the target workspace and adds the tab there.
 
+### Move an ephemeral tab from the sidebar
+
+- Right-click an ephemeral tab and open "Move to workspace".
+- The submenu lists every other workspace, or is disabled when there is no destination.
+- Choosing a destination moves the right-clicked tab, even when it is inactive, and activates it in that workspace.
+- The same tab and page state survive; the tab stays ephemeral and is not duplicated.
+- Returning to the source workspace selects a remaining tab or its empty state.
+
 ### Restore a pinned/bookmarked tab
 
 - While on a pinned or bookmarked tab, press the restore shortcut.
@@ -113,7 +121,7 @@ In the Sidebar workspace switcher:
 - `workspaces:create` — Create a new workspace. Payload: `{ name: string, icon: string, color: string }`.
 - `workspaces:update` — Update a workspace. Payload: `{ workspaceId: string, changes: Partial<Workspace> }`.
 - `workspaces:delete` — Delete a workspace. Payload: `{ workspaceId: string }`.
-- `workspaces:move-tab` — Move the current tab to a workspace. Payload: `{ targetWorkspaceId: string }`.
+- `workspaces:move-tab` — Move the current tab to a workspace. Payload: `{ targetWorkspaceId: string; tabId?: string }`. Omit `tabId` to move the active tab; the destination workspace and moved tab become active.
 - `workspaces:restore-tab` — Restore the current tab to its original address.
 
 ### Events

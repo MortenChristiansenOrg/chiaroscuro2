@@ -42,6 +42,7 @@ export const WorkspacesDeletePayloadSchema = z.strictObject({ workspaceId: Works
 
 export const WorkspacesMoveTabPayloadSchema = z.strictObject({
   targetWorkspaceId: WorkspaceIdSchema,
+  tabId: TabIdSchema.optional(),
 });
 
 export const commandContracts = {
@@ -66,9 +67,9 @@ export const commandContracts = {
     sideEffects: ["Removes workspace metadata and reorganizes its tabs"],
   }),
   [WORKSPACES_MOVE_TAB]: defineCommand(WorkspacesMoveTabPayloadSchema, z.undefined(), {
-    description: "Move a tab into a workspace.",
+    description: "Move the specified or active tab into a workspace and activate it there.",
     examples: [{ targetWorkspaceId: "example" }],
-    sideEffects: ["Writes tab workspace membership"],
+    sideEffects: ["Writes tab workspace membership", "Activates the destination workspace and tab"],
   }),
   [WORKSPACES_RESTORE_TAB]: defineCommand(z.undefined(), z.undefined(), {
     description: "Restore a bookmarked tab to its original URL.",

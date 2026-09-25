@@ -3,10 +3,14 @@ import { defineCommand } from "../../bus/contract";
 import { TabIdSchema } from "../../shared/types.contracts";
 import { CONTEXT_MENU_SHOW } from "./context-menu.shared";
 
-export const ContextMenuItemDataSchema = z.strictObject({
+const ContextMenuActionDataSchema = z.strictObject({
   label: z.string(),
   icon: z.string().optional(),
   disabled: z.boolean().optional(),
+});
+
+export const ContextMenuItemDataSchema = ContextMenuActionDataSchema.extend({
+  submenu: z.array(ContextMenuActionDataSchema).optional(),
 });
 
 export const ContextMenuShowPayloadSchema = z.strictObject({
@@ -18,7 +22,7 @@ export const ContextMenuShowPayloadSchema = z.strictObject({
 
 export const commandContracts = {
   [CONTEXT_MENU_SHOW]: defineCommand(ContextMenuShowPayloadSchema, z.number(), {
-    description: "Show a native menu and return the selected index, or -1 when dismissed.",
+    description: "Show a native menu and return the depth-first leaf index, or -1 when dismissed.",
     examples: [{ items: [], x: 0, y: 0 }],
     sideEffects: ["Opens a native context menu"],
   }),

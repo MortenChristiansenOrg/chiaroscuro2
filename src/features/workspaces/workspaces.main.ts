@@ -259,10 +259,9 @@ export default defineFeature<Deps>({
       const targetWs = workspaces.get(targetWorkspaceId);
       if (!targetWs) return;
 
-      const tabId = getActiveTabId();
-      if (!tabId) return;
+      const tabId = payload.tabId ?? getActiveTabId();
+      if (!tabId || isPinned(tabId)) return;
 
-      // Update tab's workspace (access internal tab map via getTabsForWorkspace workaround)
       const currentWsId = getActiveWorkspaceId();
       if (!currentWsId || currentWsId === targetWorkspaceId) return;
 
@@ -272,25 +271,31 @@ export default defineFeature<Deps>({
 
       await commands.send(TABS_SET_WORKSPACE, { tabId, workspaceId: targetWorkspaceId });
 
-      // Update destination workspace's active tab if it had none
-      if (!targetWs.activeTabId) {
-        targetWs.activeTabId = tabId;
+      // Remember a tab that still belongs to the source workspace on return.
+      const sourceWs = workspaces.get(currentWsId);
+      if (sourceWs && (sourceWs.activeTabId === tabId || getActiveTabId() === tabId)) {
+        const remaining = allTabs.filter((t) => t.id !== tabId && !isPinned(t.id));
+        sourceWs.activeTabId =
+          remaining.reduce<Tab | undefined>(
+            (best, candidate) =>
+              !best || candidate.lastAccessedAt > best.lastAccessedAt ? candidate : best,
+            undefined,
+          )?.id ?? null;
       }
 
-      // Hide tab since it's moving to another workspace
-      platform.hideTab(tabId);
-
-      // Activate MRU in current workspace
-      const remaining = allTabs.filter((t) => t.id !== tabId);
-      if (remaining.length > 0) {
-        const mru = remaining.reduce((best, t) =>
-          t.lastAccessedAt > best.lastAccessedAt ? t : best,
-        );
-        await commands.send(TABS_ACTIVATE, { tabId: mru.id });
-      } else {
-        setActiveTabId(undefined);
-        events.emit(TABS_ACTIVATED, { tabId: null, previousTabId: tabId });
+      // Cancel a pending empty-workspace hide before showing the moved tab.
+      if (pendingHideAllTabsTimer !== null) {
+        clearTimeout(pendingHideAllTabsTimer);
+        pendingHideAllTabsTimer = null;
       }
+      targetWs.activeTabId = tabId;
+      setActiveWorkspaceId(targetWorkspaceId);
+      await commands.send(TABS_ACTIVATE, { tabId });
+      events.emit(WORKSPACES_SWITCHED, {
+        workspaceId: targetWorkspaceId,
+        previousWorkspaceId: currentWsId,
+        workspaceName: targetWs.name,
+      });
     });
 
     commands.handle(WORKSPACES_RESTORE_TAB, async () => {

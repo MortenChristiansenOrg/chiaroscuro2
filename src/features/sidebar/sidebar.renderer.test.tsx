@@ -1,7 +1,9 @@
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import type { TabId } from "../../shared/types";
+import type { ContextMenuItem } from "../../renderer/src/components/ContextMenu";
+import type { TabId, WorkspaceId } from "../../shared/types";
 import { makeTab } from "../../test-utils";
+import { useWorkspacesStore } from "../workspaces/workspaces.store";
 import type { SidebarDragContextType } from "./SidebarContext";
 import { SidebarDragProvider, useSidebarDrag } from "./SidebarContext";
 import { TabItem } from "./TabItem";
@@ -71,6 +73,55 @@ describe("TabItem", () => {
   afterEach(() => {
     cleanup();
   });
+
+  it.each([0, 2])(
+    "offers other workspaces for an inactive ephemeral tab (%i destinations)",
+    (count) => {
+      const tab = makeTab();
+      useWorkspacesStore.setState({
+        workspaces: [
+          {
+            id: tab.workspaceId,
+            name: "Source",
+            color: "blue",
+            icon: "S",
+            privacyMode: false,
+            activeTabId: null,
+          },
+          ...Array.from({ length: count }, (_, i) => ({
+            id: `destination-${i}` as WorkspaceId,
+            name: `Target ${i}`,
+            color: "red",
+            icon: "T",
+            privacyMode: false,
+            activeTabId: null,
+          })),
+        ],
+      });
+      const menu = vi.fn();
+      render(
+        <SidebarDragProvider isDragging={false} onDragEnd={vi.fn()} onContextMenu={menu}>
+          <TabItem {...defaultProps({ tab, isEphemeral: true, isBookmarkedSection: false })} />
+        </SidebarDragProvider>,
+      );
+      fireEvent.contextMenu(getTabEl());
+      const items = menu.mock.calls[0]![0] as ContextMenuItem[];
+      const move = items.find((item) => item.label === "Move to workspace");
+      expect(move?.disabled).toBe(count === 0);
+      if (!move || !("submenu" in move)) throw new Error("Missing workspace submenu");
+      expect(move.submenu.map((item) => item.label)).toEqual(
+        Array.from({ length: count }, (_, i) => `Target ${i}`),
+      );
+      if (count) {
+        move.submenu[1]!.onSelect();
+        expect(mockSendCommand).toHaveBeenCalledWith("workspaces:move-tab", {
+          tabId: tab.id,
+          targetWorkspaceId: "destination-1",
+        });
+      }
+      useWorkspacesStore.setState({ workspaces: [] });
+    },
+  );
 
   // ── Normal (no drag) state ──────────────────────────────────
 

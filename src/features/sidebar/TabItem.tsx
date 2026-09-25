@@ -19,6 +19,8 @@ import {
   TABS_REORDER,
   TABS_TOGGLE_BOOKMARK,
 } from "../tabs/tabs.shared";
+import { WORKSPACES_MOVE_TAB, type WorkspacesCommands } from "../workspaces/workspaces.shared";
+import { useWorkspacesStore } from "../workspaces/workspaces.store";
 import { Favicon } from "./Favicon";
 import { useSidebarDrag } from "./SidebarContext";
 
@@ -35,7 +37,8 @@ type TabItemUsedCommands = Pick<
 > &
   Pick<TabCustomizationCommands, typeof TAB_CUSTOMIZATION_OPEN> &
   Pick<PinnedTabsCommands, typeof PINNED_TABS_TOGGLE_PIN> &
-  Pick<FoldersCommands, typeof FOLDERS_REORDER>;
+  Pick<FoldersCommands, typeof FOLDERS_REORDER> &
+  Pick<WorkspacesCommands, typeof WORKSPACES_MOVE_TAB>;
 
 function sendCommand<K extends keyof TabItemUsedCommands>(
   name: K,
@@ -79,6 +82,7 @@ export function TabItem({
     onContextMenu,
   } = useSidebarDrag();
   const customization = useTabCustomizationStore((s) => s.customizations.get(tab.id));
+  const workspaces = useWorkspacesStore((s) => s.workspaces);
   const customTitle = customization?.title;
   const mountedRef = useRef(false);
   const elRef = useRef<HTMLDivElement>(null);
@@ -113,6 +117,18 @@ export function TabItem({
         label: "Bookmark",
         icon: "bookmark",
         onSelect: () => sendCommand(TABS_TOGGLE_BOOKMARK, { tabId: tab.id }),
+      });
+    }
+    if (isEphemeral && !isPinned) {
+      const destinations = workspaces.filter((workspace) => workspace.id !== tab.workspaceId);
+      items.push({
+        label: "Move to workspace",
+        disabled: destinations.length === 0,
+        submenu: destinations.map((workspace) => ({
+          label: workspace.name,
+          onSelect: () =>
+            sendCommand(WORKSPACES_MOVE_TAB, { tabId: tab.id, targetWorkspaceId: workspace.id }),
+        })),
       });
     }
     if (isBookmarkedSection && !isPinned) {

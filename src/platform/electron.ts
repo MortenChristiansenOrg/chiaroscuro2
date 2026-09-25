@@ -16,6 +16,7 @@ import {
   type WebContentsView,
   webContents,
 } from "electron";
+import type { ContextMenuItemData } from "../features/context-menu/context-menu.shared";
 import type { Bounds, TabId, WindowId } from "../shared/types";
 import { unpackedExtensionId } from "./extension-identity";
 import { migrateExtensionBootstrap } from "./extension-migration";
@@ -1026,7 +1027,7 @@ export class ElectronPlatform implements Platform {
 
   async showContextMenu(opts: {
     tabId?: TabId;
-    items: { label: string; icon?: string; disabled?: boolean }[];
+    items: ContextMenuItemData[];
     x: number;
     y: number;
   }): Promise<number> {
@@ -1037,14 +1038,27 @@ export class ElectronPlatform implements Platform {
 
     return new Promise<number>((resolve) => {
       let resolved = false;
-      const template = opts.items.map((item, index) => ({
-        label: item.label,
-        enabled: !item.disabled,
-        click: () => {
-          resolved = true;
-          resolve(index);
-        },
-      }));
+      let nextIndex = 0;
+      const actionTemplate = (item: ContextMenuItemData) => {
+        const index = nextIndex++;
+        return {
+          label: item.label,
+          enabled: !item.disabled,
+          click: () => {
+            resolved = true;
+            resolve(index);
+          },
+        };
+      };
+      const template = opts.items.map((item) =>
+        item.submenu
+          ? {
+              label: item.label,
+              enabled: !item.disabled && item.submenu.length > 0,
+              submenu: item.submenu.map(actionTemplate),
+            }
+          : actionTemplate(item),
+      );
 
       const extensionItems = opts.tabId
         ? (this.extensionRuntime?.contextMenu(opts.tabId) ?? [])
