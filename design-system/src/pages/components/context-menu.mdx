@@ -15,7 +15,7 @@ Right-click menus for contextual actions on tabs, folders, workspaces, and web c
 | Target | Items |
 |--------|-------|
 | Bookmarked tab | Remove bookmark, Pin tab, Customize tab (+Restore original URL if changed) |
-| Ephemeral tab | Bookmark, Pin tab |
+| Ephemeral tab | Duplicate tab, Bookmark, Move to workspace → other workspaces, Pin tab |
 | Pinned tab (strip/inline) | Unpin tab, Close tab, Customize tab (+Restore original URL if changed) |
 | Folder header | Add subfolder |
 | Sidebar empty area | Add folder |
@@ -61,4 +61,16 @@ const handleContextMenu = (e: React.MouseEvent) => {
 | `label` | `string` | Display text |
 | `icon` | `string?` | Icon name (reserved for future use — not rendered in native menus) |
 | `disabled` | `boolean?` | Grayed out, non-interactive |
-| `onSelect` | `() => void` | Callback when clicked |
+| `onSelect` | `() => void` | Callback for a leaf action |
+| `submenu` | `ContextMenuAction[]` | One level of native child actions; replaces `onSelect` |
+
+
+The actual sidebar `TabItem` uses `useContextMenu` from
+`src/renderer/src/components/ContextMenu.tsx`. “Move to workspace” excludes the
+tab’s current workspace and is disabled when no destination exists. Selecting a
+destination moves that exact tab, keeps it ephemeral, and activates it in the
+destination workspace without reloading or copying its page. Native submenus
+provide their standard pointer and keyboard navigation.
+
+The IPC result is the depth-first leaf index, or `-1` on dismissal. Submenu
+headers do not consume an index. Callbacks stay local to each menu invocation.

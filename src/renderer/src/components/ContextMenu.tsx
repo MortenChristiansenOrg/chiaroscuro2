@@ -1,14 +1,25 @@
-import { useRef } from "react";
-import { CONTEXT_MENU_SHOW } from "../../../features/context-menu/context-menu.shared";
+import {
+  CONTEXT_MENU_SHOW,
+  type ContextMenuItemData,
+} from "../../../features/context-menu/context-menu.shared";
 
 // ── Types ───────────────────────────────────────────────────────
 
-export interface ContextMenuItem {
+interface ContextMenuAction {
   label: string;
   icon?: string;
   disabled?: boolean;
   onSelect: () => void;
 }
+
+export type ContextMenuItem =
+  | ContextMenuAction
+  | {
+      label: string;
+      icon?: string;
+      disabled?: boolean;
+      submenu: ContextMenuAction[];
+    };
 
 // ── Hook ────────────────────────────────────────────────────────
 
@@ -19,24 +30,31 @@ export interface ContextMenuItem {
 export function useContextMenu(): {
   open: (items: ContextMenuItem[], e: React.MouseEvent) => void;
 } {
-  const callbacksRef = useRef<(() => void)[]>([]);
-
   const open = (items: ContextMenuItem[], e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
 
-    callbacksRef.current = items.map((it) => it.onSelect);
+    const callbacks: (() => void)[] = [];
+    const serializeAction = ({ onSelect, ...data }: ContextMenuAction) => {
+      callbacks.push(onSelect);
+      return data;
+    };
+    const menuItems: ContextMenuItemData[] = items.map((item) =>
+      "submenu" in item
+        ? { ...item, submenu: item.submenu.map(serializeAction) }
+        : serializeAction(item),
+    );
 
     window.chiaroscuro
       .sendCommand(CONTEXT_MENU_SHOW, {
-        items: items.map((it) => ({ label: it.label, icon: it.icon, disabled: it.disabled })),
+        items: menuItems,
         x: e.clientX,
         y: e.clientY,
       })
       .then((result) => {
         const index = result as number;
-        if (index >= 0 && index < callbacksRef.current.length) {
-          callbacksRef.current[index]?.();
+        if (index >= 0 && index < callbacks.length) {
+          callbacks[index]?.();
         }
       })
       .catch(() => {});

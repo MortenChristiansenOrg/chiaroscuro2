@@ -3,7 +3,7 @@ import { CommandBus } from "../../bus/command-bus";
 import { EventBus } from "../../bus/event-bus";
 import { MemoryDataStore } from "../../data/memory-store";
 import type { TabId, WindowId, WorkspaceId } from "../../shared/types";
-import { createMockPlatform } from "../../test-utils";
+import { createMockPlatform, makeTab } from "../../test-utils";
 
 // Mock tabs.main for cross-feature dependency
 vi.mock("../tabs/tabs.main", () => ({
@@ -24,7 +24,7 @@ import {
   TABS_SET_WORKSPACE,
   TABS_UPDATED,
 } from "../tabs/tabs.shared";
-import feature from "./workspaces.main";
+import feature, { getWorkspace } from "./workspaces.main";
 import {
   WORKSPACES_CREATE,
   WORKSPACES_CREATED,
@@ -334,37 +334,99 @@ describe("workspaces commands", () => {
   });
 
   describe("WORKSPACES_MOVE_TAB", () => {
-    it("moves active tab to target workspace", async () => {
-      const { commands, events, setActiveTabId, setActiveWsId } = setup();
-      const ws1Id = await commands.send(WORKSPACES_CREATE, {
-        name: "Work",
-        color: "blue",
-        icon: "W",
-      });
-      const ws2Id = await commands.send(WORKSPACES_CREATE, {
-        name: "Personal",
-        color: "red",
-        icon: "P",
-      });
-      setActiveWsId(ws1Id);
+    it.each([true, false])(
+      "moves the %s active tab and follows it, preserving source selection",
+      async (moveActive) => {
+        const { commands, events, deps, platform, setActiveTabId, setActiveWsId } = setup();
+        const source = await commands.send(WORKSPACES_CREATE, {
+          name: "Work",
+          color: "blue",
+          icon: "W",
+        });
+        const target = await commands.send(WORKSPACES_CREATE, {
+          name: "Personal",
+          color: "red",
+          icon: "P",
+        });
+        const moved = makeTab({ id: "moved" as TabId, workspaceId: source, bookmarked: false });
+        const remaining = makeTab({ id: "remaining" as TabId, workspaceId: source });
+        const tabs = [moved, remaining];
+        vi.mocked(getTabsForWorkspace).mockImplementation((id) =>
+          tabs.filter((tab) => tab.workspaceId === id),
+        );
+        setActiveWsId(source);
+        const active = moveActive ? moved.id : remaining.id;
+        setActiveTabId(active);
+        events.emit(TABS_ACTIVATED, { tabId: active, previousTabId: null });
+        getWorkspace(target)!.activeTabId = "old-target" as TabId;
+        commands.unhandle(TABS_SET_WORKSPACE);
+        commands.handle(TABS_SET_WORKSPACE, async ({ tabId, workspaceId }) => {
+          tabs.find((tab) => tab.id === tabId)!.workspaceId = workspaceId;
+        });
+        commands.unhandle(TABS_ACTIVATE);
+        commands.handle(TABS_ACTIVATE, async ({ tabId }) => {
+          const previousTabId = deps.getActiveTabId() ?? null;
+          setActiveTabId(tabId);
+          events.emit(TABS_ACTIVATED, { tabId, previousTabId });
+        });
+        const switched = vi.fn();
+        events.on(WORKSPACES_SWITCHED, switched);
+        const before = { ...moved };
+        await commands.send(WORKSPACES_MOVE_TAB, {
+          targetWorkspaceId: target,
+          ...(moveActive ? {} : { tabId: moved.id }),
+        });
+        expect(moved).toEqual({ ...before, workspaceId: target });
+        expect(tabs).toHaveLength(2);
+        expect(deps.getActiveWorkspaceId()).toBe(target);
+        expect(deps.getActiveTabId()).toBe(moved.id);
+        expect(switched).toHaveBeenCalledWith({
+          workspaceId: target,
+          previousWorkspaceId: source,
+          workspaceName: "Personal",
+        });
+        expect(platform.closeTab).not.toHaveBeenCalled();
+        await commands.send(WORKSPACES_SWITCH, { workspaceId: source });
+        expect(deps.getActiveTabId()).toBe(remaining.id);
+      },
+    );
 
-      const mockTab = {
-        id: "t1" as TabId,
-        workspaceId: ws1Id,
-        url: "https://example.com",
-        title: "Ex",
-        favicon: "",
-        loading: false,
-        bookmarked: false,
-        lastAccessedAt: 0,
-        createdAt: 0,
-        order: 0,
-      };
-      (getTabsForWorkspace as ReturnType<typeof vi.fn>).mockReturnValue([mockTab]);
-      setActiveTabId("t1" as TabId);
-
-      await commands.send(WORKSPACES_MOVE_TAB, { targetWorkspaceId: ws2Id });
-    });
+    it.each(["missing-tab", "missing-workspace", "same-workspace", "pinned"])(
+      "ignores %s moves",
+      async (kind) => {
+        const { commands, deps, setActiveTabId, setActiveWsId } = setup();
+        const source = await commands.send(WORKSPACES_CREATE, {
+          name: "Work",
+          color: "blue",
+          icon: "W",
+        });
+        const target = await commands.send(WORKSPACES_CREATE, {
+          name: "Personal",
+          color: "red",
+          icon: "P",
+        });
+        const tab = makeTab({ workspaceId: source });
+        vi.mocked(getTabsForWorkspace).mockReturnValue([tab]);
+        vi.mocked(isPinned).mockReturnValue(kind === "pinned");
+        setActiveWsId(source);
+        setActiveTabId(tab.id);
+        const setWorkspace = vi.fn();
+        commands.unhandle(TABS_SET_WORKSPACE);
+        commands.handle(TABS_SET_WORKSPACE, setWorkspace);
+        await commands.send(WORKSPACES_MOVE_TAB, {
+          tabId: kind === "missing-tab" ? ("missing" as TabId) : tab.id,
+          targetWorkspaceId:
+            kind === "missing-workspace"
+              ? ("missing" as WorkspaceId)
+              : kind === "same-workspace"
+                ? source
+                : target,
+        });
+        expect(setWorkspace).not.toHaveBeenCalled();
+        expect(deps.getActiveWorkspaceId()).toBe(source);
+        vi.mocked(isPinned).mockReturnValue(false);
+      },
+    );
   });
 });
 

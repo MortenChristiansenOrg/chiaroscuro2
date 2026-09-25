@@ -1,3 +1,4 @@
+import type { ContextMenuItemData } from "../features/context-menu/context-menu.shared";
 import type { Bounds, TabId, WindowId } from "../shared/types";
 
 export type { Bounds };
@@ -101,7 +102,7 @@ export interface Platform {
   // Context menu (native)
   showContextMenu(opts: {
     tabId?: TabId;
-    items: { label: string; icon?: string; disabled?: boolean }[];
+    items: ContextMenuItemData[];
     x: number;
     y: number;
   }): Promise<number>;
