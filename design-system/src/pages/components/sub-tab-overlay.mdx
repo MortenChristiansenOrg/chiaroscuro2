@@ -57,6 +57,8 @@ Popup overlay for links opened from within a tab. Appears as a floating content 
 | Box shadow | `0 4px 20px oklch(0 0 0 / 0.25), 0 1px 3px oklch(0 0 0 / 0.15)` |
 | Order | Close (top), Promote (bottom) |
 
+The native overlay embeds the Font Awesome `xmark` and `up-right-from-square` SVGs at build time. The icons inherit the button color and render without loading external stylesheets or webfonts, including in packaged builds. The demo uses the same glyphs through the shared `Icon` component.
+
 ---
 
 ## States

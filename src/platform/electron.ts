@@ -1,5 +1,7 @@
 import fs from "node:fs";
 import path from "node:path";
+import promoteIcon from "@fortawesome/fontawesome-free/svgs/solid/up-right-from-square.svg?raw";
+import closeIcon from "@fortawesome/fontawesome-free/svgs/solid/xmark.svg?raw";
 import {
   app,
   BrowserWindow,
@@ -44,10 +46,8 @@ function isAllowedExternalUrl(url: string): boolean {
 // The sub-tab WCV is added as a child view and renders on top of this HTML,
 // so no hole/passthrough is needed — the backdrop covers everything and the
 // WCV naturally occludes the area it covers.
-function buildSubTabWindowHtml(faCssDir: string): string {
+function buildSubTabWindowHtml(): string {
   return `<!DOCTYPE html><html><head><meta charset="utf-8">
-<link rel="stylesheet" href="file://${faCssDir}/fontawesome.css">
-<link rel="stylesheet" href="file://${faCssDir}/solid.css">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}html,body{background:transparent;overflow:hidden;width:100%;height:100%}
 #backdrop{position:fixed;inset:0;background:oklch(0 0 0/0.5);border-radius:8px;opacity:0;transition:none}
@@ -58,12 +58,13 @@ box-shadow:0 4px 20px oklch(0 0 0/0.25),0 1px 3px oklch(0 0 0/0.15);
 cursor:pointer;display:flex;align-items:center;justify-content:center;
 transition:transform 200ms cubic-bezier(0.34,1.56,0.64,1);-webkit-font-smoothing:antialiased}
 button:hover{transform:scale(1.15)}button:active{transform:scale(0.95)}
+button svg{height:1em;width:auto;display:block;pointer-events:none}
 @media(prefers-reduced-motion:reduce){button{transition:none}button:hover,button:active{transform:none}}
 </style></head><body>
 <div id="backdrop"></div>
 <div id="btns" style="display:none">
-<button id="c" aria-label="Close sub-tab"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
-<button id="p" aria-label="Open as tab"><i class="fa-solid fa-up-right-from-square" aria-hidden="true"></i></button>
+<button id="c" aria-label="Close sub-tab"><span aria-hidden="true">${closeIcon}</span></button>
+<button id="p" aria-label="Open as tab"><span aria-hidden="true">${promoteIcon}</span></button>
 </div>
 <script>
 var bd=document.getElementById('backdrop'),btns=document.getElementById('btns');
@@ -1087,11 +1088,6 @@ export class ElectronPlatform implements Platform {
     const parent = this.getWin();
     if (!parent) return;
 
-    const rawCssDir = path
-      .join(__dirname, "../../node_modules/@fortawesome/fontawesome-free/css")
-      .replace(/\\/g, "/");
-    const faCssDir = rawCssDir.startsWith("/") ? rawCssDir : `/${rawCssDir}`;
-
     this.subTabWin = new BrowserWindow({
       parent,
       frame: false,
@@ -1108,7 +1104,7 @@ export class ElectronPlatform implements Platform {
       },
     });
 
-    const html = buildSubTabWindowHtml(faCssDir);
+    const html = buildSubTabWindowHtml();
     const tmpPath = path.join(app.getPath("temp"), `chiaroscuro-subtab-win-${process.pid}.html`);
     fs.writeFileSync(tmpPath, html, "utf-8");
     this.subTabWin.loadFile(tmpPath);

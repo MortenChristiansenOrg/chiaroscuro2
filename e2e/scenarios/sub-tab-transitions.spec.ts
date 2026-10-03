@@ -12,6 +12,59 @@ test.afterAll(async () => {
   await site.close();
 });
 
+test("sub-tab action icons render without external assets and close/promote still work", async ({
+  appSession: session,
+}) => {
+  // Packaged builds do not ship the Font Awesome development dependency.
+  await session.app.evaluate(({ session: electronSession }) => {
+    electronSession.defaultSession.webRequest.onBeforeRequest(
+      { urls: ["file://*/*fontawesome-free/*"] },
+      (_details, callback) => callback({ cancel: true }),
+    );
+  });
+  const parent = await VerificationPage.navigate(session, `${site.url}/parent`);
+  await parent.subTab.click();
+  const child = await session.target((t) => t.kind === "sub-tab" && t.visible);
+  const frame = await session.page(await session.target((t) => t.kind === "sub-tab-frame"));
+  for (const name of ["Close sub-tab", "Open as tab"]) {
+    const icon = frame.getByRole("button", { name, exact: true }).locator("svg");
+    await expect(icon).toBeVisible();
+    const appearance = await icon.evaluate((svg: SVGSVGElement) => {
+      const path = svg.querySelector("path");
+      if (!path) throw new Error("Missing icon shape");
+      const bounds = path.getBoundingClientRect();
+      return {
+        width: bounds.width,
+        height: bounds.height,
+        fill: getComputedStyle(path).fill,
+        color: getComputedStyle(svg.closest("button") as HTMLElement).color,
+      };
+    });
+    expect(appearance.width).toBeGreaterThan(10);
+    expect(appearance.height).toBeGreaterThan(10);
+    expect(appearance.fill).toBe(appearance.color);
+    expect(appearance.fill).toBe("oklch(0.35 0 0)");
+  }
+  await frame.screenshot({ path: path.join(session.artifactDir, "action-icons.renderer.png") });
+  expect((await session.capture("action-icons")).status).toBe("complete");
+  await frame.getByRole("button", { name: "Close sub-tab", exact: true }).click();
+  await waitUntil(
+    "close button removes child",
+    () => session.targets(),
+    (targets) => !targets.some((t) => t.id === child.id),
+  );
+  await parent.subTab.click();
+  const nextChild = await session.target((t) => t.kind === "sub-tab" && t.visible);
+  const childPage = new VerificationPage(await session.page(nextChild));
+  await childPage.submit("preserve promotion state");
+  await frame.getByRole("button", { name: "Open as tab", exact: true }).click();
+  await session.target(
+    (t) => t.kind === "tab" && t.webContentsId === nextChild.webContentsId && t.visible,
+  );
+  await expect(childPage.message).toHaveValue("preserve promotion state");
+  await expect(childPage.result).toHaveText("preserve promotion state");
+});
+
 test("sub-tab transitions survive nested opens, resize, rapid close and reopen", async ({
   appSession: session,
 }) => {
