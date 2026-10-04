@@ -17,6 +17,7 @@ export function createMockPlatform(overrides: Partial<Platform> = {}): Platform 
     closeTab: vi.fn(),
     navigateTab: vi.fn(),
     getTabUrl: vi.fn(() => undefined),
+    isTabLoading: vi.fn(() => false),
     getTabTitle: vi.fn(() => undefined),
     getPdfResponseUrl: vi.fn(() => undefined),
     setTabBounds: vi.fn(),
@@ -40,6 +41,7 @@ export function createMockPlatform(overrides: Partial<Platform> = {}): Platform 
     registerShortcut: vi.fn(),
     unregisterShortcut: vi.fn(),
     registerLocalShortcut: vi.fn(),
+    registerWebsiteShortcut: vi.fn(() => () => {}),
     hookWebContents: vi.fn(),
     focusShell: vi.fn(),
     initTooltipOverlay: vi.fn(),
@@ -83,6 +85,7 @@ export function createMockPlatform(overrides: Partial<Platform> = {}): Platform 
     copyImageAt: vi.fn(),
     downloadUrl: vi.fn(),
     executeJavaScript: vi.fn(async () => undefined),
+    executeWebsiteScript: vi.fn(async () => ({})),
     clearExtensionCodeCache: vi.fn(async () => {}),
     loadExtension: vi.fn(async (p: string) => ({
       id: p.split("/").pop() ?? "mock-ext",

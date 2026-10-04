@@ -11,6 +11,7 @@ import {
 export const CommandPaletteExecutePayloadSchema = z.strictObject({
   command: z.string(),
   inCurrentTab: z.boolean().optional(),
+  scriptId: z.string().optional(),
 });
 
 export const CommandPaletteSearchVisitsPayloadSchema = z.strictObject({ query: z.string() });
@@ -19,6 +20,7 @@ export const SuggestionSchema = z.strictObject({
   url: z.string(),
   title: z.string(),
   visitCount: z.number(),
+  scriptId: z.string().optional(),
 });
 
 export const commandContracts = {

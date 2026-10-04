@@ -163,6 +163,24 @@ export const routes: Route[] = [
     component: lazy(() => import("./pages/components/settings-page.mdx")),
   },
   {
+    path: "/components/domain-scripts-section",
+    title: "Domain Scripts Section",
+    group: "Components",
+    component: lazy(() => import("./pages/components/domain-scripts-section.mdx")),
+  },
+  {
+    path: "/components/domain-script-card",
+    title: "Domain Script Card",
+    group: "Components",
+    component: lazy(() => import("./pages/components/domain-script-card.mdx")),
+  },
+  {
+    path: "/components/domain-script-editor",
+    title: "Domain Script Editor",
+    group: "Components",
+    component: lazy(() => import("./pages/components/domain-script-editor.mdx")),
+  },
+  {
     path: "/components/tab-customization",
     title: "Tab Customization",
     group: "Components",

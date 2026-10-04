@@ -6,6 +6,10 @@ The Domain Customization feature provides per-domain settings including custom C
 
 Accessed via an icon button in the address bar (left of the URL). Clicking opens a singleton built-in tab for that domain showing navigation, CSS, and permission controls using the shared SettingsLayout scaffold.
 
+The same page includes personal JavaScript scripts and actions. See
+`DomainScriptsFeature.specs.md` for page-load execution, command-palette aliases,
+keyboard shortcuts and error reporting.
+
 ## Terminology
 
 - **Domain**: the hostname extracted from the active tab's URL.

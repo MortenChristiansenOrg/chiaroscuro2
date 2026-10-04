@@ -55,6 +55,41 @@ function setup(overrides: { activeTabId?: TabId | undefined } = {}) {
 }
 
 describe("command-palette commands", () => {
+  it("offers matching website actions alongside history and executes without navigating", async () => {
+    const { commands } = setup();
+    const run = vi.fn();
+    const create = vi.fn();
+    commands.unhandle("tabs:create");
+    commands.handle("tabs:create", create);
+    commands.handle("domain-scripts:actions", async () => [
+      { id: "copy-title", name: "Copy title", alias: "/copy-title", shortcut: "" },
+    ]);
+    commands.handle("domain-scripts:run", run);
+    expect(await commands.send(COMMAND_PALETTE_SEARCH_VISITS, { query: "" })).toEqual([
+      { title: "Copy title", url: "/copy-title", visitCount: 0, scriptId: "copy-title" },
+    ]);
+    await commands.send(COMMAND_PALETTE_EXECUTE, {
+      command: "/copy-title",
+      scriptId: "copy-title",
+    });
+    expect(run).toHaveBeenCalledWith({ id: "copy-title" });
+    expect(create).not.toHaveBeenCalled();
+  });
+
+  it("resolves exact website aliases before navigation and propagates execution errors", async () => {
+    const { commands } = setup();
+    const alias = vi.fn(async () => ({ handled: true }));
+    commands.handle("domain-scripts:run-alias", alias);
+    await commands.send(COMMAND_PALETTE_EXECUTE, { command: " /copy-title " });
+    expect(alias).toHaveBeenCalledWith({ alias: "/copy-title" });
+    commands.handle("domain-scripts:run", async () => {
+      throw new Error("Script failed");
+    });
+    await expect(
+      commands.send(COMMAND_PALETTE_EXECUTE, { command: "Copy title", scriptId: "copy-title" }),
+    ).rejects.toThrow("Script failed");
+  });
+
   it("offers one named Extensions result despite old internal history", async () => {
     const { commands, dataStore } = setup();
     await dataStore.collection("visits").insert({

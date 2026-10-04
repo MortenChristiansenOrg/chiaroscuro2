@@ -28,6 +28,8 @@
     "../src/renderer/src/components/BuiltInPage.tsx",
     "../src/renderer/src/components/SettingsLayout.tsx",
     "../src/features/**/*.renderer.tsx",
+    "../src/features/domain-scripts/*.tsx",
+    "../src/features/domain-scripts/domain-scripts.ui.ts",
     "../src/features/sidebar/Favicon.tsx",
     "../src/features/sidebar/TabItem.tsx",
     "../src/features/sidebar/FolderHeader.tsx",

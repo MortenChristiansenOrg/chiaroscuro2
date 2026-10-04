@@ -5,6 +5,12 @@ import type { Platform } from "../../platform/types";
 import { defineFeature } from "../../shared/define-feature";
 import { logError, logWarn } from "../../shared/log";
 import type { TabId, WindowId, WorkspaceId } from "../../shared/types";
+import {
+  DOMAIN_SCRIPTS_ACTIONS,
+  DOMAIN_SCRIPTS_RUN,
+  DOMAIN_SCRIPTS_RUN_ALIAS,
+  type DomainScriptsCommands,
+} from "../domain-scripts/domain-scripts.shared";
 import type { SettingsChangedEvent, SettingsEvents } from "../settings/settings.shared";
 import { SETTINGS_CHANGED } from "../settings/settings.shared";
 import type { TabsCommands, TabsEvents } from "../tabs/tabs.shared";
@@ -23,7 +29,12 @@ import {
 import { getBuiltInPages, type ProviderConfig, resolveInput } from "./resolve-input";
 import { initVisitTracking, recordVisit, searchVisits } from "./suggestions";
 
-type AllCommands = CommandPaletteCommands & Pick<TabsCommands, "tabs:create" | "tabs:navigate">;
+type AllCommands = CommandPaletteCommands &
+  Pick<TabsCommands, "tabs:create" | "tabs:navigate"> &
+  Pick<
+    DomainScriptsCommands,
+    typeof DOMAIN_SCRIPTS_ACTIONS | typeof DOMAIN_SCRIPTS_RUN | typeof DOMAIN_SCRIPTS_RUN_ALIAS
+  >;
 type AllEvents = CommandPaletteEvents &
   Pick<TabsEvents, typeof TABS_UPDATED> &
   Pick<SettingsEvents, typeof SETTINGS_CHANGED>;
@@ -106,6 +117,16 @@ export default defineFeature<Deps>({
     });
 
     commands.handle(COMMAND_PALETTE_EXECUTE, async (payload) => {
+      if (payload.scriptId) {
+        await commands.send(DOMAIN_SCRIPTS_RUN, { id: payload.scriptId });
+        return;
+      }
+      if (payload.command.trim().startsWith("/") && commands.hasHandler(DOMAIN_SCRIPTS_RUN_ALIAS)) {
+        const result = await commands.send(DOMAIN_SCRIPTS_RUN_ALIAS, {
+          alias: payload.command.trim(),
+        });
+        if (result.handled) return;
+      }
       const url = resolveInput(payload.command, providerConfig);
       if (!url) return;
 
@@ -123,17 +144,27 @@ export default defineFeature<Deps>({
         await commands.send("tabs:create", { url });
       }
 
-      // Palette HTML sends command-palette:hide immediately after execute —
-      // doing it here too would race with a subsequent re-open.
+      // The palette closes after successful execution and keeps failures visible.
+      // Closing here could race with a subsequent re-open.
     });
 
     commands.handle(COMMAND_PALETTE_SEARCH_VISITS, async (payload) => {
       const q = payload.query;
       const visits = await searchVisits(q);
-      const results = visits.map((v) => ({
+      const results: import("./command-palette.shared").Suggestion[] = visits.map((v) => ({
         url: v.url,
         title: v.title,
         visitCount: v.visitCount,
+      }));
+
+      const actions = commands.hasHandler(DOMAIN_SCRIPTS_ACTIONS)
+        ? await commands.send(DOMAIN_SCRIPTS_ACTIONS, { query: q })
+        : [];
+      const scriptResults = actions.map((action) => ({
+        title: action.name,
+        url: action.alias || "Website action",
+        visitCount: 0,
+        scriptId: action.id,
       }));
 
       // Prepend matching built-in pages for `/` queries
@@ -142,10 +173,10 @@ export default defineFeature<Deps>({
         const pages = getBuiltInPages()
           .filter((p) => p.route.toLowerCase().startsWith(lower))
           .map((p) => ({ url: p.route, title: p.title, visitCount: 0 }));
-        return [...pages, ...results];
+        return [...pages, ...scriptResults, ...results];
       }
 
-      return results;
+      return [...scriptResults, ...results];
     });
 
     platform.registerShortcut("CommandOrControl+T", () => {

@@ -1,0 +1,76 @@
+---
+title: Domain Scripts Section
+---
+
+import { ComponentPreview } from "../../components/ComponentPreview"
+import { DomainScriptsSection } from "@features/domain-scripts/DomainScriptsSection"
+
+# Domain Scripts Section
+
+## Overview
+
+`src/features/domain-scripts/DomainScriptsSection.tsx` manages personal scripts for one domain within the [Settings Page](/components/settings-page).
+
+## Anatomy
+
+1. Scripts heading and workflow explanation.
+2. Loading, empty, or command-error feedback.
+3. [Domain Script Cards](/components/domain-script-card).
+4. Add script action or the inline [Domain Script Editor](/components/domain-script-editor).
+
+## Visual Preview
+
+<ComponentPreview label="Scripts settings for github.com">
+  <DomainScriptsSection domain="github.com" />
+</ComponentPreview>
+
+## Visual Specs
+
+| Property | Token / value |
+|---|---|
+| Context | Content panel |
+| Heading, help text | `--text-sm`, `--muted-foreground` |
+| Heading border | `--border` |
+| Vertical gap | 0.75rem |
+| Add action | `--background`, dashed `--border`, `--radius-sm` |
+| Error | `--destructive` |
+| Minimum action height | `--click-target-min` |
+
+## States
+
+| State | Presentation |
+|---|---|
+| Loading | Polite **Loading scripts…** status |
+| Empty | Short explanation and Add script |
+| Populated | One card per saved script |
+| Editing | Inline editor; list actions disabled |
+| Command failed | Inline alert; existing data preserved |
+| Add default / hover / pressed | `--background` / `--accent` / `--muted` |
+| Add disabled | 0.5 opacity, default cursor, no hover surface |
+| Focus visible | `--ring` outline |
+
+## Behavior
+
+The renderer fetches the domain's scripts and receives authoritative updates through events. New events take precedence over an older pending list response. Add opens one draft. Toggle and Delete wait for the backend and preserve visible state on failure. Execution events update the matching card with its most recent result. Results last for the browser session.
+
+Manual scripts run from the command palette or their optional shortcut while viewing a matching webpage. Automatic scripts run on page load. Domain settings explain those choices without implying that the settings tab can execute a page action.
+
+## Animation & Motion
+
+Action colors use `--duration-fast` and `--ease-out`. Reduced motion removes transitions. List updates do not animate layout.
+
+## Keyboard & Focus
+
+Tab follows cards, then Add. Opening the editor focuses Name. Cancel/Escape restores the trigger; successful deletion returns focus to Add. Controls are standard keyboard-accessible content controls.
+
+## Accessibility
+
+The `section` has a heading association. Loading and run successes use status regions, and errors use alerts. Card controls have distinct accessible names; source editing uses labeled fields. The Add icon is decorative, and its text gives the accessible name.
+
+## Layout & Composition
+
+The section follows Custom CSS and precedes Permissions in domain settings. A Scripts category in the settings navigation scrolls to it. Cards and the editor stretch to the content width and retain the settings page's shared scroll area.
+
+## Related
+
+[Domain Script Card](/components/domain-script-card), [Domain Script Editor](/components/domain-script-editor), [Settings Page](/components/settings-page), [Command Palette](/components/command-palette).
