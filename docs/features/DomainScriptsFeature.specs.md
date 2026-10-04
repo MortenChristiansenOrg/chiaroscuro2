@@ -61,6 +61,7 @@ command palette and optional aliases and shortcuts. All scripts remain local.
 
 - Existing Ctrl+T opens the command palette. Arrow keys and Enter select actions.
 - Each manual script may have an optional local shortcut with modifiers.
+- Holding a shortcut runs its action once per press; unmatched pages receive the keys normally.
 - Form controls use normal Tab navigation; Save and Cancel are explicit buttons.
 
 ### Mouse interactions

@@ -97,6 +97,13 @@ async function sendShortcut(session: AppSession, page: Page) {
       ?.focus();
     content.focus();
     content.sendInputEvent({ type: "keyDown", keyCode: "Y", modifiers: ["control", "shift"] });
+    for (let repeat = 0; repeat < 2; repeat++) {
+      content.sendInputEvent({
+        type: "keyDown",
+        keyCode: "Y",
+        modifiers: ["control", "shift", "isautorepeat"],
+      });
+    }
     content.sendInputEvent({ type: "keyUp", keyCode: "Y", modifiers: ["control", "shift"] });
   }, target.webContentsId);
 }
@@ -225,11 +232,32 @@ test("website actions run from palette, alias and native shortcut with clipboard
     await expect
       .poll(() => session.app.evaluate(({ clipboard }) => clipboard.readText()))
       .toBe("fixture copied 3");
+    // Releasing and pressing again must still run the action once.
+    await sendShortcut(session, page);
+    await expect(page.locator("#result")).toHaveText("4");
+    await expect
+      .poll(() => session.app.evaluate(({ clipboard }) => clipboard.readText()))
+      .toBe("fixture copied 4");
     await session.restart();
     page = await selectTab(session, url);
     await expect(page.locator("#result")).toHaveText("");
     await sendShortcut(session, page);
     await expect(page.locator("#result")).toHaveText("1");
+
+    const unmatched = await VerificationPage.navigate(session, `${site.url}/unmatched`);
+    await unmatched.page.evaluate(() => {
+      document.documentElement.dataset.shortcutEvents = "0";
+      document.addEventListener("keydown", (event) => {
+        if (event.ctrlKey && event.shiftKey && event.key.toLowerCase() === "y") {
+          const root = document.documentElement;
+          root.dataset.shortcutEvents = String(Number(root.dataset.shortcutEvents) + 1);
+        }
+      });
+    });
+    await sendShortcut(session, unmatched.page);
+    await expect(unmatched.page.locator("html")).toHaveAttribute("data-shortcut-events", "3");
+    await expect(unmatched.result).toHaveText("");
+    await VerificationPage.navigate(session, url);
 
     section = await openScripts(session);
     await editSource(

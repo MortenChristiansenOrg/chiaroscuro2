@@ -994,7 +994,13 @@ export class ElectronPlatform implements Platform {
 
   hookWebContents(webContents: unknown): void {
     const wc = webContents as Electron.WebContents;
+    const heldWebsiteKeys = new Set<string>();
     wc.on("before-input-event", (_event, input) => {
+      const key = input.code || input.key.toLowerCase();
+      if (input.type === "keyUp") {
+        heldWebsiteKeys.delete(key);
+        return;
+      }
       if (input.type !== "keyDown") return;
       for (const [accelerator, cb] of this.localShortcuts) {
         if (this.matchesAccelerator(input, accelerator)) {
@@ -1008,7 +1014,15 @@ export class ElectronPlatform implements Platform {
         return;
       }
       const websiteAction = this.websiteShortcuts.get(inputChord(input) ?? "");
+      if (input.isAutoRepeat) {
+        // Only consume repeats of a press that actually matched this page.
+        // A saved shortcut for a different domain must still reach the page.
+        if (websiteAction && heldWebsiteKeys.has(key)) _event.preventDefault();
+        return;
+      }
+      heldWebsiteKeys.delete(key);
       if (websiteAction?.()) {
+        heldWebsiteKeys.add(key);
         _event.preventDefault();
         return;
       }
