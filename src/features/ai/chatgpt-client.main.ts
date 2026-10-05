@@ -307,6 +307,7 @@ export function createChatGptClient(
         credentials = {
           ...credentials,
           ...identity,
+          pendingValidation: false,
           accessToken: result.access_token,
           refreshToken: result.refresh_token,
           idToken: result.id_token,

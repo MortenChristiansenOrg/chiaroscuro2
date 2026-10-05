@@ -42,6 +42,20 @@ test("AI settings and generated drafts use the real app with a simulated ChatGPT
     provider.respond = async (options) => {
       if (options.instructions.startsWith("Write a JavaScript"))
         return "await copy(document.title);";
+      if (
+        options.instructions.startsWith("Write the complete") &&
+        JSON.stringify(options.input).includes("Load a remote background")
+      )
+        return "body { background: url(https://attacker.example/image); }";
+      if (
+        options.instructions.startsWith("Write the complete") &&
+        JSON.stringify(options.input).includes("Wait forever")
+      )
+        return new Promise((_, reject) => {
+          options.signal.addEventListener("abort", () => reject(options.signal.reason), {
+            once: true,
+          });
+        });
       if (options.instructions.startsWith("Write the complete"))
         return "h1 { color: rgb(180, 30, 70) !important; }";
       return "The heading color changed as requested.";
@@ -70,7 +84,22 @@ test("AI settings and generated drafts use the real app with a simulated ChatGPT
   await expect(scripts.getByRole("article", { name: "Generated draft" })).toBeVisible();
 
   const css = session.shell.locator("#domain-settings-css");
-  await css.getByRole("textbox", { name: "Describe the change" }).fill("Make the heading pink");
+  const cssRequest = css.getByRole("textbox", { name: "Describe the change" });
+  await cssRequest.fill("Load a remote background");
+  await css.getByRole("button", { name: "Generate and verify CSS" }).click();
+  await expect(css.getByRole("alert")).toContainText("remote resource references");
+  await expect(cssRequest).toHaveValue("Load a remote background");
+  expect(await session.command("domain-css:get-state", { domain: "127.0.0.1" })).toMatchObject({
+    enabled: false,
+    hasFile: false,
+  });
+  await cssRequest.fill("Wait forever");
+  await css.getByRole("button", { name: "Generate and verify CSS" }).click();
+  await expect(css.getByRole("status")).toContainText("Writing domain CSS");
+  await css.getByRole("button", { name: "Stop", exact: true }).click();
+  await expect(css.getByRole("alert")).toContainText("Generation stopped");
+  await expect(cssRequest).toHaveValue("Wait forever");
+  await cssRequest.fill("Make the heading pink");
   await css.getByRole("button", { name: "Generate and verify CSS" }).click();
   await expect(css.getByRole("status")).toContainText("CSS saved.");
   await expect(css.getByRole("button", { name: "Restore previous CSS" })).toBeVisible();

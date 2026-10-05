@@ -14,6 +14,7 @@ import { normalizeDomain } from "../domain-scripts/matching";
 import { AiSelectionSchema } from "./ai.contracts";
 import { type AiCommands, type AiEvents, type AiState, DEFAULT_AI_SELECTION } from "./ai.shared";
 import type { AiInput, AiProvider } from "./chatgpt-client.main";
+import { validateGeneratedCss } from "./generated-css.main";
 
 export interface AiDeps {
   commands: CommandBus<AiCommands>;
@@ -101,22 +102,40 @@ export default defineFeature<AiDeps, void>({
       selection: { ...DEFAULT_AI_SELECTION },
       models: [],
     };
+    let disposed = false;
+    let modelGeneration = 0;
+    let modelRequest: AbortController | undefined;
     let connecting: AbortController | undefined;
     const requests = new Map<string, AbortController>();
     const publish = () => {
+      if (disposed) return;
       state = { ...state, ...provider.status() };
       events.emit("ai:changed", structuredClone(state));
     };
     async function refreshModels() {
+      const generation = ++modelGeneration;
+      modelRequest?.abort();
+      const controller = new AbortController();
+      modelRequest = controller;
       state.models = [];
       state.error = undefined;
-      try {
-        if (provider.status().sharing)
-          state.models = await provider.models(AbortSignal.timeout(60000));
-      } catch (error) {
-        state.error = error instanceof Error ? error.message : String(error);
-      }
       publish();
+      try {
+        if (provider.status().sharing) {
+          const models = await provider.models(
+            AbortSignal.any([controller.signal, AbortSignal.timeout(60000)]),
+          );
+          if (!disposed && generation === modelGeneration && provider.status().sharing)
+            state.models = models;
+        }
+      } catch (error) {
+        if (!controller.signal.aborted && !disposed && generation === modelGeneration)
+          state.error = error instanceof Error ? error.message : String(error);
+      }
+      if (generation === modelGeneration) {
+        modelRequest = undefined;
+        publish();
+      }
     }
     generate = async (options) => {
       const selection = { ...state.selection };
@@ -128,7 +147,18 @@ export default defineFeature<AiDeps, void>({
           "Your selected model or reasoning effort is unavailable. Choose a supported combination in Settings → AI.",
         );
       try {
-        return await provider.respond({ ...selection, ...options });
+        const signal = AbortSignal.any([options.signal, AbortSignal.timeout(180000)]);
+        try {
+          return await provider.respond({ ...selection, ...options, signal });
+        } catch (error) {
+          if (signal.aborted)
+            throw new Error(
+              options.signal.aborted
+                ? "Generation stopped. Your previous customization is unchanged."
+                : "ChatGPT took too long. Your previous customization is unchanged. Try a smaller request or lower reasoning effort.",
+            );
+          throw error;
+        }
       } catch (error) {
         state.error = error instanceof Error ? error.message : String(error);
         publish();
@@ -164,6 +194,8 @@ export default defineFeature<AiDeps, void>({
     commands.handle("ai:disconnect", async () => {
       connecting?.abort();
       for (const controller of requests.values()) controller.abort();
+      modelGeneration++;
+      modelRequest?.abort();
       await provider.disconnect();
       state.models = [];
       state.error = undefined;
@@ -192,7 +224,7 @@ export default defineFeature<AiDeps, void>({
       const controller = new AbortController();
       requests.set(id, controller);
       cssDomains.add(normalized);
-      const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(180000)]);
+      const signal = controller.signal;
       let restorePreview: (() => Promise<void>) | undefined;
       try {
         const page = selectAiPage(deps, normalized);
@@ -233,6 +265,7 @@ export default defineFeature<AiDeps, void>({
         );
         signal.throwIfAborted();
         page.assertCurrent();
+        validateGeneratedCss(source);
         restorePreview = await previewDomainCss(page.tabId, normalized, source);
         events.emit("ai:progress", {
           id,
@@ -284,7 +317,7 @@ export default defineFeature<AiDeps, void>({
       if (requests.has(id)) throw new Error("This request is already running.");
       const controller = new AbortController();
       requests.set(id, controller);
-      const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(180000)]);
+      const signal = controller.signal;
       try {
         const page = selectAiPage(deps, domain);
         events.emit("ai:progress", { id, message: "Inspecting the target page…" });
@@ -320,13 +353,17 @@ export default defineFeature<AiDeps, void>({
       if (stored.success) state.selection = stored.data;
       try {
         await provider.load();
-        await refreshModels();
+        publish();
+        void refreshModels();
       } catch (error) {
         state.error = error instanceof Error ? error.message : String(error);
         publish();
       }
     };
     cleanup = () => {
+      disposed = true;
+      modelGeneration++;
+      modelRequest?.abort();
       connecting?.abort();
       for (const controller of requests.values()) controller.abort();
       generate = undefined;

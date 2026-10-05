@@ -6,5 +6,13 @@ export const scriptInputClass =
   "min-h-[var(--click-target-min)] w-full rounded-[var(--radius-sm)] border border-[var(--input)] bg-[var(--background)] px-2 py-1.5 text-[length:var(--text-sm)] text-[var(--foreground)] transition-colors duration-[var(--duration-fast)] ease-[var(--ease-out)] hover:border-[var(--ring)] active:border-[var(--ring)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[var(--ring)] disabled:opacity-50 disabled:hover:border-[var(--input)] motion-reduce:transition-none";
 
 export function scriptErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  if (error instanceof Error) return error.message;
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "message" in error &&
+    typeof error.message === "string"
+  )
+    return error.message;
+  return typeof error === "string" ? error : "The request could not be completed. Try again.";
 }

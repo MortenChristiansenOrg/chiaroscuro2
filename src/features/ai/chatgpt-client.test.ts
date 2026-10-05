@@ -152,6 +152,22 @@ describe("ChatGPT OAuth", () => {
     expect(fixture.getAuth().searchParams.get("client_id")).toBe("oaiapp_test");
     expect(fixture.getAuth().searchParams.get("ext_agent_host_id")).toBe(host);
   });
+  it("repairs a pending refresh-validation failure through a successful reconnect", async () => {
+    const fixture = await login();
+    await fixture.connect();
+    const file = path.join(directory, "chatgpt-credentials.enc");
+    const stored = JSON.parse(protection.decrypt(await fs.readFile(file)));
+    await fs.writeFile(
+      file,
+      protection.encrypt(JSON.stringify({ ...stored, pendingValidation: true })),
+    );
+    await fixture.client.load();
+    expect(fixture.client.status().sharing).toBe(false);
+    await fixture.connect();
+    expect(fixture.client.status().sharing).toBe(true);
+    const renewed = JSON.parse(protection.decrypt(await fs.readFile(file)));
+    expect(renewed.pendingValidation).toBe(false);
+  });
   it("cancels sign-in and closes its listener", async () => {
     let callback: string | null = null;
     const controller = new AbortController();

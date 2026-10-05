@@ -36,6 +36,7 @@
     "diagnose:startup": "bun run setup:electron && bun build e2e/diagnostics/startup.ts --target=node --packages=external --outfile=out/verification/startup.mjs && node out/verification/startup.mjs"
   },
   "dependencies": {
+    "css-tree": "^3.2.1",
     "electron-updater": "^6.8.9",
     "jose": "^6.2.12",
     "rxdb": "^17.5.0",
@@ -51,6 +52,7 @@
     "@tailwindcss/vite": "^4.3.3",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
+    "@types/css-tree": "^3.2.0",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.7",
     "@types/yauzl": "^3.4.0",

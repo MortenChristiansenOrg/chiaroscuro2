@@ -54,6 +54,25 @@ const payload = {
 };
 afterEach(() => ai.teardown?.());
 describe("shared AI connection", () => {
+  it("keeps startup responsive during model discovery and ignores a stale catalog after sign-out", async () => {
+    const { commands, provider } = setup();
+    let complete: ((models: Awaited<ReturnType<AiProvider["models"]>>) => void) | undefined;
+    vi.mocked(provider.models).mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          complete = resolve;
+        }),
+    );
+    await ai.start?.();
+    expect(provider.models).toHaveBeenCalled();
+    expect((await commands.send("ai:get-state", {})).sharing).toBe(true);
+    await commands.send("ai:disconnect", {});
+    complete?.([{ slug: "gpt-6-luna", name: "GPT-6 Luna", efforts: ["high"] }]);
+    await Promise.resolve();
+    const state = await commands.send("ai:get-state", {});
+    expect(state.sharing).toBe(false);
+    expect(state.models).toEqual([]);
+  });
   it("requires plan permission, then enables requests on connect and disables them on sign-out", async () => {
     const { commands, provider } = setup(false);
     await ai.start?.();
@@ -128,7 +147,7 @@ describe("shared AI connection", () => {
     const request = commands.send("ai:generate-script", payload);
     await vi.waitFor(() => expect(provider.respond).toHaveBeenCalledTimes(2));
     await commands.send("ai:cancel", { id: payload.id });
-    await expect(request).rejects.toThrow("Cancelled");
+    await expect(request).rejects.toThrow("Generation stopped");
   });
   it("rejects unmatched domains before sending any page data", async () => {
     const { commands, provider } = setup();

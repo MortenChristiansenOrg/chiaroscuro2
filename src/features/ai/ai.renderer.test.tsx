@@ -63,15 +63,18 @@ it("updates only JavaScript in the editable draft and saves only on explicit Sav
 });
 it("keeps the request and existing draft on failure", async () => {
   const draft = vi.fn();
-  vi.mocked(window.chiaroscuro.sendCommand).mockRejectedValue(
-    new Error("Usage limit reached. Manage usage in Settings."),
-  );
+  vi.mocked(window.chiaroscuro.sendCommand).mockRejectedValue({
+    code: "COMMAND_FAILED",
+    message: "Usage limit reached. Manage usage in Settings.",
+  });
   render(<AiRequestPanel domain="example.com" kind="script" source="old();" onDraft={draft} />);
   fireEvent.change(screen.getByLabelText("Describe the change"), {
     target: { value: "Copy title" },
   });
   fireEvent.click(screen.getByRole("button", { name: "Generate draft" }));
-  await screen.findByRole("alert");
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "Usage limit reached. Manage usage in Settings.",
+  );
   expect(screen.getByLabelText("Describe the change")).toHaveValue("Copy title");
   expect(draft).not.toHaveBeenCalled();
 });
