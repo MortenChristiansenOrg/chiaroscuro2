@@ -120,3 +120,7 @@ keyboard shortcuts and error reporting.
 ## AI CSS generation
 
 Domain settings include Ask AI. It shares the user's request, existing CSS, page structure, and screenshots with the connected ChatGPT account using global model/effort settings. A generated stylesheet is previewed on the matching open page, captured again, and assessed against the request. A completed result is saved through the domain CSS system and enabled. Failures and cancellation restore the previous preview; external edits during generation prevent overwriting them. Restore previous CSS persists across restart and restores both the previous source (including no prior file) and enabled state. Manual editing remains available without AI.
+
+### Automatic visual correction (#101)
+
+Every applied revision is inspected with a fresh screenshot and page structure. A structured assessment either confirms the request, proposes complete corrected CSS for another preview, or explains why it cannot correct the remaining mismatch. The loop allows four visual checks; at its limit it saves only the last assessed revision and clearly reports unresolved changes. Follow-up requests start from the saved stylesheet. Cancellation, invalid feedback, unsafe revised CSS, usage errors, same-URL document reloads, and concurrent manual changes stop generation and restore the prior preview without overwriting saved CSS. CSS insertions are serialized per page; saved styles also apply to sub-tabs and respect enable/disable controls.

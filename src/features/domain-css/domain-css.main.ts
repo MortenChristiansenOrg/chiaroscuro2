@@ -8,6 +8,7 @@ import { defineFeature } from "../../shared/define-feature";
 import { logError } from "../../shared/log";
 import { SingletonTabMap } from "../../shared/singleton-tab";
 import type { TabId } from "../../shared/types";
+import type { SubTabsEvents } from "../sub-tabs/sub-tabs.shared";
 import type { Tab, TabsCommands, TabsEvents } from "../tabs/tabs.shared";
 import { TABS_CLOSED, TABS_UPDATED } from "../tabs/tabs.shared";
 import {
@@ -29,7 +30,9 @@ import {
 } from "./domain-css.shared";
 
 type AllCommands = DomainCssCommands & Pick<TabsCommands, "tabs:create" | "tabs:activate">;
-type AllEvents = DomainCssEvents & Pick<TabsEvents, typeof TABS_CLOSED | typeof TABS_UPDATED>;
+type AllEvents = DomainCssEvents &
+  Pick<TabsEvents, typeof TABS_CLOSED | typeof TABS_UPDATED> &
+  Pick<SubTabsEvents, "sub-tabs:opened" | "sub-tabs:updated" | "sub-tabs:closed">;
 
 export interface DomainCssDeps {
   commands: CommandBus<AllCommands>;
@@ -37,7 +40,7 @@ export interface DomainCssDeps {
   platform: Platform;
   dataStore: DataStore;
   dataDir: string;
-  getTabsSnapshot: () => Map<TabId, Tab>;
+  getTabsSnapshot: () => Map<TabId, Pick<Tab, "url" | "builtIn">>;
 }
 
 interface DomainState {
@@ -55,6 +58,22 @@ interface PersistedNavigationState {
 // Track CSS keys injected per tab for removal
 const previewTabs = new Set<TabId>();
 const injectedCssKeys = new Map<TabId, string>();
+const cssOperations = new Map<TabId, Promise<void>>();
+
+// Serialize native insert/remove calls so a late navigation or file-watcher
+// injection cannot leave duplicate styles underneath an AI preview.
+function queueCss<T>(tabId: TabId, operation: () => Promise<T>): Promise<T> {
+  const result = (cssOperations.get(tabId) ?? Promise.resolve()).then(operation);
+  const settled = result.then(
+    () => {},
+    () => {},
+  );
+  cssOperations.set(tabId, settled);
+  void settled.then(() => {
+    if (cssOperations.get(tabId) === settled) cssOperations.delete(tabId);
+  });
+  return result;
+}
 
 // Per-domain state (enabled/disabled)
 let domainStates = new Map<string, DomainState>();
@@ -144,7 +163,10 @@ function emitChanged(domain: string): void {
   });
 }
 
-async function injectCssForTab(tabId: TabId, domain: string): Promise<void> {
+function injectCssForTab(tabId: TabId, domain: string): Promise<void> {
+  return queueCss(tabId, () => injectCssNow(tabId, domain));
+}
+async function injectCssNow(tabId: TabId, domain: string): Promise<void> {
   if (previewTabs.has(tabId)) return;
   const state = domainStates.get(domain);
   if (!state?.enabled) return;
@@ -152,7 +174,7 @@ async function injectCssForTab(tabId: TabId, domain: string): Promise<void> {
   const css = readCssFile(domain);
 
   // Remove any previously injected CSS first
-  await removeCssFromTab(tabId);
+  await removeCssNow(tabId);
   if (!css) return;
 
   try {
@@ -163,7 +185,10 @@ async function injectCssForTab(tabId: TabId, domain: string): Promise<void> {
   }
 }
 
-async function removeCssFromTab(tabId: TabId): Promise<void> {
+function removeCssFromTab(tabId: TabId): Promise<void> {
+  return queueCss(tabId, () => removeCssNow(tabId));
+}
+async function removeCssNow(tabId: TabId): Promise<void> {
   const key = injectedCssKeys.get(tabId);
   if (!key) return;
 
@@ -271,24 +296,18 @@ export default defineFeature<DomainCssDeps>({
       injectedCssKeys.delete(tabId);
     });
 
-    // When a tab navigates, inject/remove CSS for the new domain
-    events.on(TABS_UPDATED, (payload) => {
-      const { tab } = payload;
+    // Parent tabs and sub-tabs use the same per-domain stylesheet.
+    const updateCss = (tabId: TabId, tab: Pick<Tab, "url" | "builtIn">) => {
       if (tab.builtIn) return;
-
       const domain = getDomainFromUrl(tab.url);
-      if (!domain) {
-        removeCssFromTab(tab.id).catch(logError("domain-css", "remove css"));
-        return;
-      }
-
-      const state = domainStates.get(domain);
-      if (state?.enabled) {
-        injectCssForTab(tab.id, domain).catch(logError("domain-css", "inject css"));
-      } else {
-        removeCssFromTab(tab.id).catch(logError("domain-css", "remove css"));
-      }
-    });
+      if (domain && domainStates.get(domain)?.enabled)
+        injectCssForTab(tabId, domain).catch(logError("domain-css", "inject css"));
+      else removeCssFromTab(tabId).catch(logError("domain-css", "remove css"));
+    };
+    events.on(TABS_UPDATED, ({ tab }) => updateCss(tab.id, tab));
+    events.on("sub-tabs:opened", ({ subTab }) => updateCss(subTab.id, subTab));
+    events.on("sub-tabs:updated", ({ subTab }) => updateCss(subTab.id, subTab));
+    events.on("sub-tabs:closed", ({ subTabId }) => injectedCssKeys.delete(subTabId));
 
     // ── Navigation blocking callback ────────────────────────────
     stopNavigationBlock = d_.platform.onNavigationBlock((tabId, targetUrl, currentUrl, type) => {
@@ -494,23 +513,31 @@ export async function previewDomainCss(
   domain: string,
   source: string,
 ): Promise<() => Promise<void>> {
-  previewTabs.add(tabId);
-  await removeCssFromTab(tabId);
-  let key: string;
-  try {
-    key = await deps.platform.insertCSS(tabId, source);
-  } catch (error) {
-    previewTabs.delete(tabId);
-    await injectCssForTab(tabId, domain);
-    throw error;
-  }
-  return async () => {
-    await deps.platform.removeInsertedCSS(tabId, key).catch(() => {});
-    previewTabs.delete(tabId);
-    const tab = deps.getTabsSnapshot().get(tabId);
-    if (tab && getDomainFromUrl(tab.url) === domain) await injectCssForTab(tabId, domain);
-  };
+  return queueCss(tabId, async () => {
+    previewTabs.add(tabId);
+    await removeCssNow(tabId);
+    let key: string;
+    try {
+      key = await deps.platform.insertCSS(tabId, source);
+    } catch (error) {
+      previewTabs.delete(tabId);
+      await injectCssNow(tabId, domain);
+      throw error;
+    }
+    let restored = false;
+    return () =>
+      queueCss(tabId, async () => {
+        if (restored) return;
+        restored = true;
+        await deps.platform.removeInsertedCSS(tabId, key).catch(() => {});
+        previewTabs.delete(tabId);
+        const tab = deps.getTabsSnapshot().get(tabId);
+        const currentDomain = tab && getDomainFromUrl(tab.url);
+        if (currentDomain) await injectCssNow(tabId, currentDomain);
+      });
+  });
 }
+
 export async function saveGeneratedCss(
   domain: string,
   source: string,

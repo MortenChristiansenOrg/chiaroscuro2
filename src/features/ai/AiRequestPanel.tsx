@@ -95,7 +95,7 @@ export function AiRequestPanel({ domain, kind, source = "", onDraft }: AiRequest
             Using ChatGPT plan · {state.selection.model} · {state.selection.effort}.{" "}
             {kind === "script"
               ? "Page structure and your draft will be shared. Generated code is an editable draft."
-              : "Page structure and screenshots will be shared. CSS changes are applied and visually checked; you can restore the prior CSS."}
+              : "Page structure and screenshots will be shared. CSS changes are applied, visually checked, and refined automatically; you can stop or restore the prior CSS."}
           </p>
           <label htmlFor={fieldId} className="flex flex-col gap-1.5">
             Describe the change

@@ -48,7 +48,7 @@ Buttons use `--accent` on hover, `--muted` when pressed, `--ring` focus, and dis
 
 ## Variants
 
-CSS generation applies a preview, captures the rendered page, asks AI to check the result, and saves with durable restore. Script generation replaces only the editor's source draft; domain, path, mode, enabled state, aliases and shortcuts are preserved. Draft generation never executes JavaScript or saves a script.
+CSS generation applies a preview, captures the actual rendered page, and asks AI to assess it. A mismatch triggers a corrected stylesheet and another capture, up to four visual checks. Completion saves the assessed result with durable restore. An unresolved result explains what remains and invites a follow-up. Stop restores the previous stylesheet. Script generation replaces only the editor's source draft; domain, path, mode, enabled state, aliases and shortcuts are preserved. Draft generation never executes JavaScript or saves a script.
 
 ## Behavior
 
