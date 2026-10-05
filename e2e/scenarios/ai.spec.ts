@@ -56,9 +56,33 @@ test("AI settings and generated drafts use the real app with a simulated ChatGPT
             once: true,
           });
         });
+      const pink = "h1 { color: rgb(180, 30, 70) !important; }";
       if (options.instructions.startsWith("Write the complete"))
-        return "h1 { color: rgb(180, 30, 70) !important; }";
-      return "The heading color changed as requested.";
+        return JSON.stringify(options.input).includes("font larger")
+          ? `${pink} h1 { font-size: 56px !important; }`
+          : "h1 { color: blue !important; }";
+      const images = options.input.flatMap((item) =>
+        typeof item.content === "string"
+          ? []
+          : item.content.filter((part) => part.type === "input_image"),
+      );
+      if (images.length < 2) throw new Error("Missing actual before/after screenshots");
+      const latestCss = options.input
+        .filter(
+          (item) =>
+            item.role === "assistant" &&
+            typeof item.content === "string" &&
+            item.content.startsWith("h1"),
+        )
+        .at(-1)?.content as string;
+      const achieved = latestCss.includes("180, 30, 70");
+      return JSON.stringify({
+        achieved,
+        explanation: achieved
+          ? "The heading is pink as requested."
+          : "The heading is blue. Correcting it to pink.",
+        revisedCss: achieved ? null : pink,
+      });
     };
   });
   await ai.getByRole("button", { name: "Continue with ChatGPT" }).click();
@@ -111,6 +135,29 @@ test("AI settings and generated drafts use the real app with a simulated ChatGPT
   await new WindowChromePage(session.shell).reloadButton.click();
   await expect(page.locator("h1")).toHaveCSS("color", "rgb(180, 30, 70)");
 
+  // A follow-up starts from the saved CSS, preserves the color, and changes size.
+  await session.command("domain-settings:open", { domain: "127.0.0.1" });
+  await css.getByRole("button", { name: "Enabled", exact: true }).click();
+  await expect(page.locator("h1")).not.toHaveCSS("color", "rgb(180, 30, 70)");
+  await css.getByRole("button", { name: "Disabled", exact: true }).click();
+  await expect(page.locator("h1")).toHaveCSS("color", "rgb(180, 30, 70)");
+  await cssRequest.fill("Keep the pink color and make the font larger");
+  await css.getByRole("button", { name: "Generate and verify CSS" }).click();
+  await expect(css.getByRole("status")).toContainText("CSS saved.");
+  await css.scrollIntoViewIfNeeded();
+  await session.capture("ai-css-result");
+  await session.shell.locator(`[data-tab-id="${target.tabId}"]`).click();
+  await expect(page.locator("h1")).toHaveCSS("font-size", "56px");
+  await expect(page.locator("h1")).toHaveCSS("color", "rgb(180, 30, 70)");
+  await session.capture("ai-css-refined");
+  const childId = await session.command<string>("sub-tabs:open", {
+    parentTabId: target.tabId,
+    url: `${site.url}/child`,
+  });
+  const child = await session.target((item) => item.tabId === childId && item.kind === "sub-tab");
+  await expect((await session.page(child)).locator("h1")).toHaveCSS("font-size", "56px");
+  await session.command("sub-tabs:close", { parentTabId: target.tabId });
+
   await session.restart();
   const state = (await session.command("ai:get-state", {})) as {
     selection: { model: string; effort: string };
@@ -121,9 +168,15 @@ test("AI settings and generated drafts use the real app with a simulated ChatGPT
   await restartedCss.getByRole("button", { name: "Restore previous CSS" }).click();
   expect(await session.command("domain-css:get-state", { domain: "127.0.0.1" })).toEqual({
     domain: "127.0.0.1",
-    enabled: false,
-    hasFile: false,
+    enabled: true,
+    hasFile: true,
   });
+  const restoredTarget = await session.target((item) => item.url === url && item.kind === "tab");
+  await session.shell.locator(`[data-tab-id="${restoredTarget.tabId}"]`).click();
+  const restoredPage = await session.page(restoredTarget);
+  await expect(restoredPage.locator("h1")).toHaveCSS("color", "rgb(180, 30, 70)");
+  await expect(restoredPage.locator("h1")).not.toHaveCSS("font-size", "56px");
+  await session.command("domain-settings:open", { domain: "127.0.0.1" });
   await expect(restartedCss.getByRole("button", { name: "Open AI settings" })).toBeVisible();
   await session.capture("ai-disconnected-css");
 });

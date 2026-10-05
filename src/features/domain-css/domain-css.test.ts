@@ -6,10 +6,15 @@ import { CommandBus } from "../../bus/command-bus";
 import { EventBus } from "../../bus/event-bus";
 import { MemoryDataStore } from "../../data/memory-store";
 import type { TabId } from "../../shared/types";
-import { createMockPlatform } from "../../test-utils";
+import { createMockPlatform, makeTab } from "../../test-utils";
+import type { SubTabsEvents } from "../sub-tabs/sub-tabs.shared";
 import type { Tab, TabsCommands, TabsEvents } from "../tabs/tabs.shared";
 import type { DomainCssDeps } from "./domain-css.main";
-import feature, { getDomainCssSnapshot, saveGeneratedCss } from "./domain-css.main";
+import feature, {
+  getDomainCssSnapshot,
+  previewDomainCss,
+  saveGeneratedCss,
+} from "./domain-css.main";
 import {
   DOMAIN_CSS_CHANGED,
   DOMAIN_CSS_EDIT,
@@ -27,7 +32,9 @@ import {
 } from "./domain-css.shared";
 
 type AllCommands = DomainCssCommands & Pick<TabsCommands, "tabs:create" | "tabs:activate">;
-type AllEvents = DomainCssEvents & Pick<TabsEvents, "tabs:closed" | "tabs:updated">;
+type AllEvents = DomainCssEvents &
+  Pick<TabsEvents, "tabs:closed" | "tabs:updated"> &
+  Pick<SubTabsEvents, "sub-tabs:opened" | "sub-tabs:updated" | "sub-tabs:closed">;
 
 let tmpDir: string;
 
@@ -494,6 +501,73 @@ describe("AI stylesheet persistence and restore", () => {
   afterEach(() => {
     feature.teardown?.();
     cleanup();
+  });
+  it("removes a late saved-style injection before applying an AI preview", async () => {
+    const { deps, tabs, platform, events } = setup();
+    await feature.start?.(deps);
+    const tab = makeTab();
+    tabs.set(tab.id, tab);
+    await saveGeneratedCss(
+      "example.com",
+      "h1 { color: green; }",
+      getDomainCssSnapshot("example.com"),
+    );
+    let release: ((key: string) => void) | undefined;
+    platform.insertCSS.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          release = resolve;
+        }),
+    );
+    events.emit("tabs:updated", { tab });
+    await vi.waitFor(() => expect(release).toBeDefined());
+    const preview = previewDomainCss(tab.id, "example.com", "h1 { color: red; }");
+    expect(platform.insertCSS).not.toHaveBeenCalledWith(tab.id, "h1 { color: red; }");
+    release?.("late-saved-key");
+    const restore = await preview;
+    expect(platform.removeInsertedCSS).toHaveBeenCalledWith(tab.id, "late-saved-key");
+    await restore();
+    expect(platform.insertCSS).toHaveBeenLastCalledWith(tab.id, "h1 { color: green; }");
+  });
+  it("applies saved CSS to loaded sub-tabs and removes it when disabled", async () => {
+    const { deps, tabs, events, commands, platform } = setup();
+    await feature.start?.(deps);
+    await saveGeneratedCss(
+      "example.com",
+      "h1 { color: red; }",
+      getDomainCssSnapshot("example.com"),
+    );
+    const tab = makeTab();
+    const subTab = {
+      id: tab.id,
+      parentTabId: "parent" as TabId,
+      url: tab.url,
+      title: "Child",
+      favicon: "",
+      loading: false,
+    };
+    tabs.set(tab.id, tab);
+    events.emit("sub-tabs:updated", { parentTabId: subTab.parentTabId, subTab });
+    await vi.waitFor(() =>
+      expect(platform.insertCSS).toHaveBeenCalledWith(tab.id, "h1 { color: red; }"),
+    );
+    await commands.send(DOMAIN_CSS_TOGGLE, { domain: "example.com" });
+    expect(platform.removeInsertedCSS).toHaveBeenCalled();
+  });
+  it("restores the new domain's saved styles when a previewed tab navigates", async () => {
+    const { deps, tabs, platform } = setup();
+    await feature.start?.(deps);
+    const tab = makeTab();
+    tabs.set(tab.id, tab);
+    await saveGeneratedCss(
+      "other.example",
+      "body { color: green; }",
+      getDomainCssSnapshot("other.example"),
+    );
+    const restore = await previewDomainCss(tab.id, "example.com", "h1 { color: red; }");
+    tabs.set(tab.id, { ...tab, url: "https://other.example/" });
+    await restore();
+    expect(platform.insertCSS).toHaveBeenLastCalledWith(tab.id, "body { color: green; }");
   });
   it("restores a missing prior stylesheet after restart", async () => {
     const { commands, deps } = setup();

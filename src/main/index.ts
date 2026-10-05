@@ -428,7 +428,7 @@ if (gotLock) {
       },
     });
     devTools.register(deps);
-    domainCss.register({ ...deps, dataDir, getTabsSnapshot: getAllTabs });
+    domainCss.register({ ...deps, dataDir, getTabsSnapshot: websiteScriptDeps.getPageSnapshots });
     const aiProvider = createChatGptClient(
       path.join(dataDir, "ai"),
       {
@@ -564,7 +564,11 @@ if (gotLock) {
       sidebar.start?.(deps);
       await startFolders({ ...deps, getTab, getTabsForWorkspace, setTabFolderId, setTabOrder });
       await settings.start?.(deps);
-      await domainCss.start?.({ ...deps, dataDir, getTabsSnapshot: getAllTabs });
+      await domainCss.start?.({
+        ...deps,
+        dataDir,
+        getTabsSnapshot: websiteScriptDeps.getPageSnapshots,
+      });
       downloads.start?.(deps);
       await startTabCustomization({ ...deps, getTab, isPinned });
       terminal.start?.(deps);
