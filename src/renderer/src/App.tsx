@@ -10,6 +10,7 @@ import "../../features/folders/folders.feature";
 import "../../features/command-palette/command-palette.feature";
 import "../../features/settings/settings.feature";
 import "../../features/domain-css/domain-css.feature";
+import "../../features/domain-scripts/domain-scripts.feature";
 import "../../features/downloads/downloads.feature";
 import "../../features/find-text/find-text.feature";
 import "../../features/tab-customization/tab-customization.feature";

@@ -30,6 +30,11 @@ import devTools from "../features/dev-tools/dev-tools.main";
 import type { DevToolsCommands, DevToolsEvents } from "../features/dev-tools/dev-tools.shared";
 import domainCss from "../features/domain-css/domain-css.main";
 import type { DomainCssCommands, DomainCssEvents } from "../features/domain-css/domain-css.shared";
+import domainScripts from "../features/domain-scripts/domain-scripts.main";
+import type {
+  DomainScriptsCommands,
+  DomainScriptsEvents,
+} from "../features/domain-scripts/domain-scripts.shared";
 import downloads from "../features/downloads/downloads.main";
 import type { DownloadsCommands, DownloadsEvents } from "../features/downloads/downloads.shared";
 import extensions from "../features/extensions/extensions.main";
@@ -196,6 +201,7 @@ type AllCommands = MergeRegistries<
     ZoomCommands,
     DevToolsCommands,
     DomainCssCommands,
+    DomainScriptsCommands,
     DownloadsCommands,
     FindTextCommands,
     TabCustomizationCommands,
@@ -229,6 +235,7 @@ type AllEvents = MergeRegistries<
     ZoomEvents,
     DevToolsEvents,
     DomainCssEvents,
+    DomainScriptsEvents,
     DownloadsEvents,
     FindTextEvents,
     TabCustomizationEvents,
@@ -330,6 +337,25 @@ const deps = {
   },
 };
 
+const websiteScriptDeps = {
+  ...deps,
+  getActivePageTabId: () => {
+    const parentId = deps.getActiveTabId();
+    return (
+      getSubTabSnapshot()
+        .filter((tab) => tab.parentTabId === parentId)
+        .at(-1)?.id ?? parentId
+    );
+  },
+  getPageSnapshots: () => {
+    const pages = new Map<TabId, { url: string; builtIn?: boolean; loading?: boolean }>(
+      getAllTabs(),
+    );
+    for (const tab of getSubTabSnapshot()) pages.set(tab.id, tab);
+    return pages;
+  },
+};
+
 if (gotLock) {
   app.on("render-process-gone", (_event, contents, details) => {
     logError("main", "renderer process exited")({ webContentsId: contents.id, ...details });
@@ -398,6 +424,7 @@ if (gotLock) {
     });
     devTools.register(deps);
     domainCss.register({ ...deps, dataDir, getTabsSnapshot: getAllTabs });
+    domainScripts.register(websiteScriptDeps);
     downloads.register(deps);
     findText.register(deps);
     tabCustomization.register({ ...deps, getTab, isPinned });
@@ -492,6 +519,7 @@ if (gotLock) {
     ipcMain.once("renderer:ready", async () => {
       appState.start?.(deps);
       await workspaces.start?.({ ...deps, getTabsForWorkspace });
+      await domainScripts.start?.(websiteScriptDeps);
       windowChrome.start?.({ ...deps, getTabUrl });
       await installer.start?.(deps);
       await startTabs({
@@ -548,6 +576,7 @@ if (gotLock) {
     if (quitting) return;
     platform.deactivateShortcuts();
     extensions.teardown?.();
+    domainScripts.teardown?.();
     debugServer.teardown?.();
     localWebApp.teardown?.();
     installer.teardown?.();

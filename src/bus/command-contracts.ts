@@ -4,6 +4,7 @@ import { commandContracts as contextMenuContracts } from "../features/context-me
 import { commandContracts as debugServerContracts } from "../features/debug-server/debug-server.contracts";
 import { commandContracts as devToolsContracts } from "../features/dev-tools/dev-tools.contracts";
 import { commandContracts as domainCssContracts } from "../features/domain-css/domain-css.contracts";
+import { commandContracts as domainScriptsContracts } from "../features/domain-scripts/domain-scripts.contracts";
 import { commandContracts as downloadsContracts } from "../features/downloads/downloads.contracts";
 import { commandContracts as extensionsContracts } from "../features/extensions/extensions.contracts";
 import { commandContracts as externalLinkContracts } from "../features/external-link/external-link.contracts";
@@ -34,6 +35,7 @@ export const commandContracts = {
   ...debugServerContracts,
   ...devToolsContracts,
   ...domainCssContracts,
+  ...domainScriptsContracts,
   ...downloadsContracts,
   ...extensionsContracts,
   ...externalLinkContracts,

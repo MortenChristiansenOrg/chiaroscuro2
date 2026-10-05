@@ -2,7 +2,8 @@
 // biome-ignore lint/suspicious/noExplicitAny: stub for design system
 (window as any).chiaroscuro = {
   platform: "design-system",
-  sendCommand: (_name: string, _payload?: unknown) => Promise.resolve(),
+  sendCommand: (name: string, _payload?: unknown) =>
+    Promise.resolve(name === "domain-scripts:list" ? [] : undefined),
   onEvent: (_name: string, _callback: (payload: unknown) => void) => () => {},
   getPlatformName: () => "win32",
   signalReady: () => {},

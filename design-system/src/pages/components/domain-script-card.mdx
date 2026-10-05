@@ -1,0 +1,77 @@
+---
+title: Domain Script Card
+---
+
+import { ComponentPreview } from "../../components/ComponentPreview"
+import { DomainScriptCard } from "@features/domain-scripts/DomainScriptCard"
+
+# Domain Script Card
+
+## Overview
+
+`src/features/domain-scripts/DomainScriptCard.tsx` displays one personal website script in the [Scripts section](/components/domain-scripts-section) of domain settings.
+
+## Anatomy
+
+1. Script name and its run mode, path pattern, alias, and shortcut.
+2. Enable switch.
+3. Most recent execution result, when available.
+4. Edit and Delete actions.
+
+## Visual Preview
+
+<ComponentPreview label="Manual action">
+  <DomainScriptCard script={{ id: "copy-issue", domain: "github.com", name: "Copy issue as Markdown", source: "await copy(document.title)", enabled: true, runAt: "manual", pathPattern: "/*/issues/*", alias: "/copy-issue", shortcut: "Alt+Shift+C" }} onToggle={() => {}} onEdit={() => {}} onDelete={() => {}} />
+</ComponentPreview>
+
+## Visual Specs
+
+| Property | Token / value |
+|---|---|
+| Surface, text | `--content-bg`, `--foreground` |
+| Secondary text | `--muted-foreground` |
+| Error / delete text | `--destructive` |
+| Border, radius | `--border`, `--radius-md` |
+| Padding, gap | 1rem, 0.75rem |
+| Name, metadata | `--text-base`, `--text-sm` |
+| Code font | `--font-mono` |
+| Minimum control height | `--click-target-min` |
+
+## States
+
+| Control state | Background | Text | Additional feedback |
+|---|---|---|---|
+| Default | `--background` | `--foreground` | `--border` |
+| Hover | `--accent` | `--foreground` | Pointer cursor |
+| Pressed | `--muted` | `--foreground` | Immediate surface change |
+| Enabled / disabled script | Same ladder | Same | Switch label and `aria-checked` identify state |
+| Pending operation | `--background` | Same, 0.5 opacity | Controls disabled |
+| Focus visible | Same | Same | `--ring` outline |
+
+## Variants
+
+Manual scripts show their optional alias and shortcut. Automatic scripts show **On page load**. Execution feedback appears as a success status or a failure alert with the error message.
+
+## Behavior
+
+Enable, edit, and delete dispatch through parent callbacks. The enable value changes only after the main-process event arrives. Errors preserve the existing script. Manual execution is available in the [command palette](/components/command-palette) while viewing a matching page. The settings tab itself is not a script target.
+
+## Animation & Motion
+
+Controls transition color and background with `--duration-fast` and `--ease-out`; reduced motion disables transitions. Cards have no layout animation or elevation.
+
+## Keyboard & Focus
+
+Content controls participate in normal Tab order. Enter/Space activate actions; the switch has standard button keyboard behavior. Closing the editor restores focus to Edit; deletion moves focus to Add script.
+
+## Accessibility
+
+The card is an `article` labeled by the script name. The enable button uses `role=switch` and `aria-checked`. Text actions include the script name in their accessible label. Font Awesome toggle icons are decorative. Execution failures use `role=alert`, and success uses `role=status`. Controls meet `--click-target-min`.
+
+## Layout & Composition
+
+Cards stretch to the settings content width. Their header and actions wrap; long titles, patterns, and errors break without horizontal overflow.
+
+## Related
+
+[Domain Script Editor](/components/domain-script-editor), [Scripts section](/components/domain-scripts-section), [Settings Page](/components/settings-page), [Interaction](/interaction).

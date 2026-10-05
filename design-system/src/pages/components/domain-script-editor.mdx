@@ -1,0 +1,78 @@
+---
+title: Domain Script Editor
+---
+
+import { ComponentPreview } from "../../components/ComponentPreview"
+import { DomainScriptEditor } from "@features/domain-scripts/DomainScriptEditor"
+
+# Domain Script Editor
+
+## Overview
+
+`src/features/domain-scripts/DomainScriptEditor.tsx` edits a script directly in domain settings, using explicit Save and Cancel actions.
+
+## Anatomy
+
+1. Name.
+2. Run mode and path pattern.
+3. JavaScript source and clipboard helper explanation.
+4. Optional alias and shortcut for manual scripts.
+5. Save / Cancel actions and inline save error.
+
+## Visual Preview
+
+<ComponentPreview label="Edit a manual script">
+  <DomainScriptEditor domain="github.com" script={{ id: "copy-issue", domain: "github.com", name: "Copy issue as Markdown", source: "const title = document.querySelector('h1')?.textContent;\nif (title) await copy(title);", enabled: true, runAt: "manual", pathPattern: "/*/issues/*", alias: "/copy-issue", shortcut: "Alt+Shift+C" }} onSave={async () => {}} onCancel={() => {}} />
+</ComponentPreview>
+
+## Visual Specs
+
+| Property | Token / value |
+|---|---|
+| Surface, foreground | `--content-bg`, `--foreground` |
+| Fields | `--background`, `--input`, `--radius-sm` |
+| Border, form radius | `--border`, `--radius-md` |
+| Form padding / gaps | 1rem / 0.75rem |
+| Label, title | `--text-sm`, `--text-base` |
+| Source font | `--font-mono`, relaxed line height |
+| Minimum control height | `--click-target-min` |
+
+## States
+
+| State | Background | Text / feedback |
+|---|---|---|
+| Default fields / buttons | `--background` | `--foreground` |
+| Field hover / pressed | `--background` | Border uses `--ring` |
+| Button hover | `--accent` | `--foreground` |
+| Button pressed | `--muted` | `--foreground` |
+| Saving | Same | Controls disabled; **Saving…**, 0.5 opacity |
+| Focus visible | Same | `--ring` outline |
+| Save failed | Same | Error uses `--destructive`; draft retained |
+
+## Variants
+
+New scripts start enabled in manual mode with an example using `await copy(text)`. Existing scripts preserve their saved fields. Automatic mode hides alias and shortcut and clears those manual bindings when saved.
+
+## Behavior
+
+Changing a field never persists immediately. Save submits the full draft and waits for success. Failure keeps the editor open for correction. Cancel discards the draft. Name, path, and source are required; pattern, alias, and shortcut validation errors appear inline. JavaScript errors appear in the card's last-run feedback after execution. The source area resizes vertically.
+
+## Animation & Motion
+
+Button colors transition with `--duration-fast` / `--ease-out`. Reduced motion removes transitions. No overlay or layout animation applies.
+
+## Keyboard & Focus
+
+Opening focuses Name. Tab follows field order; Enter submits from single-line fields. The JavaScript textarea retains normal multiline keyboard behavior. Escape cancels when no save is pending. Closing returns focus to the triggering Add/Edit action. No focus trap applies to this inline form.
+
+## Accessibility
+
+Every field has an explicit label; help text is associated with `aria-describedby`. A named semantic `form` contains a disabled `fieldset` while saving. Save failures use `role=alert`. Buttons and fields meet `--click-target-min` and expose a visible focus outline.
+
+## Layout & Composition
+
+The editor belongs to the [Scripts section](/components/domain-scripts-section). Run/pattern and alias/shortcut use two columns when space permits and stack on narrow screens. The source textarea fills the available width.
+
+## Related
+
+[Domain Script Card](/components/domain-script-card), [Scripts section](/components/domain-scripts-section), [Typography](/typography), [Accessibility](/accessibility).

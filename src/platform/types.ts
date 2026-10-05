@@ -55,6 +55,8 @@ export interface Platform {
   closeTab(tabId: TabId): Promise<void>;
   navigateTab(tabId: TabId, url: string): Promise<void>;
   getTabUrl(tabId: TabId): string | undefined;
+  /** Missing or dormant pages are not ready for scripts. */
+  isTabLoading(tabId: TabId): boolean;
   getTabTitle(tabId: TabId): string | undefined;
   /** Current main-frame PDF response, including URLs without a .pdf extension. */
   getPdfResponseUrl(tabId: TabId): string | undefined;
@@ -89,6 +91,8 @@ export interface Platform {
   unregisterShortcut(accelerator: string): void;
   /** Register a window-scoped shortcut via before-input-event (for keys like F12 that can't be global). */
   registerLocalShortcut(accelerator: string, callback: () => void): void;
+  /** Register a removable local user-script shortcut without replacing browser bindings. */
+  registerWebsiteShortcut(accelerator: string, callback: () => boolean): () => void;
   hookWebContents(webContents: unknown): void;
 
   // Focus
@@ -206,6 +210,11 @@ export interface Platform {
   downloadUrl(tabId: TabId, url: string): void;
   /** Execute JavaScript in the tab's webContents and return the result. */
   executeJavaScript(tabId: TabId, code: string, userGesture?: boolean): Promise<unknown>;
+  /** Execute an async website script against the current main-frame document. */
+  executeWebsiteScript(
+    tabId: TabId,
+    options: { source: string; expectedUrl: string; userGesture: boolean },
+  ): Promise<{ clipboard?: string }>;
 
   // Chrome extensions
 

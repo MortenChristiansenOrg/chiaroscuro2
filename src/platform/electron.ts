@@ -20,6 +20,7 @@ import {
 } from "electron";
 import type { ContextMenuItemData } from "../features/context-menu/context-menu.shared";
 import type { Bounds, TabId, WindowId } from "../shared/types";
+import { commandChord, inputChord, suggestedShortcut } from "./extension-commands";
 import { unpackedExtensionId } from "./extension-identity";
 import { migrateExtensionBootstrap } from "./extension-migration";
 import { ExtensionRuntime } from "./extension-runtime";
@@ -30,6 +31,7 @@ import { TabBoundsAnimation } from "./tab-bounds-animation";
 import { closeTabContents, createTabView } from "./tab-view";
 import type { ExtensionTabActions, Platform, PlatformDownload } from "./types";
 import { isAllowedNavigation, isAllowedUrl } from "./url-policy";
+import { runWebsiteScript } from "./website-script";
 
 const ALLOWED_EXTERNAL_SCHEMES = new Set(["http:", "https:", "mailto:"]);
 
@@ -152,10 +154,13 @@ html,body{background:transparent;overflow:hidden;
 #suggestions::-webkit-scrollbar-track{background:transparent}
 #suggestions::-webkit-scrollbar-thumb{background:oklch(1 0 0/.12);border-radius:999px}
 #suggestions::-webkit-scrollbar-thumb:hover{background:oklch(1 0 0/.25)}
-.sg{display:flex;align-items:center;gap:.625rem;padding:7px 18px;cursor:pointer;
+.sg{display:flex;align-items:center;width:calc(100% - 10px);border:none;background:transparent;text-align:left;font-family:inherit;gap:.625rem;padding:7px 18px;cursor:pointer;
   font-size:.6875rem;border-radius:7px;margin:2px 5px;
   transition:background 80ms ease-out}
 .sg:hover,.sg.sel{background:oklch(1 0 0/.1)}
+.sg:active{background:oklch(1 0 0/.15)}
+.sg:focus-visible{outline:2px solid oklch(1 0 0/.5);outline-offset:-2px}
+#error{padding:.5rem 1.125rem;color:oklch(.8 .12 25);font-size:.75rem;display:none}
 .sg .title{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:oklch(1 0 0/.55)}
 .sg .url{flex-shrink:0;max-width:200px;overflow:hidden;text-overflow:ellipsis;
   white-space:nowrap;color:oklch(1 0 0/.4);font-size:.5625rem}
@@ -167,11 +172,12 @@ html,body{background:transparent;overflow:hidden;
 <input id="input" type="text" placeholder="Search or enter URL..."
   autocomplete="off" spellcheck="false" aria-label="Search or enter URL">
 <div id="res"></div>
+<div id="error" role="alert"></div>
 <div id="suggestions"></div>
 <div id="hints">Enter = new tab &middot; Ctrl+Enter = current tab &middot; Esc = close</div>
 </div></div>
 <script>
-var providerConfig=null,debounceTimer=null,suggestions=[],selIdx=-1;
+var providerConfig=null,debounceTimer=null,suggestions=[],selIdx=-1,queryVersion=0,executionVersion=0,executing=false;
 var $=id=>document.getElementById(id);
 
 function resetPalette(){
@@ -180,10 +186,14 @@ function resetPalette(){
   $('suggestions').style.display='none';
   $('suggestions').innerHTML='';
   suggestions=[];selIdx=-1;
+  ++executionVersion;
+  executing=false;$('input').disabled=false;$('error').style.display='none';
+  clearTimeout(debounceTimer);refreshSuggestions('');
   setTimeout(()=>{$('backdrop').classList.add('open');$('input').focus()},16);
 }
 
 function closePalette(){
+  ++executionVersion;++queryVersion;
   $('backdrop').classList.remove('open');
   window.chiaroscuro.sendCommand('command-palette:hide',undefined);
 }
@@ -226,34 +236,45 @@ function renderSuggestions(){
   if(!suggestions.length){el.style.display='none';el.innerHTML='';return}
   el.style.display='block';
   el.innerHTML=suggestions.map(function(s,i){
-    return '<div class="sg'+(i===selIdx?' sel':'')+'" data-i="'+i+'">'
+    return '<button type="button" class="sg'+(i===selIdx?' sel':'')+'" data-i="'+i+'">'
       +'<span class="title">'+esc(s.title)+'</span>'
-      +'<span class="url">'+esc(s.url)+'</span></div>';
+      +'<span class="url">'+esc(s.url)+'</span></button>';
   }).join('');
 }
 function esc(s){var d=document.createElement('span');d.textContent=s;return d.innerHTML}
 
-function execute(value,inCurrentTab){
-  if(!value.trim())return;
-  window.chiaroscuro.sendCommand('command-palette:execute',{command:value,inCurrentTab:inCurrentTab});
-  window.chiaroscuro.sendCommand('command-palette:hide',undefined);
+async function execute(value,inCurrentTab,scriptId){
+  if(!value.trim()||executing)return;
+  var version=++executionVersion;
+  executing=true;$('input').disabled=true;$('error').style.display='none';
+  try{
+    await window.chiaroscuro.sendCommand('command-palette:execute',{command:value,inCurrentTab:inCurrentTab,...(scriptId?{scriptId:scriptId}:{})});
+    if(version===executionVersion)closePalette();
+  }catch(error){
+    if(version!==executionVersion)return;
+    $('error').textContent=error.message||String(error);$('error').style.display='block';
+  }finally{if(version===executionVersion){executing=false;$('input').disabled=false;$('input').focus()}}
+}
+
+function refreshSuggestions(q){
+  var version=++queryVersion;
+  window.chiaroscuro.sendCommand('command-palette:search-visits',{query:q})
+    .then(function(r){if(version!==queryVersion)return;suggestions=r||[];renderSuggestions()})
+    .catch(function(){if(version!==queryVersion)return;suggestions=[];renderSuggestions()});
 }
 
 $('input').addEventListener('input',function(){
   updateResolution();selIdx=-1;
   clearTimeout(debounceTimer);
+  ++queryVersion;$('error').style.display='none';
   var q=$('input').value.trim();
-  if(q.startsWith('/')){
-    window.chiaroscuro.sendCommand('command-palette:search-visits',{query:q})
-      .then(function(r){suggestions=r||[];renderSuggestions()})
-      .catch(function(){suggestions=[];renderSuggestions()});
+  if(q.startsWith('/')||q.length<2){
+    refreshSuggestions(q);
     return;
   }
   if(q.length>=2){
     debounceTimer=setTimeout(function(){
-      window.chiaroscuro.sendCommand('command-palette:search-visits',{query:q})
-        .then(function(r){suggestions=r||[];renderSuggestions()})
-        .catch(function(){suggestions=[];renderSuggestions()});
+      refreshSuggestions(q);
     },150);
   }else{suggestions=[];renderSuggestions()}
 });
@@ -265,14 +286,14 @@ $('input').addEventListener('keydown',function(e){
     if(e.key==='ArrowUp'){e.preventDefault();selIdx=Math.max(selIdx-1,-1);renderSuggestions();return}
   }
   if(e.key==='Enter'){
-    if(selIdx>=0&&suggestions[selIdx]){execute(suggestions[selIdx].url,e.ctrlKey||e.metaKey);return}
+    if(selIdx>=0&&suggestions[selIdx]){var s=suggestions[selIdx];execute(s.url,e.ctrlKey||e.metaKey,s.scriptId);return}
     execute($('input').value,e.ctrlKey||e.metaKey);
   }
 });
 
 $('suggestions').addEventListener('click',function(e){
   var t=e.target.closest('.sg');if(!t)return;
-  var i=parseInt(t.dataset.i);if(suggestions[i])execute(suggestions[i].url,false);
+  var i=parseInt(t.dataset.i);if(suggestions[i])execute(suggestions[i].url,false,suggestions[i].scriptId);
 });
 
 document.addEventListener('keydown',function(e){if(e.key==='Escape')closePalette()});
@@ -349,6 +370,7 @@ export class ElectronPlatform implements Platform {
 
   private shortcuts = new Map<string, () => void>();
   private localShortcuts = new Map<string, () => void>();
+  private websiteShortcuts = new Map<string, () => boolean>();
   private views = new Map<TabId, WebContentsView>();
   // Restored tabs need no native renderer until their first navigation. Keep
   // subscriptions here so all feature listeners precede that navigation.
@@ -706,6 +728,11 @@ export class ElectronPlatform implements Platform {
     view.webContents.loadURL(url);
   }
 
+  isTabLoading(tabId: TabId): boolean {
+    const contents = this.views.get(tabId)?.webContents;
+    return !contents || contents.isDestroyed() || contents.isLoadingMainFrame();
+  }
+
   getTabUrl(tabId: TabId): string | undefined {
     return this.views.get(tabId)?.webContents.getURL() || undefined;
   }
@@ -913,6 +940,42 @@ export class ElectronPlatform implements Platform {
     this.rebuildLocalShortcutMenu();
   }
 
+  registerWebsiteShortcut(accelerator: string, callback: () => boolean): () => void {
+    const chord = commandChord(accelerator);
+    if (!chord?.includes("+") || !/^(?:control|meta|alt)\+|\+(?:control|meta|alt)\+/.test(chord)) {
+      throw new Error("Use a shortcut with Ctrl, Alt or Command and a key.");
+    }
+    const key = chord.split("+").at(-1) ?? "";
+    if (
+      !/^[a-z0-9 ,./;'[\]\\=-]$|^f(?:[1-9]|1\d|2[0-4])$|^(?:enter|escape|tab|up|down|left|right|home|end|pageup|pagedown|backspace|delete|insert)$/.test(
+        key,
+      )
+    ) {
+      throw new Error(
+        "Use a letter, number, function key or standard navigation key for the shortcut.",
+      );
+    }
+    const reserved = [...this.shortcuts.keys(), ...this.localShortcuts.keys()];
+    if (reserved.some((key) => commandChord(key) === chord) || this.websiteShortcuts.has(chord)) {
+      throw new Error("This keyboard shortcut is already in use.");
+    }
+    // Keep enabled extension commands intact as well as the browser's own shortcuts.
+    for (const extension of this.getAllExtensions()) {
+      const commands = extension.manifest.commands as
+        | Record<string, import("./extension-commands").ExtensionCommand>
+        | undefined;
+      for (const details of Object.values(commands ?? {})) {
+        const key = suggestedShortcut(details);
+        if (key && commandChord(key) === chord)
+          throw new Error("This keyboard shortcut is used by an extension.");
+      }
+    }
+    this.websiteShortcuts.set(chord, callback);
+    return () => {
+      if (this.websiteShortcuts.get(chord) === callback) this.websiteShortcuts.delete(chord);
+    };
+  }
+
   /** Rebuild the app menu so local shortcuts also work as menu accelerators
    *  (needed for keys like F12 that can't be globalShortcut and whose
    *  before-input-event doesn't fire on devtools webContents). */
@@ -931,7 +994,13 @@ export class ElectronPlatform implements Platform {
 
   hookWebContents(webContents: unknown): void {
     const wc = webContents as Electron.WebContents;
+    const heldWebsiteKeys = new Set<string>();
     wc.on("before-input-event", (_event, input) => {
+      const key = input.code || input.key.toLowerCase();
+      if (input.type === "keyUp") {
+        heldWebsiteKeys.delete(key);
+        return;
+      }
       if (input.type !== "keyDown") return;
       for (const [accelerator, cb] of this.localShortcuts) {
         if (this.matchesAccelerator(input, accelerator)) {
@@ -940,7 +1009,23 @@ export class ElectronPlatform implements Platform {
           return;
         }
       }
-      if (this.extensionRuntime?.handleCommand(wc, input)) _event.preventDefault();
+      if (this.extensionRuntime?.handleCommand(wc, input)) {
+        _event.preventDefault();
+        return;
+      }
+      const websiteAction = this.websiteShortcuts.get(inputChord(input) ?? "");
+      if (input.isAutoRepeat) {
+        // Only consume repeats of a press that actually matched this page.
+        // A saved shortcut for a different domain must still reach the page.
+        if (websiteAction && heldWebsiteKeys.has(key)) _event.preventDefault();
+        return;
+      }
+      heldWebsiteKeys.delete(key);
+      if (websiteAction?.()) {
+        heldWebsiteKeys.add(key);
+        _event.preventDefault();
+        return;
+      }
     });
   }
 
@@ -1658,6 +1743,13 @@ export class ElectronPlatform implements Platform {
     const view = this.views.get(tabId);
     if (!view) return undefined;
     return view.webContents.executeJavaScript(code, userGesture);
+  }
+
+  async executeWebsiteScript(
+    tabId: TabId,
+    options: { source: string; expectedUrl: string; userGesture: boolean },
+  ): Promise<{ clipboard?: string }> {
+    return runWebsiteScript(this.views.get(tabId)?.webContents, options);
   }
 
   // ── Permissions ────────────────────────────────────────────────
