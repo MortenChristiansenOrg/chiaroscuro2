@@ -1,10 +1,12 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Icon } from "../../renderer/src/components/Icon";
 import {
   SettingItem,
   settingsAddButtonStyle,
   settingsCategoryHeadingStyle,
 } from "../../renderer/src/components/SettingsLayout";
+import { AiRequestPanel } from "../ai/AiRequestPanel";
+import { scriptButtonClass, scriptErrorMessage } from "../domain-scripts/domain-scripts.ui";
 import {
   DEFAULT_NAVIGATION_BLOCK_RULE,
   DOMAIN_CSS_EDIT,
@@ -24,6 +26,27 @@ function sendCommand(name: string, payload: unknown) {
 
 export function CssControls({ domain }: { domain: string }) {
   const state = useDomainCssStore((s) => s.states.get(domain));
+  const [canRestore, setCanRestore] = useState(false);
+  const [restoreError, setRestoreError] = useState<string>();
+  useEffect(() => {
+    let disposed = false;
+    const refresh = () => {
+      window.chiaroscuro
+        .sendCommand("domain-css:can-restore", { domain })
+        .then((value) => {
+          if (!disposed) setCanRestore(value as boolean);
+        })
+        .catch(console.error);
+    };
+    const unsubscribe = window.chiaroscuro.onEvent("domain-css:changed", (value: unknown) => {
+      if ((value as { domain: string }).domain === domain) refresh();
+    });
+    refresh();
+    return () => {
+      disposed = true;
+      unsubscribe();
+    };
+  }, [domain]);
 
   // Fetch initial state from main process
   useEffect(() => {
@@ -58,6 +81,26 @@ export function CssControls({ domain }: { domain: string }) {
   return (
     <section id="domain-settings-css">
       <h2 style={settingsCategoryHeadingStyle}>Custom CSS</h2>
+      <AiRequestPanel key={domain} domain={domain} kind="css" />
+      {canRestore && (
+        <button
+          type="button"
+          className={scriptButtonClass}
+          onClick={() => {
+            setRestoreError(undefined);
+            void window.chiaroscuro
+              .sendCommand("domain-css:restore", { domain })
+              .catch((error) => setRestoreError(scriptErrorMessage(error)));
+          }}
+        >
+          Restore previous CSS
+        </button>
+      )}
+      {restoreError && (
+        <p role="alert" className="text-[var(--destructive)]">
+          {restoreError}
+        </p>
+      )}
 
       <SettingItem
         label="Enable Custom CSS"

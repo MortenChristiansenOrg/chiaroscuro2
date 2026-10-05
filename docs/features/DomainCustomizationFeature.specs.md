@@ -116,3 +116,7 @@ keyboard shortcuts and error reporting.
 ## Unresolved Issues
 
 - **CSS injection on navigation**: Need to verify `did-finish-load` is sufficient for re-injection after SPA navigations and redirects.
+
+## AI CSS generation
+
+Domain settings include Ask AI. It shares the user's request, existing CSS, page structure, and screenshots with the connected ChatGPT account using global model/effort settings. A generated stylesheet is previewed on the matching open page, captured again, and assessed against the request. A completed result is saved through the domain CSS system and enabled. Failures and cancellation restore the previous preview; external edits during generation prevent overwriting them. Restore previous CSS persists across restart and restores both the previous source (including no prior file) and enabled state. Manual editing remains available without AI.

@@ -519,6 +519,10 @@ export class AppSession {
     } finally {
       let timer: ReturnType<typeof setTimeout> | undefined;
       try {
+        // Windows must also wait for Playwright's shell wrapper and Chromium
+        // children to exit. CI shutdowns can approach five seconds even when
+        // Electron quits normally; retain a bounded deadline for genuine hangs.
+        const shutdownTimeout = process.platform === "win32" ? 15_000 : 5_000;
         await Promise.race([
           this.app.close(),
           new Promise<never>((_, reject) => {
@@ -527,7 +531,7 @@ export class AppSession {
               reject(
                 new Error("Graceful shutdown timed out; terminated this verification process"),
               );
-            }, 5_000);
+            }, shutdownTimeout);
           }),
         ]);
       } finally {

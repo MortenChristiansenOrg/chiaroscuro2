@@ -98,3 +98,7 @@ command palette and optional aliases and shortcuts. All scripts remain local.
 - Automatic execution on SPA route changes and persistent DOM observers are
   outside this initial feature. Scripts can install their own observers.
 - A script cannot undo arbitrary JavaScript effects or stop a synchronous loop.
+
+## AI draft generation
+
+The editor includes Ask AI using the shared ChatGPT plan connection and global model/effort settings. It shares the matching open page's structure, the user's request, and existing JavaScript. Generation returns only an editable source draft; it never executes code, enables a script, saves it, changes its scope or manual bindings, or writes to the clipboard. Saving remains explicit. Progress, Stop, follow-up instructions, and inline errors preserve the request and existing source. Closing the editor cancels the request.

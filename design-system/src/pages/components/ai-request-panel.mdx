@@ -1,0 +1,75 @@
+---
+title: AI Request Panel
+---
+
+import { ComponentPreview } from "../../components/ComponentPreview"
+import { AiRequestPanel } from "@features/ai/AiRequestPanel"
+
+# AI Request Panel
+
+## Overview
+
+`src/features/ai/AiRequestPanel.tsx` accepts plain-language requests for CSS or an editable script draft inside domain settings.
+
+## Anatomy
+
+1. Ask AI heading and connection guidance or active global defaults.
+2. Labeled request textarea.
+3. Generate action and Stop while running.
+4. Live progress / result and an inline failure alert.
+
+## Visual Preview
+
+<ComponentPreview label="CSS request before connection">
+  <AiRequestPanel domain="example.com" kind="css" />
+</ComponentPreview>
+
+<ComponentPreview label="Script request before connection">
+  <AiRequestPanel domain="example.com" kind="script" source="await copy(document.title);" />
+</ComponentPreview>
+
+## Visual Specs
+
+| Property | Token / value |
+|---|---|
+| Surface / text | `--content-bg`, `--foreground`, `--muted-foreground` |
+| Border / radius | `--border`, `--radius-md` panel, `--radius-sm` controls |
+| Title / body | `--text-base` semibold / `--text-sm` |
+| Padding / gaps | 1rem / 0.75rem |
+| Fields | `--background`, `--input` |
+| Minimum control height | `--click-target-min` |
+| Error | `--destructive` |
+
+## States
+
+Disconnected shows Open AI settings while manual editing remains available. Idle connected state shows the model and effort and explains shared page context. Empty requests disable Generate. Running disables request editing and Generate, exposes Stop, and reports progress. Failure retains the request and existing customization. Completion keeps the request for follow-up refinement.
+
+Buttons use `--accent` on hover, `--muted` when pressed, `--ring` focus, and disabled opacity 0.5 with no hover feedback.
+
+## Variants
+
+CSS generation applies a preview, captures the rendered page, asks AI to check the result, and saves with durable restore. Script generation replaces only the editor's source draft; domain, path, mode, enabled state, aliases and shortcuts are preserved. Draft generation never executes JavaScript or saves a script.
+
+## Behavior
+
+Each request has a unique ID. Progress and cancellation belong to that ID. Closing the panel cancels its request and ignores late results. The target domain must have an open page. Errors preserve the request; changing the text and generating again refines the current customization.
+
+## Animation & Motion
+
+Control colors use `--duration-fast` / `--ease-out`; reduced motion removes transitions. Progress uses text without animated decoration.
+
+## Keyboard & Focus
+
+Tab follows request, Generate, and Stop. Textarea keeps multiline editing. Buttons are native keyboard actions; focus stays in the form after generation.
+
+## Accessibility
+
+Explicit textarea label, semantic buttons, `role=status` progress, and `role=alert` failures. All controls have visible focus indicators and meet the minimum click target.
+
+## Layout & Composition
+
+Inline panel with a full-width resizable textarea and wrapping buttons. Used by the actual CSS controls and Domain Script Editor.
+
+## Related
+
+[AI Settings Section](/components/ai-settings-section), [Domain Script Editor](/components/domain-script-editor), [Accessibility](/accessibility).

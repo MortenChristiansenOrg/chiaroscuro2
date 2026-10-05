@@ -138,6 +138,9 @@ export interface Platform {
   findInPage(tabId: TabId, text: string, options?: { forward?: boolean; findNext?: boolean }): void;
   stopFindInPage(tabId: TabId): void;
 
+  /** Capture the actual rendered web page for visual AI feedback. */
+  captureTabScreenshot(tabId: TabId): Promise<string>;
+
   // CSS injection
   insertCSS(tabId: TabId, css: string): Promise<string>;
   removeInsertedCSS(tabId: TabId, key: string): Promise<void>;

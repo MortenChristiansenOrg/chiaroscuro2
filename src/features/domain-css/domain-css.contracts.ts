@@ -53,6 +53,16 @@ export const DomainNavigationStateSchema = z.strictObject({
 });
 
 export const commandContracts = {
+  "domain-css:can-restore": defineCommand(z.strictObject({ domain: z.string() }), z.boolean(), {
+    description: "Check whether previous AI CSS can be restored.",
+    examples: [{ domain: "example.com" }],
+    sideEffects: [],
+  }),
+  "domain-css:restore": defineCommand(z.strictObject({ domain: z.string() }), z.undefined(), {
+    description: "Restore the CSS from before AI generation.",
+    examples: [{ domain: "example.com" }],
+    sideEffects: ["Restores previous stylesheet and enabled state"],
+  }),
   [DOMAIN_SETTINGS_OPEN]: defineCommand(DomainSettingsOpenPayloadSchema, TabIdSchema, {
     description: "Open the settings page for a domain.",
     examples: [{ domain: "example.com" }],

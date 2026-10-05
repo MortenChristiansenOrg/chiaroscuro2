@@ -62,6 +62,7 @@ export function createMockPlatform(overrides: Partial<Platform> = {}): Platform 
     updateCommandPalette: vi.fn(async () => undefined),
     findInPage: vi.fn(),
     stopFindInPage: vi.fn(),
+    captureTabScreenshot: vi.fn(async () => "data:image/png;base64,fixture"),
     insertCSS: vi.fn(async () => "css-key"),
     removeInsertedCSS: vi.fn(async () => {}),
     onWindowOpen: vi.fn(() => () => {}),

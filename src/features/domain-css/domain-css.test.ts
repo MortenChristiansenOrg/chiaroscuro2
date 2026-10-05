@@ -9,7 +9,7 @@ import type { TabId } from "../../shared/types";
 import { createMockPlatform } from "../../test-utils";
 import type { Tab, TabsCommands, TabsEvents } from "../tabs/tabs.shared";
 import type { DomainCssDeps } from "./domain-css.main";
-import feature from "./domain-css.main";
+import feature, { getDomainCssSnapshot, saveGeneratedCss } from "./domain-css.main";
 import {
   DOMAIN_CSS_CHANGED,
   DOMAIN_CSS_EDIT,
@@ -487,5 +487,48 @@ describe("domain-css commands", () => {
         callback("tab-1" as TabId, "https://other.com", "https://example.com/page", "new-window"),
       ).toBe(true);
     });
+  });
+});
+
+describe("AI stylesheet persistence and restore", () => {
+  afterEach(() => {
+    feature.teardown?.();
+    cleanup();
+  });
+  it("restores a missing prior stylesheet after restart", async () => {
+    const { commands, deps } = setup();
+    await feature.start?.(deps);
+    const before = getDomainCssSnapshot("example.com");
+    await saveGeneratedCss("example.com", "h1 { color: red; }", before);
+    expect(await commands.send("domain-css:can-restore", { domain: "example.com" })).toBe(true);
+    expect(await commands.send(DOMAIN_CSS_GET_STATE, { domain: "example.com" })).toEqual({
+      domain: "example.com",
+      enabled: true,
+      hasFile: true,
+    });
+    feature.teardown?.();
+    const restartedCommands = new CommandBus<AllCommands>();
+    feature.register({ ...deps, commands: restartedCommands });
+    await feature.start?.(deps);
+    await restartedCommands.send("domain-css:restore", { domain: "example.com" });
+    expect(getDomainCssSnapshot("example.com")).toEqual(before);
+    expect(await restartedCommands.send("domain-css:can-restore", { domain: "example.com" })).toBe(
+      false,
+    );
+  });
+  it("restores the previous disabled stylesheet and refuses to overwrite external edits", async () => {
+    const { commands, deps } = setup();
+    await feature.start?.(deps);
+    await commands.send(DOMAIN_CSS_EDIT, { domain: "example.com" });
+    const file = path.join(tmpDir, "domain-css/example.com.css");
+    fs.writeFileSync(file, "body { color: green; }");
+    await commands.send(DOMAIN_CSS_TOGGLE, { domain: "example.com" });
+    const before = getDomainCssSnapshot("example.com");
+    await saveGeneratedCss("example.com", "h1 { color: red; }", before);
+    await commands.send("domain-css:restore", { domain: "example.com" });
+    expect(getDomainCssSnapshot("example.com")).toEqual(before);
+    fs.writeFileSync(file, "body { color: blue; }");
+    await expect(saveGeneratedCss("example.com", "bad CSS", before)).rejects.toThrow("CSS changed");
+    expect(fs.readFileSync(file, "utf8")).toBe("body { color: blue; }");
   });
 });

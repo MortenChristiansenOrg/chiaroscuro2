@@ -8,6 +8,18 @@ interface Route {
 }
 
 export const routes: Route[] = [
+  {
+    path: "/components/ai-settings-section",
+    title: "AI Settings Section",
+    group: "Components",
+    component: lazy(() => import("./pages/components/ai-settings-section.mdx")),
+  },
+  {
+    path: "/components/ai-request-panel",
+    title: "AI Request Panel",
+    group: "Components",
+    component: lazy(() => import("./pages/components/ai-request-panel.mdx")),
+  },
   // Overview
   { path: "/", title: "Overview", component: lazy(() => import("./pages/index.mdx")) },
 

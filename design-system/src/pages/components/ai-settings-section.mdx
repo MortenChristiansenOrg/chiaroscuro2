@@ -1,0 +1,70 @@
+---
+title: AI Settings Section
+---
+
+import { ComponentPreview } from "../../components/ComponentPreview"
+import { AiSettingsSection } from "@features/ai/AiSettingsSection"
+
+# AI Settings Section
+
+## Overview
+
+`src/features/ai/AiSettingsSection.tsx` manages the shared ChatGPT connection and global model and reasoning defaults in application Settings.
+
+## Anatomy
+
+1. Connection status and account.
+2. Continue with ChatGPT, reconnect, cancel sign-in, sign out, and Manage usage actions.
+3. Global model and effort selectors with Refresh models.
+4. Unavailable selection guidance and connection errors.
+
+## Visual Preview
+
+<ComponentPreview label="Disconnected AI settings">
+  <AiSettingsSection />
+</ComponentPreview>
+
+## Visual Specs
+
+| Property | Token / value |
+|---|---|
+| Layout | Shared SettingsLayout / SettingItem |
+| Surface / foreground | `--background`, `--foreground` |
+| Fields / radius | `--input`, `--radius-sm` |
+| Text | `--text-sm` |
+| Control height | `--click-target-min` |
+| Gaps | 0.5rem between related controls |
+
+## States
+
+Disconnected shows Continue with ChatGPT. Connecting shows a waiting status and Cancel sign-in. Connected shows the account and Using ChatGPT plan only when plan permission is granted. Identity-only sessions explain the missing permission. Failed requests show an alert with recovery guidance. An unavailable default or saved choice remains selected until the user chooses a supported combination. Models with unknown reasoning support are disabled.
+
+Buttons use `--accent` on hover, `--muted` when pressed, and `--ring` for focus. Disabled controls have 0.5 opacity and no interactive hover.
+
+## Variants
+
+Connection-only and plan-authorized states use the same component. The initial selection is GPT-6 Luna / High. Saved selections apply to subsequent requests throughout the app.
+
+## Behavior
+
+Connection actions run in the main process and never expose credentials. Manage usage opens ChatGPT usage settings. Selections save immediately after validation. Refresh models reads the current account's catalog.
+
+## Animation & Motion
+
+Control colors transition using `--duration-fast` / `--ease-out`; reduced motion removes transitions.
+
+## Keyboard & Focus
+
+Tab follows action and field order. Selectors use native keyboard behavior. Sign-in runs in the system browser; cancellation is explicit.
+
+## Accessibility
+
+Named selectors, semantic buttons, a live status, and alert errors. Controls meet `--click-target-min` and have visible focus outlines.
+
+## Layout & Composition
+
+The section uses the settings scaffold and wraps account actions on narrow widths. Model and effort fields stack vertically.
+
+## Related
+
+[AI Request Panel](/components/ai-request-panel), [Settings Page](/components/settings-page), [Interaction](/interaction).
