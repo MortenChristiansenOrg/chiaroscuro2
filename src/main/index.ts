@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
-import { app, BrowserWindow, ipcMain, Menu, powerMonitor, screen } from "electron";
+import { app, BrowserWindow, ipcMain, Menu, powerMonitor, safeStorage, screen } from "electron";
 import { CommandBus } from "../bus/command-bus";
 import { commandContracts } from "../bus/command-contracts";
 import { EventBus } from "../bus/event-bus";
@@ -8,6 +8,9 @@ import { bridgeBusToIpc } from "../bus/ipc-main-bridge";
 import type { CommandRegistry, EventRegistry, MergeRegistries } from "../bus/types";
 import { createDataStore } from "../data/store";
 import type { DataStore } from "../data/types";
+import ai from "../features/ai/ai.main";
+import type { AiCommands, AiEvents } from "../features/ai/ai.shared";
+import { createChatGptClient } from "../features/ai/chatgpt-client.main";
 import appState, { loadPersistedState } from "../features/app-state/app-state.main";
 import type { AppStateCommands, AppStateEvents } from "../features/app-state/app-state.shared";
 import commandPalette from "../features/command-palette/command-palette.main";
@@ -200,6 +203,7 @@ type AllCommands = MergeRegistries<
     FoldersCommands,
     ZoomCommands,
     DevToolsCommands,
+    AiCommands,
     DomainCssCommands,
     DomainScriptsCommands,
     DownloadsCommands,
@@ -234,6 +238,7 @@ type AllEvents = MergeRegistries<
     FoldersEvents,
     ZoomEvents,
     DevToolsEvents,
+    AiEvents,
     DomainCssEvents,
     DomainScriptsEvents,
     DownloadsEvents,
@@ -424,6 +429,25 @@ if (gotLock) {
     });
     devTools.register(deps);
     domainCss.register({ ...deps, dataDir, getTabsSnapshot: getAllTabs });
+    const aiProvider = createChatGptClient(
+      path.join(dataDir, "ai"),
+      {
+        encrypt(value) {
+          if (
+            !safeStorage.isEncryptionAvailable() ||
+            (process.platform === "linux" &&
+              safeStorage.getSelectedStorageBackend() === "basic_text")
+          )
+            throw new Error("ChatGPT sign-in requires a secure system keyring.");
+          return safeStorage.encryptString(value);
+        },
+        decrypt(value) {
+          return safeStorage.decryptString(Buffer.from(value));
+        },
+      },
+      (url) => platform.openExternal(url),
+    );
+    ai.register({ ...websiteScriptDeps, provider: aiProvider });
     domainScripts.register(websiteScriptDeps);
     downloads.register(deps);
     findText.register(deps);
@@ -497,7 +521,12 @@ if (gotLock) {
     });
     if (isAutomation) {
       Object.assign(globalThis, {
-        __testHooks: { commandBus: commands, getDebugPort: getActualPort, ready: false },
+        __testHooks: {
+          commandBus: commands,
+          getDebugPort: getActualPort,
+          ready: false,
+          aiProvider,
+        },
       });
     }
 
@@ -519,6 +548,7 @@ if (gotLock) {
     ipcMain.once("renderer:ready", async () => {
       appState.start?.(deps);
       await workspaces.start?.({ ...deps, getTabsForWorkspace });
+      await ai.start?.();
       await domainScripts.start?.(websiteScriptDeps);
       windowChrome.start?.({ ...deps, getTabUrl });
       await installer.start?.(deps);
@@ -576,6 +606,7 @@ if (gotLock) {
     if (quitting) return;
     platform.deactivateShortcuts();
     extensions.teardown?.();
+    ai.teardown?.();
     domainScripts.teardown?.();
     debugServer.teardown?.();
     localWebApp.teardown?.();

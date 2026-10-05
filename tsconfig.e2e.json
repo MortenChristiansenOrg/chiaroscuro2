@@ -10,6 +10,7 @@
     "noEmit": true
   },
   "include": [
+    "src/features/ai/chatgpt-client.main.ts",
     "e2e/**/*",
     "playwright*.config.ts",
     "src/features/debug-server/targets.shared.ts",

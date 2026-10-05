@@ -1615,6 +1615,15 @@ export class ElectronPlatform implements Platform {
 
   // ── CSS injection ───────────────────────────────────────────────
 
+  async captureTabScreenshot(tabId: TabId): Promise<string> {
+    const view = this.views.get(tabId);
+    if (!view || view.webContents.isDestroyed()) throw new Error("The target page closed.");
+    const image = await view.webContents.capturePage();
+    if (image.isEmpty())
+      throw new Error("Could not capture the target page. Open it and try again.");
+    return image.toDataURL();
+  }
+
   async insertCSS(tabId: TabId, css: string): Promise<string> {
     const view = this.views.get(tabId);
     if (!view) throw new Error(`No view for tab ${tabId}`);

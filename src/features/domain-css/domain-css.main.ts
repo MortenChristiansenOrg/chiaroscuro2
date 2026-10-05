@@ -53,6 +53,7 @@ interface PersistedNavigationState {
 }
 
 // Track CSS keys injected per tab for removal
+const previewTabs = new Set<TabId>();
 const injectedCssKeys = new Map<TabId, string>();
 
 // Per-domain state (enabled/disabled)
@@ -144,6 +145,7 @@ function emitChanged(domain: string): void {
 }
 
 async function injectCssForTab(tabId: TabId, domain: string): Promise<void> {
+  if (previewTabs.has(tabId)) return;
   const state = domainStates.get(domain);
   if (!state?.enabled) return;
 
@@ -251,6 +253,7 @@ export default defineFeature<DomainCssDeps>({
     domainStates = new Map();
     navigationStates = new Map();
     injectedCssKeys.clear();
+    previewTabs.clear();
     for (const w of watchers.values()) w.close();
     watchers.clear();
 
@@ -318,6 +321,10 @@ export default defineFeature<DomainCssDeps>({
       );
     });
 
+    commands.handle("domain-css:can-restore", async ({ domain }) =>
+      fs.existsSync(`${getCssFilePath(domain)}.previous.json`),
+    );
+    commands.handle("domain-css:restore", async ({ domain }) => restoreGeneratedCss(domain));
     commands.handle(DOMAIN_CSS_GET_STATE, async (payload) => {
       const { domain } = payload;
       const state = domainStates.get(domain);
@@ -434,6 +441,7 @@ export default defineFeature<DomainCssDeps>({
     domainStates.clear();
     navigationStates.clear();
     injectedCssKeys.clear();
+    previewTabs.clear();
   },
 
   async start({ dataStore }) {
@@ -473,3 +481,66 @@ export default defineFeature<DomainCssDeps>({
     }
   },
 });
+
+export interface CssSnapshot {
+  source: string | null;
+  enabled: boolean;
+}
+export function getDomainCssSnapshot(domain: string): CssSnapshot {
+  return { source: readCssFile(domain), enabled: domainStates.get(domain)?.enabled ?? false };
+}
+export async function previewDomainCss(
+  tabId: TabId,
+  domain: string,
+  source: string,
+): Promise<() => Promise<void>> {
+  previewTabs.add(tabId);
+  await removeCssFromTab(tabId);
+  let key: string;
+  try {
+    key = await deps.platform.insertCSS(tabId, source);
+  } catch (error) {
+    previewTabs.delete(tabId);
+    await injectCssForTab(tabId, domain);
+    throw error;
+  }
+  return async () => {
+    await deps.platform.removeInsertedCSS(tabId, key).catch(() => {});
+    previewTabs.delete(tabId);
+    const tab = deps.getTabsSnapshot().get(tabId);
+    if (tab && getDomainFromUrl(tab.url) === domain) await injectCssForTab(tabId, domain);
+  };
+}
+export async function saveGeneratedCss(
+  domain: string,
+  source: string,
+  before: CssSnapshot,
+): Promise<void> {
+  const current = getDomainCssSnapshot(domain);
+  if (current.source !== before.source || current.enabled !== before.enabled)
+    throw new Error("CSS changed while AI was working. Your changes were kept; try again.");
+  const file = getCssFilePath(domain);
+  // Durable undo preserves both absence of a file and the previous enable state.
+  fs.mkdirSync(cssDir, { recursive: true });
+  fs.writeFileSync(`${file}.previous.json`, JSON.stringify(before), { mode: 0o600 });
+  stopWatching(domain);
+  fs.writeFileSync(file, source);
+  domainStates.set(domain, { enabled: true });
+  await persistStates();
+  await injectOrRemoveForAllTabs(domain);
+  startWatching(domain);
+  emitChanged(domain);
+}
+async function restoreGeneratedCss(domain: string): Promise<void> {
+  const file = getCssFilePath(domain);
+  const before = JSON.parse(fs.readFileSync(`${file}.previous.json`, "utf8")) as CssSnapshot;
+  stopWatching(domain);
+  if (before.source === null) fs.rmSync(file, { force: true });
+  else fs.writeFileSync(file, before.source);
+  domainStates.set(domain, { enabled: before.enabled });
+  await persistStates();
+  await injectOrRemoveForAllTabs(domain);
+  if (before.enabled && before.source !== null) startWatching(domain);
+  fs.rmSync(`${file}.previous.json`, { force: true });
+  emitChanged(domain);
+}

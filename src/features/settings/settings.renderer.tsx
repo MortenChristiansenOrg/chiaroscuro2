@@ -10,6 +10,7 @@ import {
   settingsSelectStyle,
   useScrollSpy,
 } from "../../renderer/src/components/SettingsLayout";
+import { AiSettingsSection } from "../ai/AiSettingsSection";
 import type { SearchProvider } from "../command-palette/resolve-input";
 import { GlobalPermissionsSection } from "../permissions/global-permissions.renderer";
 import type { Settings } from "./settings.shared";
@@ -287,6 +288,7 @@ function DeveloperSettings({
 const categories = [
   { id: "search", label: "Search" },
   { id: "permissions", label: "Permissions" },
+  { id: "ai", label: "AI" },
   { id: "developer", label: "Developer" },
 ];
 
@@ -337,6 +339,9 @@ export default function SettingsPage(_props: { params: Record<string, string> })
           )
         }
       />
+      {(!searchQuery || "ai chatgpt model reasoning".includes(searchQuery.toLowerCase())) && (
+        <AiSettingsSection />
+      )}
       <DeveloperSettings settings={settings} onSettingsChange={handleSettingsChange} />
     </SettingsLayout>
   );

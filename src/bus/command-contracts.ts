@@ -1,3 +1,4 @@
+import { commandContracts as aiContracts } from "../features/ai/ai.contracts";
 import { commandContracts as appStateContracts } from "../features/app-state/app-state.contracts";
 import { commandContracts as commandPaletteContracts } from "../features/command-palette/command-palette.contracts";
 import { commandContracts as contextMenuContracts } from "../features/context-menu/context-menu.contracts";
@@ -29,6 +30,7 @@ import { commandContracts as workspacesContracts } from "../features/workspaces/
 import { commandContracts as zoomContracts } from "../features/zoom/zoom.contracts";
 
 export const commandContracts = {
+  ...aiContracts,
   ...appStateContracts,
   ...commandPaletteContracts,
   ...contextMenuContracts,

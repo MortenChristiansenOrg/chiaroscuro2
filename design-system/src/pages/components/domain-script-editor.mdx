@@ -13,7 +13,8 @@ import { DomainScriptEditor } from "@features/domain-scripts/DomainScriptEditor"
 
 ## Anatomy
 
-1. Name.
+1. [AI Request Panel](/components/ai-request-panel) for an editable generated draft.
+2. Name.
 2. Run mode and path pattern.
 3. JavaScript source and clipboard helper explanation.
 4. Optional alias and shortcut for manual scripts.
@@ -76,3 +77,5 @@ The editor belongs to the [Scripts section](/components/domain-scripts-section).
 ## Related
 
 [Domain Script Card](/components/domain-script-card), [Scripts section](/components/domain-scripts-section), [Typography](/typography), [Accessibility](/accessibility).
+
+Ask AI updates only the JavaScript draft. Saving remains explicit and preserves the current enabled state, domain scope, execution mode, path, alias and shortcut. Manual editing works without a connection.

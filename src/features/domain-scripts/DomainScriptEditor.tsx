@@ -1,4 +1,5 @@
 import { type FormEvent, useEffect, useId, useRef, useState } from "react";
+import { AiRequestPanel } from "../ai/AiRequestPanel";
 import type { DomainScript } from "./domain-scripts.shared";
 import { scriptButtonClass, scriptErrorMessage, scriptInputClass } from "./domain-scripts.ui";
 
@@ -68,6 +69,18 @@ export function DomainScriptEditor({ domain, script, onSave, onCancel }: DomainS
       <h3 className="m-0 text-[length:var(--text-base)] font-semibold">
         {script ? "Edit script" : "New script"}
       </h3>
+      <AiRequestPanel
+        domain={domain}
+        kind="script"
+        source={draft.source}
+        onDraft={(source, previousSource) => {
+          if (draft.source !== previousSource)
+            throw new Error(
+              "Your JavaScript changed while AI was working. Your edits were kept; try again.",
+            );
+          setDraft((current) => ({ ...current, source }));
+        }}
+      />
       <fieldset disabled={saving} className="m-0 flex min-w-0 flex-col gap-3 border-0 p-0">
         <label htmlFor={`${fieldId}-name`} className="flex flex-col gap-1.5">
           Name

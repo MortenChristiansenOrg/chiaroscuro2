@@ -16,6 +16,7 @@
     }
   },
   "include": [
+    "../src/features/ai/**/*.tsx",
     "src/**/*",
     "vite.config.ts",
     "../src/shared/**/*",
