@@ -9,3 +9,7 @@ export type AiEvents = {
   "ai:progress": { id: string; message: string };
 };
 export const DEFAULT_AI_SELECTION = { model: "gpt-6-luna", effort: "high" };
+export const MODEL_DEFAULT_EFFORT = "default";
+export function reasoningEffortLabel(effort: string): string {
+  return effort === MODEL_DEFAULT_EFFORT ? "Model default" : effort === "high" ? "High" : effort;
+}

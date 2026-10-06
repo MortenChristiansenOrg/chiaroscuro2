@@ -37,7 +37,7 @@ import { AiSettingsSection } from "@features/ai/AiSettingsSection"
 
 ## States
 
-Disconnected shows Continue with ChatGPT. Connecting shows a waiting status and Cancel sign-in. Connected shows the account and Using ChatGPT plan only when plan permission is granted. Identity-only sessions explain the missing permission. Failed requests show an alert with recovery guidance. An unavailable default or saved choice remains selected until the user chooses a supported combination. Models with unknown reasoning support are disabled.
+Disconnected shows Continue with ChatGPT. Connecting shows a waiting status and Cancel sign-in. Connected shows the account and Using ChatGPT plan only when plan permission is granted. Identity-only sessions explain the missing permission. Failed requests show an alert with recovery guidance. An unavailable default or saved choice remains selected until the user chooses a supported combination. Listed models without reasoning metadata use documented effort options when available, or Model default. Model default sends no reasoning override. The section explains that choices come from the current account catalog; models absent after refresh are not added locally.
 
 Buttons use `--accent` on hover, `--muted` when pressed, and `--ring` for focus. Disabled controls have 0.5 opacity and no interactive hover.
 

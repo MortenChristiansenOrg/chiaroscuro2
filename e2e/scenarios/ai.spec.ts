@@ -1,4 +1,5 @@
 import type { AiProvider } from "../../src/features/ai/chatgpt-client.main";
+import { parseModelCatalog } from "../../src/features/ai/model-catalog.main";
 import { startSite } from "../automation/site";
 import { expect, test } from "../fixtures/electron-app";
 import { VerificationPage } from "../pages/verification.page";
@@ -10,6 +11,95 @@ test.beforeAll(async () => {
 });
 test.afterAll(async () => {
   await site.close();
+});
+
+test("AI model picker uses live account choices and supports missing reasoning metadata", async ({
+  appSession: session,
+}) => {
+  test.setTimeout(120000);
+  await VerificationPage.navigate(session, `${site.url}/scripts/initial`);
+  await session.command("settings:open", undefined);
+  const listed = (slug: string, display_name: string) => ({
+    slug,
+    display_name,
+    visibility: "list",
+  });
+  const reported = parseModelCatalog({
+    models: [
+      listed("gpt-6-astra", "GPT-6 Astra"),
+      listed("gpt-5.6-sol", "GPT-5.6 Sol"),
+      listed("gpt-5.6-terra", "GPT-5.6 Terra"),
+      listed("gpt-5.6-luna", "GPT-5.6 Luna"),
+    ],
+  });
+  const refreshed = parseModelCatalog({
+    models: [
+      listed("gpt-6-sol", "GPT-6 Sol"),
+      listed("gpt-6-luna", "GPT-6 Luna"),
+      listed("future-model", "Future model"),
+      { visibility: "hidden" },
+    ],
+  });
+  await session.app.evaluate(
+    (_, catalogs) => {
+      const provider = (globalThis as unknown as { __testHooks: { aiProvider: AiProvider } })
+        .__testHooks.aiProvider;
+      let connected = false;
+      let reads = 0;
+      provider.status = () => ({ connected, sharing: connected, account: "fixture@example.com" });
+      provider.connect = async () => {
+        connected = true;
+      };
+      provider.models = async () => (reads++ === 0 ? catalogs.reported : catalogs.refreshed);
+      provider.respond = async (options) => {
+        if (options.model !== "future-model" || options.effort !== "default")
+          throw new Error("The request did not use the selected model default");
+        return "await copy(document.title);";
+      };
+    },
+    { reported, refreshed },
+  );
+  const ai = session.shell.locator("#settings-ai");
+  await ai.getByRole("button", { name: "Continue with ChatGPT" }).click();
+  const model = ai.getByRole("combobox", { name: "AI model" });
+  const effort = ai.getByRole("combobox", { name: "AI reasoning effort" });
+  await expect(model.locator('option[value="gpt-5.6-sol"]')).toBeEnabled();
+  await expect(model.locator('option[value="gpt-6-sol"]')).toHaveCount(0);
+  for (const slug of ["gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"]) {
+    await model.selectOption(slug);
+    await expect(model).toHaveValue(slug);
+    await expect(effort).toHaveValue("high");
+  }
+  await ai.scrollIntoViewIfNeeded();
+  await session.capture("ai-model-picker-reported-catalog");
+  await ai.getByRole("button", { name: "Refresh models" }).click();
+  await expect(model.locator('option[value="gpt-6-sol"]')).toBeEnabled();
+  for (const slug of ["gpt-6-sol", "gpt-6-luna"]) {
+    await model.selectOption(slug);
+    await expect(model).toHaveValue(slug);
+    await expect(effort).toHaveValue("high");
+  }
+  await session.capture("ai-model-picker-refreshed-catalog");
+  await model.selectOption("future-model");
+  await expect(effort).toHaveValue("default");
+  await expect(effort.locator("option")).toHaveText(["Model default"]);
+  await expect(
+    ai.getByText("Reasoning options are not provided for this model. Requests use its default."),
+  ).toBeVisible();
+  await session.capture("ai-model-picker-model-default");
+  await session.command("domain-settings:open", { domain: "127.0.0.1" });
+  const scripts = session.shell.locator("#domain-settings-scripts");
+  await scripts.getByRole("button", { name: "Add script", exact: true }).click();
+  const form = scripts.getByRole("form", { name: "New script", exact: true });
+  await form.getByRole("textbox", { name: "Describe the change" }).fill("Copy the page title");
+  await form.getByRole("button", { name: "Generate draft" }).click();
+  await expect(form.getByRole("textbox", { name: "JavaScript", exact: true })).toHaveValue(
+    "await copy(document.title);",
+  );
+  await session.restart();
+  expect(await session.command("ai:get-state", {})).toMatchObject({
+    selection: { model: "future-model", effort: "default" },
+  });
 });
 
 test("AI settings and generated drafts use the real app with a simulated ChatGPT provider", async ({

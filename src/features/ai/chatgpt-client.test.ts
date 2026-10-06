@@ -100,6 +100,46 @@ async function login(options: { scopes?: string; badNonce?: boolean; expiresIn?:
   };
 }
 
+it.each(["high", "default"])(
+  "sends account models and omits reasoning for model default (%s)",
+  async (effort) => {
+    const fixture = await login();
+    await fixture.connect();
+    fixture.network.mockImplementationOnce(async () =>
+      Response.json({
+        models: [{ slug: "gpt-5.6-sol", display_name: "GPT-5.6 Sol", visibility: "list" }],
+      }),
+    );
+    const models = await fixture.client.models(AbortSignal.timeout(5000));
+    expect(models[0].efforts).toContain("high");
+    expect(fixture.network.mock.lastCall).toEqual([
+      "https://api.openai.com/v1/models",
+      expect.objectContaining({ headers: { Authorization: "Bearer private-access" } }),
+    ]);
+    fixture.network.mockImplementationOnce(
+      async () =>
+        new Response(
+          'data: {"type":"response.output_text.delta","delta":"draft"}\n\ndata: {"type":"response.completed"}\n\n',
+        ),
+    );
+    expect(
+      await fixture.client.respond({
+        model: "gpt-5.6-sol",
+        effort,
+        instructions: "Write a draft",
+        input: [{ role: "user", content: "Help" }],
+        signal: AbortSignal.timeout(5000),
+      }),
+    ).toBe("draft");
+    const [url, request] = fixture.network.mock.lastCall ?? [];
+    expect(url).toBe("https://api.openai.com/v1/responses");
+    const body = JSON.parse(request?.body as string);
+    expect(body).toMatchObject({ model: "gpt-5.6-sol", store: false, stream: true });
+    if (effort === "default") expect(body).not.toHaveProperty("reasoning");
+    else expect(body.reasoning).toEqual({ effort: "high" });
+  },
+);
+
 describe("ChatGPT OAuth", () => {
   it("uses loopback PKCE, nonce and plan scopes, encrypts credentials, and reloads without exposing tokens", async () => {
     const fixture = await login();

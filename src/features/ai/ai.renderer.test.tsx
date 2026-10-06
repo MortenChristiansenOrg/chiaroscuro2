@@ -20,6 +20,45 @@ beforeEach(() => {
   vi.mocked(window.chiaroscuro.sendCommand).mockReset();
 });
 afterEach(cleanup);
+it("enables the reported GPT-5.6 choices, preserves High, and lets unknown models use their default", async () => {
+  useAiStore.setState((s) => ({
+    state: {
+      ...s.state,
+      models: [
+        { slug: "gpt-5.6-sol", name: "GPT-5.6 Sol", efforts: ["low", "high"] },
+        { slug: "gpt-5.6-terra", name: "GPT-5.6 Terra", efforts: ["low", "high"] },
+        { slug: "gpt-5.6-luna", name: "GPT-5.6 Luna", efforts: ["low", "high"] },
+        { slug: "future-model", name: "Future model", efforts: ["default"] },
+      ],
+    },
+  }));
+  vi.mocked(window.chiaroscuro.sendCommand).mockResolvedValue(undefined);
+  render(<AiSettingsSection />);
+  for (const name of ["GPT-5.6 Sol", "GPT-5.6 Terra", "GPT-5.6 Luna", "Future model"])
+    expect(screen.getByRole("option", { name })).toBeEnabled();
+  expect(screen.getByText(/Your saved model or effort is unavailable/)).toBeVisible();
+  fireEvent.change(screen.getByLabelText("AI model"), { target: { value: "gpt-5.6-sol" } });
+  await waitFor(() =>
+    expect(window.chiaroscuro.sendCommand).toHaveBeenCalledWith("ai:set-selection", {
+      model: "gpt-5.6-sol",
+      effort: "high",
+    }),
+  );
+  fireEvent.change(screen.getByLabelText("AI model"), { target: { value: "future-model" } });
+  await waitFor(() =>
+    expect(window.chiaroscuro.sendCommand).toHaveBeenCalledWith("ai:set-selection", {
+      model: "future-model",
+      effort: "default",
+    }),
+  );
+  act(() =>
+    useAiStore.setState((s) => ({
+      state: { ...s.state, selection: { model: "future-model", effort: "default" } },
+    })),
+  );
+  expect(screen.getByRole("option", { name: "Model default" })).toBeVisible();
+  expect(screen.getByText(/Requests use its default/)).toBeVisible();
+});
 it("explains how to connect and responds to sign-out", async () => {
   render(<AiRequestPanel domain="example.com" kind="script" />);
   expect(screen.getByRole("button", { name: "Generate draft" })).toBeDisabled();
