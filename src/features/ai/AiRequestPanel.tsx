@@ -4,6 +4,7 @@ import {
   scriptErrorMessage,
   scriptInputClass,
 } from "../domain-scripts/domain-scripts.ui";
+import { reasoningEffortLabel } from "./ai.shared";
 import { useAiStore } from "./ai.store";
 
 interface AiRequestPanelProps {
@@ -92,7 +93,8 @@ export function AiRequestPanel({ domain, kind, source = "", onDraft }: AiRequest
       ) : (
         <>
           <p className="m-0 text-[var(--muted-foreground)]">
-            Using ChatGPT plan · {state.selection.model} · {state.selection.effort}.{" "}
+            Using ChatGPT plan · {state.selection.model} ·{" "}
+            {reasoningEffortLabel(state.selection.effort)}.{" "}
             {kind === "script"
               ? "Page structure and your draft will be shared. Generated code is an editable draft."
               : "Page structure and screenshots will be shared. CSS changes are applied, visually checked, and refined automatically; you can stop or restore the prior CSS."}

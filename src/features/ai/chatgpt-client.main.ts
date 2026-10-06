@@ -3,6 +3,8 @@ import { promises as fs } from "node:fs";
 import { createServer } from "node:http";
 import path from "node:path";
 import { createRemoteJWKSet, jwtVerify } from "jose";
+import { MODEL_DEFAULT_EFFORT } from "./ai.shared";
+import { parseModelCatalog } from "./model-catalog.main";
 
 const AUTH = "https://auth.openai.com";
 const RESOURCE = "https://api.openai.com/v1";
@@ -340,31 +342,7 @@ export function createChatGptClient(
           signal,
         }),
       );
-      const body = (await response.json()) as {
-        models?: {
-          slug: string;
-          display_name: string;
-          visibility: string;
-          supported_reasoning_efforts?: (string | { reasoning_effort: string })[];
-        }[];
-      };
-      if (!Array.isArray(body.models))
-        throw new Error("ChatGPT returned an unexpected model catalog. Refresh models to retry.");
-      return body.models
-        .filter((m) => m.visibility === "list")
-        .map((m) => ({
-          slug: m.slug,
-          name: m.display_name,
-          efforts:
-            m.supported_reasoning_efforts?.map((e) =>
-              typeof e === "string" ? e : e.reasoning_effort,
-            ) ??
-            (m.slug === "gpt-6-luna" || m.slug === "gpt-6-sol"
-              ? ["none", "low", "medium", "high", "xhigh", "max"]
-              : m.slug === "gpt-6-astra" || m.slug === "gpt-6.1-sol"
-                ? ["low", "medium", "high", "xhigh", "max"]
-                : []),
-        }));
+      return parseModelCatalog(await response.json());
     },
     async respond(options) {
       const bearer = await access(options.signal);
@@ -374,7 +352,9 @@ export function createChatGptClient(
           headers: { Authorization: `Bearer ${bearer}`, "Content-Type": "application/json" },
           body: JSON.stringify({
             model: options.model,
-            reasoning: { effort: options.effort },
+            ...(options.effort === MODEL_DEFAULT_EFFORT
+              ? {}
+              : { reasoning: { effort: options.effort } }),
             instructions: options.instructions,
             input: options.input,
             store: false,

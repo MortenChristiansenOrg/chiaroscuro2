@@ -11,6 +11,9 @@
   },
   "include": [
     "src/features/ai/chatgpt-client.main.ts",
+    "src/features/ai/model-catalog.main.ts",
+    "src/features/ai/ai.shared.ts",
+    "src/features/ai/ai.contracts.ts",
     "e2e/**/*",
     "playwright*.config.ts",
     "src/features/debug-server/targets.shared.ts",

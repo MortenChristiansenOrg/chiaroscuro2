@@ -8,6 +8,7 @@ import {
   scriptErrorMessage,
   scriptInputClass,
 } from "../domain-scripts/domain-scripts.ui";
+import { MODEL_DEFAULT_EFFORT, reasoningEffortLabel } from "./ai.shared";
 import { useAiStore } from "./ai.store";
 
 export function AiSettingsSection() {
@@ -113,7 +114,6 @@ export function AiSettingsSection() {
               {state.models.map((m) => (
                 <option key={m.slug} value={m.slug} disabled={!m.efforts.length}>
                   {m.name}
-                  {!m.efforts.length && " (reasoning support unknown)"}
                 </option>
               ))}
             </select>
@@ -134,16 +134,25 @@ export function AiSettingsSection() {
             >
               {!valid && (
                 <option value={state.selection.effort}>
-                  {state.selection.effort} (unavailable)
+                  {reasoningEffortLabel(state.selection.effort)} (unavailable)
                 </option>
               )}
               {model?.efforts.map((effort) => (
                 <option key={effort} value={effort}>
-                  {effort === "high" ? "High" : effort}
+                  {reasoningEffortLabel(effort)}
                 </option>
               ))}
             </select>
           </label>
+          <p className="m-0 text-[var(--muted-foreground)]">
+            Only models listed for your ChatGPT account appear here. Refresh models to check for new
+            choices.
+          </p>
+          {model?.efforts.includes(MODEL_DEFAULT_EFFORT) && (
+            <p className="m-0 text-[var(--muted-foreground)]">
+              Reasoning options are not provided for this model. Requests use its default.
+            </p>
+          )}
           {state.sharing && !valid && (
             <p role="status" className="m-0 text-[var(--muted-foreground)]">
               Your saved model or effort is unavailable. Choose a supported combination to continue.
