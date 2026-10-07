@@ -20,6 +20,7 @@ import {
 } from "electron";
 import type { ContextMenuItemData } from "../features/context-menu/context-menu.shared";
 import type { Bounds, TabId, WindowId } from "../shared/types";
+import { capturePageScreenshot } from "./capture-page";
 import { commandChord, inputChord, suggestedShortcut } from "./extension-commands";
 import { unpackedExtensionId } from "./extension-identity";
 import { migrateExtensionBootstrap } from "./extension-migration";
@@ -1618,35 +1619,7 @@ export class ElectronPlatform implements Platform {
   async captureTabScreenshot(tabId: TabId): Promise<string> {
     const view = this.views.get(tabId);
     if (!view || view.webContents.isDestroyed()) throw new Error("The target page closed.");
-    const contents = view.webContents;
-    const throttled = contents.getBackgroundThrottling();
-    contents.setBackgroundThrottling(false);
-    let timeout: ReturnType<typeof setTimeout> | undefined;
-    let image: Electron.NativeImage;
-    try {
-      image = await Promise.race([
-        (async () => {
-          // Paint the inserted CSS before copying the compositor's current image.
-          // Frames are enabled only for this bounded capture, even for hidden tabs.
-          await contents.executeJavaScript(
-            "new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve(true))))",
-          );
-          return contents.capturePage();
-        })(),
-        new Promise<never>((_, reject) => {
-          timeout = setTimeout(
-            () => reject(new Error("Could not capture the target page. Open it and try again.")),
-            10000,
-          );
-        }),
-      ]);
-    } finally {
-      clearTimeout(timeout);
-      if (!contents.isDestroyed()) contents.setBackgroundThrottling(throttled);
-    }
-    if (image.isEmpty())
-      throw new Error("Could not capture the target page. Open it and try again.");
-    return image.toDataURL();
+    return capturePageScreenshot(view.webContents);
   }
 
   async insertCSS(tabId: TabId, css: string): Promise<string> {
