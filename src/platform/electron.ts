@@ -20,6 +20,7 @@ import {
 } from "electron";
 import type { ContextMenuItemData } from "../features/context-menu/context-menu.shared";
 import type { Bounds, TabId, WindowId } from "../shared/types";
+import { capturePageScreenshot } from "./capture-page";
 import { commandChord, inputChord, suggestedShortcut } from "./extension-commands";
 import { unpackedExtensionId } from "./extension-identity";
 import { migrateExtensionBootstrap } from "./extension-migration";
@@ -1618,10 +1619,7 @@ export class ElectronPlatform implements Platform {
   async captureTabScreenshot(tabId: TabId): Promise<string> {
     const view = this.views.get(tabId);
     if (!view || view.webContents.isDestroyed()) throw new Error("The target page closed.");
-    const image = await view.webContents.capturePage();
-    if (image.isEmpty())
-      throw new Error("Could not capture the target page. Open it and try again.");
-    return image.toDataURL();
+    return capturePageScreenshot(view.webContents);
   }
 
   async insertCSS(tabId: TabId, css: string): Promise<string> {

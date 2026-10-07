@@ -198,6 +198,68 @@ describe("CSS generation checks", () => {
       false,
     );
   });
+  it("stops an unresponsive screenshot and restores the preview without saving", async () => {
+    const { commands, provider, platform } = await setup();
+    vi.mocked(platform.captureTabScreenshot)
+      .mockResolvedValueOnce("data:image/png;base64,before")
+      .mockImplementationOnce(() => new Promise(() => {}));
+    const result = commands.send("ai:generate-css", payload);
+    const rejected = expect(result).rejects.toThrow("Generation stopped");
+    await vi.waitFor(() => expect(platform.captureTabScreenshot).toHaveBeenCalledTimes(2));
+    await commands.send("ai:cancel", { id: payload.id });
+    await rejected;
+    expect(provider.respond).toHaveBeenCalledTimes(1);
+    expect(platform.removeInsertedCSS).toHaveBeenCalledTimes(1);
+    expect(await commands.send("domain-css:get-state", { domain: payload.domain })).toMatchObject({
+      hasFile: false,
+      enabled: false,
+    });
+    // The cancelled request releases the domain so another request can complete.
+    vi.mocked(provider.respond)
+      .mockReset()
+      .mockResolvedValueOnce("h1 {color:red}")
+      .mockResolvedValueOnce(verified);
+    await expect(commands.send("ai:generate-css", payload)).resolves.toMatchObject({
+      message: expect.stringContaining("CSS saved."),
+    });
+  });
+  it("times out a stalled screenshot and ignores a late result", async () => {
+    const { commands, provider, platform } = await setup();
+    vi.useFakeTimers();
+    let resolveScreenshot: ((value: string) => void) | undefined;
+    vi.mocked(platform.captureTabScreenshot)
+      .mockResolvedValueOnce("data:image/png;base64,before")
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveScreenshot = resolve;
+          }),
+      );
+    const result = commands.send("ai:generate-css", payload);
+    const rejected = expect(result).rejects.toThrow("target page took too long");
+    await vi.waitFor(() => expect(platform.captureTabScreenshot).toHaveBeenCalledTimes(2));
+    await vi.advanceTimersByTimeAsync(15000);
+    await rejected;
+    resolveScreenshot?.("data:image/png;base64,late");
+    await Promise.resolve();
+    expect(provider.respond).toHaveBeenCalledTimes(1);
+    expect(platform.removeInsertedCSS).toHaveBeenCalledTimes(1);
+    expect(await commands.send("domain-css:get-state", { domain: payload.domain })).toMatchObject({
+      hasFile: false,
+      enabled: false,
+    });
+  });
+  it("stops an unresponsive initial inspection before contacting ChatGPT", async () => {
+    const { commands, provider, platform } = await setup();
+    vi.mocked(platform.executeJavaScript).mockImplementationOnce(() => new Promise(() => {}));
+    const result = commands.send("ai:generate-css", payload);
+    const rejected = expect(result).rejects.toThrow("Generation stopped");
+    await vi.waitFor(() => expect(platform.executeJavaScript).toHaveBeenCalledTimes(1));
+    await commands.send("ai:cancel", { id: payload.id });
+    await rejected;
+    expect(provider.respond).not.toHaveBeenCalled();
+    expect(platform.insertCSS).not.toHaveBeenCalled();
+  });
   it("does not save an assessment of a document that reloaded at the same URL", async () => {
     const { commands, provider, platform } = await setup();
     let navigate: ((...args: unknown[]) => void) | undefined;
