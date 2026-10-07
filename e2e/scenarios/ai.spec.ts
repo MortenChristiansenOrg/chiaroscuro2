@@ -111,7 +111,7 @@ test("AI settings and generated drafts use the real app with a simulated ChatGPT
   await session.command("settings:open", undefined);
   const ai = session.shell.locator("#settings-ai");
   await expect(ai.getByRole("button", { name: "Continue with ChatGPT" })).toBeVisible();
-  await session.app.evaluate(() => {
+  await session.app.evaluate(({ BrowserWindow, nativeImage }) => {
     const provider = (globalThis as unknown as { __testHooks: { aiProvider: AiProvider } })
       .__testHooks.aiProvider;
     let connected = false;
@@ -147,10 +147,17 @@ test("AI settings and generated drafts use the real app with a simulated ChatGPT
           });
         });
       const pink = "h1 { color: rgb(180, 30, 70) !important; }";
-      if (options.instructions.startsWith("Write the complete"))
+      if (options.instructions.startsWith("Write the complete")) {
+        // Background/occluded pages can stop receiving animation frames while
+        // inference runs. Hide the owned window to reproduce that native state.
+        BrowserWindow.getAllWindows()
+          .find((win) => !win.getParentWindow())
+          ?.hide();
+        await new Promise((resolve) => setTimeout(resolve, 1000));
         return JSON.stringify(options.input).includes("font larger")
           ? `${pink} h1 { font-size: 56px !important; }`
           : "h1 { color: blue !important; }";
+      }
       const images = options.input.flatMap((item) =>
         typeof item.content === "string"
           ? []
@@ -166,6 +173,21 @@ test("AI settings and generated drafts use the real app with a simulated ChatGPT
         )
         .at(-1)?.content as string;
       const achieved = latestCss.includes("180, 30, 70");
+      const image = images.at(-1);
+      if (image?.type !== "input_image") throw new Error("Missing assessed image");
+      const bitmap = nativeImage.createFromDataURL(image.image_url).toBitmap();
+      const [blue, green, red] = achieved ? [70, 30, 180] : [255, 0, 0];
+      let painted = false;
+      for (let offset = 0; offset < bitmap.length; offset += 4) {
+        if (bitmap[offset] === blue && bitmap[offset + 1] === green && bitmap[offset + 2] === red) {
+          painted = true;
+          break;
+        }
+      }
+      if (!painted) throw new Error("The assessed screenshot does not show the preview CSS");
+      BrowserWindow.getAllWindows()
+        .find((win) => !win.getParentWindow())
+        ?.show();
       return JSON.stringify({
         achieved,
         explanation: achieved
@@ -215,7 +237,7 @@ test("AI settings and generated drafts use the real app with a simulated ChatGPT
   await expect(cssRequest).toHaveValue("Wait forever");
   await cssRequest.fill("Make the heading pink");
   await css.getByRole("button", { name: "Generate and verify CSS" }).click();
-  await expect(css.getByRole("status")).toContainText("CSS saved.");
+  await expect(css.getByRole("status")).toContainText("CSS saved.", { timeout: 20000 });
   await expect(css.getByRole("button", { name: "Restore previous CSS" })).toBeVisible();
   const target = await session.target((target) => target.url === url && target.kind === "tab");
   await session.shell.locator(`[data-tab-id="${target.tabId}"]`).click();
@@ -233,7 +255,7 @@ test("AI settings and generated drafts use the real app with a simulated ChatGPT
   await expect(page.locator("h1")).toHaveCSS("color", "rgb(180, 30, 70)");
   await cssRequest.fill("Keep the pink color and make the font larger");
   await css.getByRole("button", { name: "Generate and verify CSS" }).click();
-  await expect(css.getByRole("status")).toContainText("CSS saved.");
+  await expect(css.getByRole("status")).toContainText("CSS saved.", { timeout: 20000 });
   await css.scrollIntoViewIfNeeded();
   await session.capture("ai-css-result");
   await session.shell.locator(`[data-tab-id="${target.tabId}"]`).click();

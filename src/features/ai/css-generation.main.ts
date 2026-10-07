@@ -9,6 +9,7 @@ import type { AiInput } from "./chatgpt-client.main";
 import { validateGeneratedCss } from "./generated-css.main";
 
 const MAX_ATTEMPTS = 4;
+const PAGE_TIMEOUT_MS = 15000;
 const FeedbackSchema = z.strictObject({
   achieved: z.boolean(),
   explanation: z.string().trim().min(1).max(4000),
@@ -26,6 +27,32 @@ interface CssGenerationOptions {
     signal: AbortSignal;
   }) => Promise<string>;
   progress: (message: string) => void;
+}
+
+/** Page reads do not support AbortSignal; bound them without waiting on Chromium. */
+async function readPage<T>(signal: AbortSignal, operation: () => Promise<T>): Promise<T> {
+  signal.throwIfAborted();
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  let abort: (() => void) | undefined;
+  try {
+    return await new Promise<T>((resolve, reject) => {
+      abort = () => reject(signal.reason);
+      signal.addEventListener("abort", abort, { once: true });
+      timeout = setTimeout(
+        () =>
+          reject(
+            new Error(
+              "The target page took too long to respond. Your previous CSS is unchanged. Open the page and try again.",
+            ),
+          ),
+        PAGE_TIMEOUT_MS,
+      );
+      Promise.resolve().then(operation).then(resolve, reject);
+    });
+  } finally {
+    clearTimeout(timeout);
+    if (abort) signal.removeEventListener("abort", abort);
+  }
 }
 
 /** Inspect each applied revision; only save CSS that has had a visual assessment. */
@@ -63,8 +90,8 @@ export async function generateDomainCss({
   };
   try {
     progress("Inspecting the target page and its appearance…");
-    const context = await inspectAiPage(deps.platform, page.tabId);
-    const screenshot = await deps.platform.captureTabScreenshot(page.tabId);
+    const context = await readPage(signal, () => inspectAiPage(deps.platform, page.tabId));
+    const screenshot = await readPage(signal, () => deps.platform.captureTabScreenshot(page.tabId));
     assertCurrent();
     const input: AiInput[] = [
       {
@@ -95,12 +122,12 @@ export async function generateDomainCss({
       assertCurrent();
       restorePreview = await previewDomainCss(page.tabId, domain, source);
       progress(`Checking rendered result ${attempt} of ${MAX_ATTEMPTS}…`);
-      await deps.platform.executeJavaScript(
-        page.tabId,
-        "new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve(true))))",
+      // Capture owns a bounded render wait with background painting enabled.
+      // Waiting for frames here can deadlock on a throttled target page.
+      const appearance = await readPage(signal, () =>
+        deps.platform.captureTabScreenshot(page.tabId),
       );
-      const appearance = await deps.platform.captureTabScreenshot(page.tabId);
-      const structure = await inspectAiPage(deps.platform, page.tabId);
+      const structure = await readPage(signal, () => inspectAiPage(deps.platform, page.tabId));
       assertCurrent();
       input.push(
         { role: "assistant", content: source },
@@ -119,6 +146,7 @@ export async function generateDomainCss({
           ],
         },
       );
+      progress(`Assessing rendered result ${attempt} of ${MAX_ATTEMPTS} with ChatGPT…`);
       const answer = await generate({
         signal,
         input: [...input],
