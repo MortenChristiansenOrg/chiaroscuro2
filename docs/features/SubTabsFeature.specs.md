@@ -37,6 +37,7 @@ Sub-tabs keep the user's context by avoiding full tab switches for casual link-f
 - Reduced-motion preferences make bounds/backdrop changes immediate and suppress action-button scaling.
 - Resize, hide, detach and close cancel pending bounds updates. An interrupted exit starts at the displayed geometry.
 - Order open/close/promote operations per parent; completing an old transition must not resurrect a closed child or disable a newly shown overlay.
+- Backdrop transitions must finish even if compositor animation frames stop. Closing or promoting must not remain queued behind a stalled fade; cancellation clears its completion timer.
 - Native animation and blur adoption is conditional on preserving these behaviors. See [the Electron 44.3.0 evaluation](../testing/native-view-evaluation.md).
 
 ### Sub-tab stack

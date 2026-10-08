@@ -151,6 +151,76 @@ test("sub-tab transitions survive nested opens, resize, rapid close and reopen",
   await expect(parent.result).toHaveText("parent restored");
 });
 
+test("sub-tab promotion and dismissal finish when backdrop animation frames stop", async ({
+  appSession: session,
+}) => {
+  const parent = await VerificationPage.navigate(session, `${site.url}/parent`);
+  await parent.subTab.click();
+  const first = await session.target((t) => t.kind === "sub-tab" && t.visible);
+  const frame = await session.page(await session.target((t) => t.kind === "sub-tab-frame"));
+  await frame.getByRole("button", { name: "Close sub-tab", exact: true }).click();
+  await waitUntil(
+    "warm-up child closes",
+    () => session.targets(),
+    (targets) => !targets.some((t) => t.id === first.id),
+  );
+
+  // Reproduce a compositor that delivers one frame, then suspends painting.
+  // Timers and input remain available, as when native window visibility changes.
+  await frame.evaluate(() => {
+    const requestFrame = window.requestAnimationFrame.bind(window);
+    let delivered = false;
+    window.requestAnimationFrame = (callback) => {
+      if (delivered) return 0;
+      delivered = true;
+      return requestFrame(callback);
+    };
+  });
+  await session.shell.getByRole("button", { name: "Maximize", exact: true }).click();
+  await expect(session.shell.getByRole("button", { name: "Restore", exact: true })).toBeVisible();
+  const frameTarget = await session.target((t) => t.kind === "sub-tab-frame");
+  await session.recordFrames(frameTarget, "suspended-entry-promotion", async () => {
+    await parent.subTab.click();
+    await expect(frame.getByRole("button", { name: "Open as tab", exact: true })).toBeVisible();
+    await frame.getByRole("button", { name: "Open as tab", exact: true }).click();
+    await session.target((t) => t.kind === "tab" && t.url === `${site.url}/child` && t.visible);
+    await expect(frame.locator("#backdrop")).toHaveCSS("opacity", "0");
+  });
+  const promoted = await session.target((t) => t.kind === "tab" && t.url === `${site.url}/child`);
+  const promotedPage = new VerificationPage(await session.page(promoted));
+  await promotedPage.submit("promoted after suspended frames");
+  await expect(promotedPage.result).toHaveText("promoted after suspended frames");
+  await expect(frame.locator("#backdrop")).toHaveCSS("opacity", "0");
+  await session.app.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows()
+      .find((w) => !w.getParentWindow())
+      ?.setAlwaysOnTop(true);
+  });
+  try {
+    expect((await session.capture("promotion-restored")).status).toBe("complete");
+  } finally {
+    await session.app.evaluate(({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows()
+        .find((w) => !w.getParentWindow())
+        ?.setAlwaysOnTop(false);
+    });
+  }
+
+  // Exercise both entry and exit with no subsequent compositor callbacks.
+  await promotedPage.subTab.click();
+  const next = await session.target((t) => t.kind === "sub-tab" && t.visible);
+  await frame.getByRole("button", { name: "Close sub-tab", exact: true }).click();
+  await waitUntil(
+    "suspended-frame child closes",
+    () => session.targets(),
+    (targets) => !targets.some((t) => t.id === next.id),
+  );
+  await expect(frame.locator("#backdrop")).toHaveCSS("opacity", "0");
+  await promotedPage.message.fill("");
+  await promotedPage.submit("parent usable after suspended exit");
+  await expect(promotedPage.result).toHaveText("parent usable after suspended exit");
+});
+
 test("sub-tab backdrop honors reduced motion and settles interrupted promises", async ({
   appSession: session,
 }) => {
