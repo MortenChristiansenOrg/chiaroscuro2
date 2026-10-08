@@ -99,6 +99,8 @@ Hover/active transitions use `200ms cubic-bezier(0.34, 1.56, 0.64, 1)` for a spr
 
 The native application keeps its 200 ms centered bounds transition (88% → 100% on entry, reversed on exit). Bounds updates cancel on resize, hide, detach and close; interrupted exits start at the displayed geometry. Rapid open/close/promote operations are ordered per parent tab.
 
+Backdrop fades also finish through a completion timer if compositor frames stop during a window visibility change. Close and Promote remain usable without waiting for painting to resume. Cancelling a fade clears both its frame callback and timer so an old transition cannot change a newly shown overlay.
+
 Electron 44.3.0's animated `View.setBounds()` was evaluated on Windows at 100% and 150% scale. A resize during animation was overwritten by the old destination, so the timer fallback remains. Native background blur worked within a single window but did not blur the parent page through the separate sub-tab window. The current backdrop and glass presentation remain in place. See `docs/testing/native-view-evaluation.md` for evidence and reproduction.
 
 ---

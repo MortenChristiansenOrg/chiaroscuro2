@@ -120,6 +120,26 @@ focus, resize, rapid close/reopen, and reduced-motion/cancelled backdrop promise
 The existing cross-window scenario retains popup and parent-focus coverage.
 The design-system example honors reduced motion for frame/backdrop and buttons.
 
+## Stalled backdrop recovery (issue #111)
+
+On October 8, 2026, the Windows Electron 44.3.0 fixture reproduced a stuck dim
+backdrop by delivering one animation frame and suppressing subsequent callbacks.
+The child remained hidden and promotion timed out behind the pending entry fade.
+This reproduces the failure mechanism; it does not establish the original
+incident's window-visibility trigger.
+
+Backdrop transitions now also finish through a timer, cleared on cancellation.
+The regression verifies promotion, close and restored page input with suspended
+frames, including a maximized shell. All six sub-tab scenarios passed natively
+on Windows. Rerun with
+`bun run verify:app:win e2e/scenarios/sub-tab-transitions.spec.ts`.
+
+![Maximized browser after promotion, with working page input](evidence/sub-tab-overlay/promotion-restored.png)
+
+[Backdrop completion recording](evidence/sub-tab-overlay/backdrop-completion.mp4)
+shows the overlay renderer only; transparent pixels appear black and native
+page views are excluded. The screenshot above captures the composed application.
+
 ## API references
 
 - [Electron 42 release: native view animations and blur](https://www.electronjs.org/blog/electron-42-0)

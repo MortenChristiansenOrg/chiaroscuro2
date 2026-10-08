@@ -71,7 +71,7 @@ button svg{height:1em;width:auto;display:block;pointer-events:none}
 </div>
 <script>
 var bd=document.getElementById('backdrop'),btns=document.getElementById('btns');
-var pid=null,animId=null,finishAnim=null,D=200;
+var pid=null,animId=null,animTimer=null,finishAnim=null,D=200;
 var reducedMotion=matchMedia('(prefers-reduced-motion: reduce)');
 function setParentTabId(id){pid=id}
 function positionButtons(fx,fy,fw,fh){
@@ -80,18 +80,22 @@ function positionButtons(fx,fy,fw,fh){
   btns.style.top=(fy+gap)+'px';
   btns.style.display='flex';
 }
-function cancelAnim(){if(animId){cancelAnimationFrame(animId);animId=null}if(finishAnim){var done=finishAnim;finishAnim=null;done()}}
+function cancelAnim(){if(animId!==null){cancelAnimationFrame(animId);animId=null}if(animTimer!==null){clearTimeout(animTimer);animTimer=null}if(finishAnim){var done=finishAnim;finishAnim=null;done()}}
 function enterAnimation(fx,fy,fw,fh){
   return new Promise(function(resolve){
     cancelAnim();
     positionButtons(fx,fy,fw,fh);
     if(reducedMotion.matches){bd.style.opacity=1;resolve();return}
     finishAnim=resolve;
+    function finish(){bd.style.opacity=1;cancelAnim()}
+    // Window visibility changes can stop compositor callbacks. Completion must
+    // also run on a timer so queued close/promote commands can still proceed.
+    animTimer=setTimeout(finish,D);
     var start=performance.now();
     function tick(now){
       var t=Math.min((now-start)/D,1);
       bd.style.opacity=1-(1-t)*(1-t);
-      if(t<1){animId=requestAnimationFrame(tick)}else{animId=null;finishAnim=null;resolve()}
+      if(t<1){animId=requestAnimationFrame(tick)}else{finish()}
     }
     animId=requestAnimationFrame(tick);
   });
@@ -101,10 +105,12 @@ function exitAnimation(){
     cancelAnim();
     if(reducedMotion.matches){bd.style.opacity=0;btns.style.display='none';resolve();return}
     finishAnim=resolve;var start=performance.now();
+    function finish(){bd.style.opacity=0;btns.style.display='none';cancelAnim()}
+    animTimer=setTimeout(finish,D);
     function tick(now){
       var t=Math.min((now-start)/D,1);
       bd.style.opacity=1-t*t;
-      if(t<1){animId=requestAnimationFrame(tick)}else{animId=null;finishAnim=null;bd.style.opacity=0;btns.style.display='none';resolve()}
+      if(t<1){animId=requestAnimationFrame(tick)}else{finish()}
     }
     animId=requestAnimationFrame(tick);
   });
