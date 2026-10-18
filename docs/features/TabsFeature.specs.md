@@ -25,6 +25,7 @@ It also keeps the in-app tab list (the Sidebar) in sync with the actual set of o
 - Activating a tab shows that tab's `WebContentsView` and updates the tab list selection.
 - Closing a tab destroys the `WebContentsView` and removes it from the tab list.
 - Tab switching is done by showing/hiding views, not by destroying and recreating them.
+- When the browser window is activated again (switching back from another app or window, or closing the command palette), keyboard focus returns to the shown page if it had focus, so a focused input keeps receiving typing.
 
 ### Workspaces
 
