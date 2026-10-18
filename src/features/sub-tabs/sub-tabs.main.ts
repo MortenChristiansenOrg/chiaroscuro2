@@ -152,13 +152,17 @@ export default defineFeature<Deps>({
 
     // CSS keys for disabling input on parent tabs while sub-tabs are active.
     // The dark backdrop is handled by the native overlay (canvas with hole).
-    const disabledInputKeys = new Map<TabId, Promise<string>>();
+    const disabledInputKeys = new Map<TabId, Promise<string | null>>();
     const INPUT_BLOCK_CSS =
       "html{pointer-events:none!important;overflow:hidden!important;user-select:none!important}";
 
     function disableParentInput(parentTabId: TabId): void {
       if (disabledInputKeys.has(parentTabId)) return;
-      disabledInputKeys.set(parentTabId, platform.insertCSS(parentTabId, INPUT_BLOCK_CSS));
+      // A style that misses its document needs no removal: navigation or close discarded it.
+      disabledInputKeys.set(
+        parentTabId,
+        platform.insertCSS(parentTabId, INPUT_BLOCK_CSS).catch(() => null),
+      );
     }
 
     function enableParentInput(parentTabId: TabId): void {
@@ -166,7 +170,9 @@ export default defineFeature<Deps>({
       if (!keyPromise) return;
       disabledInputKeys.delete(parentTabId);
       keyPromise
-        .then((key) => platform.removeInsertedCSS(parentTabId, key))
+        .then(async (key) => {
+          if (key) await platform.removeInsertedCSS(parentTabId, key);
+        })
         .catch(logError("sub-tabs", "remove input-block CSS"));
     }
 

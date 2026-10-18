@@ -10,7 +10,7 @@ vi.mock("electron", () => ({
   },
 }));
 
-import { closeTabContents, createTabView } from "./tab-view";
+import { closeTabContents, createTabView, untilDocumentReplaced } from "./tab-view";
 
 describe("cloned tab initialization", () => {
   it("restores zoom on main-frame failure and stops restoring after the initial load", () => {
@@ -130,5 +130,63 @@ describe("native tab close completion", () => {
     contents.isDestroyed.mockReturnValue(true);
     await closeTabContents(contents as unknown as Electron.WebContents, stay);
     expect(contents.close).not.toHaveBeenCalled();
+  });
+});
+
+describe("CSS calls interrupted by a new document", () => {
+  function fixture() {
+    return Object.assign(new EventEmitter(), { isDestroyed: vi.fn(() => false) });
+  }
+  const pending = <T>() => Promise.withResolvers<T>();
+
+  it("resolves a call the current document answers and removes its listeners", async () => {
+    const contents = fixture();
+    const reply = pending<string>();
+    const result = untilDocumentReplaced(
+      contents as unknown as Electron.WebContents,
+      () => reply.promise,
+    );
+    reply.resolve("key");
+    await expect(result).resolves.toBe("key");
+    expect(contents.eventNames()).toEqual([]);
+  });
+
+  it.each(["did-navigate", "render-process-gone", "destroyed"])(
+    "rejects an unanswered call on %s instead of waiting forever",
+    async (event) => {
+      const contents = fixture();
+      const result = untilDocumentReplaced(
+        contents as unknown as Electron.WebContents,
+        () => new Promise<string>(() => {}),
+      );
+      contents.emit(event);
+      await expect(result).rejects.toThrow("The page changed before its CSS was updated");
+      expect(contents.eventNames()).toEqual([]);
+    },
+  );
+
+  it("passes native failures through without retaining listeners", async () => {
+    const contents = fixture();
+    await expect(
+      untilDocumentReplaced(contents as unknown as Electron.WebContents, () =>
+        Promise.reject(new Error("native failure")),
+      ),
+    ).rejects.toThrow("native failure");
+    await expect(
+      untilDocumentReplaced(contents as unknown as Electron.WebContents, () => {
+        throw new Error("synchronous failure");
+      }),
+    ).rejects.toThrow("synchronous failure");
+    expect(contents.eventNames()).toEqual([]);
+  });
+
+  it("does not call into destroyed contents", async () => {
+    const contents = fixture();
+    contents.isDestroyed.mockReturnValue(true);
+    const operation = vi.fn(async () => "key");
+    await expect(
+      untilDocumentReplaced(contents as unknown as Electron.WebContents, operation),
+    ).rejects.toThrow("The page was closed");
+    expect(operation).not.toHaveBeenCalled();
   });
 });

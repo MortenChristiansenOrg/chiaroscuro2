@@ -89,3 +89,43 @@ function requestClose(contents: Electron.WebContents, confirmLeave: () => boolea
     }
   });
 }
+
+const DOCUMENT_REPLACED = ["did-navigate", "render-process-gone", "destroyed"] as const;
+
+/**
+ * Electron settles insertCSS and removeInsertedCSS when the renderer replies. A call that
+ * reaches a document as a navigation commits never settles, so reject at the commit
+ * instead. CSS belongs to a document; callers apply it again to the new one.
+ */
+export function untilDocumentReplaced<T>(
+  contents: Electron.WebContents,
+  operation: () => Promise<T>,
+): Promise<T> {
+  if (contents.isDestroyed()) return Promise.reject(new Error("The page was closed"));
+  const emitter: NodeJS.EventEmitter = contents;
+  return new Promise<T>((resolve, reject) => {
+    const cleanup = () => {
+      for (const event of DOCUMENT_REPLACED) emitter.removeListener(event, onReplaced);
+    };
+    const onReplaced = () => {
+      cleanup();
+      reject(new Error("The page changed before its CSS was updated"));
+    };
+    for (const event of DOCUMENT_REPLACED) emitter.on(event, onReplaced);
+    try {
+      operation().then(
+        (value) => {
+          cleanup();
+          resolve(value);
+        },
+        (error: unknown) => {
+          cleanup();
+          reject(error);
+        },
+      );
+    } catch (error) {
+      cleanup();
+      reject(error);
+    }
+  });
+}

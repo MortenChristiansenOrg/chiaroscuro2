@@ -1,3 +1,5 @@
+import type { Page } from "playwright";
+
 /** Poll observations only. Never retry a click/command that may already have taken effect. */
 export async function waitUntil<T>(
   description: string,
@@ -33,4 +35,22 @@ export async function waitUntil<T>(
   throw new Error(
     `Timed out waiting for ${description}. Last observation: ${JSON.stringify(last)}. Last error: ${lastError ?? "none"}`,
   );
+}
+
+/**
+ * Run an action that replaces the page's document, such as clicking Reload, and wait until
+ * the new document has loaded. Load states and locators alone can still observe the old one.
+ */
+export async function waitForNewDocument(
+  page: Page,
+  replace: () => Promise<unknown>,
+  timeoutMs = 5_000,
+): Promise<void> {
+  const committed = page.waitForEvent("framenavigated", {
+    predicate: (frame) => frame === page.mainFrame(),
+    timeout: timeoutMs,
+  });
+  await replace();
+  await committed;
+  await page.waitForLoadState("load", { timeout: timeoutMs });
 }
