@@ -41,15 +41,26 @@ export function createTabView(source?: WebContents): WebContentsView {
   return view;
 }
 
+const closing = new WeakMap<Electron.WebContents, Promise<void>>();
+
 /**
  * Resolve on native destruction. A page that prevents beforeunload is closed only if
- * `confirmLeave` agrees; otherwise it is retained and the close rejects.
+ * `confirmLeave` agrees; otherwise it is retained and the close rejects. Overlapping
+ * requests share one close and one answer, so a later Stay cannot be overridden.
  */
 export function closeTabContents(
   contents: Electron.WebContents,
   confirmLeave: () => boolean,
 ): Promise<void> {
   if (contents.isDestroyed()) return Promise.resolve();
+  const pending = closing.get(contents);
+  if (pending) return pending;
+  const result = requestClose(contents, confirmLeave).finally(() => closing.delete(contents));
+  closing.set(contents, result);
+  return result;
+}
+
+function requestClose(contents: Electron.WebContents, confirmLeave: () => boolean) {
   return new Promise<void>((resolve, reject) => {
     const cleanup = () => {
       contents.removeListener("destroyed", onDestroyed);
