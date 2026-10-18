@@ -6,6 +6,8 @@ const hooks = vi.hoisted(() => ({
   calls: new Map<string, (event: unknown, method: string, args: unknown[]) => Promise<Reply>>(),
   events: new Map<string, (event: unknown) => void>(),
   notifications: [] as { emit(name: string): boolean; close: ReturnType<typeof vi.fn> }[],
+  windows: [] as Electron.BrowserWindow[],
+  leave: true,
 }));
 vi.mock("electron", async () => {
   const { EventEmitter } = await import("node:events");
@@ -20,9 +22,45 @@ vi.mock("electron", async () => {
       hooks.notifications.push(this);
     }
   }
+  // Closing runs beforeunload first: a vetoed close only proceeds if a listener prevents the veto.
+  class BrowserWindow extends EventEmitter {
+    static fromId = (id: number) => hooks.windows.find((window) => window.id === id) ?? null;
+    static fromWebContents = (contents: unknown) =>
+      hooks.windows.find((window) => window.webContents === contents) ?? null;
+    id = hooks.windows.length + 100;
+    destroyed = false;
+    vetoUnload = false;
+    webContents = new EventEmitter();
+    removeMenu = vi.fn();
+    loadURL = vi.fn(async () => {});
+    show = vi.fn();
+    showInactive = vi.fn();
+    isFocused = () => true;
+    isMaximized = () => false;
+    isDestroyed = () => this.destroyed;
+    getBounds = () => ({ left: 0, top: 0, width: 480, height: 600 });
+    constructor() {
+      super();
+      hooks.windows.push(this as unknown as Electron.BrowserWindow);
+    }
+    close() {
+      if (this.vetoUnload) {
+        let allowed = false;
+        this.webContents.emit("will-prevent-unload", {
+          preventDefault: () => {
+            allowed = true;
+          },
+        });
+        if (!allowed) return;
+      }
+      this.destroyed = true;
+      this.emit("closed");
+    }
+  }
   return {
     Notification,
-    BrowserWindow: {},
+    BrowserWindow,
+    dialog: { showMessageBoxSync: vi.fn(() => (hooks.leave ? 0 : 1)) },
     webContents: {},
     ipcMain: {
       handle: (
@@ -45,13 +83,70 @@ vi.mock("electron", async () => {
   };
 });
 
-import { session } from "electron";
+import { dialog, session } from "electron";
 import { ExtensionRuntime } from "./extension-runtime";
 
 beforeEach(() => {
   hooks.calls.clear();
   hooks.events.clear();
   hooks.notifications.length = 0;
+  hooks.windows.length = 0;
+  hooks.leave = true;
+  vi.mocked(dialog.showMessageBoxSync).mockClear();
+});
+
+it("lets an extension close its own popup window from inside it, after confirming a beforeunload veto", async () => {
+  const main = { id: 1, isDestroyed: () => false } as unknown as Electron.BrowserWindow;
+  new ExtensionRuntime(
+    { create: async () => "tab" as TabId, activate: async () => {}, close: async () => {} },
+    () => main,
+  );
+  const call = hooks.calls.get("extension-browser:call");
+  if (!call) throw new Error("No browser API handler");
+  const id = "a".repeat(32);
+  const opener = {
+    sender: { session: session.defaultSession },
+    senderFrame: { url: `chrome-extension://${id}/popup.html`, send: vi.fn() },
+  };
+  const created = await call(opener, "windows.create", [
+    { type: "popup", url: "popup.html?uilocation=popout", width: 480, height: 630 },
+  ]);
+  expect(created).toMatchObject({ ok: true, value: { type: "popup", tabs: [] } });
+  const popout = hooks.windows[0];
+  if (!popout) throw new Error("No extension window");
+  // Browser accelerators in the application menu act on the main window, not this one.
+  expect(popout.removeMenu).toHaveBeenCalledOnce();
+  const inside = {
+    sender: Object.assign(popout.webContents, { session: session.defaultSession }),
+    senderFrame: { url: `chrome-extension://${id}/popup.html?uilocation=popout`, send: vi.fn() },
+  };
+  // Bitwarden closes its pop-out with windows.remove((await windows.getCurrent()).id).
+  const current = await call(inside, "windows.getCurrent", [{ populate: true }]);
+  expect(current).toMatchObject({ ok: true, value: { id: popout.id, type: "popup" } });
+  expect(await call(inside, "windows.get", [popout.id])).toEqual(current);
+  const other = {
+    ...opener,
+    senderFrame: { url: `chrome-extension://${"b".repeat(32)}/popup.html`, send: vi.fn() },
+  };
+  expect(await call(other, "windows.get", [popout.id])).toEqual({
+    ok: false,
+    error: "No such browser window",
+  });
+  expect(await call(other, "windows.remove", [popout.id])).toMatchObject({ ok: false });
+
+  // The page warns about unsaved changes: staying keeps the window, leaving closes it.
+  Object.assign(popout, { vetoUnload: true });
+  hooks.leave = false;
+  expect(await call(inside, "windows.remove", [popout.id])).toEqual({ ok: true });
+  expect(dialog.showMessageBoxSync).toHaveBeenCalledWith(
+    popout,
+    expect.objectContaining({ message: "Leave this page?", buttons: ["Leave", "Stay"] }),
+  );
+  expect(popout.isDestroyed()).toBe(false);
+  hooks.leave = true;
+  popout.close();
+  expect(popout.isDestroyed()).toBe(true);
+  expect(await call(inside, "windows.remove", [popout.id])).toMatchObject({ ok: false });
 });
 it("keeps replacement notifications tracked when an older close event arrives", async () => {
   new ExtensionRuntime(
