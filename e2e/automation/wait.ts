@@ -50,7 +50,6 @@ export async function waitForNewDocument(
     predicate: (frame) => frame === page.mainFrame(),
     timeout: timeoutMs,
   });
-  await replace();
-  await committed;
+  await Promise.all([committed, replace()]);
   await page.waitForLoadState("load", { timeout: timeoutMs });
 }

@@ -1657,7 +1657,17 @@ export class ElectronPlatform implements Platform {
     const view = this.views.get(tabId);
     if (!view) throw new Error(`No view for tab ${tabId}`);
     const contents = view.webContents;
-    return untilDocumentReplaced(contents, () => contents.insertCSS(css));
+    const processId = contents.mainFrame.processId;
+    return untilDocumentReplaced(
+      contents,
+      () => contents.insertCSS(css),
+      (key) => {
+        // Keys are unique only within a renderer process. After a process swap the late
+        // key belonged to a discarded document and may name a style of the current one.
+        if (!contents.isDestroyed() && contents.mainFrame.processId === processId)
+          contents.removeInsertedCSS(key).catch(() => {});
+      },
+    );
   }
 
   async removeInsertedCSS(tabId: TabId, key: string): Promise<void> {

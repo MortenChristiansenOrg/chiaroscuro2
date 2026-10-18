@@ -165,6 +165,38 @@ describe("CSS calls interrupted by a new document", () => {
     },
   );
 
+  it("rejects when the main frame commits an error page but not when a subframe fails", async () => {
+    const contents = fixture();
+    const result = untilDocumentReplaced(
+      contents as unknown as Electron.WebContents,
+      () => new Promise<string>(() => {}),
+    );
+    const settled = vi.fn();
+    result.catch(settled);
+    contents.emit("did-fail-load", {}, -105, "Failed", "https://example.com/frame", false);
+    await Promise.resolve();
+    expect(settled).not.toHaveBeenCalled();
+    contents.emit("did-fail-load", {}, -105, "Failed", "https://example.com", true);
+    await expect(result).rejects.toThrow("The page changed before its CSS was updated");
+    expect(contents.eventNames()).toEqual([]);
+  });
+
+  it("discards a result that arrives after the document changed", async () => {
+    const contents = fixture();
+    const reply = pending<string>();
+    const discardLate = vi.fn();
+    const result = untilDocumentReplaced(
+      contents as unknown as Electron.WebContents,
+      () => reply.promise,
+      discardLate,
+    );
+    contents.emit("did-navigate");
+    await expect(result).rejects.toThrow("The page changed before its CSS was updated");
+    reply.resolve("late-key");
+    await reply.promise;
+    expect(discardLate).toHaveBeenCalledWith("late-key");
+  });
+
   it("passes native failures through without retaining listeners", async () => {
     const contents = fixture();
     await expect(

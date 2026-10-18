@@ -90,42 +90,52 @@ function requestClose(contents: Electron.WebContents, confirmLeave: () => boolea
   });
 }
 
-const DOCUMENT_REPLACED = ["did-navigate", "render-process-gone", "destroyed"] as const;
-
 /**
  * Electron settles insertCSS and removeInsertedCSS when the renderer replies. A call that
- * reaches a document as a navigation commits never settles, so reject at the commit
- * instead. CSS belongs to a document; callers apply it again to the new one.
+ * reaches a document as a navigation commits never settles, so reject when the main frame
+ * commits a page or an error page, crashes or closes. CSS belongs to a document; callers
+ * apply it again to the new one. `discardLate` undoes a result that arrives after that.
  */
 export function untilDocumentReplaced<T>(
   contents: Electron.WebContents,
   operation: () => Promise<T>,
+  discardLate?: (value: T) => void,
 ): Promise<T> {
   if (contents.isDestroyed()) return Promise.reject(new Error("The page was closed"));
   const emitter: NodeJS.EventEmitter = contents;
   return new Promise<T>((resolve, reject) => {
-    const cleanup = () => {
-      for (const event of DOCUMENT_REPLACED) emitter.removeListener(event, onReplaced);
+    let settled = false;
+    const finish = (complete: () => void) => {
+      settled = true;
+      emitter.removeListener("did-navigate", onReplaced);
+      emitter.removeListener("did-fail-load", onFailedLoad);
+      emitter.removeListener("render-process-gone", onReplaced);
+      emitter.removeListener("destroyed", onReplaced);
+      complete();
     };
-    const onReplaced = () => {
-      cleanup();
-      reject(new Error("The page changed before its CSS was updated"));
+    const onReplaced = () =>
+      finish(() => reject(new Error("The page changed before its CSS was updated")));
+    // Error pages commit without did-navigate. A failure that keeps the old page still
+    // rejects; `discardLate` removes the style its late answer applied.
+    const onFailedLoad = (...args: unknown[]) => {
+      if (args[4] === true) onReplaced();
     };
-    for (const event of DOCUMENT_REPLACED) emitter.on(event, onReplaced);
+    emitter.on("did-navigate", onReplaced);
+    emitter.on("did-fail-load", onFailedLoad);
+    emitter.on("render-process-gone", onReplaced);
+    emitter.on("destroyed", onReplaced);
     try {
       operation().then(
         (value) => {
-          cleanup();
-          resolve(value);
+          if (settled) discardLate?.(value);
+          else finish(() => resolve(value));
         },
         (error: unknown) => {
-          cleanup();
-          reject(error);
+          if (!settled) finish(() => reject(error));
         },
       );
     } catch (error) {
-      cleanup();
-      reject(error);
+      finish(() => reject(error));
     }
   });
 }
