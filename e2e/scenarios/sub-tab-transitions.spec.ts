@@ -1,4 +1,5 @@
 import path from "node:path";
+import { answerLeavePrompts, leavePrompts, warnBeforeUnload } from "../automation/leave-prompt";
 import { startSite } from "../automation/site";
 import { waitUntil } from "../automation/wait";
 import { expect, test } from "../fixtures/electron-app";
@@ -261,7 +262,7 @@ test("sub-tab backdrop honors reduced motion and settles interrupted promises", 
   );
 });
 
-test("sub-tab remains usable when beforeunload prevents closing", async ({
+test("sub-tab asks before leaving unsaved changes and remains usable when you stay", async ({
   appSession: session,
 }) => {
   const parent = await VerificationPage.navigate(session, `${site.url}/parent`);
@@ -269,27 +270,26 @@ test("sub-tab remains usable when beforeunload prevents closing", async ({
   const target = await session.target((t) => t.kind === "sub-tab" && t.visible);
   const child = new VerificationPage(await session.page(target));
   await child.submit("unsaved child input");
-  // Electron handles the beforeunload decision through will-prevent-unload;
-  // Playwright's automatic dialog dismissal would race that native decision.
-  child.page.on("dialog", () => {});
-  await child.page.evaluate(() => {
-    window.onbeforeunload = () => false;
-  });
+  await warnBeforeUnload(child.page);
+  await answerLeavePrompts(session.app, [false]);
   await expect(
     session.command("sub-tabs:close", {
       parentTabId: target.parentId?.replace(/^tab:/, ""),
     }),
   ).rejects.toThrow("Page prevented closing");
+  expect(await leavePrompts(session.app)).toEqual([
+    { title: "Verification /child", message: "Leave this page?" },
+  ]);
   await session.target((t) => t.id === target.id && t.visible);
   await expect(child.message).toHaveValue("unsaved child input");
   await child.message.fill("");
   await child.submit("still usable");
   await expect(child.result).toHaveText("still usable");
-  await child.page.evaluate(() => {
-    window.onbeforeunload = null;
-  });
+  // Leaving closes it despite the warning.
+  await answerLeavePrompts(session.app, [true]);
   const frame = await session.page(await session.target((t) => t.kind === "sub-tab-frame"));
   await frame.getByRole("button", { name: "Close sub-tab", exact: true }).click();
+  await expect.poll(() => leavePrompts(session.app)).toHaveLength(1);
   await waitUntil(
     "accepted close destroys child",
     () => session.targets(),
@@ -305,10 +305,9 @@ test("closing a parent preserves a vetoing child as a standalone tab", async ({
   const target = await session.target((t) => t.kind === "sub-tab" && t.visible);
   const child = new VerificationPage(await session.page(target));
   await child.submit("unsaved child state");
-  child.page.on("dialog", () => {});
-  await child.page.evaluate(() => {
-    window.onbeforeunload = () => false;
-  });
+  await warnBeforeUnload(child.page);
+  // Staying on the child keeps it once its parent is gone.
+  await answerLeavePrompts(session.app, [false]);
   const parentRow = session.shell.locator(
     `[data-tab-id="${target.parentId?.replace(/^tab:/, "")}"]`,
   );
@@ -327,9 +326,8 @@ test("closing a parent preserves a vetoing child as a standalone tab", async ({
     path: path.join(session.artifactDir, "preserved-child-shell.renderer.png"),
   });
   expect((await session.targets()).filter((t) => t.kind === "sub-tab")).toHaveLength(0);
-  await child.page.evaluate(() => {
-    window.onbeforeunload = null;
-  });
+  expect(await leavePrompts(session.app)).toHaveLength(1);
+  await answerLeavePrompts(session.app, [true]);
   const preservedRow = session.shell.locator(`[data-tab-id="${preserved.tabId}"]`);
   await preservedRow.hover();
   await preservedRow.getByRole("button", { name: "Close tab", exact: true }).click();

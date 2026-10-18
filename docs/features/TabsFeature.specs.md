@@ -60,6 +60,8 @@ It also keeps the in-app tab list (the Sidebar) in sync with the actual set of o
 
 - Close a tab from the Sidebar tab list.
 - If the closed tab was active, the UI may select another tab (most recently used), otherwise no active tab change is required.
+- If the page warns about unsaved changes (`beforeunload`), a native prompt asks "Leave this page?". **Leave** closes the tab; **Stay** keeps it with its unsaved state. Clearing ephemeral tabs asks once per such page and still closes the others.
+- Closing the window or quitting does not ask: tabs are kept for the next session.
 
 ### Switch workspace
 

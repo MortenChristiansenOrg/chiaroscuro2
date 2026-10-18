@@ -19,7 +19,7 @@ restores the visible overlay. If the parent is already closed, a vetoing child i
 adopted as a standalone tab before its sub-tab ownership record is removed.
 If adoption fails, the child remains queued for recovery on the next workspace
 selection. Recovery transfers ownership separately from activation and the
-preserved tab can close normally after its unload veto is cleared.
+preserved tab can close normally once the user chooses to leave it.
 
 ## Environment and reproduction
 

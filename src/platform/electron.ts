@@ -26,6 +26,7 @@ import { unpackedExtensionId } from "./extension-identity";
 import { migrateExtensionBootstrap } from "./extension-migration";
 import { ExtensionRuntime } from "./extension-runtime";
 import type { GithubSessionDiagnostics } from "./github-session-diagnostics";
+import { confirmLeave } from "./leave-prompt";
 import { PdfResponses } from "./pdf-responses";
 import { checkPermission, matchesGrantedDevice } from "./permission-check";
 import { TabBoundsAnimation } from "./tab-bounds-animation";
@@ -703,9 +704,12 @@ export class ElectronPlatform implements Platform {
     if (!view) return;
     this.tabBoundsAnimations.cancel(view);
 
-    // Keep ownership intact if the page vetoes beforeunload. Native close is
-    // synchronous; only the destroyed event establishes completion.
-    await closeTabContents(view.webContents);
+    // Keep ownership intact if the user stays on a page that vetoes beforeunload.
+    // Native close is synchronous; only the destroyed event establishes completion.
+    const contents = view.webContents;
+    await closeTabContents(contents, () =>
+      confirmLeave(this.getWin(), contents.getTitle() || contents.getURL()),
+    );
 
     // Remove from whichever window owns the view (main or sub-tab child window)
     const win = this.getWin();
