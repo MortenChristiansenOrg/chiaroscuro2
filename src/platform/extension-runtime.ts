@@ -1,7 +1,6 @@
 import path from "node:path";
 import {
   BrowserWindow,
-  dialog,
   ipcMain,
   type MenuItemConstructorOptions,
   Notification,
@@ -20,6 +19,7 @@ import {
   suggestedShortcut,
 } from "./extension-commands";
 import { matchesUrl } from "./extension-match-pattern";
+import { confirmLeave } from "./leave-prompt";
 import type { ExtensionTabActions } from "./types";
 
 type Host = WebFrameMain | ServiceWorkerMain;
@@ -40,23 +40,6 @@ const menuSchema = z
   })
   .passthrough();
 type ExtensionMenu = z.infer<typeof menuSchema>;
-
-/** Ask before leaving a page whose beforeunload handler vetoed closing it. */
-function confirmLeave(window: BrowserWindow, title: string): boolean {
-  const leave = 0;
-  return (
-    dialog.showMessageBoxSync(window, {
-      type: "question",
-      title,
-      message: "Leave this page?",
-      detail: "Changes you made may not be saved.",
-      buttons: ["Leave", "Stay"],
-      defaultId: leave,
-      cancelId: 1,
-      noLink: true,
-    }) === leave
-  );
-}
 
 /** Browser semantics missing from Electron; Chromium retains runtime, storage and scripting. */
 export class ExtensionRuntime {

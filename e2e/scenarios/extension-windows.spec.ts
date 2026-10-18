@@ -2,6 +2,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { expect, type Page, test } from "@playwright/test";
+import { answerLeavePrompts, leavePrompts, warnBeforeUnload } from "../automation/leave-prompt";
 import { AppSession } from "../automation/session";
 import { waitUntil } from "../automation/wait";
 
@@ -62,31 +63,12 @@ test("an extension pop-out window closes natively and from inside, confirming un
     );
     if (!popout) throw new Error("No pop-out page");
     await popout.waitForLoadState();
-    // Electron answers beforeunload itself; the DevTools dialog event cannot be handled.
-    popout.on("dialog", (dialog) => void dialog.dismiss().catch(() => {}));
     return popout;
   };
-  // Answer the native "Leave this page?" prompt and record how often it was shown.
-  const answerLeavePrompt = (leave: boolean) =>
-    app.app.evaluate(({ dialog }, leave) => {
-      const record = globalThis as unknown as { leavePrompts?: string[] };
-      record.leavePrompts = [];
-      dialog.showMessageBoxSync = ((_window: unknown, options: Electron.MessageBoxSyncOptions) => {
-        record.leavePrompts?.push(options.message);
-        return leave ? 0 : 1;
-      }) as typeof dialog.showMessageBoxSync;
-    }, leave);
-  const leavePrompts = () =>
-    app.app.evaluate(() => (globalThis as unknown as { leavePrompts?: string[] }).leavePrompts);
-  const warnBeforeUnload = async (popout: Page) => {
+  const unsaved = async (popout: Page) => {
     // Chromium only honours beforeunload after the user has interacted with the page.
     await popout.getByRole("button", { name: "Unlock and fill fixture" }).click();
-    await popout.evaluate(() =>
-      addEventListener("beforeunload", (event) => {
-        event.preventDefault();
-        event.returnValue = "";
-      }),
-    );
+    await warnBeforeUnload(popout);
   };
   const closeNatively = (id: number) =>
     app.app.evaluate(({ BrowserWindow }, id) => BrowserWindow.fromId(id)?.close(), id);
@@ -129,16 +111,17 @@ test("an extension pop-out window closes natively and from inside, confirming un
     expect(current).toMatchObject({ id: native.id, type: "popup" });
 
     // Title-bar close with unsaved changes: staying keeps the window.
-    await warnBeforeUnload(popout);
-    await answerLeavePrompt(false);
+    await unsaved(popout);
+    const prompt = { title: "Compatibility fixture", message: "Leave this page?" };
+    await answerLeavePrompts(app.app, [false]);
     await closeNatively(native.id);
-    await expect.poll(leavePrompts).toEqual(["Leave this page?"]);
+    await expect.poll(() => leavePrompts(app.app)).toEqual([prompt]);
     expect(await popoutWindows()).toHaveLength(1);
     // Leaving closes it.
-    await answerLeavePrompt(true);
+    await answerLeavePrompts(app.app, [true]);
     await closeNatively(native.id);
     await closed();
-    expect(await leavePrompts()).toEqual(["Leave this page?"]);
+    expect(await leavePrompts(app.app)).toEqual([prompt]);
 
     // Bitwarden's own close: windows.remove((await windows.getCurrent()).id).
     popout = await openPopout();

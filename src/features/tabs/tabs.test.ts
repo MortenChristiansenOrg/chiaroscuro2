@@ -436,6 +436,28 @@ describe("tabs commands", () => {
       expect(platform.closeTab).toHaveBeenCalledWith("tab-2");
       expect(platform.closeTab).not.toHaveBeenCalledWith("tab-1");
     });
+
+    it("keeps a tab whose page the user stays on and closes the rest", async () => {
+      const { commands, platform } = setup({
+        closeTab: vi.fn(async (tabId: TabId) => {
+          if (tabId === "tab-2") throw new Error("Page prevented closing");
+        }),
+      });
+      for (const url of ["https://a.com", "https://unsaved.com", "https://c.com"]) {
+        await commands.send(TABS_CREATE, { url });
+      }
+
+      await expect(commands.send(TABS_CLEAR_EPHEMERAL, {})).rejects.toThrow(
+        "Page prevented closing",
+      );
+
+      expect(platform.closeTab).toHaveBeenCalledTimes(3);
+      const remaining = [];
+      for (const tabId of ["tab-1", "tab-2", "tab-3"] as TabId[]) {
+        if (await commands.send(TABS_GET, { tabId })) remaining.push(tabId);
+      }
+      expect(remaining).toEqual(["tab-2"]);
+    });
   });
 
   describe("TABS_REORDER", () => {

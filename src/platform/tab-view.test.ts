@@ -37,6 +37,7 @@ describe("cloned tab initialization", () => {
 });
 
 describe("native tab close completion", () => {
+  const stay = () => false;
   function fixture() {
     return Object.assign(new EventEmitter(), {
       isDestroyed: vi.fn(() => false),
@@ -47,7 +48,7 @@ describe("native tab close completion", () => {
   it("waits for destruction after the synchronous close call", async () => {
     const contents = fixture();
     const done = vi.fn();
-    const result = closeTabContents(contents as unknown as Electron.WebContents).then(done);
+    const result = closeTabContents(contents as unknown as Electron.WebContents, stay).then(done);
     await Promise.resolve();
     expect(done).not.toHaveBeenCalled();
     contents.emit("destroyed");
@@ -56,12 +57,61 @@ describe("native tab close completion", () => {
     expect(contents.eventNames()).toEqual([]);
   });
 
-  it("rejects a prevented unload and removes its temporary listeners", async () => {
+  it("rejects a prevented unload the user stays on and removes its temporary listeners", async () => {
     const contents = fixture();
-    const result = closeTabContents(contents as unknown as Electron.WebContents);
-    contents.emit("will-prevent-unload");
+    const confirm = vi.fn(stay);
+    const result = closeTabContents(contents as unknown as Electron.WebContents, confirm);
+    const event = { preventDefault: vi.fn() };
+    contents.emit("will-prevent-unload", event);
     await expect(result).rejects.toThrow("Page prevented closing");
+    expect(confirm).toHaveBeenCalledOnce();
+    expect(event.preventDefault).not.toHaveBeenCalled();
     expect(contents.eventNames()).toEqual([]);
+  });
+
+  it("overrides a prevented unload the user leaves and waits for destruction", async () => {
+    const contents = fixture();
+    const done = vi.fn();
+    const result = closeTabContents(contents as unknown as Electron.WebContents, () => true).then(
+      done,
+    );
+    const event = { preventDefault: vi.fn() };
+    contents.emit("will-prevent-unload", event);
+    expect(event.preventDefault).toHaveBeenCalledOnce();
+    await Promise.resolve();
+    expect(done).not.toHaveBeenCalled();
+    contents.emit("destroyed");
+    await result;
+    expect(done).toHaveBeenCalledOnce();
+    expect(contents.eventNames()).toEqual([]);
+  });
+
+  it("shares one close and one answer between overlapping requests", async () => {
+    const contents = fixture();
+    const confirm = vi.fn(stay);
+    const first = closeTabContents(contents as unknown as Electron.WebContents, () => true);
+    const second = closeTabContents(contents as unknown as Electron.WebContents, confirm);
+    expect(second).toBe(first);
+    expect(contents.close).toHaveBeenCalledOnce();
+    const event = { preventDefault: vi.fn() };
+    contents.emit("will-prevent-unload", event);
+    expect(confirm).not.toHaveBeenCalled();
+    expect(event.preventDefault).toHaveBeenCalledOnce();
+    contents.emit("destroyed");
+    await Promise.all([first, second]);
+  });
+
+  it("asks again for a later close after the user stayed", async () => {
+    const contents = fixture();
+    const first = closeTabContents(contents as unknown as Electron.WebContents, stay);
+    contents.emit("will-prevent-unload", { preventDefault: vi.fn() });
+    await expect(first).rejects.toThrow("Page prevented closing");
+    const second = closeTabContents(contents as unknown as Electron.WebContents, () => true);
+    expect(second).not.toBe(first);
+    expect(contents.close).toHaveBeenCalledTimes(2);
+    contents.emit("will-prevent-unload", { preventDefault: vi.fn() });
+    contents.emit("destroyed");
+    await second;
   });
 
   it("rejects a synchronous close failure without retaining listeners", async () => {
@@ -69,16 +119,16 @@ describe("native tab close completion", () => {
     contents.close.mockImplementation(() => {
       throw new Error("native close failed");
     });
-    await expect(closeTabContents(contents as unknown as Electron.WebContents)).rejects.toThrow(
-      "native close failed",
-    );
+    await expect(
+      closeTabContents(contents as unknown as Electron.WebContents, stay),
+    ).rejects.toThrow("native close failed");
     expect(contents.eventNames()).toEqual([]);
   });
 
   it("does not close already destroyed contents again", async () => {
     const contents = fixture();
     contents.isDestroyed.mockReturnValue(true);
-    await closeTabContents(contents as unknown as Electron.WebContents);
+    await closeTabContents(contents as unknown as Electron.WebContents, stay);
     expect(contents.close).not.toHaveBeenCalled();
   });
 });

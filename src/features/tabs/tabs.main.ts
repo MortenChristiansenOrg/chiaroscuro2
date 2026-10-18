@@ -533,9 +533,14 @@ export default defineFeature<Deps>({
           toClose.push(tab.id);
         }
       }
+      // A page the user stays on keeps its tab; the others still close.
+      let failure: unknown;
       for (const tabId of toClose) {
-        await commands.send(TABS_CLOSE, { tabId });
+        await commands.send(TABS_CLOSE, { tabId }).catch((error: unknown) => {
+          failure ??= error;
+        });
       }
+      if (failure) throw failure;
     });
 
     commands.handle(TABS_REORDER, async (payload) => {
