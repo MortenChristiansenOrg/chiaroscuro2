@@ -1,6 +1,7 @@
 import path from "node:path";
 import {
   BrowserWindow,
+  dialog,
   ipcMain,
   type MenuItemConstructorOptions,
   Notification,
@@ -39,6 +40,23 @@ const menuSchema = z
   })
   .passthrough();
 type ExtensionMenu = z.infer<typeof menuSchema>;
+
+/** Ask before leaving a page whose beforeunload handler vetoed closing it. */
+function confirmLeave(window: BrowserWindow, title: string): boolean {
+  const leave = 0;
+  return (
+    dialog.showMessageBoxSync(window, {
+      type: "question",
+      title,
+      message: "Leave this page?",
+      detail: "Changes you made may not be saved.",
+      buttons: ["Leave", "Stay"],
+      defaultId: leave,
+      cancelId: 1,
+      noLink: true,
+    }) === leave
+  );
+}
 
 /** Browser semantics missing from Electron; Chromium retains runtime, storage and scripting. */
 export class ExtensionRuntime {
@@ -401,11 +419,16 @@ export class ExtensionRuntime {
     return visible;
   }
 
+  private ownWindow(window: BrowserWindow | null | undefined, extensionId: string) {
+    const owned = window && this.extensionWindows.get(window.id);
+    return owned && owned.extensionId === extensionId && !window.isDestroyed() ? window : undefined;
+  }
+
   private windowDetails(window: BrowserWindow, extension?: Electron.Extension) {
     return {
       id: window.id,
       focused: window.isFocused(),
-      type: "normal",
+      type: this.extensionWindows.has(window.id) ? "popup" : "normal",
       incognito: false,
       ...window.getBounds(),
       state: window.isMaximized() ? "maximized" : "normal",
@@ -531,6 +554,14 @@ export class ExtensionRuntime {
       case "windows.get":
       case "windows.getCurrent":
       case "windows.getLastFocused": {
+        const current = name === "windows.getCurrent" || (name === "windows.get" && args[0] === -2);
+        // An extension's own window is its current window, as in Chrome's popup windows.
+        const own = current
+          ? this.ownWindow(caller.contents && BrowserWindow.fromWebContents(caller.contents), extId)
+          : name === "windows.get"
+            ? this.ownWindow(BrowserWindow.fromId(idSchema.parse(args[0])), extId)
+            : undefined;
+        if (own) return this.windowDetails(own, caller.extension);
         const win =
           name === "windows.get" && args[0] !== -2
             ? BrowserWindow.fromId(idSchema.parse(args[0]))
@@ -561,8 +592,14 @@ export class ExtensionRuntime {
             nodeIntegration: false,
           },
         });
+        // The application menu holds browser accelerators that act on the main window.
+        win.removeMenu();
         this.extensionWindows.set(win.id, { extensionId: extId, window: win });
         const windowId = win.id;
+        // Electron cancels a close vetoed by beforeunload without asking; Chrome asks.
+        win.webContents.on("will-prevent-unload", (event) => {
+          if (confirmLeave(win, caller.extension.name)) event.preventDefault();
+        });
         win.on("closed", () => {
           this.extensionWindows.delete(windowId);
           this.emit("windows.onRemoved", [windowId], extId);

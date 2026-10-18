@@ -57,6 +57,10 @@ has no dependency on `electron-chrome-extensions`.
 - Supply browser tab/window operations and selected navigation, menu, permission
   and notification APIs through `src/platform/extension-runtime.ts`. Only loaded
   extension frames/workers in the shared session can invoke these operations.
+- Open `windows.create` windows (Bitwarden's pop-out) as framed `popup` windows
+  without the browser's accelerator menu. Inside one, `windows.getCurrent` is that
+  window, so the extension can close it with `windows.remove`. A `beforeunload`
+  veto asks "Leave this page?" natively instead of silently cancelling the close.
 - Use native WebContents IDs for extension tabs, and the browser's selected tab
   for active-tab queries. Redact URLs/titles without tabs or matching host permissions.
 - Relay native storage invalidations to MV3 workers, whose storage events are
