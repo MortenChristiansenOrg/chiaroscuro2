@@ -34,6 +34,7 @@ import { closeTabContents, createTabView } from "./tab-view";
 import type { ExtensionTabActions, Platform, PlatformDownload } from "./types";
 import { isAllowedNavigation, isAllowedUrl } from "./url-policy";
 import { runWebsiteScript } from "./website-script";
+import { WindowContentFocus } from "./window-focus";
 
 const ALLOWED_EXTERNAL_SCHEMES = new Set(["http:", "https:", "mailto:"]);
 
@@ -380,6 +381,7 @@ export class ElectronPlatform implements Platform {
   private localShortcuts = new Map<string, () => void>();
   private websiteShortcuts = new Map<string, () => boolean>();
   private views = new Map<TabId, WebContentsView>();
+  private windowFocus = new WeakMap<BrowserWindow, WindowContentFocus>();
   // Restored tabs need no native renderer until their first navigation. Keep
   // subscriptions here so all feature listeners precede that navigation.
   private pendingTabs = new Map<
@@ -443,6 +445,24 @@ export class ElectronPlatform implements Platform {
     const id = windowId ?? this.getActiveWindowId();
     if (!id) return undefined;
     return BrowserWindow.fromId(Number(id)) ?? undefined;
+  }
+
+  /** Return keyboard focus to the page shown in this window when the user switches back to it. */
+  private contentFocus(win: BrowserWindow): WindowContentFocus {
+    let focus = this.windowFocus.get(win);
+    if (!focus) {
+      focus = new WindowContentFocus(win, (contents) =>
+        [...this.views.values()].some((view) => {
+          if (view.webContents !== contents || !win.contentView.children.includes(view)) {
+            return false;
+          }
+          const { width, height } = view.getBounds();
+          return width > 0 && height > 0;
+        }),
+      );
+      this.windowFocus.set(win, focus);
+    }
+    return focus;
   }
 
   private getView(tabId: TabId): WebContentsView | undefined {
@@ -548,6 +568,7 @@ export class ElectronPlatform implements Platform {
     this.views.set(tabId, view);
     this.extensionRuntime?.addTab(tabId, view.webContents, win);
     win.contentView.addChildView(view);
+    this.contentFocus(win).track(view.webContents);
 
     // Hide initially — caller will activate
     view.setBounds({ x: 0, y: 0, width: 0, height: 0 });

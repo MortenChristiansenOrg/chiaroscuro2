@@ -8,6 +8,7 @@
 - Closing a tab or sub-tab runs `beforeunload`. Electron cancels a vetoed close silently, so
   `will-prevent-unload` asks the shared "Leave this page?" prompt (`src/platform/leave-prompt.ts`)
   synchronously; Leave overrides the veto. Window close and quit do not unload tab pages.
+- Keyboard focus: outside macOS, Electron focuses the window's own (shell) WebContents whenever the window is activated. `WindowContentFocus` (`src/platform/window-focus.ts`) remembers which shown page had focus when the window was deactivated and focuses it again, so a page input stays typeable after switching to another app or closing the command palette. A click or touch that activates the window keeps the focus it gives (#114).
 - Web tabs use `setZoomMode("isolated")`: zoom belongs to each WebContents, including sub-tabs and adopted contents, while cookies/session sharing is unchanged. Keyboard zoom targets the topmost sub-tab when open. PDF reader zoom is independent.
 - Multi-window support from day 1
 - **Per-tab session isolation**: Use `session.fromPartition('persist:tab-{id}')` for isolated tabs
