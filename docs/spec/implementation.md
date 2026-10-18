@@ -64,6 +64,12 @@ has no dependency on `electron-chrome-extensions`.
   without the browser's accelerator menu. Inside one, `windows.getCurrent` is that
   window, so the extension can close it with `windows.remove`. A `beforeunload`
   veto asks "Leave this page?" natively instead of silently cancelling the close.
+- Give each extension window one active tab (its page, ID = native WebContents ID),
+  visible only to the owning extension: `tabs.query`, `tabs.get`, `tabs.getCurrent`,
+  `windows.getAll`/`get` and the `tabs.on*` events report it, `tabs.remove` closes the
+  window and `tabs.update`/`windows.update` focus it. Bitwarden finds, focuses and
+  closes its single-action pop-outs this way. Current-window tab queries still return
+  the browser window's tabs, even from inside an extension window.
 - Use native WebContents IDs for extension tabs, and the browser's selected tab
   for active-tab queries. Redact URLs/titles without tabs or matching host permissions.
 - Relay native storage invalidations to MV3 workers, whose storage events are

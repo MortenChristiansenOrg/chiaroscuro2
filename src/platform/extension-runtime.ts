@@ -85,7 +85,10 @@ export class ExtensionRuntime {
           documentUrl: frame.url,
           documentOrigin: `chrome-extension://${extensionId}`,
           frameId: frame === contents.mainFrame ? 0 : frame.frameTreeNodeId,
-          tabId: this.tabs.has(contents.id) ? contents.id : -1,
+          tabId:
+            this.tabs.has(contents.id) || this.ownTabWindow(contents, extensionId)
+              ? contents.id
+              : -1,
           windowId: BrowserWindow.fromWebContents(contents)?.id ?? -1,
           incognito: false,
         });
@@ -370,12 +373,31 @@ export class ExtensionRuntime {
 
   private tabDetails(id: number) {
     const { contents, window } = this.tab(id);
+    return this.contentsDetails(
+      contents,
+      window,
+      [...this.tabs.keys()].indexOf(id),
+      this.activeId === id,
+    );
+  }
+
+  /** Like Chrome's popup windows, an extension window has one active tab: its own page. */
+  private windowTab(window: BrowserWindow) {
+    return this.contentsDetails(window.webContents, window, 0, true);
+  }
+
+  private contentsDetails(
+    contents: WebContents,
+    window: BrowserWindow,
+    index: number,
+    active: boolean,
+  ) {
     return {
-      id,
+      id: contents.id,
       windowId: window.id,
-      index: [...this.tabs.keys()].indexOf(id),
-      active: this.activeId === id,
-      highlighted: this.activeId === id,
+      index,
+      active,
+      highlighted: active,
       url: contents.getURL(),
       title: contents.getTitle(),
       status: contents.isLoading() ? "loading" : "complete",
@@ -407,6 +429,20 @@ export class ExtensionRuntime {
     return owned && owned.extensionId === extensionId && !window.isDestroyed() ? window : undefined;
   }
 
+  /** The extension's own windows; other extensions cannot see them or their tabs. */
+  private ownWindows(extensionId: string) {
+    return [...this.extensionWindows.values()]
+      .filter((entry) => entry.extensionId === extensionId && !entry.window.isDestroyed())
+      .map((entry) => entry.window);
+  }
+
+  /** The own window whose tab has this ID (or that hosts these contents). */
+  private ownTabWindow(id: number | WebContents | undefined, extensionId: string) {
+    return this.ownWindows(extensionId).find((window) =>
+      typeof id === "number" ? window.webContents.id === id : window.webContents === id,
+    );
+  }
+
   private windowDetails(window: BrowserWindow, extension?: Electron.Extension) {
     return {
       id: window.id,
@@ -415,13 +451,12 @@ export class ExtensionRuntime {
       incognito: false,
       ...window.getBounds(),
       state: window.isMaximized() ? "maximized" : "normal",
-      tabs: [...this.tabs.values()]
-        .filter((tab) => tab.window === window)
-        .map((tab) =>
-          extension
-            ? this.visibleTab(this.tabDetails(tab.contents.id), extension)
-            : this.tabDetails(tab.contents.id),
-        ),
+      tabs: (this.extensionWindows.has(window.id)
+        ? [this.windowTab(window)]
+        : [...this.tabs.values()]
+            .filter((tab) => tab.window === window)
+            .map((tab) => this.tabDetails(tab.contents.id))
+      ).map((tab) => (extension ? this.visibleTab(tab, extension) : tab)),
     };
   }
 
@@ -475,8 +510,18 @@ export class ExtensionRuntime {
         throw new Error("Managed storage is read-only");
       case "tabs.query": {
         const q = object.parse(args[0] ?? {});
-        return [...this.tabs.keys()]
-          .map((id) => this.visibleTab(this.tabDetails(id), caller.extension))
+        // Current-window queries keep returning the browser window's tabs, even from inside an
+        // extension window, so a pop-out still acts on the page as it did before.
+        const current = !!q.currentWindow || !!q.lastFocusedWindow || q.windowId === -2;
+        return [
+          ...(q.windowType === undefined || q.windowType === "normal"
+            ? [...this.tabs.keys()].map((id) => this.tabDetails(id))
+            : []),
+          ...(current || (q.windowType !== undefined && q.windowType !== "popup")
+            ? []
+            : this.ownWindows(extId).map((window) => this.windowTab(window))),
+        ]
+          .map((tab) => this.visibleTab(tab, caller.extension))
           .filter(
             (tab) =>
               (q.active === undefined || tab.active === q.active) &&
@@ -487,16 +532,24 @@ export class ExtensionRuntime {
                     typeof pattern === "string" &&
                     "url" in tab &&
                     typeof tab.url === "string" &&
-                    matchesUrl(pattern, tab.url),
+                    matchesUrl(pattern, tab.url, true),
                 )),
           );
       }
-      case "tabs.get":
-        return this.visibleTab(this.tabDetails(this.tab(args[0]).contents.id), caller.extension);
-      case "tabs.getCurrent":
+      case "tabs.get": {
+        const own = this.ownTabWindow(idSchema.parse(args[0]), extId);
+        return this.visibleTab(
+          own ? this.windowTab(own) : this.tabDetails(this.tab(args[0]).contents.id),
+          caller.extension,
+        );
+      }
+      case "tabs.getCurrent": {
+        const own = this.ownTabWindow(caller.contents, extId);
+        if (own) return this.visibleTab(this.windowTab(own), caller.extension);
         return caller.contents && this.tabs.has(caller.contents.id)
           ? this.visibleTab(this.tabDetails(caller.contents.id), caller.extension)
           : undefined;
+      }
       case "tabs.create": {
         const data = z
           .object({ url: z.string().optional(), active: z.boolean().optional() })
@@ -511,7 +564,6 @@ export class ExtensionRuntime {
       }
       case "tabs.update": {
         const explicit = typeof args[0] === "number";
-        const tab = this.tab(explicit ? args[0] : this.activeId);
         const data = z
           .object({
             url: z.string().optional(),
@@ -519,6 +571,15 @@ export class ExtensionRuntime {
             muted: z.boolean().optional(),
           })
           .parse(args[explicit ? 1 : 0]);
+        const own = explicit ? this.ownTabWindow(idSchema.parse(args[0]), extId) : undefined;
+        if (own) {
+          if (data.url) await own.loadURL(this.navigationUrl(data.url, caller.extension));
+          if (data.muted !== undefined) own.webContents.audioMuted = data.muted;
+          // Its tab is always active; activating it brings the window forward.
+          if (data.active) own.focus();
+          return this.visibleTab(this.windowTab(own), caller.extension);
+        }
+        const tab = this.tab(explicit ? args[0] : this.activeId);
         if (data.url) await tab.contents.loadURL(this.navigationUrl(data.url, caller.extension));
         if (data.muted !== undefined) tab.contents.audioMuted = data.muted;
         if (data.active) await this.actions.activate(tab.id);
@@ -526,14 +587,28 @@ export class ExtensionRuntime {
       }
       case "tabs.remove": {
         const ids = z.union([idSchema, z.array(idSchema)]).parse(args[0]);
-        for (const id of Array.isArray(ids) ? ids : [ids])
-          await this.actions.close(this.tab(id).id);
+        for (const id of Array.isArray(ids) ? ids : [ids]) {
+          // Closing an extension window's only tab closes the window, as in Chrome.
+          const own = this.ownTabWindow(id, extId);
+          if (own) own.close();
+          else await this.actions.close(this.tab(id).id);
+        }
         return;
       }
-      case "windows.getAll":
-        return [...new Set([...this.tabs.values()].map((tab) => tab.window))]
+      case "windows.getAll": {
+        const types = z
+          .object({ windowTypes: z.array(z.string()).optional() })
+          .passthrough()
+          .parse(args[0] ?? {}).windowTypes ?? ["normal", "popup"];
+        return [
+          ...(types.includes("normal")
+            ? new Set([...this.tabs.values()].map((tab) => tab.window))
+            : []),
+          ...(types.includes("popup") ? this.ownWindows(extId) : []),
+        ]
           .filter((win) => !win.isDestroyed())
           .map((win) => this.windowDetails(win, caller.extension));
+      }
       case "windows.get":
       case "windows.getCurrent":
       case "windows.getLastFocused": {
@@ -579,21 +654,62 @@ export class ExtensionRuntime {
         win.removeMenu();
         this.extensionWindows.set(win.id, { extensionId: extId, window: win });
         const windowId = win.id;
+        const contents = win.webContents;
+        const tabId = contents.id;
         // Electron cancels a close vetoed by beforeunload without asking; Chrome asks.
-        win.webContents.on("will-prevent-unload", (event) => {
+        contents.on("will-prevent-unload", (event) => {
           if (confirmLeave(win, caller.extension.name)) event.preventDefault();
         });
+        // Announce the window and its tab once loaded; a window closed while loading never was.
+        let announced = false;
         win.on("closed", () => {
           this.extensionWindows.delete(windowId);
+          if (!announced) return;
+          this.emit("tabs.onRemoved", [tabId, { windowId, isWindowClosing: true }], extId);
           this.emit("windows.onRemoved", [windowId], extId);
         });
+        const updated = () => {
+          if (!announced || win.isDestroyed()) return;
+          const tab = this.windowTab(win);
+          this.emit("tabs.onUpdated", [tabId, { url: tab.url, status: tab.status }, tab], extId);
+        };
+        contents.on("did-start-loading", updated);
+        contents.on("did-stop-loading", updated);
+        contents.on("page-title-updated", updated);
+        contents.on("did-navigate-in-page", (_event, _url, main) => {
+          if (main) updated();
+        });
         await win.loadURL(url);
+        if (win.isDestroyed()) throw new Error("Extension window was closed");
         if (data.focused === false) win.showInactive();
         else win.show();
+        announced = true;
         this.emit("windows.onCreated", [this.windowDetails(win, caller.extension)], extId);
+        this.emit("tabs.onCreated", [this.windowTab(win)], extId);
         return this.windowDetails(win, caller.extension);
       }
       case "windows.update": {
+        const own =
+          typeof args[0] === "number" && args[0] >= 0
+            ? this.ownWindow(BrowserWindow.fromId(idSchema.parse(args[0])), extId)
+            : undefined;
+        if (own) {
+          // Bitwarden focuses an open single-action pop-out instead of opening a duplicate.
+          // Like windows.create, this honours the size but not the position.
+          const data = z
+            .object({
+              focused: z.boolean().optional(),
+              width: z.number().int().positive().max(4000).optional(),
+              height: z.number().int().positive().max(4000).optional(),
+            })
+            .parse(args[1]);
+          if (data.width || data.height) {
+            const { width, height } = own.getBounds();
+            own.setSize(data.width ?? width, data.height ?? height);
+          }
+          if (data.focused) own.focus();
+          return this.windowDetails(own, caller.extension);
+        }
         const win = this.getWindow();
         if (!win || (args[0] !== -2 && args[0] !== win.id))
           throw new Error("No such browser window");

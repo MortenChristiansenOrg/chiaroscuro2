@@ -1,20 +1,26 @@
-/** Match the HTTP(S) URL patterns supported by this browser's extension adapter. */
-export function matchesUrl(pattern: string, value: string): boolean {
+/**
+ * Match the HTTP(S) URL patterns supported by this browser's extension adapter.
+ * `tabs.query` may also name extension pages (`chrome-extension://<id>/...`) explicitly;
+ * host permissions cannot.
+ */
+export function matchesUrl(pattern: string, value: string, extensionPages = false): boolean {
   let url: URL;
   try {
     url = new URL(value);
   } catch {
     return false;
   }
-  if (!["http:", "https:"].includes(url.protocol)) return false;
-  if (pattern === "<all_urls>") return true;
-  const parts = /^(\*|https?):\/\/(\*|\*\.[^/:]+|\[[\da-f:]+\]|[^/:]+)(?::(\d+|\*))?(\/.*)$/i.exec(
-    pattern,
-  );
+  const extensionPage = extensionPages && url.protocol === "chrome-extension:";
+  if (!extensionPage && !["http:", "https:"].includes(url.protocol)) return false;
+  if (pattern === "<all_urls>") return !extensionPage;
+  const parts =
+    /^(\*|https?|chrome-extension):\/\/(\*|\*\.[^/:]+|\[[\da-f:]+\]|[^/:]+)(?::(\d+|\*))?(\/.*)$/i.exec(
+      pattern,
+    );
   if (!parts) return false;
   const [, scheme, rawHost, port, pathname] = parts;
   if (!scheme || !rawHost || !pathname) return false;
-  if (scheme !== "*" && `${scheme.toLowerCase()}:` !== url.protocol) return false;
+  if (scheme === "*" ? extensionPage : `${scheme.toLowerCase()}:` !== url.protocol) return false;
   const host = rawHost.toLowerCase();
   if (
     host !== "*" &&
