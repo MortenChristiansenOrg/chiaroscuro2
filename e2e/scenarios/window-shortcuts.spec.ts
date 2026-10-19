@@ -327,27 +327,30 @@ test("Windows desktop keys in a sub-tab and a popup act on the right window", as
       }
       note("start");
     });
-    // Win+Up maximizes the browser window and Win+Down restores it. Typing stays in the page.
-    await windowsInput(session, { windowsArrows: ["Up"] });
-    await expect
-      .poll(() => browserWindowState(session))
-      .toEqual({
-        maximized: true,
-        minimized: false,
-      });
-    await windowsInput(session, { keys: "b" });
-    await expect(child.message).toHaveValue("ab");
-    await windowsInput(session, { windowsArrows: ["Down"] });
-    await expect
-      .poll(() => browserWindowState(session))
-      .toEqual({
-        maximized: false,
-        minimized: false,
-      });
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    console.log(
-      `DIAG ${JSON.stringify(await session.app.evaluate(() => (globalThis as unknown as { diag: string[] }).diag))}`,
-    );
+    try {
+      // Win+Up maximizes the browser window and Win+Down restores it. Typing stays in the page.
+      await windowsInput(session, { windowsArrows: ["Up"] });
+      await expect
+        .poll(() => browserWindowState(session))
+        .toEqual({
+          maximized: true,
+          minimized: false,
+        });
+      await windowsInput(session, { keys: "b" });
+      await expect(child.message).toHaveValue("ab");
+      await windowsInput(session, { windowsArrows: ["Down"] });
+      await expect
+        .poll(() => browserWindowState(session))
+        .toEqual({
+          maximized: false,
+          minimized: false,
+        });
+    } finally {
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      console.log(
+        `DIAG ${JSON.stringify(await session.app.evaluate(() => (globalThis as unknown as { diag: string[] }).diag))}`,
+      );
+    }
     await windowsInput(session, { keys: "c" });
     await expect(child.message).toHaveValue("abc");
     // Win+Down again minimizes it. Restoring it returns typing to the sub-tab page.

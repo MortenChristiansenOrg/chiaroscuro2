@@ -136,7 +136,7 @@ jobs:
         with:
           name: build-output
           path: out/
-      - run: bun run verify:app e2e/scenarios/window-shortcuts.spec.ts --repeat-each 6
+      - run: bun run verify:app e2e/scenarios/window-shortcuts.spec.ts --repeat-each 10
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
