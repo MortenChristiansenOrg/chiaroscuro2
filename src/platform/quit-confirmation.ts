@@ -193,7 +193,7 @@ export async function closeShowingWarning(
  */
 export class QuitAnswers<Id> {
   private readonly answers = new WeakMap<object, boolean>();
-  private stayedOn: { id: Id } | undefined;
+  private firstStay: { id: Id } | undefined;
   private onStay: (id: Id) => void = () => {};
   /** Resolves with the first page the user stayed on. */
   readonly stayed = new Promise<Id>((resolve) => {
@@ -202,7 +202,12 @@ export class QuitAnswers<Id> {
 
   /** The user stayed on a page, so the quit is cancelled. */
   get cancelled(): boolean {
-    return this.stayedOn !== undefined;
+    return this.firstStay !== undefined;
+  }
+
+  /** The page whose Stay cancelled the quit. */
+  get stayedOn(): Id | undefined {
+    return this.firstStay?.id;
   }
 
   /** The answer given about a page, if it was asked about: true when the user left it. */
@@ -216,8 +221,8 @@ export class QuitAnswers<Id> {
     if (known !== undefined) return known;
     const leave = ask();
     this.answers.set(page, leave);
-    if (!leave && !this.stayedOn) {
-      this.stayedOn = { id };
+    if (!leave && !this.firstStay) {
+      this.firstStay = { id };
       this.onStay(id);
     }
     return leave;

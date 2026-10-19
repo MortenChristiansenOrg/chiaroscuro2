@@ -541,6 +541,10 @@ describe("showing a page before asking about it when quitting", () => {
 
   // #150: after asking about a tab the user closed, go back to the page they were on.
   describe("going back after asking", () => {
+    afterEach(() => {
+      vi.mocked(isPinned).mockImplementation(() => false);
+    });
+
     async function setupGoingBack(where: "this" | "other") {
       let showPage: ShowPage = () => {};
       const ctx = setup({
@@ -570,7 +574,9 @@ describe("showing a page before asking about it when quitting", () => {
       );
       ctx.commands.unhandle(TABS_ACTIVATE);
       ctx.commands.handle(TABS_ACTIVATE, async ({ tabId }) => {
+        const previousTabId = ctx.deps.getActiveTabId() ?? null;
         ctx.setActiveTabId(tabId);
+        ctx.events.emit(TABS_ACTIVATED, { tabId, previousTabId });
       });
       // The other workspace was last left on another tab.
       await ctx.commands.send(WORKSPACES_SWITCH, { workspaceId: other });
@@ -600,6 +606,47 @@ describe("showing a page before asking about it when quitting", () => {
       // The other workspace still opens on the tab it was left on.
       await ctx.commands.send(WORKSPACES_SWITCH, { workspaceId: ctx.other });
       expect(ctx.deps.getActiveTabId()).toBe(ctx.remembered.id);
+    });
+
+    it("goes back to a pinned tab, and the workspace still remembers its own tab", async () => {
+      const ctx = await setupGoingBack("this");
+      const pinned = "pinned" as TabId;
+      vi.mocked(isPinned).mockImplementation((id) => id === pinned);
+      await ctx.commands.send(TABS_ACTIVATE, { tabId: pinned });
+      const goBack = await ctx.showPage();
+      expect(ctx.deps.getActiveTabId()).toBe(ctx.asked.id);
+
+      await goBack?.();
+
+      expect(ctx.deps.getActiveTabId()).toBe(pinned);
+      expect(getWorkspace(ctx.here)?.activeTabId).toBe(ctx.current.id);
+    });
+
+    it("stays on the page when the one the user was on closed meanwhile", async () => {
+      const ctx = await setupGoingBack("other");
+      const goBack = await ctx.showPage();
+      vi.mocked(getTabsForWorkspace).mockImplementation((id) =>
+        [ctx.remembered, ctx.asked].filter((tab) => tab.workspaceId === id),
+      );
+
+      await goBack?.();
+
+      expect(ctx.deps.getActiveWorkspaceId()).toBe(ctx.other);
+      expect(ctx.deps.getActiveTabId()).toBe(ctx.asked.id);
+    });
+
+    it("stays in the workspace the user switched to while a pinned page was shown", async () => {
+      const ctx = await setupGoingBack("this");
+      vi.mocked(isPinned).mockImplementation((id) => id === ctx.asked.id);
+      const goBack = await ctx.showPage();
+      expect(ctx.deps.getActiveTabId()).toBe(ctx.asked.id);
+      // The pinned page stays shown in the other workspace.
+      await ctx.commands.send(WORKSPACES_SWITCH, { workspaceId: ctx.other });
+
+      await goBack?.();
+
+      expect(ctx.deps.getActiveWorkspaceId()).toBe(ctx.other);
+      expect(ctx.deps.getActiveTabId()).toBe(ctx.asked.id);
     });
 
     it("stays where the user went while the page was shown", async () => {

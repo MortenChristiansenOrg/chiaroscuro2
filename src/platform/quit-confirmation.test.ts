@@ -467,6 +467,7 @@ describe("quit answers", () => {
     expect(ask).toHaveBeenCalledTimes(1);
     expect(answers.answer(page)).toBe(true);
     expect(answers.cancelled).toBe(false);
+    expect(answers.stayedOn).toBeUndefined();
   });
 
   it("cancels the quit at the first page the user stays on", async () => {
@@ -477,6 +478,7 @@ describe("quit answers", () => {
     expect(answers.ask(second, "b", () => false)).toBe(false);
     expect(answers.ask(first, "a", () => true)).toBe(false);
     expect(answers.cancelled).toBe(true);
+    expect(answers.stayedOn).toBe("a");
     await expect(answers.stayed).resolves.toBe("a");
   });
 });

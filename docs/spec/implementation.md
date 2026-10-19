@@ -14,8 +14,11 @@
   switches back to the workspace and tab the user was on and restores the remembered tab of the
   page's workspace; sub-tabs shows a tab's sub-tabs again if it is still active), which run
   once the user answered, before a left page closes, waiting at most 1 s. They do not run when
-  the user moved to another tab meanwhile, or while a quit asks about pages. The shown tab and
-  sub-tabs are asked about directly, as before. Overlapping closes of one tab share one close.
+  the user moved to another tab or workspace meanwhile, when the tab or workspace they were on
+  is gone, while a quit asks about pages, or when staying on the page cancelled a quit (the quit
+  shows it). Going back to a pinned tab restores the tab its workspace remembered. The shown
+  tab and sub-tabs are asked about directly, as before. Overlapping closes of one tab share one
+  close.
 - Quitting, closing the browser window and update restarts ask about unsaved changes first
   (#121). `before-quit` and the browser window's `close` are prevented until
   `ElectronPlatform.confirmQuit()` (`src/platform/quit-confirmation.ts`) has closed the pages

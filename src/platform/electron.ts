@@ -898,16 +898,20 @@ export class ElectronPlatform implements Platform {
    */
   private closeHiddenTab(tabId: TabId, contents: Electron.WebContents): Promise<void> {
     const requestedWhileQuitting = this.quitAnswers;
-    const quitting = () =>
-      requestedWhileQuitting !== undefined ||
-      this.quitAnswers !== undefined ||
-      this.quitConfirmation.settled;
+    // A quit still asking about pages decides what is shown, as does a confirmed quit, and
+    // staying on this page cancelled the quit, which shows the page. Once the quit was
+    // cancelled on another page, go back as usual.
+    const quitShowsPages = () => {
+      if (this.quitConfirmation.settled) return true;
+      const answers = this.quitAnswers ?? requestedWhileQuitting;
+      return answers !== undefined && (!answers.cancelled || answers.stayedOn === tabId);
+    };
     return closeShowingWarning(
       {
         close: (leave) => closeTabContents(contents, leave, { asks: false }),
         show: async () => {
           const goBack = await this.showTabToAsk(tabId, contents);
-          return () => (quitting() ? Promise.resolve() : this.goBackAfterAsking(goBack));
+          return () => (quitShowsPages() ? Promise.resolve() : this.goBackAfterAsking(goBack));
         },
         ask: this.askAboutTab(tabId, contents),
         answered: () => (this.quitAnswers ?? requestedWhileQuitting)?.answer(contents),
