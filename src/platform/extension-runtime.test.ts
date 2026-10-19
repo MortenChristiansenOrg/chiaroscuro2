@@ -78,7 +78,9 @@ vi.mock("electron", async () => {
   return {
     Notification,
     BrowserWindow,
-    screen: { getAllDisplays: () => hooks.workAreas.map((workArea) => ({ workArea })) },
+    screen: {
+      getAllDisplays: () => hooks.workAreas.map((area) => ({ bounds: area, workArea: area })),
+    },
     dialog: { showMessageBoxSync: vi.fn(() => (hooks.leave ? 0 : 1)) },
     webContents: {},
     ipcMain: {
@@ -356,7 +358,6 @@ it("reports window positions as left and top and keeps placed extension windows 
     ok: true,
     value: { id: popout.id, left: 3125, top: 130, width: 380, height: 630 },
   });
-  expect(popout.setBounds).toHaveBeenCalledOnce();
   expect(created.value).not.toHaveProperty("x");
 
   const place = async (bounds: Record<string, number>) =>
@@ -382,9 +383,18 @@ it("reports window positions as left and top and keeps placed extension windows 
     height: 1400,
   });
 
-  // Without a position, Electron's default placement stands.
-  await call(opener, "windows.create", [{ url: "popup.html", width: 380, height: 630 }]);
-  expect(hooks.windows[1]?.setBounds).not.toHaveBeenCalled();
+  // A coordinate that is not finite is ignored.
+  expect(await place({ left: Number.POSITIVE_INFINITY, top: Number.NaN })).toMatchObject({
+    left: 1920,
+    top: 0,
+  });
+  expect(await call(opener, "windows.update", [popout.id, { left: "0" }])).toMatchObject({
+    ok: false,
+  });
+
+  // Without a position, it stays where Electron put it, shrunk to fit.
+  await call(opener, "windows.create", [{ url: "popup.html", width: 4000, height: 4000 }]);
+  expect(hooks.windows[1]?.getBounds()).toEqual({ x: 1920, y: 0, width: 2560, height: 1400 });
 
   // Extensions cannot move the browser window.
   expect(await call(opener, "windows.update", [1, { left: 0, top: 0 }])).toMatchObject({

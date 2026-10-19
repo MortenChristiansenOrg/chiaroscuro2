@@ -22,7 +22,7 @@ import {
 import { matchesUrl } from "./extension-match-pattern";
 import { confirmLeave } from "./leave-prompt";
 import type { ExtensionTabActions } from "./types";
-import { fitToWorkArea } from "./window-placement";
+import { fitToDisplay } from "./window-placement";
 
 type Host = WebFrameMain | ServiceWorkerMain;
 type Caller = { extension: Electron.Extension; host: Host; contents?: WebContents };
@@ -30,9 +30,9 @@ type Tab = { id: TabId; contents: WebContents; window: BrowserWindow };
 const object = z.record(z.string(), z.unknown());
 const idSchema = z.number().int().nonnegative();
 const sizeSchema = z.number().int().positive().max(4000).optional();
-// A coordinate computed from a missing value (NaN) is ignored rather than failing the call.
+// A coordinate computed from a missing value (NaN, Infinity) is ignored rather than failing the call.
 const coordinateSchema = z
-  .union([z.number(), z.nan()])
+  .custom<number>((value) => typeof value === "number", "Expected a number")
   .optional()
   .transform((value) =>
     value !== undefined && Number.isFinite(value) ? Math.round(value) : undefined,
@@ -487,14 +487,14 @@ export class ExtensionRuntime {
   private placeWindow(window: BrowserWindow, requested: RequestedBounds) {
     const current = window.getBounds();
     window.setBounds(
-      fitToWorkArea(
+      fitToDisplay(
         {
           x: requested.left ?? current.x,
           y: requested.top ?? current.y,
           width: requested.width ?? current.width,
           height: requested.height ?? current.height,
         },
-        screen.getAllDisplays().map((display) => display.workArea),
+        screen.getAllDisplays(),
       ),
     );
   }
@@ -686,8 +686,9 @@ export class ExtensionRuntime {
         });
         // The application menu holds browser accelerators that act on the main window.
         win.removeMenu();
-        // Bitwarden places its pop-out at the browser window's top right.
-        if (data.left !== undefined || data.top !== undefined) this.placeWindow(win, data);
+        // Bitwarden places its pop-out at the browser window's top right; without a position
+        // the window stays where Electron centred it.
+        this.placeWindow(win, data);
         this.extensionWindows.set(win.id, { extensionId: extId, window: win });
         const windowId = win.id;
         const contents = win.webContents;

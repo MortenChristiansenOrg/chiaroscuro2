@@ -284,11 +284,13 @@ test("an extension pop-out window opens at the browser window's top right and st
     // Where Bitwarden asks for it, kept inside the work area.
     const within = (value: number, start: number, length: number, size: number) =>
       Math.min(Math.max(value, start), start + length - size);
+    const width = Math.min(480, workArea.width),
+      height = Math.min(630, workArea.height);
     const expected = {
-      left: within(bounds.x + bounds.width - 495, workArea.x, workArea.width, 480),
-      top: within(bounds.y + 90, workArea.y, workArea.height, 630),
-      width: 480,
-      height: 630,
+      left: within(bounds.x + bounds.width - 495, workArea.x, workArea.width, width),
+      top: within(bounds.y + 90, workArea.y, workArea.height, height),
+      width,
+      height,
     };
     const popout = await openPopout(app);
     const [browser] = await popout.evaluate(() =>
@@ -316,7 +318,7 @@ test("an extension pop-out window opens at the browser window's top right and st
         ({ BrowserWindow }, id) => BrowserWindow.fromId(id)?.getBounds(),
         native.id,
       ),
-    ).toEqual({ x: expected.left, y: expected.top, width: 480, height: 630 });
+    ).toEqual({ x: expected.left, y: expected.top, width, height });
 
     // Moving it off screen keeps it inside the display's work area.
     const moved = await popout.evaluate(
@@ -329,9 +331,9 @@ test("an extension pop-out window opens at the browser window's top right and st
     );
     expect(moved).toMatchObject({
       left: workArea.x,
-      top: workArea.y + workArea.height - 630,
-      width: 480,
-      height: 630,
+      top: workArea.y + workArea.height - height,
+      width,
+      height,
     });
 
     // The browser window itself stays where the user put it.
