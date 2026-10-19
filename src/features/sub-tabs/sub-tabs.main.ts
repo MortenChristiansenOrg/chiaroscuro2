@@ -6,7 +6,8 @@ import { featureState } from "../../shared/feature-state";
 import { logError } from "../../shared/log";
 import { TabScope } from "../../shared/tab-scope";
 import type { TabId, WindowId, WorkspaceId } from "../../shared/types";
-import { getContentBounds } from "../tabs/tabs.main";
+import { isPinned } from "../pinned-tabs/pinned-tabs.main";
+import { getContentBounds, getTab } from "../tabs/tabs.main";
 import type { TabsCommands, TabsEvents } from "../tabs/tabs.shared";
 import {
   TABS_ACTIVATE,
@@ -15,7 +16,12 @@ import {
   TABS_CLOSED,
   TABS_CONTENT_BOUNDS_CHANGED,
 } from "../tabs/tabs.shared";
-import { WORKSPACES_SWITCHED, type WorkspacesEvents } from "../workspaces/workspaces.shared";
+import {
+  WORKSPACES_SWITCH,
+  WORKSPACES_SWITCHED,
+  type WorkspacesCommands,
+  type WorkspacesEvents,
+} from "../workspaces/workspaces.shared";
 import {
   SUB_TABS_CLOSE,
   SUB_TABS_CLOSE_ALL,
@@ -81,7 +87,9 @@ function computeChildFrameBounds(cb: Bounds): Bounds {
   };
 }
 
-type AllCommands = SubTabsCommands & TabsCommands;
+type AllCommands = SubTabsCommands &
+  TabsCommands &
+  Pick<WorkspacesCommands, typeof WORKSPACES_SWITCH>;
 type AllEvents = SubTabsEvents & TabsEvents & Pick<WorkspacesEvents, typeof WORKSPACES_SWITCHED>;
 
 interface Deps {
@@ -92,6 +100,8 @@ interface Deps {
   getActiveTabId: () => TabId | undefined;
   getActiveWorkspaceId: () => WorkspaceId | undefined;
 }
+
+let stopQuitCancelled: (() => void) | undefined;
 
 const _state = featureState<{
   stacks: Map<TabId, SubTab[]>;
@@ -112,7 +122,8 @@ function resolveParent(sourceTabId: TabId, stacks: Map<TabId, SubTab[]>): TabId 
 
 export default defineFeature<Deps>({
   register(deps) {
-    const { commands, events, platform, getActiveWindowId, getActiveTabId } = deps;
+    const { commands, events, platform, getActiveWindowId, getActiveTabId, getActiveWorkspaceId } =
+      deps;
 
     const stacks = new Map<TabId, SubTab[]>();
     // Keep open/close/promote mutations ordered while their animations yield.
@@ -634,6 +645,45 @@ export default defineFeature<Deps>({
       }).catch(logError("sub-tabs", "close children after parent close"));
     });
 
+    // A quit the user cancelled closed some sub-tab pages to ask about unsaved changes. Load them
+    // again so every stack stays as it was, and show a sub-tab the user stayed on.
+    stopQuitCancelled?.();
+    stopQuitCancelled = platform.onQuitCancelled(({ unloadedTabIds, stayedTabId }) => {
+      const unloaded = new Set(unloadedTabIds);
+      const parentTabId = stayedTabId && resolveParent(stayedTabId, stacks);
+      const stayedParent = parentTabId && parentTabId !== stayedTabId ? parentTabId : undefined;
+      // Sub-tabs above the one the user stayed on would hide it. When their pages were all left
+      // while asking, close them, as dismissing them would.
+      const stack = stayedParent ? (stacks.get(stayedParent) ?? []) : [];
+      const above = stack.slice(stack.findIndex((subTab) => subTab.id === stayedTabId) + 1);
+      const dismissed = above.every((subTab) => unloaded.has(subTab.id)) ? above : [];
+
+      for (const [parent, subTabs] of stacks) {
+        for (const subTab of subTabs) {
+          if (!unloaded.has(subTab.id) || dismissed.includes(subTab)) continue;
+          platform
+            .navigateTab(subTab.id, subTab.url)
+            .then(() => {
+              if (getActiveTabId() === parent && topSubTab(parent)?.id === subTab.id)
+                showTopSubTab(parent);
+            })
+            .catch(logError("sub-tabs", "reload sub-tab after quit"));
+        }
+      }
+      if (!stayedParent) return;
+
+      const showStayed = async () => {
+        for (const _ of dismissed)
+          await commands.send(SUB_TABS_CLOSE, { parentTabId: stayedParent });
+        if (stayedParent === getActiveTabId()) return;
+        const workspaceId = getTab(stayedParent)?.workspaceId;
+        if (workspaceId && workspaceId !== getActiveWorkspaceId() && !isPinned(stayedParent))
+          await commands.send(WORKSPACES_SWITCH, { workspaceId });
+        await commands.send(TABS_ACTIVATE, { tabId: stayedParent });
+      };
+      showStayed().catch(logError("sub-tabs", "show sub-tab after quit"));
+    });
+
     // Escape in a sub-tab or the browser window dismisses the topmost sub-tab. The command
     // palette handles its own Escape, which does not reach this shortcut (#130).
     const dismissTopSubTab = () => {
@@ -649,6 +699,8 @@ export default defineFeature<Deps>({
 
   teardown() {
     _state.reset();
+    stopQuitCancelled?.();
+    stopQuitCancelled = undefined;
   },
 });
 

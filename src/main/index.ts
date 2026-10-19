@@ -304,6 +304,18 @@ function createWindow(windowBounds?: {
   activeWindowId = String(win.id) as WindowId;
   win.on("page-title-updated", (event) => event.preventDefault());
 
+  // Closing the browser window asks about pages with unsaved changes first, as quitting does.
+  // Staying keeps the window and all its tabs.
+  win.on("close", (event) => {
+    if (platform.quitConfirmed) return;
+    event.preventDefault();
+    void platform.confirmQuit().then((leave) => {
+      if (leave && !win.isDestroyed()) win.close();
+    });
+  });
+  // Windows is ending the session (log off, shutdown, restart): never hold it up with a prompt.
+  win.on("session-end", () => platform.skipQuitConfirmation());
+
   // Hook BrowserWindow webContents for shortcut support
   platform.hookWebContents(win.webContents);
 
@@ -491,6 +503,8 @@ if (gotLock) {
     });
     powerMonitor.on("suspend", () => void githubSessions.snapshot("suspend"));
     powerMonitor.on("resume", () => void githubSessions.snapshot("resume"));
+    // Linux and macOS are shutting down or restarting: quit without asking.
+    powerMonitor.on("shutdown", () => platform.skipQuitConfirmation());
     registerDebugState("debug-server", () => ({ actualPort: getActualPort() }));
     registerDebugState("sub-tabs", getSubTabSnapshot);
     registerDebugState("targets", () => {
@@ -600,6 +614,16 @@ if (gotLock) {
   let quitting = false;
   app.on("before-quit", (event) => {
     if (quitting) return;
+    // Ask about pages with unsaved changes before anything is torn down, so staying keeps the
+    // browser fully working. Pages closed while asking keep their tabs, which were saved as
+    // they changed, so the full tab list is restored next session either way.
+    if (!platform.quitConfirmed) {
+      event.preventDefault();
+      void platform.confirmQuit().then((leave) => {
+        if (leave) app.quit();
+      });
+      return;
+    }
     platform.deactivateShortcuts();
     extensions.teardown?.();
     ai.teardown?.();

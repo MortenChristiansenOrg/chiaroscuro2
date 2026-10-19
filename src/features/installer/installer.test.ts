@@ -460,6 +460,48 @@ describe("installer feature", () => {
 
       expect(autoUpdater.quitAndInstall).toHaveBeenCalled();
     });
+
+    it("asks about unsaved changes first and keeps running when the user stays", async () => {
+      const { commands, deps, platform } = setup({ isDev: false });
+      vi.mocked(platform.confirmQuit).mockResolvedValue(false);
+      await feature.start(deps);
+      await vi.advanceTimersByTimeAsync(3_000);
+
+      const { autoUpdater } = await import("electron-updater");
+      await expect(commands.send(INSTALLER_APPLY_UPDATE, undefined)).rejects.toThrow(
+        "Restart cancelled to keep unsaved changes.",
+      );
+      expect(platform.confirmQuit).toHaveBeenCalled();
+      expect(autoUpdater.quitAndInstall).not.toHaveBeenCalled();
+    });
+
+    it("keeps the browser running when the installer fails to start", async () => {
+      const { commands, deps, platform } = setup({ isDev: false });
+      await feature.start(deps);
+      await vi.advanceTimersByTimeAsync(3_000);
+
+      const { autoUpdater } = await import("electron-updater");
+      // electron-updater reports an installer it cannot start before scheduling the quit.
+      vi.mocked(autoUpdater.quitAndInstall).mockImplementationOnce(() => {
+        // biome-ignore lint/suspicious/noExplicitAny: test mock helper
+        (autoUpdater as any)._emit("error", new Error("Cannot start installer"));
+      });
+      await commands.send(INSTALLER_APPLY_UPDATE, undefined);
+      expect(platform.cancelQuit).toHaveBeenCalledOnce();
+    });
+
+    it("does not cancel the quit once the installer started", async () => {
+      const { commands, deps, platform } = setup({ isDev: false });
+      await feature.start(deps);
+      await vi.advanceTimersByTimeAsync(3_000);
+
+      const { autoUpdater } = await import("electron-updater");
+      await commands.send(INSTALLER_APPLY_UPDATE, undefined);
+      // The browser is already quitting; restoring tabs now would race the teardown.
+      // biome-ignore lint/suspicious/noExplicitAny: test mock helper
+      (autoUpdater as any)._emit("error", new Error("Installer exited"));
+      expect(platform.cancelQuit).not.toHaveBeenCalled();
+    });
   });
 
   describe("cleanup", () => {

@@ -31,7 +31,12 @@ import {
   type TabsEvents,
 } from "../tabs/tabs.shared";
 import type { TabLoadingChangedPayload } from "../window-chrome/window-chrome.shared";
-import { WORKSPACES_SWITCHED, type WorkspacesEvents } from "../workspaces/workspaces.shared";
+import {
+  WORKSPACES_SWITCH,
+  WORKSPACES_SWITCHED,
+  type WorkspacesCommands,
+  type WorkspacesEvents,
+} from "../workspaces/workspaces.shared";
 import subTabsFeature from "./sub-tabs.main";
 import {
   SUB_TABS_CLOSE,
@@ -51,7 +56,7 @@ import {
 const WIN_ID = "win-1" as WindowId;
 const WS_ID = "ws-1" as WorkspaceId;
 
-type AllCommands = TabsCommands & SubTabsCommands;
+type AllCommands = TabsCommands & SubTabsCommands & WorkspacesCommands;
 type AllEvents = TabsEvents &
   SubTabsEvents &
   WorkspacesEvents & { "tab:loading-changed": TabLoadingChangedPayload };
@@ -887,5 +892,122 @@ describe("parent close with pending or prevented child destruction", () => {
       url: "https://nested.com",
     });
     await expect(send.mock.results.at(-1)?.value).resolves.toBeDefined();
+  });
+});
+
+describe("cancelled quit", () => {
+  type QuitCancelled = Parameters<ReturnType<typeof createMockPlatform>["onQuitCancelled"]>[0];
+  afterEach(() => {
+    tabsFeature.teardown?.();
+    subTabsFeature.teardown?.();
+  });
+  function setupQuit() {
+    const callbacks = new Set<QuitCancelled>();
+    const ctx = setup({
+      navigateTab: vi.fn(async () => {}),
+      onQuitCancelled: vi.fn((callback: QuitCancelled) => {
+        callbacks.add(callback);
+        return () => callbacks.delete(callback);
+      }),
+    });
+    const cancelQuit = (details: Parameters<QuitCancelled>[0]) => {
+      for (const callback of callbacks) callback(details);
+    };
+    return { ...ctx, cancelQuit };
+  }
+
+  it("loads closed sub-tab pages again and keeps the stack", async () => {
+    const ctx = setupQuit();
+    const { tabId: parentId } = await createParentTab(ctx);
+    const first = await ctx.commands.send(SUB_TABS_OPEN, {
+      parentTabId: parentId,
+      url: "https://first.com",
+    });
+    const second = await ctx.commands.send(SUB_TABS_OPEN, {
+      parentTabId: parentId,
+      url: "https://second.com",
+    });
+    vi.mocked(ctx.platform.navigateTab).mockClear();
+    vi.mocked(ctx.platform.attachTabToSubTabWindow).mockClear();
+
+    ctx.cancelQuit({ unloadedTabIds: [first, second] });
+
+    expect(ctx.platform.navigateTab).toHaveBeenCalledWith(first, "https://first.com");
+    expect(ctx.platform.navigateTab).toHaveBeenCalledWith(second, "https://second.com");
+    // The top sub-tab is shown again in its frame.
+    await vi.waitFor(() =>
+      expect(ctx.platform.attachTabToSubTabWindow).toHaveBeenCalledWith(second, expect.anything()),
+    );
+    expect(ctx.platform.attachTabToSubTabWindow).not.toHaveBeenCalledWith(first, expect.anything());
+    const stack = await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: parentId });
+    expect(stack.map((subTab) => subTab.id)).toEqual([first, second]);
+  });
+
+  it("shows the parent of the sub-tab the user stayed on", async () => {
+    const ctx = setupQuit();
+    const { tabId: parentId } = await createParentTab(ctx);
+    const child = await ctx.commands.send(SUB_TABS_OPEN, {
+      parentTabId: parentId,
+      url: "https://unsaved.com",
+    });
+    const { tabId: otherId } = await createParentTab(ctx);
+    expect(ctx.getActiveTabId()).toBe(otherId);
+
+    ctx.cancelQuit({ unloadedTabIds: [], stayedTabId: child });
+
+    await vi.waitFor(() => expect(ctx.getActiveTabId()).toBe(parentId));
+  });
+
+  it.each([
+    ["closes the sub-tabs above it that were left", true],
+    ["keeps sub-tabs above it that still have their pages", false],
+  ])("shows a sub-tab stayed on beneath others: %s", async (_, aboveLeft) => {
+    const ctx = setupQuit();
+    const { tabId: parentId } = await createParentTab(ctx);
+    const first = await ctx.commands.send(SUB_TABS_OPEN, {
+      parentTabId: parentId,
+      url: "https://first.com",
+    });
+    const second = await ctx.commands.send(SUB_TABS_OPEN, {
+      parentTabId: parentId,
+      url: "https://second.com",
+    });
+    vi.mocked(ctx.platform.navigateTab).mockClear();
+    vi.mocked(ctx.platform.attachTabToSubTabWindow).mockClear();
+
+    ctx.cancelQuit({ unloadedTabIds: aboveLeft ? [second] : [], stayedTabId: first });
+
+    const expected = aboveLeft ? [first] : [first, second];
+    await vi.waitFor(async () => {
+      const stack = await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: parentId });
+      expect(stack.map((subTab) => subTab.id)).toEqual(expected);
+    });
+    expect(ctx.platform.navigateTab).not.toHaveBeenCalled();
+    if (aboveLeft)
+      await vi.waitFor(() =>
+        expect(ctx.platform.attachTabToSubTabWindow).toHaveBeenCalledWith(first, expect.anything()),
+      );
+  });
+
+  it("switches to the workspace of the sub-tab the user stayed on", async () => {
+    const ctx = setupQuit();
+    const { tabId: parentId } = await createParentTab(ctx);
+    const child = await ctx.commands.send(SUB_TABS_OPEN, {
+      parentTabId: parentId,
+      url: "https://unsaved.com",
+    });
+    const otherWorkspace = "ws-other" as WorkspaceId;
+    ctx.setActiveWorkspaceId(otherWorkspace);
+    ctx.setActiveTabId(undefined);
+    const switched: WorkspaceId[] = [];
+    ctx.commands.handle(WORKSPACES_SWITCH, async ({ workspaceId }) => {
+      switched.push(workspaceId);
+      ctx.setActiveWorkspaceId(workspaceId);
+    });
+
+    ctx.cancelQuit({ unloadedTabIds: [], stayedTabId: child });
+
+    await vi.waitFor(() => expect(ctx.getActiveTabId()).toBe(parentId));
+    expect(switched).toEqual([WS_ID]);
   });
 });

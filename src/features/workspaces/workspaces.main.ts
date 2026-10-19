@@ -67,6 +67,8 @@ export function isPrivacyWorkspace(id: WorkspaceId): boolean {
   return _state.initialized ? (_state.get().workspaces.get(id)?.privacyMode ?? false) : false;
 }
 
+let stopQuitCancelled: (() => void) | undefined;
+
 export default defineFeature<Deps>({
   register(deps) {
     const {
@@ -345,10 +347,30 @@ export default defineFeature<Deps>({
       platform.registerShortcut(`CommandOrControl+Shift+${n}`, moveToN);
       platform.registerLocalShortcut(`CommandOrControl+Shift+${n}`, moveToN);
     }
+
+    // Show a page the user stayed on when quitting, even in another workspace.
+    stopQuitCancelled?.();
+    stopQuitCancelled = platform.onQuitCancelled(({ stayedTabId }) => {
+      if (!stayedTabId || isPinned(stayedTabId)) return;
+      const activeWsId = getActiveWorkspaceId();
+      for (const ws of workspaces.values()) {
+        if (ws.id === activeWsId) continue;
+        if (!getTabsForWorkspace(ws.id).some((tab) => tab.id === stayedTabId)) continue;
+        ws.activeTabId = stayedTabId;
+        commands
+          .send(WORKSPACES_SWITCH, { workspaceId: ws.id })
+          // Switching keeps an active pinned tab shown.
+          .then(() => commands.send(TABS_ACTIVATE, { tabId: stayedTabId }))
+          .catch(logError("workspaces", "show page after quit"));
+        return;
+      }
+    });
   },
 
   teardown() {
     _state.reset();
+    stopQuitCancelled?.();
+    stopQuitCancelled = undefined;
   },
 
   async start(deps) {

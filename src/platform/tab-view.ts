@@ -1,5 +1,6 @@
 import path from "node:path";
 import { type WebContents, WebContentsView } from "electron";
+import { StayedOnPage } from "./leave-prompt";
 
 /** Construct normal and duplicated tabs without replacing a clone's session or preferences. */
 export function createTabView(source?: WebContents): WebContentsView {
@@ -77,7 +78,7 @@ function requestClose(contents: Electron.WebContents, confirmLeave: () => boolea
         return;
       }
       cleanup();
-      reject(new Error("Page prevented closing"));
+      reject(new StayedOnPage());
     };
     contents.once("destroyed", onDestroyed);
     contents.on("will-prevent-unload", onPreventUnload);

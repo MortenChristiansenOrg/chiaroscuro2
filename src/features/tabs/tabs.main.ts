@@ -128,8 +128,10 @@ let builtInCounter = 0;
 // fixedAddressDisabled is set.
 const fixedUrls = new Map<TabId, string>();
 
-// Tabs restored at startup that haven't loaded their URL yet (lazy loading).
+// Tabs restored at startup that haven't loaded their URL yet (lazy loading), and tabs whose
+// pages were closed by a quit that did not happen.
 const unloadedTabs = new Set<TabId>();
+let stopQuitCancelled: (() => void) | undefined;
 
 /** Spread a tab with its fixedUrl for event emission. */
 function tabSnapshot(tab: Tab): Tab {
@@ -701,6 +703,37 @@ export default defineFeature<Deps>({
       return tabId;
     });
 
+    // A quit the user cancelled closed some pages to ask about unsaved changes. Their tabs stay
+    // as unloaded tabs; the shown one loads again, or the page the user stayed on is shown.
+    stopQuitCancelled?.();
+    stopQuitCancelled = platform.onQuitCancelled(({ unloadedTabIds, stayedTabId }) => {
+      for (const tabId of unloadedTabIds) {
+        const tab = tabs.get(tabId);
+        if (!tab || tab.builtIn) continue;
+        unloadedTabs.add(tabId);
+        if (!tab.loading) continue;
+        tab.loading = false;
+        events.emit(TABS_UPDATED, { tab: tabSnapshot(tab) });
+        events.emit("tab:loading-changed", { tabId, loading: false });
+      }
+      const activeTabId = getActiveTabId();
+      const stayed = stayedTabId ? tabs.get(stayedTabId) : undefined;
+      const stayedHere =
+        stayed && (stayed.workspaceId === getActiveWorkspaceId() || isPinned(stayed.id));
+      // The workspaces feature switches to a page stayed on in another workspace.
+      const show = stayedHere
+        ? stayed.id !== activeTabId
+          ? stayed.id
+          : undefined
+        : !stayed && activeTabId && unloadedTabs.has(activeTabId)
+          ? activeTabId
+          : undefined;
+      if (show)
+        commands
+          .send(TABS_ACTIVATE, { tabId: show })
+          .catch(logError("tabs", "show tab after quit"));
+    });
+
     const toggleBookmark = () => {
       commands.send(TABS_TOGGLE_BOOKMARK, {}).catch(logError("tabs", "toggle bookmark shortcut"));
     };
@@ -711,6 +744,8 @@ export default defineFeature<Deps>({
     _state.reset();
     fixedUrls.clear();
     unloadedTabs.clear();
+    stopQuitCancelled?.();
+    stopQuitCancelled = undefined;
   },
 });
 

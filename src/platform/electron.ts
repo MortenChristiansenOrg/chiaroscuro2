@@ -19,6 +19,7 @@ import {
   webContents,
 } from "electron";
 import type { ContextMenuItemData } from "../features/context-menu/context-menu.shared";
+import { logError } from "../shared/log";
 import type { Bounds, TabId, WindowId } from "../shared/types";
 import { capturePageScreenshot } from "./capture-page";
 import { commandChord, inputChord, suggestedShortcut } from "./extension-commands";
@@ -28,9 +29,16 @@ import { closePopupOnBlur } from "./extension-popup";
 import { ExtensionRuntime } from "./extension-runtime";
 import type { GithubSessionDiagnostics } from "./github-session-diagnostics";
 import { routeShortcutsToFocus, shortcutWindow, WindowArrowKeys } from "./keyboard-routing";
-import { confirmLeave } from "./leave-prompt";
+import {
+  askBeforeClosingWindow,
+  closePageWindow,
+  confirmLeave,
+  leavePromptTime,
+  windowsWithPages,
+} from "./leave-prompt";
 import { PdfResponses } from "./pdf-responses";
 import { checkPermission, matchesGrantedDevice } from "./permission-check";
+import { closePagesInTurn, type PageToClose, QuitConfirmation } from "./quit-confirmation";
 import { TabBoundsAnimation } from "./tab-bounds-animation";
 import { insertTabCss, removeTabCss } from "./tab-css";
 import { closeTabContents, createTabView } from "./tab-view";
@@ -312,6 +320,11 @@ $('suggestions').addEventListener('click',function(e){
 document.addEventListener('keydown',function(e){if(e.key==='Escape'){e.preventDefault();closePalette()}});
 </script></body></html>`;
 
+/** Longest wait for one page to close before quitting, beyond answering its prompt. */
+const QUIT_PAGE_TIMEOUT_MS = 3_000;
+/** Longest total wait for pages before quitting, excluding prompts. */
+const QUIT_BUDGET_MS = 5_000;
+
 export class ElectronPlatform implements Platform {
   /** Read-only native inventory shared by HTTP discovery and Electron verification. */
   getDebugTargets(): import("../features/debug-server/targets.shared").DebugTarget[] {
@@ -386,15 +399,24 @@ export class ElectronPlatform implements Platform {
   private websiteShortcuts = new Map<string, () => boolean>();
   private views = new Map<TabId, WebContentsView>();
   private windowFocus = new WeakMap<BrowserWindow, WindowContentFocus>();
-  // Restored tabs need no native renderer until their first navigation. Keep
-  // subscriptions here so all feature listeners precede that navigation.
-  private pendingTabs = new Map<
+  // Restored tabs need no native renderer until their first navigation.
+  private pendingTabs = new Map<TabId, { windowId: WindowId; url: string }>();
+  // Feature subscriptions per tab. They move to the new contents when a tab whose page was
+  // unloaded gets a renderer again, so all feature listeners precede its navigation.
+  private tabListeners = new Map<
     TabId,
-    {
-      windowId: WindowId;
-      url: string;
-      listeners: Set<{ event: string; callback: (...args: unknown[]) => void }>;
-    }
+    Set<{ event: string; callback: (...args: unknown[]) => void }>
+  >();
+  private readonly quitConfirmation = new QuitConfirmation(() => this.closePagesBeforeQuit());
+  /** Tabs whose pages were closed to ask about unsaved changes, kept until the quit happens. */
+  private unloadedForQuit = new Map<TabId, { url: string }>();
+  /** Tabs being closed for good; quitting must not restore them. */
+  private closingTabs = new Set<TabId>();
+  /** When each tab first got a page, kept when a cancelled quit gives it a new one. */
+  private tabSequence = new Map<TabId, number>();
+  private lastTabSequence = 0;
+  private quitCancelledCallbacks = new Set<
+    (details: { unloadedTabIds: TabId[]; stayedTabId?: TabId }) => void
   >();
   private tooltipWin: BrowserWindow | null = null;
   private paletteWin: BrowserWindow | null = null;
@@ -541,7 +563,7 @@ export class ElectronPlatform implements Platform {
     // their complete tab inventory whenever an extension is loaded.
     if (options?.lazy && !options.cloneFrom && this.extensions.getAllExtensions().length === 0) {
       const tabId = existingTabId ?? (crypto.randomUUID() as TabId);
-      this.pendingTabs.set(tabId, { windowId, url, listeners: new Set() });
+      this.pendingTabs.set(tabId, { windowId, url });
       return tabId;
     }
     return this.createNativeTab(windowId, url, existingTabId, options);
@@ -554,7 +576,6 @@ export class ElectronPlatform implements Platform {
     // a second view, and subscriptions are attached before loadURL is called.
     this.createNativeTab(pending.windowId, pending.url, tabId, { lazy: true });
     this.pendingTabs.delete(tabId);
-    for (const { event, callback } of pending.listeners) this.onTabEvent(tabId, event, callback);
   }
 
   private createNativeTab(
@@ -580,6 +601,7 @@ export class ElectronPlatform implements Platform {
     view.setBorderRadius(8);
 
     this.views.set(tabId, view);
+    if (!this.tabSequence.has(tabId)) this.tabSequence.set(tabId, ++this.lastTabSequence);
     this.extensionRuntime?.addTab(tabId, view.webContents, win);
     win.contentView.addChildView(view);
     this.contentFocus(win).track(view.webContents);
@@ -659,6 +681,7 @@ export class ElectronPlatform implements Platform {
       // without one reach the browser window that owns it, which then takes focus (#115).
       popupWin.setAutoHideMenuBar(false);
       popupWin.setMenuBarVisibility(false);
+      askBeforeClosingWindow(popupWin, () => wc.getTitle() || wc.getURL());
     });
 
     view.webContents.on("will-navigate", (event, navUrl) => {
@@ -714,6 +737,12 @@ export class ElectronPlatform implements Platform {
 
     this.hookWebContents(view.webContents);
 
+    // A tab whose page was unloaded keeps its feature subscriptions.
+    for (const { event, callback } of this.tabListeners.get(tabId) ?? []) {
+      // biome-ignore lint/suspicious/noExplicitAny: Electron event names are dynamic
+      view.webContents.on(event as any, callback as any);
+    }
+
     // The tab preload applies Ctrl+wheel zoom via webFrame and sends
     // the resulting level here. We re-emit as a synthetic zoom-changed
     // event so the zoom feature can read the new level and update state.
@@ -738,35 +767,181 @@ export class ElectronPlatform implements Platform {
 
   async closeTab(tabId: TabId): Promise<void> {
     this.pendingTabs.delete(tabId);
+    this.unloadedForQuit.delete(tabId);
     const view = this.views.get(tabId);
-    if (!view) return;
+    if (!view) {
+      this.tabListeners.delete(tabId);
+      this.tabSequence.delete(tabId);
+      return;
+    }
     this.tabBoundsAnimations.cancel(view);
 
     // Keep ownership intact if the user stays on a page that vetoes beforeunload.
     // Native close is synchronous; only the destroyed event establishes completion.
     const contents = view.webContents;
-    await closeTabContents(contents, () =>
-      confirmLeave(this.getWin(), contents.getTitle() || contents.getURL()),
-    );
+    this.closingTabs.add(tabId);
+    try {
+      await closeTabContents(contents, () =>
+        confirmLeave(this.getWin(), contents.getTitle() || contents.getURL()),
+      );
+    } finally {
+      this.closingTabs.delete(tabId);
+    }
 
+    this.removeClosedView(tabId, view);
+    // Quitting may have been asking about this page at the same time.
+    this.unloadedForQuit.delete(tabId);
+    this.tabListeners.delete(tabId);
+    this.tabSequence.delete(tabId);
+  }
+
+  // ── Quitting ────────────────────────────────────────────────────
+
+  /** Closing the browser window or quitting may proceed without asking about pages. */
+  get quitConfirmed(): boolean {
+    return this.quitConfirmation.settled;
+  }
+
+  confirmQuit(): Promise<boolean> {
+    return this.quitConfirmation.confirm();
+  }
+
+  cancelQuit(): void {
+    this.quitConfirmation.cancel();
+    this.restoreUnloadedTabs();
+  }
+
+  /** Quit without asking about unsaved changes, because the operating system ends the session. */
+  skipQuitConfirmation(): void {
+    this.quitConfirmation.skip();
+  }
+
+  onQuitCancelled(
+    callback: (details: { unloadedTabIds: TabId[]; stayedTabId?: TabId }) => void,
+  ): () => void {
+    this.quitCancelledCallbacks.add(callback);
+    return () => this.quitCancelledCallbacks.delete(callback);
+  }
+
+  /**
+   * Close every page, asking about each one that warns about unsaved changes. Pop-up and
+   * extension windows go first, newest first, because closing the page that opened a pop-up
+   * destroys it without asking. Shown pages follow, the sub-tab on top before the tab beneath
+   * it: the user is likeliest to be editing them, and staying on one keeps the pages after it.
+   */
+  private async closePagesBeforeQuit(): Promise<boolean> {
+    const subTabWin = this.subTabWin && !this.subTabWin.isDestroyed() ? this.subTabWin : null;
+    const subTab: PageToClose<TabId | BrowserWindow>[] = [];
+    const shown: PageToClose<TabId | BrowserWindow>[] = [];
+    const hidden: PageToClose<TabId | BrowserWindow>[] = [];
+    for (const [tabId, view] of this.views) {
+      const contents = view.webContents;
+      // Crashed pages and views that never loaded a page have nothing to lose.
+      if (contents.isDestroyed() || contents.isCrashed() || !contents.getURL()) continue;
+      const page = { id: tabId, close: () => this.unloadTabForQuit(tabId, view) };
+      if (!this.isViewShown(view)) hidden.push(page);
+      else if (subTabWin?.contentView.children.includes(view)) subTab.push(page);
+      else shown.push(page);
+    }
+    const windows = windowsWithPages()
+      .reverse()
+      .map((win) => ({
+        id: win,
+        // A window too slow to ask in time leaves without asking once quitting is confirmed.
+        close: () => closePageWindow(win, () => this.quitConfirmation.settled),
+      }));
+    // Newest hidden pages first, so a sub-tab is asked about before the one beneath it.
+    const sequence = (page: PageToClose<TabId | BrowserWindow>) =>
+      this.tabSequence.get(page.id as TabId) ?? 0;
+    hidden.sort((a, b) => sequence(b) - sequence(a));
+    const result = await closePagesInTurn([...windows, ...subTab, ...shown, ...hidden], {
+      pageTimeoutMs: QUIT_PAGE_TIMEOUT_MS,
+      budgetMs: QUIT_BUDGET_MS,
+      promptTime: leavePromptTime,
+    });
+    if (result.left) return true;
+    const { stayedOn } = result;
+    if (stayedOn instanceof BrowserWindow) {
+      if (!stayedOn.isDestroyed()) stayedOn.focus();
+      this.restoreUnloadedTabs();
+    } else {
+      this.restoreUnloadedTabs(stayedOn);
+    }
+    return false;
+  }
+
+  private isViewShown(view: WebContentsView): boolean {
+    const { width, height } = view.getBounds();
+    if (width === 0 || height === 0) return false;
+    return [this.getWin(), this.subTabWin].some(
+      (win) =>
+        win &&
+        !win.isDestroyed() &&
+        win.isVisible() &&
+        !win.isMinimized() &&
+        win.contentView.children.includes(view),
+    );
+  }
+
+  /** Close a tab's page to run its unsaved-changes warning. The tab itself stays. */
+  private async unloadTabForQuit(tabId: TabId, view: WebContentsView): Promise<void> {
+    const contents = view.webContents;
+    const url = contents.getURL();
+    // A page too slow to ask in time leaves without asking once quitting is confirmed.
+    await closeTabContents(
+      contents,
+      () =>
+        this.quitConfirmation.settled || confirmLeave(this.getWin(), contents.getTitle() || url),
+    );
+    // A tab the user closed at the same time is gone for good.
+    if (this.closingTabs.has(tabId) || !this.removeClosedView(tabId, view)) return;
+    this.unloadedForQuit.set(tabId, { url });
+    // The page took longer to close than quitting waited, and the user has since stayed.
+    if (!this.quitConfirmation.settled && !this.quitConfirmation.asking) this.restoreUnloadedTabs();
+  }
+
+  /**
+   * Keep tabs whose pages were closed by a quit that did not happen. They become unloaded tabs,
+   * like restored ones, and load again when shown.
+   */
+  private restoreUnloadedTabs(stayedTabId?: TabId): void {
+    const unloadedTabIds = [...this.unloadedForQuit.keys()];
+    const windowId = this.getActiveWindowId();
+    for (const [tabId, { url }] of this.unloadedForQuit) {
+      if (!windowId || !this.getWin(windowId)) break;
+      if (this.views.has(tabId) || this.pendingTabs.has(tabId) || this.closingTabs.has(tabId))
+        continue;
+      // Extensions identify tabs by native contents, so they keep a renderer.
+      if (this.extensions.getAllExtensions().length === 0) {
+        this.pendingTabs.set(tabId, { windowId, url });
+        continue;
+      }
+      try {
+        this.createNativeTab(windowId, url, tabId, { lazy: true });
+      } catch (error) {
+        logError("quit", "restore unloaded tab")(error);
+      }
+    }
+    this.unloadedForQuit.clear();
+    if (unloadedTabIds.length === 0 && !stayedTabId) return;
+    for (const callback of this.quitCancelledCallbacks) callback({ unloadedTabIds, stayedTabId });
+  }
+
+  /** Forget a view whose contents were destroyed, unless the tab already has another one. */
+  private removeClosedView(tabId: TabId, view: WebContentsView): boolean {
+    if (this.views.get(tabId) !== view) return false;
+    this.tabBoundsAnimations.cancel(view);
     // Remove from whichever window owns the view (main or sub-tab child window)
-    const win = this.getWin();
-    if (win) {
+    for (const win of [this.getWin(), this.subTabWin]) {
+      if (!win || win.isDestroyed()) continue;
       try {
         win.contentView.removeChildView(view);
       } catch {
-        // may not be a child of main window
+        // may not be a child of this window
       }
     }
-    if (this.subTabWin && !this.subTabWin.isDestroyed()) {
-      try {
-        this.subTabWin.contentView.removeChildView(view);
-      } catch {
-        // may not be a child of sub-tab window
-      }
-    }
-
     this.views.delete(tabId);
+    return true;
   }
 
   async navigateTab(tabId: TabId, url: string): Promise<void> {
@@ -833,26 +1008,26 @@ export class ElectronPlatform implements Platform {
   }
 
   onTabEvent(tabId: TabId, event: string, callback: (...args: unknown[]) => void): () => void {
-    const pending = this.pendingTabs.get(tabId);
-    if (pending) {
-      const listener = { event, callback };
-      pending.listeners.add(listener);
-      return () => {
-        pending.listeners.delete(listener);
-        // The tab may have been materialized since subscription.
-        // biome-ignore lint/suspicious/noExplicitAny: Electron event names are dynamic
-        this.views.get(tabId)?.webContents.removeListener(event as any, callback as any);
-      };
+    if (!this.views.has(tabId) && !this.pendingTabs.has(tabId) && !this.unloadedForQuit.has(tabId))
+      return () => {};
+    const listener = { event, callback };
+    let listeners = this.tabListeners.get(tabId);
+    if (!listeners) {
+      listeners = new Set();
+      this.tabListeners.set(tabId, listeners);
     }
-    const view = this.views.get(tabId);
-    if (!view) return () => {};
-
-    const wc = view.webContents;
+    listeners.add(listener);
+    const subscribed = this.views.get(tabId)?.webContents;
     // biome-ignore lint/suspicious/noExplicitAny: Electron event names are dynamic
-    wc.on(event as any, callback as any);
+    subscribed?.on(event as any, callback as any);
     return () => {
-      // biome-ignore lint/suspicious/noExplicitAny: Electron event names are dynamic
-      wc.removeListener(event as any, callback as any);
+      listeners.delete(listener);
+      // The tab may have received new contents since subscription.
+      for (const contents of new Set([subscribed, this.views.get(tabId)?.webContents])) {
+        if (!contents || contents.isDestroyed()) continue;
+        // biome-ignore lint/suspicious/noExplicitAny: Electron event names are dynamic
+        contents.removeListener(event as any, callback as any);
+      }
     };
   }
 
@@ -1333,7 +1508,9 @@ export class ElectronPlatform implements Platform {
     });
     // Alt+F4 closes the active window. In a sub-tab, it is meant for the browser window.
     overlay.on("close", (event) => {
-      if (this.subTabWinParentClosing || parent.isDestroyed()) return;
+      // A confirmed quit closes every window.
+      if (this.subTabWinParentClosing || parent.isDestroyed() || this.quitConfirmation.settled)
+        return;
       event.preventDefault();
       parent.close();
     });
@@ -1369,9 +1546,6 @@ export class ElectronPlatform implements Platform {
         setImmediate(() => {
           this.subTabWinParentClosing = false;
         });
-      });
-      app.once("before-quit", () => {
-        this.subTabWinParentClosing = true;
       });
       this.subTabWinParentListenersSet = true;
     }

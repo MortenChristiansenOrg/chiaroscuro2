@@ -48,10 +48,10 @@ type AllEvents = Parameters<typeof feature.register>[0] extends { events: EventB
   ? E
   : never;
 
-function setup() {
+function setup(platformOverrides = {}) {
   const commands = new CommandBus<AllCommands>();
   const events = new EventBus<AllEvents>();
-  const platform = createMockPlatform();
+  const platform = createMockPlatform(platformOverrides);
   const dataStore = new MemoryDataStore();
   let activeTabId: TabId | undefined;
   let activeWsId: WorkspaceId | undefined;
@@ -427,6 +427,64 @@ describe("workspaces commands", () => {
         vi.mocked(isPinned).mockReturnValue(false);
       },
     );
+  });
+});
+
+describe("cancelled quit", () => {
+  type QuitCancelled = Parameters<ReturnType<typeof createMockPlatform>["onQuitCancelled"]>[0];
+
+  it.each([
+    ["in another workspace", "other", "none", "other"],
+    ["in another workspace while a pinned tab is shown", "other", "pinned-active", "other"],
+    ["in this workspace", "this", "none", "this"],
+    ["pinned", "other", "stayed", "this"],
+  ] as const)("shows a page the user stayed on %s", async (_, where, pinned, workspaceAfter) => {
+    let cancelQuit: QuitCancelled = () => {};
+    const ctx = setup({
+      onQuitCancelled: vi.fn((callback: QuitCancelled) => {
+        cancelQuit = callback;
+        return () => {};
+      }),
+    });
+    const here = await ctx.commands.send(WORKSPACES_CREATE, {
+      name: "Work",
+      color: "blue",
+      icon: "W",
+    });
+    const other = await ctx.commands.send(WORKSPACES_CREATE, {
+      name: "Personal",
+      color: "red",
+      icon: "P",
+    });
+    const stayed = makeTab({
+      id: "stayed" as TabId,
+      workspaceId: where === "other" ? other : here,
+    });
+    const pinnedTab = "pinned" as TabId;
+    vi.mocked(getTabsForWorkspace).mockImplementation((id) =>
+      id === stayed.workspaceId ? [stayed] : [],
+    );
+    vi.mocked(isPinned).mockImplementation((id) =>
+      pinned === "stayed" ? id === stayed.id : pinned === "pinned-active" && id === pinnedTab,
+    );
+    ctx.setActiveWsId(here);
+    ctx.setActiveTabId(pinned === "pinned-active" ? pinnedTab : undefined);
+    ctx.commands.unhandle(TABS_ACTIVATE);
+    ctx.commands.handle(TABS_ACTIVATE, async ({ tabId }) => {
+      ctx.setActiveTabId(tabId);
+    });
+
+    cancelQuit({ unloadedTabIds: [], stayedTabId: stayed.id });
+
+    const switches = workspaceAfter === "other";
+    await vi.waitFor(() => {
+      expect(ctx.deps.getActiveWorkspaceId()).toBe(switches ? other : here);
+      if (switches) expect(ctx.deps.getActiveTabId()).toBe(stayed.id);
+    });
+    // The tabs feature shows a stayed page in this workspace or a pinned one.
+    if (!switches) expect(ctx.deps.getActiveTabId()).not.toBe(stayed.id);
+    vi.mocked(isPinned).mockReset();
+    vi.mocked(isPinned).mockReturnValue(false);
   });
 });
 
