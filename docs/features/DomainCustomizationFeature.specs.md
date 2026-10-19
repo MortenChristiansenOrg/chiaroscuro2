@@ -2,7 +2,7 @@
 
 ## Overview
 
-The Domain Customization feature provides per-domain settings including custom CSS injection and navigation blocking. Users can inject a user-managed CSS file into pages on a domain using Electron's `webContents.insertCSS()` and `webContents.removeInsertedCSS()` APIs, and control navigation behavior for all tabs on a domain.
+The Domain Customization feature provides per-domain settings including custom CSS injection and navigation blocking. Users can inject a user-managed CSS file into pages on a domain through the tab preload, which applies it with `webFrame.insertCSS()` (exempt from the page's CSP), and control navigation behavior for all tabs on a domain.
 
 Accessed via an icon button in the address bar (left of the URL). Clicking opens a singleton built-in tab for that domain showing navigation, CSS, and permission controls using the shared SettingsLayout scaffold.
 
@@ -23,8 +23,8 @@ keyboard shortcuts and error reporting.
 
 - Domain customization state (enabled/disabled per domain) persisted across app runs via DataStore.
 - CSS files stored in a `domain-css/` subdirectory of the app's user data directory.
-- If CSS is enabled and a CSS file exists, inject it via `webContents.insertCSS()`.
-- If CSS is disabled or no file exists, remove any injected CSS via `webContents.removeInsertedCSS()`.
+- If CSS is enabled and a CSS file exists, inject it into the current document through the tab preload. `webContents.insertCSS()` is not used: Electron never settles a call that races a navigation and keeps the tab's WebContents referenced for good (#127).
+- If CSS is disabled or no file exists, remove any injected CSS from the current document.
 - When switching tabs or navigating to a different domain, update injected CSS accordingly.
 - File watching via `fs.watch()` re-injects CSS on file changes while enabled.
 - If the CSS file is deleted while enabled, auto-disable CSS for that domain.

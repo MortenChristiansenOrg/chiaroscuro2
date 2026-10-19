@@ -1,7 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { startSite } from "../automation/site";
-import { waitForNewDocument } from "../automation/wait";
+import { waitForNewDocument, waitUntil } from "../automation/wait";
 import { expect, test } from "../fixtures/electron-app";
 import { VerificationPage } from "../pages/verification.page";
 import { WindowChromePage } from "../pages/window-chrome.page";
@@ -14,11 +14,12 @@ test.afterAll(async () => {
   await site.close();
 });
 
-test("domain CSS is applied again after reloads that race tab updates", async ({
+test("domain CSS is applied again after reloads that race tab updates and leaks nothing", async ({
   appSession: session,
 }) => {
   test.setTimeout(120_000);
-  const url = `${site.url}/scripts/initial`;
+  // Domain CSS must apply even where the page's CSP forbids styles.
+  const url = `${site.url}/strict-csp`;
   const { page } = await VerificationPage.navigate(session, url);
   const heading = page.locator("h1");
   // The settings UI saves CSS through the system editor or AI; write the file it would save.
@@ -32,6 +33,7 @@ test("domain CSS is applied again after reloads that race tab updates", async ({
 
   // Every tab update re-applies domain CSS. Spread updates across each reload so some
   // CSS calls reach the page while its new document commits, as busy sessions do.
+  // Electron's own insertCSS leaked the tab for each such call (#127).
   const target = await session.target((item) => item.kind === "tab" && item.url === url);
   await session.app.evaluate(
     ({ webContents }, { contentsId, tabId }) => {
@@ -40,10 +42,28 @@ test("domain CSS is applied again after reloads that race tab updates", async ({
           __testHooks: { commandBus: { send(name: string, payload: unknown): Promise<unknown> } };
         }
       ).__testHooks.commandBus;
+      const contents = webContents.fromId(contentsId);
+      if (!contents) throw new Error("Tab contents missing");
       let reloads = 0;
-      webContents.fromId(contentsId)?.on("did-start-loading", () => {
+      let committing = false;
+      contents.on("did-start-loading", () => {
+        committing = true;
         setTimeout(() => void bus.send("tabs:activate", { tabId }), reloads++ % 25);
       });
+      contents.on("did-navigate", () => {
+        committing = false;
+      });
+      // Also lose the first CSS request sent while a reload commits, as the replaced
+      // document can, so a run abandons a call even when the timing above misses.
+      const send = contents.send.bind(contents);
+      contents.send = (channel: string, ...args: unknown[]) => {
+        const state = globalThis as unknown as { __droppedCssRequest?: boolean };
+        if (committing && !state.__droppedCssRequest && channel === "tab:css-insert") {
+          state.__droppedCssRequest = true;
+          return;
+        }
+        send(channel, ...args);
+      };
     },
     { contentsId: target.webContentsId, tabId: target.tabId },
   );
@@ -52,4 +72,37 @@ test("domain CSS is applied again after reloads that race tab updates", async ({
     await waitForNewDocument(page, () => reload.click());
     await expect(heading, `reload ${attempt}`).toHaveCSS("color", "rgb(180, 30, 70)");
   }
+  await session.command("domain-css:toggle", { domain: "127.0.0.1" });
+  await expect(heading).not.toHaveCSS("color", "rgb(180, 30, 70)");
+
+  // A CSS call lost to a reload must not keep the closed tab's WebContents alive.
+  await session.app.evaluate(({ webContents }, contentsId) => {
+    const contents = webContents.fromId(contentsId);
+    if (!contents) throw new Error("Tab contents missing");
+    Object.assign(globalThis, { __closedTabContents: new WeakRef(contents) });
+  }, target.webContentsId);
+  await session.command("tabs:close", { tabId: target.tabId });
+  await waitUntil(
+    "the closed tab's WebContents to be garbage collected",
+    () =>
+      session.app.evaluate(async () => {
+        process.getBuiltinModule("v8").setFlagsFromString("--expose-gc");
+        const collect = process.getBuiltinModule("vm").runInNewContext("gc") as () => void;
+        collect();
+        // A WeakRef keeps its target alive until the current job ends.
+        await new Promise((resolve) => setTimeout(resolve));
+        collect();
+        const ref = (globalThis as unknown as { __closedTabContents: WeakRef<object> })
+          .__closedTabContents;
+        return ref.deref() === undefined;
+      }),
+    (collected) => collected,
+    10_000,
+  );
+  // The collection above covered at least one abandoned request.
+  expect(
+    await session.app.evaluate(
+      () => (globalThis as unknown as { __droppedCssRequest?: boolean }).__droppedCssRequest,
+    ),
+  ).toBe(true);
 });
