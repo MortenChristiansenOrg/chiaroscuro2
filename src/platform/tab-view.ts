@@ -63,15 +63,26 @@ export function closeTabContents(
   return result;
 }
 
+const closingForUser = new WeakMap<Electron.WebContents, Promise<void>>();
+
 /**
  * Close a tab the user closes, asking with `confirmLeave` if its page warns. If the close
  * joined one that found the page warns but kept it without asking, ask now and leave it on
- * Leave: its beforeunload may not warn a second time.
+ * Leave: its beforeunload may not warn a second time. Overlapping requests share one close
+ * and one answer.
  */
-export async function closeTabContentsAsking(
+export function closeTabContentsAsking(
   contents: Electron.WebContents,
   confirmLeave: () => boolean,
 ): Promise<void> {
+  const pending = closingForUser.get(contents);
+  if (pending) return pending;
+  const result = closeAsking(contents, confirmLeave).finally(() => closingForUser.delete(contents));
+  closingForUser.set(contents, result);
+  return result;
+}
+
+async function closeAsking(contents: Electron.WebContents, confirmLeave: () => boolean) {
   try {
     await closeTabContents(contents, confirmLeave);
   } catch (error) {

@@ -168,6 +168,20 @@ describe("closing a tab the user closes", () => {
     expect(contents.close).toHaveBeenCalledOnce();
   });
 
+  it("asks once for overlapping closes that joined such a close", async () => {
+    const contents = fixture();
+    const probe = closeTabContents(contents, () => false, { asks: false }).catch(() => {});
+    const ask = vi.fn(() => false);
+    const first = closeTabContentsAsking(contents, ask);
+    const second = closeTabContentsAsking(contents, ask);
+    contents.emit("will-prevent-unload", { preventDefault: vi.fn() });
+    await probe;
+    await expect(first).rejects.toThrow("Page prevented closing");
+    await expect(second).rejects.toThrow("Page prevented closing");
+    expect(ask).toHaveBeenCalledOnce();
+    expect(contents.close).toHaveBeenCalledOnce();
+  });
+
   it("asks once for overlapping closes", async () => {
     const contents = fixture();
     const ask = vi.fn(() => false);
