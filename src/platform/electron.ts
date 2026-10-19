@@ -30,7 +30,8 @@ import { confirmLeave } from "./leave-prompt";
 import { PdfResponses } from "./pdf-responses";
 import { checkPermission, matchesGrantedDevice } from "./permission-check";
 import { TabBoundsAnimation } from "./tab-bounds-animation";
-import { closeTabContents, createTabView, untilDocumentReplaced } from "./tab-view";
+import { insertTabCss, removeTabCss } from "./tab-css";
+import { closeTabContents, createTabView } from "./tab-view";
 import type { ExtensionTabActions, Platform, PlatformDownload } from "./types";
 import { isAllowedNavigation, isAllowedUrl } from "./url-policy";
 import { runWebsiteScript } from "./website-script";
@@ -1759,25 +1760,13 @@ export class ElectronPlatform implements Platform {
   async insertCSS(tabId: TabId, css: string): Promise<string> {
     const view = this.views.get(tabId);
     if (!view) throw new Error(`No view for tab ${tabId}`);
-    const contents = view.webContents;
-    const processId = contents.mainFrame.processId;
-    return untilDocumentReplaced(
-      contents,
-      () => contents.insertCSS(css),
-      (key) => {
-        // Keys are unique only within a renderer process. After a process swap the late
-        // key belonged to a discarded document and may name a style of the current one.
-        if (!contents.isDestroyed() && contents.mainFrame.processId === processId)
-          contents.removeInsertedCSS(key).catch(() => {});
-      },
-    );
+    return insertTabCss(view.webContents, css);
   }
 
   async removeInsertedCSS(tabId: TabId, key: string): Promise<void> {
     const view = this.views.get(tabId);
     if (!view) return;
-    const contents = view.webContents;
-    await untilDocumentReplaced(contents, () => contents.removeInsertedCSS(key));
+    await removeTabCss(view.webContents, key);
   }
 
   // ── Dialogs ───────────────────────────────────────────────────

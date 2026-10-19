@@ -69,7 +69,13 @@ export async function startSite(onRequest?: (request: http.IncomingMessage) => v
       response.end("Intentional fixture failure");
       return;
     }
-    response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+    response.writeHead(200, {
+      "Content-Type": "text/html; charset=utf-8",
+      // Pages under /strict-csp forbid every style and script the page does not own.
+      ...(url.pathname.startsWith("/strict-csp")
+        ? { "Content-Security-Policy": "default-src 'none'; style-src 'none'" }
+        : {}),
+    });
     response.end(`<!doctype html><html lang="en"><meta charset="utf-8"><title>Verification ${url.pathname.replace(/[^a-z/-]/gi, "")}</title>
       <style>body{font:20px system-ui;background:#e7edf5;color:#172a42;padding:32px}button,input,a{font:inherit;margin:12px;padding:8px}#scroll{height:180px;overflow:auto;border:2px solid}#spacer{height:600px}</style>
       <h1>Local verification page</h1><label>Message <input aria-label="Message"></label><button id="apply">Apply</button><output id="result"></output>

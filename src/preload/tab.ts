@@ -3,6 +3,10 @@
 import { ipcRenderer, webFrame } from "electron";
 import { ZOOM_MAX, ZOOM_MIN, ZOOM_STEP } from "../features/zoom/zoom.shared";
 import { installFileDrop } from "./file-drop";
+import { installTabCss } from "./tab-css";
+
+// Install first so later setup failures cannot leave the main process waiting for CSS.
+installTabCss();
 
 // Disable FedCM (Federated Credential Management) in the page context.
 // Electron doesn't implement the FedCM account-chooser UI for WebContentsView,
