@@ -101,7 +101,10 @@ describe("leaving a page", () => {
     expect(pageAddress("https://example.com/%E0%A4%A")).toBe("example.com/%E0%A4%A");
     expect(pageAddress("https://user:secret@example.com/a")).toBe("example.com/a");
     // Escaped line breaks and direction overrides stay escaped.
-    expect(pageAddress("https://example.com/a%0Ab%E2%80%AEc")).toBe("example.com/a%0Ab%E2%80%AEc");
+    expect(pageAddress("https://example.com/a%0Ab%E2%80%AEc%E2%80%A8")).toBe(
+      "example.com/a%0Ab%E2%80%AEc%E2%80%A8",
+    );
+    expect(pageAddress("https://[invalid]/caf%C3%A9")).toBe("[invalid]/caf%C3%A9");
     const long = pageAddress(`https://example.com/${"a".repeat(200)}`);
     expect(long).toHaveLength(100);
     expect(long.endsWith("\u2026")).toBe(true);

@@ -44,7 +44,7 @@ const MAX_ADDRESS_LENGTH = 100;
 // the address, so they stay escaped, as Chrome shows them.
 const UNSAFE_CHARACTERS =
   // biome-ignore lint/suspicious/noControlCharactersInRegex: matching them is the point
-  /[\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u202a-\u202e\u2066-\u2069]/g;
+  /[\u0000-\u001f\u007f-\u009f\u061c\u200e\u200f\u2028\u2029\u202a-\u202e\u2066-\u2069]/g;
 
 /**
  * A page's address as the prompt shows it: without `https://` or a user name and password,
@@ -54,19 +54,13 @@ export function pageAddress(url: string): string {
   let address = url;
   try {
     const parsed = new URL(url);
-    if (parsed.username || parsed.password) {
-      parsed.username = "";
-      parsed.password = "";
-      address = parsed.href;
-    }
+    parsed.username = "";
+    parsed.password = "";
+    address = decodeURI(parsed.href);
   } catch {
     // Keep a malformed address as it is.
   }
-  try {
-    address = decodeURI(address).replace(UNSAFE_CHARACTERS, encodeURIComponent);
-  } catch {
-    // Keep a malformed escape as it is.
-  }
+  address = address.replace(UNSAFE_CHARACTERS, encodeURIComponent);
   address = address.replace(/^https?:\/\//, "").replace(/^([^/?#]+)\/$/, "$1");
   return address.length > MAX_ADDRESS_LENGTH
     ? `${address.slice(0, MAX_ADDRESS_LENGTH - 1)}…`
