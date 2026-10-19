@@ -28,7 +28,10 @@ function contents(owner: FocusOwner) {
 /** Let the current native event finish, as separate user actions do. */
 const settle = () => new Promise((resolve) => setImmediate(resolve));
 
-function fixture(canRestore: (contents: unknown) => boolean = () => true) {
+function fixture(
+  canRestore: (contents: unknown) => boolean = () => true,
+  { framesPage = false } = {},
+) {
   const owner: FocusOwner = {};
   const shell = contents(owner);
   /** Electron focuses the window's own contents before emitting the window's focus event. */
@@ -44,14 +47,23 @@ function fixture(canRestore: (contents: unknown) => boolean = () => true) {
     isFocused: () => window.active,
     focus: vi.fn(activate),
   });
-  const focus = new WindowContentFocus(window, canRestore);
-  const page = contents(owner);
+  let page: ReturnType<typeof contents> | undefined;
+  const focus = new WindowContentFocus(window, canRestore, framesPage ? () => page : undefined);
+  page = contents(owner);
   focus.track(page);
   const deactivate = () => {
     window.active = false;
     window.emit("blur");
   };
-  return { owner, shell, window, page, focus, deactivate, activate };
+  return {
+    owner,
+    shell,
+    window,
+    page: page as ReturnType<typeof contents>,
+    focus,
+    deactivate,
+    activate,
+  };
 }
 
 describe("returning to the browser window", () => {
@@ -233,6 +245,47 @@ describe("returning to the browser window", () => {
     page.focus.mockClear();
     activate();
     expect(page.focus).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("a window that frames a page (the sub-tab window)", () => {
+  it("returns to the page when the frame took focus before the deactivation was reported", async () => {
+    // Recorded on Windows CI after Win+Up in a sub-tab: Electron reported the frame's focus on
+    // the window's next activation before the window's earlier blur.
+    const { shell, page, deactivate, activate } = fixture(() => true, { framesPage: true });
+    page.focus();
+    await settle();
+    shell.focus();
+    await settle();
+    deactivate();
+    page.focus.mockClear();
+    activate();
+    expect(page.focus).toHaveBeenCalledTimes(1);
+  });
+
+  it("leaves focus in the frame when the frame shows no page", async () => {
+    const { shell, page, deactivate, activate } = fixture((contents) => contents !== page, {
+      framesPage: true,
+    });
+    shell.focus();
+    await settle();
+    deactivate();
+    activate();
+    expect(page.focus).not.toHaveBeenCalled();
+    expect(shell.isFocused()).toBe(true);
+  });
+
+  it("lets a click that activates the window decide instead", async () => {
+    const { shell, page, window, deactivate } = fixture(() => true, { framesPage: true });
+    page.focus();
+    await settle();
+    deactivate();
+    page.focus.mockClear();
+    window.active = true;
+    shell.press();
+    shell.focus();
+    window.emit("focus");
+    expect(page.focus).not.toHaveBeenCalled();
   });
 });
 
