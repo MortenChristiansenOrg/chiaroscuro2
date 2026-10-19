@@ -28,11 +28,6 @@ const PRESS_EVENTS = new Set(["mouseDown", "touchStart"]);
 export class WindowContentFocus {
   private focused: FocusableContents | undefined;
   private focusedAtBlur: FocusableContents | undefined;
-  /**
-   * The window was deactivated and has not been active for its focus event since. Activations
-   * that end before their focus event runs leave the page to restore as it was (#131).
-   */
-  private awaitingRestore = false;
   private shellFocus: NodeJS.Immediate | undefined;
   private readonly tracked = new WeakSet<FocusableContents>();
   private readonly pressListeners = new Set<() => void>();
@@ -55,8 +50,6 @@ export class WindowContentFocus {
     this.trackPresses(shell);
     window.on("blur", () => {
       this.cancelShellFocus();
-      if (this.awaitingRestore) return;
-      this.awaitingRestore = true;
       this.focusedAtBlur = this.focused;
     });
     // Electron emits this after it has focused the shell, so the page's focus wins.
@@ -85,7 +78,6 @@ export class WindowContentFocus {
     }
     // Restored by the window's focus event, after Electron has focused the shell.
     this.focusedAtBlur = contents;
-    this.awaitingRestore = true;
     this.window.focus();
   }
 
@@ -104,7 +96,6 @@ export class WindowContentFocus {
       }
       // The click came before the window's focus event: nothing to restore.
       this.focusedAtBlur = undefined;
-      this.awaitingRestore = false;
       // The click came after focus was restored elsewhere: follow the click.
       if (!contents.isDestroyed() && !contents.isFocused()) contents.focus();
     });
@@ -121,18 +112,13 @@ export class WindowContentFocus {
   }
 
   private restore(): void {
-    if (this.window.isDestroyed()) return;
-    // Focus events are queued; the window may have lost activation again since. The shell's
-    // focus on that activation is Electron's, and the page still waits for the next one.
-    if (!this.window.isFocused()) {
-      this.cancelShellFocus();
-      return;
-    }
     const contents = this.focusedAtBlur;
     this.focusedAtBlur = undefined;
-    this.awaitingRestore = false;
     if (
       !contents ||
+      this.window.isDestroyed() ||
+      // Focus events are queued; the window may have lost activation again since.
+      !this.window.isFocused() ||
       contents === this.window.webContents ||
       contents.isDestroyed() ||
       !this.canRestore(contents)
