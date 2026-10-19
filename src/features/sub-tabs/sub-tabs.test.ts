@@ -410,6 +410,110 @@ describe("sub-tabs:promote", () => {
   });
 });
 
+describe("keyboard focus in the sub-tab window", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+    tabsFeature.teardown?.();
+    subTabsFeature.teardown?.();
+  });
+
+  it("returns focus to the parent tab's page once the last sub-tab has closed", async () => {
+    const ctx = setup();
+    const { tabId: parentId } = await createParentTab(ctx);
+    await ctx.commands.send(SUB_TABS_OPEN, { parentTabId: parentId, url: "https://child.com" });
+
+    await ctx.commands.send(SUB_TABS_CLOSE, { parentTabId: parentId });
+
+    expect(ctx.platform.returnFocusFromSubTabWindow).toHaveBeenCalledWith(parentId);
+    expect(vi.mocked(ctx.platform.hideSubTabWindow).mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(ctx.platform.returnFocusFromSubTabWindow).mock.invocationCallOrder[0],
+    );
+  });
+
+  it("leaves focus alone when another tab is activated while the last sub-tab closes", async () => {
+    let finishHide = () => {};
+    const ctx = setup({
+      hideSubTabWindow: vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            finishHide = resolve;
+          }),
+      ),
+    });
+    const { tabId: first } = await createParentTab(ctx);
+    const { tabId: second } = await createParentTab(ctx);
+    await ctx.commands.send(TABS_ACTIVATE, { tabId: first });
+    await ctx.commands.send(SUB_TABS_OPEN, { parentTabId: first, url: "https://child1.com" });
+
+    const closing = ctx.commands.send(SUB_TABS_CLOSE, { parentTabId: first });
+    await vi.waitFor(() => expect(ctx.platform.hideSubTabWindow).toHaveBeenCalled());
+    await ctx.commands.send(TABS_ACTIVATE, { tabId: second });
+    vi.mocked(ctx.platform.returnFocusFromSubTabWindow).mockClear();
+    finishHide();
+    await closing;
+
+    expect(ctx.platform.returnFocusFromSubTabWindow).not.toHaveBeenCalled();
+  });
+
+  it("keeps focus in the sub-tab window when a nested sub-tab closes", async () => {
+    const ctx = setup();
+    const { tabId: parentId } = await createParentTab(ctx);
+    await ctx.commands.send(SUB_TABS_OPEN, { parentTabId: parentId, url: "https://child1.com" });
+    await ctx.commands.send(SUB_TABS_OPEN, { parentTabId: parentId, url: "https://child2.com" });
+
+    await ctx.commands.send(SUB_TABS_CLOSE, { parentTabId: parentId });
+
+    expect(ctx.platform.returnFocusFromSubTabWindow).not.toHaveBeenCalled();
+  });
+
+  it("returns focus to the parent tab's page when all sub-tabs close", async () => {
+    const ctx = setup();
+    const { tabId: parentId } = await createParentTab(ctx);
+    await ctx.commands.send(SUB_TABS_OPEN, { parentTabId: parentId, url: "https://child1.com" });
+    await ctx.commands.send(SUB_TABS_OPEN, { parentTabId: parentId, url: "https://child2.com" });
+
+    await ctx.commands.send(SUB_TABS_CLOSE_ALL, { parentTabId: parentId });
+
+    expect(ctx.platform.returnFocusFromSubTabWindow).toHaveBeenCalledWith(parentId);
+  });
+
+  it("keeps focus in a promoted page once it is shown as a tab", async () => {
+    const ctx = setup();
+    const { tabId: parentId } = await createParentTab(ctx);
+    const subTabId = await ctx.commands.send(SUB_TABS_OPEN, {
+      parentTabId: parentId,
+      url: "https://child.com",
+    });
+
+    await ctx.commands.send(SUB_TABS_PROMOTE, { parentTabId: parentId });
+
+    expect(ctx.platform.returnFocusFromSubTabWindow).toHaveBeenCalledWith(subTabId);
+    // Only after the adopted tab is shown in the browser window.
+    expect(vi.mocked(ctx.platform.setTabBounds).mock.invocationCallOrder.at(-1)).toBeLessThan(
+      vi.mocked(ctx.platform.returnFocusFromSubTabWindow).mock.invocationCallOrder[0],
+    );
+  });
+
+  it("moves focus to the activated tab, unless that tab shows a sub-tab itself", async () => {
+    const ctx = setup();
+    const { tabId: first } = await createParentTab(ctx);
+    const { tabId: second } = await createParentTab(ctx);
+    await ctx.commands.send(TABS_ACTIVATE, { tabId: first });
+    await ctx.commands.send(SUB_TABS_OPEN, { parentTabId: first, url: "https://child1.com" });
+
+    await ctx.commands.send(TABS_ACTIVATE, { tabId: second });
+    expect(ctx.platform.returnFocusFromSubTabWindow).toHaveBeenCalledWith(second);
+
+    await ctx.commands.send(SUB_TABS_OPEN, { parentTabId: second, url: "https://child2.com" });
+    vi.mocked(ctx.platform.returnFocusFromSubTabWindow).mockClear();
+    await ctx.commands.send(TABS_ACTIVATE, { tabId: first });
+    expect(ctx.platform.returnFocusFromSubTabWindow).not.toHaveBeenCalled();
+  });
+});
+
 describe("parent tab lifecycle", () => {
   beforeEach(() => {
     vi.useFakeTimers();

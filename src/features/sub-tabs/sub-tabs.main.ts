@@ -463,6 +463,9 @@ export default defineFeature<Deps>({
             platform.animateTabBounds(top.id, cfb, exitBounds, ANIM_DURATION),
             platform.hideSubTabWindow(),
           ]);
+          // Typing in the closed sub-tab continues in the page underneath, unless the user
+          // switched tabs during the animation.
+          if (getActiveTabId() === parentTabId) platform.returnFocusFromSubTabWindow(parentTabId);
           platform.detachTabFromSubTabWindow(top.id);
           await closeSubTab(parentTabId, top.id);
           if (getActiveTabId() === parentTabId) platform.hideSubTabWindowInstant();
@@ -494,6 +497,7 @@ export default defineFeature<Deps>({
               : Promise.resolve(),
             platform.hideSubTabWindow(),
           ]);
+        if (getActiveTabId() === parentTabId) platform.returnFocusFromSubTabWindow(parentTabId);
 
         // Detach all WCVs back to main window
         for (const st of stack) {
@@ -549,6 +553,8 @@ export default defineFeature<Deps>({
         platform.hideTab(subTabId);
 
         const newTabId = await commands.send(TABS_ADOPT, { tabId: subTabId, activate: true });
+        // The promoted page keeps keyboard focus, now as a tab.
+        platform.returnFocusFromSubTabWindow(newTabId);
 
         events.emit(SUB_TABS_PROMOTED, { parentTabId, subTabId, newTabId });
         emitStackChanged(parentTabId);
@@ -584,6 +590,8 @@ export default defineFeature<Deps>({
         hideAllSubTabs(previousTabId);
         if (topSubTab(previousTabId)) {
           platform.hideSubTabWindowInstant();
+          // Focus in the hidden sub-tab moves to the activated tab, or to its own sub-tab below.
+          if (!tabId || !topSubTab(tabId)) platform.returnFocusFromSubTabWindow(tabId ?? undefined);
         }
       }
 
@@ -606,7 +614,10 @@ export default defineFeature<Deps>({
       disabledInputKeys.delete(tabId);
       if (!stacks.get(tabId)?.length && !transitions.has(tabId)) return;
       closedParents.add(tabId);
-      if (!getActiveTabId() || getActiveTabId() === tabId) platform.hideSubTabWindowInstant();
+      if (!getActiveTabId() || getActiveTabId() === tabId) {
+        platform.hideSubTabWindowInstant();
+        platform.returnFocusFromSubTabWindow();
+      }
       transition(tabId, async () => {
         let preservedChild = false;
         for (const st of [...(stacks.get(tabId) ?? [])].reverse()) {

@@ -10,6 +10,7 @@ interface FocusWindow {
   readonly webContents: FocusableContents;
   isDestroyed(): boolean;
   isFocused(): boolean;
+  focus(): void;
   on(event: "focus" | "blur", listener: () => void): unknown;
 }
 
@@ -28,6 +29,7 @@ export class WindowContentFocus {
   private focused: FocusableContents | undefined;
   private focusedAtBlur: FocusableContents | undefined;
   private shellFocus: NodeJS.Immediate | undefined;
+  private readonly tracked = new WeakSet<FocusableContents>();
 
   constructor(
     private readonly window: FocusWindow,
@@ -53,11 +55,29 @@ export class WindowContentFocus {
     window.on("focus", () => this.restore());
   }
 
+  /** Follow focus in contents shown in this window. Contents can move between windows, so tracking twice is a no-op. */
   track(contents: FocusableContents): void {
+    if (this.tracked.has(contents)) return;
+    this.tracked.add(contents);
     contents.on("focus", () => this.focus(contents));
     // Typing into the page's docked DevTools must not be redirected to the page.
     contents.on("devtools-focused", () => this.focus(undefined));
     this.trackPresses(contents);
+  }
+
+  /** Activate the window and give keyboard focus to these contents once it is active. */
+  activate(contents: FocusableContents): void {
+    if (this.window.isDestroyed()) return;
+    if (this.window.isFocused()) {
+      if (!contents.isDestroyed() && this.canRestore(contents)) {
+        contents.focus();
+        this.focus(contents);
+      }
+      return;
+    }
+    // Restored by the window's focus event, after Electron has focused the shell.
+    this.focusedAtBlur = contents;
+    this.window.focus();
   }
 
   private trackPresses(contents: FocusableContents): void {

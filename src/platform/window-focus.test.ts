@@ -31,11 +31,18 @@ const settle = () => new Promise((resolve) => setImmediate(resolve));
 function fixture(canRestore: (contents: unknown) => boolean = () => true) {
   const owner: FocusOwner = {};
   const shell = contents(owner);
+  /** Electron focuses the window's own contents before emitting the window's focus event. */
+  const activate = () => {
+    window.active = true;
+    shell.focus();
+    window.emit("focus");
+  };
   const window = Object.assign(new EventEmitter(), {
     webContents: shell,
     active: true,
     isDestroyed: () => false,
     isFocused: () => window.active,
+    focus: vi.fn(activate),
   });
   const focus = new WindowContentFocus(window, canRestore);
   const page = contents(owner);
@@ -43,12 +50,6 @@ function fixture(canRestore: (contents: unknown) => boolean = () => true) {
   const deactivate = () => {
     window.active = false;
     window.emit("blur");
-  };
-  /** Electron focuses the window's own contents before emitting the window's focus event. */
-  const activate = () => {
-    window.active = true;
-    shell.focus();
-    window.emit("focus");
   };
   return { owner, shell, window, page, focus, deactivate, activate };
 }
@@ -215,5 +216,56 @@ describe("returning to the browser window", () => {
     page.focus.mockClear();
     activate();
     expect(page.focus).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("contents moving between windows", () => {
+  it("does not listen twice to contents tracked again after moving back", () => {
+    const { page, focus } = fixture();
+    const listeners = page.listenerCount("focus") + page.listenerCount("input-event");
+    focus.track(page);
+    expect(page.listenerCount("focus") + page.listenerCount("input-event")).toBe(listeners);
+  });
+});
+
+describe("activating the window for a page", () => {
+  it("gives the page keyboard focus once the window is active", () => {
+    const { owner, shell, window, page, focus, deactivate } = fixture();
+    shell.focus();
+    deactivate();
+    focus.activate(page);
+    expect(window.focus).toHaveBeenCalledTimes(1);
+    // Electron's own focus on the shell comes first; the page must end up with focus.
+    expect(owner.current).toBe(page);
+  });
+
+  it("focuses the page directly when the window is already active", () => {
+    const { owner, shell, window, page, focus } = fixture();
+    shell.focus();
+    focus.activate(page);
+    expect(window.focus).not.toHaveBeenCalled();
+    expect(owner.current).toBe(page);
+  });
+
+  it("leaves focus in the browser UI when the page is not shown", () => {
+    const { owner, shell, page, focus, deactivate } = fixture(() => false);
+    shell.focus();
+    deactivate();
+    focus.activate(page);
+    expect(owner.current).toBe(shell);
+  });
+
+  it("lets a click that activates the window decide instead", () => {
+    const { owner, shell, window, page, focus, deactivate } = fixture();
+    shell.focus();
+    deactivate();
+    window.focus.mockImplementationOnce(() => {
+      window.active = true;
+      shell.focus();
+      shell.press();
+      window.emit("focus");
+    });
+    focus.activate(page);
+    expect(owner.current).toBe(shell);
   });
 });
