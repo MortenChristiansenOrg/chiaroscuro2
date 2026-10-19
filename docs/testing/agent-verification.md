@@ -22,6 +22,10 @@ The same isolated profile and scenarios are used, without passing the local
 `out/main/index.js` entry point. For PDF engine regressions, run
 `bun run verify:app e2e/scenarios/mupdf.spec.ts` with that variable set.
 
+Otherwise the session refuses to run when `out/` no longer matches the
+sources and says to run `bun run build`; see
+[Stale builds](./e2e-tests.md#stale-builds).
+
 Linux's full suite uses Xvfb at 1920×1080 and Openbox. Install `xvfb`, `xauth` and
 `openbox` and `xcompmgr`; the launcher checks window-manager readiness and saves its log in
 `test-results/desktop.log`. An existing desktop can be used with

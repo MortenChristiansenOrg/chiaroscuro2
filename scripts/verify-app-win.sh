@@ -15,8 +15,10 @@ if [[ "${1:-}" == "--address-bar" ]]; then MODE=diagnose:address-bar; shift; fi
 if [[ "${1:-}" == "--native-views" ]]; then MODE=diagnose:native-views; shift; fi
 if [[ "${1:-}" == "--startup" ]]; then MODE=diagnose:startup; shift; fi
 bun run build
-rsync -a --delete out e2e src resources "$VERIFY_DIR/"
-cp package.json bun.lock bunfig.toml playwright.verification.config.ts "$VERIFY_DIR/"
+rsync -a --delete out e2e src resources scripts "$VERIFY_DIR/"
+# The session checks out/build-stamp.json against these build inputs, so copy all of them.
+cp package.json bun.lock bunfig.toml playwright.verification.config.ts electron.vite.config.ts \
+  tsconfig.json tsconfig.node.json tsconfig.web.json "$VERIFY_DIR/"
 python3 - "$VERIFY_DIR/arguments.json" "$MODE" "$@" <<'PY'
 import json, sys
 with open(sys.argv[1], 'w') as f:

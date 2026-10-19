@@ -1,6 +1,7 @@
 import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
+  globalSetup: "./e2e/automation/global-setup.ts",
   testDir: "./e2e",
   testIgnore: "**/scenarios/**",
   outputDir: "test-results/e2e",

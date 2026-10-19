@@ -30,6 +30,10 @@ src/renderer/src/components/
   TooltipLayer.tsx
   TooltipLayer.test.tsx
 
+scripts/
+  build-stamp.ts
+  build-stamp.test.ts             # build and tooling script tests (node env)
+
 e2e/
   fixtures/                       # Electron fixture, extended test
   pages/                          # Page objects (one per feature area)

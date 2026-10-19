@@ -3,6 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { type ElectronApplication, _electron as electron, type Page } from "playwright";
+import { assertFreshBuild } from "../../scripts/build-stamp";
 import type { RecordedEntry } from "../../src/features/debug-server/recorder";
 import type { DebugTarget } from "../../src/features/debug-server/targets.shared";
 import { waitUntil } from "./wait";
@@ -63,6 +64,8 @@ export class AppSession {
             : "Missing build. Run bun run build and bun run setup:electron first.",
         );
       });
+      // A build older than the sources makes old behavior look like a new bug (#137).
+      if (!packagedExecutable && this.generation === 1) assertFreshBuild(process.cwd());
       const env: NodeJS.ProcessEnv = {
         ...process.env,
         NODE_ENV: "test",
