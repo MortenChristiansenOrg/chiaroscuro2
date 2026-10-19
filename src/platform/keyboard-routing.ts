@@ -1,3 +1,5 @@
+import type { WindowKey } from "./window-arrangement";
+
 /**
  * Which window a key press acts on (#115).
  *
@@ -88,13 +90,22 @@ export function routeShortcutsToFocus<W extends RoutedWindow>(options: {
   });
 }
 
-const WINDOW_ARROWS: Record<string, "up" | "down"> = { ArrowUp: "up", ArrowDown: "down" };
+/** How long before an arrow's release a release of Shift still counts as Shift held for it. */
+const SHIFT_RELEASE_MS = 150;
+
+const WINDOW_ARROWS: Record<string, "up" | "down" | "left" | "right"> = {
+  ArrowUp: "up",
+  ArrowDown: "down",
+  ArrowLeft: "left",
+  ArrowRight: "right",
+};
 
 /**
- * Recognizes Win+Up and Win+Down, which Windows applies to the active window itself. The shell
- * takes the arrow's key press, so only its release reaches the app, while the Windows key is held
- * or just after its release. An arrow release counts when its press did not reach the app and the
- * Windows key was held for it: held now, or released with no key pressed since.
+ * Recognizes Windows' window keys, Win+arrows and Win+Shift+Up/Left/Right, which Windows applies
+ * to the active window itself. The shell takes the arrow's key press, so only its release reaches
+ * the app, while the Windows key is held or just after its release. An arrow release counts when
+ * its press did not reach the app and the Windows key was held for it: held now, or released with
+ * no key pressed since.
  */
 export class WindowArrowKeys {
   /** Arrows whose press reached the app, so the shell did not take it. */
@@ -102,11 +113,16 @@ export class WindowArrowKeys {
   private windowsKeyHeld = false;
   /** The Windows key is held, or was released with no key pressed since. */
   private windowsKey = false;
+  /** When Shift was last released while the Windows key was held. */
+  private shiftReleasedAt: number | undefined;
 
-  constructor(private readonly platform = process.platform) {}
+  constructor(
+    private readonly platform = process.platform,
+    private readonly now = Date.now,
+  ) {}
 
-  /** Follow a key event of the window; returns the arrow of a completed Win+Up or Win+Down. */
-  input(input: KeyInput): "up" | "down" | undefined {
+  /** Follow a key event of the window; returns a completed window key. */
+  input(input: KeyInput): WindowKey | undefined {
     if (this.platform !== "win32") return undefined;
     if (input.type === "keyDown" || input.type === "rawKeyDown") {
       if (input.key === "Meta") {
@@ -114,6 +130,7 @@ export class WindowArrowKeys {
         this.windowsKey = true;
       } else {
         this.windowsKey = this.windowsKeyHeld;
+        if (input.key !== "Shift") this.shiftReleasedAt = undefined;
         if (WINDOW_ARROWS[input.key]) this.pressed.add(input.key);
       }
       return undefined;
@@ -123,15 +140,27 @@ export class WindowArrowKeys {
       this.windowsKeyHeld = false;
       return undefined;
     }
+    if (input.key === "Shift") {
+      if (this.windowsKeyHeld) this.shiftReleasedAt = this.now();
+      return undefined;
+    }
     const arrow = WINDOW_ARROWS[input.key];
     if (!arrow) return undefined;
     if (this.pressed.delete(input.key)) return undefined;
-    if (!this.windowsKey || input.control || input.alt || input.shift) return undefined;
-    return arrow;
+    if (!this.windowsKey || input.control || input.alt) return undefined;
+    // The arrow's press is not seen. Shift released just before the arrow was most likely held
+    // for its press, while a tap of Shift before Win+arrow ends well before the arrow's release.
+    const shift =
+      input.shift ||
+      (this.shiftReleasedAt !== undefined && this.now() - this.shiftReleasedAt <= SHIFT_RELEASE_MS);
+    this.shiftReleasedAt = undefined;
+    if (!shift) return arrow;
+    return arrow === "down" ? undefined : `shift+${arrow}`;
   }
 
   /** Key events of a window that lost focus go elsewhere. */
   reset(): void {
+    this.shiftReleasedAt = undefined;
     this.pressed.clear();
     this.windowsKeyHeld = false;
     this.windowsKey = false;

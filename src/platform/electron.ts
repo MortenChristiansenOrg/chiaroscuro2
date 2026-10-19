@@ -55,6 +55,8 @@ import { closeTabContents, closeTabContentsAsking, createTabView } from "./tab-v
 import type { ExtensionTabActions, Platform, PlatformDownload } from "./types";
 import { isAllowedNavigation, isAllowedUrl } from "./url-policy";
 import { runWebsiteScript } from "./website-script";
+import { ActivationOrigin, WM_ACTIVATE } from "./window-activation";
+import { WindowArranger } from "./window-arrangement";
 import { WindowContentFocus } from "./window-focus";
 
 const ALLOWED_EXTERNAL_SCHEMES = new Set(["http:", "https:", "mailto:"]);
@@ -494,10 +496,13 @@ export class ElectronPlatform implements Platform {
   private paletteOverSubTab = false;
   /** The sub-tab window had keyboard focus when the app was last deactivated or minimized. */
   private subTabWinHadFocus = false;
-  /** Win+Up and Win+Down pressed in the sub-tab window (#129). */
+  /** Whether a click on the browser window activated it, rather than the taskbar or a program (#131). */
+  private readonly subTabWinParentActivation = new ActivationOrigin();
+  /** Windows' window keys pressed in the sub-tab window (#129, #134). */
   private readonly subTabWinArrows = new WindowArrowKeys();
-  /** Acting on Win+Up or Win+Down, which can briefly activate the browser window. */
+  /** Acting on a window key, which can briefly activate the browser window. */
   private forwardingWindowArrow = false;
+  private readonly windowArrangers = new WeakMap<BrowserWindow, WindowArranger>();
   private tabBoundsAnimations = new TabBoundsAnimation();
   private subTabWindowTransition = 0;
   private pendingPaletteJs: string | null = null;
@@ -546,18 +551,33 @@ export class ElectronPlatform implements Platform {
     return BrowserWindow.fromId(Number(id)) ?? undefined;
   }
 
-  /** Return keyboard focus to the page shown in this window when the user switches back to it. */
-  private contentFocus(win: BrowserWindow): WindowContentFocus {
+  /**
+   * Return keyboard focus to the page shown in this window when the user switches back to it.
+   * With `framesPage`, the window's own contents only frame the page it shows, which then takes
+   * focus instead of them.
+   */
+  private contentFocus(win: BrowserWindow, framesPage = false): WindowContentFocus {
     let focus = this.windowFocus.get(win);
     if (!focus) {
-      focus = new WindowContentFocus(win, (contents) =>
-        [...this.views.values()].some((view) => {
-          if (view.webContents !== contents || !win.contentView.children.includes(view)) {
-            return false;
-          }
-          const { width, height } = view.getBounds();
-          return width > 0 && height > 0;
-        }),
+      const shown = (view: WebContentsView) => {
+        if (!win.contentView.children.includes(view)) return false;
+        const { width, height } = view.getBounds();
+        return width > 0 && height > 0;
+      };
+      focus = new WindowContentFocus(
+        win,
+        (contents) =>
+          [...this.views.values()].some((view) => view.webContents === contents && shown(view)),
+        framesPage
+          ? () => {
+              // The topmost page shown.
+              const views = new Set<unknown>(this.views.values());
+              const page = [...win.contentView.children]
+                .reverse()
+                .find((view) => views.has(view) && shown(view as WebContentsView));
+              return (page as WebContentsView | undefined)?.webContents;
+            }
+          : undefined,
       );
       this.windowFocus.set(win, focus);
     }
@@ -1368,6 +1388,11 @@ export class ElectronPlatform implements Platform {
 
   hookWebContents(webContents: unknown): void {
     const wc = webContents as Electron.WebContents;
+    // Follow the browser window's bounds from the start, so that a window key pressed in a sub-tab
+    // can return it from a snap to the bounds it had before (#134).
+    const owner = BrowserWindow.fromWebContents(wc);
+    if (process.platform === "win32" && owner?.webContents === wc && !owner.getParentWindow())
+      this.windowArranger(owner);
     const heldWebsiteKeys = new Set<string>();
     wc.on("before-input-event", (_event, input) => {
       const key = input.code || input.key.toLowerCase();
@@ -1405,32 +1430,37 @@ export class ElectronPlatform implements Platform {
   }
 
   /**
-   * Windows ignores Win+Up and Win+Down in the sub-tab window, which cannot be maximized or
-   * minimized on its own. Like other keys pressed there, they act on the browser window (#129).
+   * Windows ignores its window keys (Win+arrows) in the sub-tab window, which cannot be snapped,
+   * maximized or minimized on its own. Like other keys pressed there, they act on the browser
+   * window (#129, #134).
    */
   private forwardWindowArrowKey(input: Electron.Input): void {
     const overlay = this.subTabWin;
     if (!overlay || overlay.isDestroyed() || !overlay.isFocused()) return;
-    const arrow = this.subTabWinArrows.input(input);
-    if (!arrow) return;
+    const key = this.subTabWinArrows.input(input);
+    if (!key) return;
     const win = this.shortcutWindow(overlay);
     if (!win || win.isDestroyed()) return;
-    if (arrow === "down" && !win.isMaximized()) {
-      // Restoring the browser window returns focus to the sub-tab page.
-      win.minimize();
-      return;
-    }
-    if (arrow === "up" && win.isMaximized()) return;
     // Maximizing and restoring activate the browser window. Typing stays in the sub-tab page, and
     // the Windows key can stay held for another arrow.
     this.forwardingWindowArrow = true;
     try {
-      if (arrow === "up") win.maximize();
-      else win.unmaximize();
-      if (!overlay.isDestroyed()) overlay.focus();
+      const done = this.windowArranger(win).press(key);
+      // Restoring the minimized browser window returns focus to the sub-tab page.
+      if (done === "minimize") this.subTabWinArrows.reset();
+      else if (done !== "none" && !overlay.isDestroyed()) overlay.focus();
     } finally {
       this.forwardingWindowArrow = false;
     }
+  }
+
+  private windowArranger(win: BrowserWindow): WindowArranger {
+    let arranger = this.windowArrangers.get(win);
+    if (!arranger) {
+      arranger = new WindowArranger(win, screen);
+      this.windowArrangers.set(win, arranger);
+    }
+    return arranger;
   }
 
   private matchesAccelerator(input: Electron.Input, accelerator: string): boolean {
@@ -1601,7 +1631,7 @@ export class ElectronPlatform implements Platform {
     // Escape and browser shortcuts must work after clicking the backdrop or its buttons.
     this.hookWebContents(overlay.webContents);
     // Returning to the browser must give focus back to the sub-tab page, not the backdrop.
-    this.contentFocus(overlay);
+    this.contentFocus(overlay, true);
     overlay.on("focus", () => {
       // The window stays shown but transparent and click-through while no sub-tab is open.
       // If Windows activates it anyway, for example after another window closed, move on.
@@ -1647,9 +1677,20 @@ export class ElectronPlatform implements Platform {
       parent.on("resize", () => this.syncSubTabWinBounds());
       // Windows moves a minimized window off-screen and does not report its return as a move.
       parent.on("restore", () => this.syncSubTabWinBounds());
-      // The taskbar, Alt-Tab and restoring the minimized window can activate the browser window
-      // instead of the sub-tab window. Typing then still belongs in the sub-tab page.
-      parent.on("focus", () => setImmediate(() => this.forwardFocusToSubTabWindow(parent)));
+      // The taskbar, Alt-Tab, restoring the minimized window, the app itself and other programs
+      // can activate the browser window instead of the sub-tab window. Typing then still belongs
+      // in the sub-tab page, wherever the pointer is (#131).
+      const activation = this.subTabWinParentActivation;
+      if (process.platform === "win32") {
+        parent.hookWindowMessage(WM_ACTIVATE, (wParam) =>
+          activation.activateMessage(wParam.readUInt16LE(0)),
+        );
+      }
+      this.contentFocus(parent).onPress(() => activation.press());
+      parent.on("blur", () => activation.blur());
+      parent.on("focus", () =>
+        activation.focus((clicked) => this.forwardFocusToSubTabWindow(parent, clicked)),
+      );
       parent.on("close", () => {
         this.subTabWinParentClosing = true;
         // Closing the browser window can be cancelled.
@@ -1661,7 +1702,7 @@ export class ElectronPlatform implements Platform {
     }
   }
 
-  private forwardFocusToSubTabWindow(parent: BrowserWindow): void {
+  private forwardFocusToSubTabWindow(parent: BrowserWindow, clicked: boolean): void {
     const overlay = this.subTabWin;
     if (!this.subTabWinHadFocus || !overlay || overlay.isDestroyed() || parent.isDestroyed())
       return;
@@ -1672,16 +1713,8 @@ export class ElectronPlatform implements Platform {
     }
     // Minimizing hides the sub-tab window and activates the browser window on its way out.
     if (parent.isMinimized() || !overlay.isVisible()) return;
-    // With the pointer over the browser window, a click there may have activated it. Keep the
-    // focus the click gives. The taskbar and window switchers are outside the window.
-    const pointer = screen.getCursorScreenPoint();
-    const bounds = parent.getBounds();
-    if (
-      pointer.x >= bounds.x &&
-      pointer.y >= bounds.y &&
-      pointer.x < bounds.x + bounds.width &&
-      pointer.y < bounds.y + bounds.height
-    ) {
+    // A click on the browser's own UI, such as its sidebar or toolbar, keeps the focus it gives.
+    if (clicked) {
       this.subTabWinHadFocus = false;
       return;
     }

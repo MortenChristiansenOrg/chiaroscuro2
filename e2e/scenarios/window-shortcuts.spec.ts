@@ -334,12 +334,10 @@ test("Windows desktop keys in a sub-tab and a popup act on the right window", as
         .find((win) => !win.getParentWindow())
         ?.restore();
     });
-    // Restoring from the taskbar returns focus to the sub-tab page (page-focus.spec.ts). Here the
-    // pointer is over the window, which keeps the focus a click would give (#131).
-    await windowsInput(session, {
-      click: { webContentsId: childTab.webContentsId, locator: child.message },
-    });
-    await windowsInput(session, { keys: "{END}d" });
+    // Restoring it without a click returns typing to the sub-tab page, even with the pointer
+    // resting over the browser window (#131).
+    await expect.poll(() => focusedContents(session)).toBe(childTab.webContentsId);
+    await windowsInput(session, { keys: "d" });
     await expect(child.message).toHaveValue("abcd");
 
     // Ctrl+W in a website popup closes the popup, not a browser tab or the sub-tab.
@@ -364,6 +362,102 @@ test("Windows desktop keys in a sub-tab and a popup act on the right window", as
       (targets) => !targets.some((target) => target.id === popup.id),
     );
     expect(await tabCount(session)).toBe(tabs);
+  } finally {
+    await site.close();
+  }
+});
+
+/** The browser window's bounds, and the work area of its display. */
+const browserWindowPlacement = (session: AppSession) =>
+  session.app.evaluate(({ BrowserWindow, screen }) => {
+    const main = BrowserWindow.getAllWindows().find((win) => !win.getParentWindow());
+    if (!main) throw new Error("No browser window");
+    const display = screen.getDisplayMatching(main.getBounds());
+    return {
+      bounds: main.getBounds(),
+      maximized: main.isMaximized(),
+      area: display.workArea,
+      displays: screen.getAllDisplays().length,
+    };
+  });
+
+// #134: Windows ignored Win+Left, Win+Right and Win+Shift+arrows in the sub-tab window, which
+// cannot be snapped. They arrange the browser window as Windows does, and typing stays in the page.
+test("Windows window keys in a sub-tab snap and stretch the browser window", async ({
+  appSession: session,
+}) => {
+  test.skip(process.platform !== "win32", "Requires Windows desktop input");
+  test.setTimeout(120_000);
+  const site = await startSite();
+  try {
+    const { parent, parentTab } = await openSubTab(session, site.url);
+    const restored = await session.app.evaluate(({ BrowserWindow, screen }) => {
+      const main = BrowserWindow.getAllWindows().find((win) => !win.getParentWindow());
+      if (!main) throw new Error("No browser window");
+      if (main.isMaximized()) main.unmaximize();
+      const area = screen.getDisplayMatching(main.getBounds()).workArea;
+      const bounds = {
+        x: area.x + 40,
+        y: area.y + 30,
+        width: Math.round(area.width * 0.6),
+        height: Math.round(area.height * 0.7),
+      };
+      main.setBounds(bounds);
+      return main.getBounds();
+    });
+    await windowsPointer(session, { x: 4, y: 400 });
+    await windowsInput(session, {
+      click: { webContentsId: parentTab.webContentsId, locator: parent.subTab },
+    });
+    const { child, childTab } = await subTabPage(session, site.url);
+    await windowsInput(session, {
+      click: { webContentsId: childTab.webContentsId, locator: child.message },
+    });
+    const { area, displays } = await browserWindowPlacement(session);
+    const half = Math.floor(area.width / 2);
+    const left = { x: area.x, y: area.y, width: half, height: area.height };
+    const right = { x: area.x + half, y: area.y, width: area.width - half, height: area.height };
+    const topRight = { ...right, height: Math.floor(area.height / 2) };
+
+    let typed = "";
+    /** Press a window key, check the browser window's bounds, and that typing reaches the page. */
+    const press = async (
+      key: "Left" | "Right" | "Up" | "Down" | "Shift+Up",
+      bounds: typeof restored,
+      letter: string,
+    ) => {
+      await windowsInput(session, { windowsArrows: [key] });
+      await expect
+        .poll(async () => (await browserWindowPlacement(session)).bounds, { message: key })
+        .toEqual(bounds);
+      expect(await hasSubTab(session)).toBe(true);
+      await expect.poll(() => focusedContents(session)).toBe(childTab.webContentsId);
+      await windowsInput(session, { keys: letter });
+      typed += letter;
+      await expect(child.message).toHaveValue(typed);
+    };
+
+    await press("Left", left, "a");
+    await press("Right", restored, "b");
+    await press("Right", right, "c");
+    await press("Up", topRight, "d");
+    await press("Down", right, "e");
+    // Past the last display, Win+Right continues from the first: here, its left side.
+    if (displays === 1) await press("Right", left, "f");
+    await press("Left", displays === 1 ? right : restored, "g");
+    if (displays === 1) await press("Left", restored, "h");
+    await press("Shift+Up", { ...restored, y: area.y, height: area.height }, "i");
+    await press("Down", restored, "j");
+    // The sub-tab window covers the browser window's content area wherever it goes.
+    const overlay = await session.target((target) => target.kind === "sub-tab-frame");
+    const content = await session.app.evaluate(({ BrowserWindow }) => {
+      const main = BrowserWindow.getAllWindows().find((win) => !win.getParentWindow());
+      return main?.getContentBounds();
+    });
+    expect(overlay.bounds.x).toBeGreaterThanOrEqual(content?.x ?? Number.NaN);
+    expect(overlay.bounds.x + overlay.bounds.width).toBeLessThanOrEqual(
+      (content?.x ?? Number.NaN) + (content?.width ?? Number.NaN),
+    );
   } finally {
     await site.close();
   }

@@ -65,7 +65,7 @@
   about 1 s. Windows `session-end` and `powerMonitor` `shutdown` skip asking. Termination
   signals reach Chromium's own handler, which quits normally and may ask; Node signal
   listeners never run, and a second signal kills the process.
-- Keyboard focus: outside macOS, Electron focuses the window's own (shell) WebContents whenever the window is activated. `WindowContentFocus` (`src/platform/window-focus.ts`) remembers which shown page had focus when the window was deactivated and focuses it again, so a page input stays typeable after switching to another app or closing the command palette. A click or touch that activates the window keeps the focus it gives (#114). Sub-tabs are shown in a child window that can be activated so their pages can take keyboard focus (#124). It has its own `WindowContentFocus`; `returnFocusFromSubTabWindow` moves focus back to the browser window's page when the last sub-tab closes.
+- Keyboard focus: outside macOS, Electron focuses the window's own (shell) WebContents whenever the window is activated. `WindowContentFocus` (`src/platform/window-focus.ts`) remembers which shown page had focus when the window was deactivated and focuses it again, so a page input stays typeable after switching to another app or closing the command palette. A click or touch that activates the window keeps the focus it gives (#114). Sub-tabs are shown in a child window that can be activated so their pages can take keyboard focus (#124). It has its own `WindowContentFocus`; `returnFocusFromSubTabWindow` moves focus back to the browser window's page when the last sub-tab closes. Its own contents only frame the sub-tab page, so activating it returns focus to the page rather than the frame: Electron can report the frame's focus on an activation before the window's earlier blur. An activation that ends before its focus event runs leaves the page to restore for the next one. When the browser window is activated while a sub-tab page had focus, focus moves on to the sub-tab window unless a click or touch on the browser window activated it (`ActivationOrigin`, `src/platform/window-activation.ts`, #131). On Windows, `WM_ACTIVATE`'s `WA_CLICKACTIVE` tells, before the focus event; `WM_MOUSEACTIVATE` does not reach the browser window because Chromium's child window under the pointer handles it. Elsewhere a press in the browser window's contents within 100 ms of its activation counts as the click.
 - Web tabs use `setZoomMode("isolated")`: zoom belongs to each WebContents, including sub-tabs and adopted contents, while cookies/session sharing is unchanged. Keyboard zoom targets the topmost sub-tab when open. PDF reader zoom is independent.
 - Multi-window support from day 1
 - **Per-tab session isolation**: Use `session.fromPartition('persist:tab-{id}')` for isolated tabs
@@ -94,6 +94,13 @@ See `docs/features/SidebarFeature.specs.md`, `docs/features/TabsFeature.specs.md
   which then takes focus.
 - A window shown as part of the browser handles its own keys first. The command palette
   consumes its Escape, so it never reaches the sub-tab's Escape (#130).
+- Windows ignores its window keys (Win+arrows, Win+Shift+arrows) in the sub-tab window,
+  which cannot be snapped, maximized or minimized. Only the arrow's release reaches the app
+  (`WindowArrowKeys`). `WindowArranger` (`src/platform/window-arrangement.ts`) then arranges
+  the browser window as Windows 11 does, measured with the keys on the browser window:
+  halves, quarters, maximize/minimize, full height and other monitors, and back to the bounds
+  from before (#129, #134). Electron has no snapping API, so Windows does not know the window
+  is snapped: Snap Assist and snap groups do not apply.
 - Custom shortcut registry with rebinding support
 - Vim-style keybindings optional
 

@@ -103,11 +103,36 @@ describe("WindowArrowKeys", () => {
     expect(run(keys, events)).toEqual([]);
   });
 
-  it("ignores arrows without the Windows key, with other modifiers, and other arrows", () => {
+  it("reports Win+Left and Win+Right (#134)", () => {
+    const keys = new WindowArrowKeys("win32");
+    expect(run(keys, [winDown(), event("keyUp", "ArrowLeft", true), winUp()])).toEqual(["left"]);
+    expect(run(keys, [winDown(), event("keyUp", "ArrowRight", true), winUp()])).toEqual(["right"]);
+  });
+
+  it("reports Win+Shift+Up, Left and Right (#134)", () => {
+    const keys = new WindowArrowKeys("win32");
+    // As recorded on Windows: the Shift press reaches the page, the arrow's press does not.
+    const withShift = (arrow: string) => [
+      winDown(),
+      event("keyDown", "Shift", true, { shift: true }),
+      event("keyUp", arrow, true, { shift: true }),
+      event("keyUp", "Shift", true),
+      winUp(),
+    ];
+    expect(run(keys, withShift("ArrowUp"))).toEqual(["shift+up"]);
+    expect(run(keys, withShift("ArrowLeft"))).toEqual(["shift+left"]);
+    expect(run(keys, withShift("ArrowRight"))).toEqual(["shift+right"]);
+  });
+
+  it("ignores arrows without the Windows key, with other modifiers, and Win+Shift+Down", () => {
     const keys = new WindowArrowKeys("win32");
     expect(run(keys, [event("keyUp", "ArrowDown", false)])).toEqual([]);
     expect(run(keys, [winDown(), event("keyUp", "ArrowDown", true, { shift: true })])).toEqual([]);
-    expect(run(keys, [winDown(), event("keyUp", "ArrowLeft", true)])).toEqual([]);
+    expect(run(keys, [winDown(), event("keyUp", "ArrowLeft", true, { control: true })])).toEqual(
+      [],
+    );
+    expect(run(keys, [winDown(), event("keyUp", "ArrowRight", true, { alt: true })])).toEqual([]);
+    expect(run(keys, [winDown(), event("keyUp", "Home", true)])).toEqual([]);
     // A key press after the Windows key's release ends the gesture.
     expect(
       run(keys, [
@@ -120,15 +145,32 @@ describe("WindowArrowKeys", () => {
   });
 
   it("keeps the gesture while the Windows key stays held through other keys", () => {
-    const keys = new WindowArrowKeys("win32");
+    let now = 0;
+    const keys = new WindowArrowKeys("win32", () => now);
     // Hold Win, tap Shift, then Win+Up.
-    const events = [
-      winDown(),
-      event("keyDown", "Shift", true, { shift: true }),
-      event("keyUp", "Shift", true),
-      event("keyUp", "ArrowUp", true),
-    ];
-    expect(run(keys, events)).toEqual(["up"]);
+    expect(
+      run(keys, [
+        winDown(),
+        event("keyDown", "Shift", true, { shift: true }),
+        event("keyUp", "Shift", true),
+      ]),
+    ).toEqual([]);
+    now += 400;
+    expect(run(keys, [event("keyUp", "ArrowUp", true)])).toEqual(["up"]);
+  });
+
+  it("reports Win+Shift+arrow when Shift is released just before the arrow", () => {
+    let now = 0;
+    const keys = new WindowArrowKeys("win32", () => now);
+    keys.input(winDown());
+    keys.input(event("keyDown", "Shift", true, { shift: true }));
+    // The shell takes the arrow's press here.
+    keys.input(event("keyUp", "Shift", true));
+    now += 40;
+    expect(keys.input(event("keyUp", "ArrowUp", true))).toBe("shift+up");
+    // Only for that arrow.
+    now += 40;
+    expect(keys.input(event("keyUp", "ArrowLeft", true))).toBe("left");
   });
 
   it("keeps ignoring a held arrow after a Win+arrow of another arrow", () => {

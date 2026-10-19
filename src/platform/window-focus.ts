@@ -28,13 +28,25 @@ const PRESS_EVENTS = new Set(["mouseDown", "touchStart"]);
 export class WindowContentFocus {
   private focused: FocusableContents | undefined;
   private focusedAtBlur: FocusableContents | undefined;
+  /**
+   * The window was deactivated and has not been active for its focus event since. Activations
+   * that end before their focus event runs leave the page to restore as it was (#131).
+   */
+  private awaitingRestore = false;
   private shellFocus: NodeJS.Immediate | undefined;
   private readonly tracked = new WeakSet<FocusableContents>();
+  private readonly pressListeners = new Set<() => void>();
 
   constructor(
     private readonly window: FocusWindow,
     /** Only contents that are still shown in this window may take focus back. */
     private readonly canRestore: (contents: FocusableContents) => boolean,
+    /**
+     * For a window whose own contents only frame a page, such as the sub-tab window: the page to
+     * return to instead of the frame. Electron reports focus moving to the frame on activation
+     * before it reports the window's earlier deactivation, so the frame can look like it had focus.
+     */
+    private readonly framedPage?: () => FocusableContents | undefined,
   ) {
     const shell = window.webContents;
     shell.on("focus", () => {
@@ -49,6 +61,8 @@ export class WindowContentFocus {
     this.trackPresses(shell);
     window.on("blur", () => {
       this.cancelShellFocus();
+      if (this.awaitingRestore) return;
+      this.awaitingRestore = true;
       this.focusedAtBlur = this.focused;
     });
     // Electron emits this after it has focused the shell, so the page's focus wins.
@@ -77,14 +91,26 @@ export class WindowContentFocus {
     }
     // Restored by the window's focus event, after Electron has focused the shell.
     this.focusedAtBlur = contents;
+    this.awaitingRestore = true;
     this.window.focus();
+  }
+
+  /** Follow mouse and touch presses in this window's own contents and the contents it shows. */
+  onPress(listener: () => void): () => void {
+    this.pressListeners.add(listener);
+    return () => this.pressListeners.delete(listener);
   }
 
   private trackPresses(contents: FocusableContents): void {
     contents.on("input-event", (_event, input) => {
       if (!PRESS_EVENTS.has(input.type)) return;
+      // Contents tracked here may have moved to another window since.
+      if (contents === this.window.webContents || this.canRestore(contents)) {
+        for (const listener of this.pressListeners) listener();
+      }
       // The click came before the window's focus event: nothing to restore.
       this.focusedAtBlur = undefined;
+      this.awaitingRestore = false;
       // The click came after focus was restored elsewhere: follow the click.
       if (!contents.isDestroyed() && !contents.isFocused()) contents.focus();
     });
@@ -101,13 +127,21 @@ export class WindowContentFocus {
   }
 
   private restore(): void {
-    const contents = this.focusedAtBlur;
+    if (this.window.isDestroyed()) return;
+    // Focus events are queued; the window may have lost activation again since. The shell's
+    // focus on that activation is Electron's, and the page still waits for the next one.
+    if (!this.window.isFocused()) {
+      this.cancelShellFocus();
+      return;
+    }
+    const contents =
+      this.focusedAtBlur === this.window.webContents && this.framedPage
+        ? this.framedPage()
+        : this.focusedAtBlur;
     this.focusedAtBlur = undefined;
+    this.awaitingRestore = false;
     if (
       !contents ||
-      this.window.isDestroyed() ||
-      // Focus events are queued; the window may have lost activation again since.
-      !this.window.isFocused() ||
       contents === this.window.webContents ||
       contents.isDestroyed() ||
       !this.canRestore(contents)

@@ -22,6 +22,7 @@ public class VerificationPointer {
   [DllImport("user32.dll")] public static extern bool AttachThreadInput(uint source, uint target, bool attach);
   [DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(POINT point);
   [DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr window, uint flags);
+  [DllImport("user32.dll")] public static extern IntPtr GetWindow(IntPtr window, uint command);
   [DllImport("user32.dll")] public static extern IntPtr SendMessageTimeout(IntPtr window, uint message, UIntPtr wParam, IntPtr lParam, uint flags, uint timeout, out UIntPtr result);
   [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
 }
@@ -51,8 +52,16 @@ try {
   if ($targetAttached) { [VerificationPointer]::AttachThreadInput($inputThread, $targetThread, $false) | Out-Null }
   if ($attached) { [VerificationPointer]::AttachThreadInput($inputThread, $foregroundThread, $false) | Out-Null }
 }
+# The window may hand the foreground on to a window it owns, such as its sub-tab window (#131).
+function Foreground-Owner {
+  $foreground = [VerificationPointer]::GetForegroundWindow()
+  # GW_OWNER
+  $owner = [VerificationPointer]::GetWindow($foreground, 4)
+  if ($owner -ne [IntPtr]::Zero) { return $owner.ToInt64() }
+  return $foreground.ToInt64()
+}
 $focusDeadline = [DateTime]::UtcNow.AddSeconds(1)
-while ([VerificationPointer]::GetForegroundWindow().ToInt64() -ne $ExpectedWindow -and [DateTime]::UtcNow -lt $focusDeadline) {
+while ((Foreground-Owner) -ne $ExpectedWindow -and [DateTime]::UtcNow -lt $focusDeadline) {
   Start-Sleep -Milliseconds 20
 }
 if (-not [VerificationPointer]::SetCursorPos($X, $Y)) { throw 'Cannot move desktop pointer' }
@@ -60,7 +69,7 @@ $point = New-Object VerificationPointer+POINT
 if (-not [VerificationPointer]::GetCursorPos([ref]$point)) { throw 'Cannot observe desktop pointer' }
 $root = [VerificationPointer]::GetAncestor([VerificationPointer]::WindowFromPoint($point), 2).ToInt64()
 $foreground = [VerificationPointer]::GetForegroundWindow().ToInt64()
-if ($root -ne $ExpectedWindow -or $foreground -ne $ExpectedWindow) {
+if ($root -ne $ExpectedWindow -or (Foreground-Owner) -ne $ExpectedWindow) {
   throw "Owned window $ExpectedWindow is obscured or unfocused (pointer window $root, foreground $foreground)"
 }
 if ($point.X -ne $X -or $point.Y -ne $Y) { throw 'Pointer did not reach the requested position' }
