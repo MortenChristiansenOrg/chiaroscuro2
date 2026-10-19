@@ -108,20 +108,46 @@ describe("WindowArrowKeys", () => {
     expect(run(keys, [event("keyUp", "ArrowDown", false)])).toEqual([]);
     expect(run(keys, [winDown(), event("keyUp", "ArrowDown", true, { shift: true })])).toEqual([]);
     expect(run(keys, [winDown(), event("keyUp", "ArrowLeft", true)])).toEqual([]);
-    // Another key press after the Windows key ends the gesture.
+    // A key press after the Windows key's release ends the gesture.
     expect(
-      run(keys, [winDown(), event("keyDown", "a", true), event("keyUp", "ArrowUp", true)]),
+      run(keys, [
+        winDown(),
+        winUp(),
+        event("keyDown", "a", false),
+        event("keyUp", "ArrowUp", false),
+      ]),
     ).toEqual([]);
   });
 
-  it("forgets the Windows key when focus leaves, unless it stays held for another arrow", () => {
+  it("keeps the gesture while the Windows key stays held through other keys", () => {
+    const keys = new WindowArrowKeys("win32");
+    // Hold Win, tap Shift, then Win+Up.
+    const events = [
+      winDown(),
+      event("keyDown", "Shift", true, { shift: true }),
+      event("keyUp", "Shift", true),
+      event("keyUp", "ArrowUp", true),
+    ];
+    expect(run(keys, events)).toEqual(["up"]);
+  });
+
+  it("keeps ignoring a held arrow after a Win+arrow of another arrow", () => {
+    const keys = new WindowArrowKeys("win32");
+    // Hold Down, then Win+Up, then release Down.
+    const events = [
+      event("keyDown", "ArrowDown", false),
+      winDown(),
+      event("keyUp", "ArrowUp", true),
+      event("keyUp", "ArrowDown", true),
+    ];
+    expect(run(keys, events)).toEqual(["up"]);
+  });
+
+  it("forgets the gesture when focus leaves", () => {
     const keys = new WindowArrowKeys("win32");
     keys.input(winDown());
     keys.reset();
-    expect(keys.input(event("keyUp", "ArrowUp", false))).toBeUndefined();
-    keys.input(winDown());
-    keys.reset({ keepWindowsKey: true });
-    expect(keys.input(event("keyUp", "ArrowUp", true))).toBe("up");
+    expect(keys.input(event("keyUp", "ArrowUp", true))).toBeUndefined();
   });
 
   it("does nothing outside Windows", () => {

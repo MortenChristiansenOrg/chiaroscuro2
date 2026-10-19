@@ -1326,9 +1326,11 @@ export class ElectronPlatform implements Platform {
       }
       this.subTabWinHadFocus = true;
     });
-    overlay.on("blur", () =>
-      this.subTabWinArrows.reset({ keepWindowsKey: this.forwardingWindowArrow }),
-    );
+    // Acting on Win+Up or Win+Down can activate the browser window for a moment. The keys
+    // still held then, the Windows key and any arrows, stay part of the gesture.
+    overlay.on("blur", () => {
+      if (!this.forwardingWindowArrow) this.subTabWinArrows.reset();
+    });
     // Alt+F4 closes the active window. In a sub-tab, it is meant for the browser window.
     overlay.on("close", (event) => {
       if (this.subTabWinParentClosing || parent.isDestroyed()) return;

@@ -92,12 +92,15 @@ const WINDOW_ARROWS: Record<string, "up" | "down"> = { ArrowUp: "up", ArrowDown:
 
 /**
  * Recognizes Win+Up and Win+Down, which Windows applies to the active window itself. The shell
- * takes the arrow's key press, so only its release reaches the app, after the Windows key's own
- * press and possibly after its release. An arrow release counts when its press did not reach the
- * app and the Windows key was pressed since the last key press that did.
+ * takes the arrow's key press, so only its release reaches the app, while the Windows key is held
+ * or just after its release. An arrow release counts when its press did not reach the app and the
+ * Windows key was held for it: held now, or released with no key pressed since.
  */
 export class WindowArrowKeys {
+  /** Arrows whose press reached the app, so the shell did not take it. */
   private readonly pressed = new Set<string>();
+  private windowsKeyHeld = false;
+  /** The Windows key is held, or was released with no key pressed since. */
   private windowsKey = false;
 
   constructor(private readonly platform = process.platform) {}
@@ -107,28 +110,30 @@ export class WindowArrowKeys {
     if (this.platform !== "win32") return undefined;
     if (input.type === "keyDown" || input.type === "rawKeyDown") {
       if (input.key === "Meta") {
+        this.windowsKeyHeld = true;
         this.windowsKey = true;
       } else {
-        this.windowsKey = false;
+        this.windowsKey = this.windowsKeyHeld;
         if (WINDOW_ARROWS[input.key]) this.pressed.add(input.key);
       }
       return undefined;
     }
     if (input.type !== "keyUp") return undefined;
+    if (input.key === "Meta") {
+      this.windowsKeyHeld = false;
+      return undefined;
+    }
     const arrow = WINDOW_ARROWS[input.key];
     if (!arrow) return undefined;
-    // The press reached the app, so the shell did not take it.
     if (this.pressed.delete(input.key)) return undefined;
     if (!this.windowsKey || input.control || input.alt || input.shift) return undefined;
     return arrow;
   }
 
-  /**
-   * Key events of a window that lost focus go elsewhere. A Windows key that stays held while
-   * focus comes back, as after a Win+Up that activated another window, can still be used.
-   */
-  reset({ keepWindowsKey = false } = {}): void {
+  /** Key events of a window that lost focus go elsewhere. */
+  reset(): void {
     this.pressed.clear();
-    if (!keepWindowsKey) this.windowsKey = false;
+    this.windowsKeyHeld = false;
+    this.windowsKey = false;
   }
 }
