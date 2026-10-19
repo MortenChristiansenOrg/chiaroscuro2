@@ -192,6 +192,23 @@ describe("returning to the browser window", () => {
     expect(page.focus).not.toHaveBeenCalled();
   });
 
+  it("returns to the page on the next activation when one ended before its focus event ran", async () => {
+    // Recorded on Windows: another program activated the browser window twice in quick
+    // succession, and the first activation had ended when its focus event ran.
+    const { shell, window, page, deactivate, activate } = fixture();
+    page.focus();
+    await settle();
+    deactivate();
+    shell.focus();
+    window.emit("focus");
+    await settle();
+    deactivate();
+    await settle();
+    page.focus.mockClear();
+    activate();
+    expect(page.focus).toHaveBeenCalledTimes(1);
+  });
+
   it("restores only once per deactivation", async () => {
     const { window, page, deactivate, activate } = fixture();
     page.focus();
