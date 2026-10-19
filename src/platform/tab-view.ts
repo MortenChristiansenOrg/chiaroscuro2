@@ -115,8 +115,9 @@ export function untilDocumentReplaced<T>(
     };
     const onReplaced = () =>
       finish(() => reject(new Error("The page changed before its CSS was updated")));
-    // Error pages commit without did-navigate. A failure that keeps the old page still
-    // rejects; `discardLate` removes the style its late answer applied.
+    // Error pages commit without did-navigate, and did-fail-load does not say whether the
+    // failure kept the old page. Reject either way: `discardLate` removes a late answer's
+    // style, and the did-stop-loading that follows every failure makes callers apply again.
     const onFailedLoad = (...args: unknown[]) => {
       if (args[4] === true) onReplaced();
     };
