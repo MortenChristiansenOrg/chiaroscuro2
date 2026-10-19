@@ -222,6 +222,20 @@ export class AppSession {
     return target;
   }
 
+  /**
+   * Run an action that opens a target, such as clicking a button that opens a popup, and wait
+   * for a matching target that did not exist before it. An earlier one may still be closing.
+   */
+  async targetOpenedBy(
+    predicate: (target: DebugTarget) => boolean,
+    open: () => Promise<unknown>,
+    timeoutMs = 5_000,
+  ): Promise<DebugTarget> {
+    const before = new Set((await this.targets()).map((target) => target.cdpTargetId));
+    await open();
+    return this.target((target) => !before.has(target.cdpTargetId) && predicate(target), timeoutMs);
+  }
+
   async page(target: DebugTarget, timeoutMs = 5_000): Promise<Page> {
     const cached = this.pages.get(target.cdpTargetId);
     if (cached && !cached.isClosed()) return cached;

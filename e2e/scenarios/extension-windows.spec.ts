@@ -62,7 +62,13 @@ async function launch(app: AppSession) {
 const popoutWindows = (app: AppSession) =>
   app.app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()
-      .filter((win) => win.webContents.getURL().includes("uilocation=popout"))
+      // A closing window, such as the action popup, stays listed after its contents are destroyed.
+      .filter(
+        (win) =>
+          !win.isDestroyed() &&
+          !win.webContents.isDestroyed() &&
+          win.webContents.getURL().includes("uilocation=popout"),
+      )
       .map((win) => ({ id: win.id, menuBar: win.isMenuBarVisible() })),
   );
 
@@ -78,10 +84,11 @@ const closed = (app: AppSession) =>
 async function openPopout(app: AppSession, search = "?uilocation=popout") {
   const toggle = app.shell.getByRole("button", { name: "Extensions", exact: true });
   if ((await toggle.getAttribute("aria-expanded")) !== "true") await toggle.click();
-  await app.shell.getByRole("button", { name: "Compatibility fixture", exact: true }).click();
+  // A previous action popup can still be closing; act in the one this click opens.
   const popup = await app.page(
-    await app.target(
+    await app.targetOpenedBy(
       (target) => target.url.startsWith("chrome-extension:") && target.url.endsWith("/popup.html"),
+      () => app.shell.getByRole("button", { name: "Compatibility fixture", exact: true }).click(),
     ),
   );
   // The focused window closes the popup.

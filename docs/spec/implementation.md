@@ -58,6 +58,10 @@ has no dependency on `electron-chrome-extensions`.
 - Resolve manifest keyboard commands locally with browser-shortcut priority, worker wake-up,
   listener readiness, and cancellation when the selected document changes. Route action
   shortcuts and `action.openPopup` through the existing native extension popup.
+- The action popup closes when it loses focus, including to a window the extension opens
+  from it. Only focus returning to the browser window in the 200 ms after it shows (the
+  opening click) keeps it open. Opening it again replaces it; the old popup's late events
+  never act on the new one.
 - Supply browser tab/window operations and selected navigation, menu, permission
   and notification APIs through `src/platform/extension-runtime.ts`. Only loaded
   extension frames/workers in the shared session can invoke these operations.
