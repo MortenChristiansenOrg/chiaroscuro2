@@ -5,7 +5,7 @@ import {
   isCloseWindowInput,
   routeShortcutsToFocus,
   shortcutWindow,
-  windowArrowKey,
+  WindowArrowKeys,
 } from "./keyboard-routing";
 
 const key = (overrides: Partial<Parameters<typeof isCloseWindowInput>[0]> = {}) => ({
@@ -64,29 +64,69 @@ describe("isCloseWindowInput", () => {
   });
 });
 
-describe("windowArrowKey", () => {
-  const arrow = (overrides: Record<string, unknown> = {}) =>
-    key({
-      type: "keyUp",
-      key: "ArrowDown",
-      code: "ArrowDown",
-      control: false,
-      meta: true,
-      ...overrides,
-    });
+describe("WindowArrowKeys", () => {
+  /** A key event as the sub-tab window sees it; the shell takes Win+arrow presses. */
+  const event = (type: "keyDown" | "keyUp", name: string, meta: boolean, extra = {}) =>
+    key({ type, key: name, code: name, control: false, meta, ...extra });
+  const winDown = () => event("keyDown", "Meta", true);
+  const winUp = () => event("keyUp", "Meta", false);
 
-  it("reports the release of Win+Up and Win+Down on Windows", () => {
-    expect(windowArrowKey(arrow(), "win32")).toBe("down");
-    expect(windowArrowKey(arrow({ key: "ArrowUp", code: "ArrowUp" }), "win32")).toBe("up");
+  /** Feed the events and collect what the gesture reports. */
+  const run = (keys: WindowArrowKeys, events: ReturnType<typeof event>[]) =>
+    events.map((input) => keys.input(input)).filter(Boolean);
+
+  it("reports Win+Up and Win+Down when the arrow is released first", () => {
+    const keys = new WindowArrowKeys("win32");
+    expect(run(keys, [winDown(), event("keyUp", "ArrowUp", true), winUp()])).toEqual(["up"]);
+    expect(run(keys, [winDown(), event("keyUp", "ArrowDown", true), winUp()])).toEqual(["down"]);
   });
 
-  it("ignores key presses, other arrows, other modifiers and other platforms", () => {
-    expect(windowArrowKey(arrow({ type: "keyDown" }), "win32")).toBeUndefined();
-    expect(windowArrowKey(arrow({ key: "ArrowLeft", code: "ArrowLeft" }), "win32")).toBeUndefined();
-    expect(windowArrowKey(arrow({ meta: false }), "win32")).toBeUndefined();
-    expect(windowArrowKey(arrow({ shift: true }), "win32")).toBeUndefined();
-    expect(windowArrowKey(arrow({ control: true }), "win32")).toBeUndefined();
-    expect(windowArrowKey(arrow(), "linux")).toBeUndefined();
+  it("reports Win+Down when the Windows key is released first", () => {
+    const keys = new WindowArrowKeys("win32");
+    expect(run(keys, [winDown(), winUp(), event("keyUp", "ArrowDown", false)])).toEqual(["down"]);
+  });
+
+  it("reports each arrow pressed while the Windows key stays held", () => {
+    const keys = new WindowArrowKeys("win32");
+    const down = event("keyUp", "ArrowDown", true);
+    expect(run(keys, [winDown(), down, down, winUp()])).toEqual(["down", "down"]);
+  });
+
+  it("ignores an arrow whose press reached the page", () => {
+    const keys = new WindowArrowKeys("win32");
+    // Held Down, then Win pressed, then Down released: no Win+Down was pressed.
+    const events = [
+      event("keyDown", "ArrowDown", false),
+      winDown(),
+      event("keyUp", "ArrowDown", true),
+    ];
+    expect(run(keys, events)).toEqual([]);
+  });
+
+  it("ignores arrows without the Windows key, with other modifiers, and other arrows", () => {
+    const keys = new WindowArrowKeys("win32");
+    expect(run(keys, [event("keyUp", "ArrowDown", false)])).toEqual([]);
+    expect(run(keys, [winDown(), event("keyUp", "ArrowDown", true, { shift: true })])).toEqual([]);
+    expect(run(keys, [winDown(), event("keyUp", "ArrowLeft", true)])).toEqual([]);
+    // Another key press after the Windows key ends the gesture.
+    expect(
+      run(keys, [winDown(), event("keyDown", "a", true), event("keyUp", "ArrowUp", true)]),
+    ).toEqual([]);
+  });
+
+  it("forgets the Windows key when focus leaves, unless it stays held for another arrow", () => {
+    const keys = new WindowArrowKeys("win32");
+    keys.input(winDown());
+    keys.reset();
+    expect(keys.input(event("keyUp", "ArrowUp", false))).toBeUndefined();
+    keys.input(winDown());
+    keys.reset({ keepWindowsKey: true });
+    expect(keys.input(event("keyUp", "ArrowUp", true))).toBe("up");
+  });
+
+  it("does nothing outside Windows", () => {
+    const keys = new WindowArrowKeys("linux");
+    expect(run(keys, [winDown(), event("keyUp", "ArrowUp", true)])).toEqual([]);
   });
 });
 

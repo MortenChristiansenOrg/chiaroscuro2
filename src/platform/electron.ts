@@ -27,7 +27,7 @@ import { migrateExtensionBootstrap } from "./extension-migration";
 import { closePopupOnBlur } from "./extension-popup";
 import { ExtensionRuntime } from "./extension-runtime";
 import type { GithubSessionDiagnostics } from "./github-session-diagnostics";
-import { routeShortcutsToFocus, shortcutWindow, windowArrowKey } from "./keyboard-routing";
+import { routeShortcutsToFocus, shortcutWindow, WindowArrowKeys } from "./keyboard-routing";
 import { confirmLeave } from "./leave-prompt";
 import { PdfResponses } from "./pdf-responses";
 import { checkPermission, matchesGrantedDevice } from "./permission-check";
@@ -409,6 +409,10 @@ export class ElectronPlatform implements Platform {
   private paletteOverSubTab = false;
   /** The sub-tab window had keyboard focus when the app was last deactivated or minimized. */
   private subTabWinHadFocus = false;
+  /** Win+Up and Win+Down pressed in the sub-tab window (#129). */
+  private readonly subTabWinArrows = new WindowArrowKeys();
+  /** Acting on Win+Up or Win+Down, which can briefly activate the browser window. */
+  private forwardingWindowArrow = false;
   private tabBoundsAnimations = new TabBoundsAnimation();
   private subTabWindowTransition = 0;
   private pendingPaletteJs: string | null = null;
@@ -1082,9 +1086,9 @@ export class ElectronPlatform implements Platform {
     const heldWebsiteKeys = new Set<string>();
     wc.on("before-input-event", (_event, input) => {
       const key = input.code || input.key.toLowerCase();
+      this.forwardWindowArrowKey(input);
       if (input.type === "keyUp") {
         heldWebsiteKeys.delete(key);
-        this.forwardWindowArrowKey(input);
         return;
       }
       if (input.type !== "keyDown") return;
@@ -1120,9 +1124,10 @@ export class ElectronPlatform implements Platform {
    * minimized on its own. Like other keys pressed there, they act on the browser window (#129).
    */
   private forwardWindowArrowKey(input: Electron.Input): void {
-    const arrow = windowArrowKey(input);
     const overlay = this.subTabWin;
-    if (!arrow || !overlay || overlay.isDestroyed() || !overlay.isFocused()) return;
+    if (!overlay || overlay.isDestroyed() || !overlay.isFocused()) return;
+    const arrow = this.subTabWinArrows.input(input);
+    if (!arrow) return;
     const win = this.shortcutWindow(overlay);
     if (!win || win.isDestroyed()) return;
     if (arrow === "down" && !win.isMaximized()) {
@@ -1131,10 +1136,16 @@ export class ElectronPlatform implements Platform {
       return;
     }
     if (arrow === "up" && win.isMaximized()) return;
-    if (arrow === "up") win.maximize();
-    else win.unmaximize();
-    // Maximizing and restoring activate the browser window. Typing stays in the sub-tab page.
-    if (!overlay.isDestroyed()) overlay.focus();
+    // Maximizing and restoring activate the browser window. Typing stays in the sub-tab page, and
+    // the Windows key can stay held for another arrow.
+    this.forwardingWindowArrow = true;
+    try {
+      if (arrow === "up") win.maximize();
+      else win.unmaximize();
+      if (!overlay.isDestroyed()) overlay.focus();
+    } finally {
+      this.forwardingWindowArrow = false;
+    }
   }
 
   private matchesAccelerator(input: Electron.Input, accelerator: string): boolean {
@@ -1315,6 +1326,9 @@ export class ElectronPlatform implements Platform {
       }
       this.subTabWinHadFocus = true;
     });
+    overlay.on("blur", () =>
+      this.subTabWinArrows.reset({ keepWindowsKey: this.forwardingWindowArrow }),
+    );
     // Alt+F4 closes the active window. In a sub-tab, it is meant for the browser window.
     overlay.on("close", (event) => {
       if (this.subTabWinParentClosing || parent.isDestroyed()) return;
