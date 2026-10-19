@@ -394,6 +394,9 @@ test("Windows: activations without a click return typing to the sub-tab page, cl
     await new Promise((resolve) => setTimeout(resolve, 500));
     expect(await focusedContents(session)).toBe(shell.webContentsId);
     await expect(child.message).toHaveValue("abc");
+    // The desktop pointer stays for later scenarios: leave it off the sidebar's tabs, where
+    // its hover changes what they show.
+    await windowsPointer(session, { x: 4, y: 400 });
   } finally {
     await closeOtherWindows(session);
     await site.close();
