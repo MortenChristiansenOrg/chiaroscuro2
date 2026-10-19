@@ -52,6 +52,14 @@ describe("closePopupOnBlur", () => {
     expect(popup.close).not.toHaveBeenCalled();
   });
 
+  it("waits for focus to land before deciding, since blur can come first", () => {
+    const popup = open();
+    moveFocus(popup, null);
+    focused = browser;
+    vi.advanceTimersByTime(POPUP_FOCUS_GRACE_MS);
+    expect(popup.close).not.toHaveBeenCalled();
+  });
+
   it("closes once shown when focus moved to a window the extension opened", () => {
     const popup = open();
     moveFocus(popup, extensionWindow);
