@@ -24,6 +24,7 @@ import { capturePageScreenshot } from "./capture-page";
 import { commandChord, inputChord, suggestedShortcut } from "./extension-commands";
 import { unpackedExtensionId } from "./extension-identity";
 import { migrateExtensionBootstrap } from "./extension-migration";
+import { closePopupOnBlur } from "./extension-popup";
 import { ExtensionRuntime } from "./extension-runtime";
 import type { GithubSessionDiagnostics } from "./github-session-diagnostics";
 import { confirmLeave } from "./leave-prompt";
@@ -2238,7 +2239,8 @@ export class ElectronPlatform implements Platform {
     const popupFile = path.join(ext.path, popupRelativePath);
     if (!fs.existsSync(popupFile)) return;
 
-    this.extensionPopup = new BrowserWindow({
+    // Handlers act on this popup only: a replaced popup's late blur or close must not reach its successor.
+    const popup = new BrowserWindow({
       parent,
       width: 400,
       height: 600,
@@ -2255,12 +2257,13 @@ export class ElectronPlatform implements Platform {
         enablePreferredSizeMode: true,
       },
     });
+    this.extensionPopup = popup;
 
-    this.extensionRuntime?.registerPopup(this.extensionPopup.webContents);
+    this.extensionRuntime?.registerPopup(popup.webContents);
 
     // Position at top-right of parent, below title bar
     const parentBounds = parent.getBounds();
-    this.extensionPopup.setBounds({
+    popup.setBounds({
       x: parentBounds.x + parentBounds.width - 400 - 8,
       y: parentBounds.y + 40,
       width: 400,
@@ -2269,54 +2272,37 @@ export class ElectronPlatform implements Platform {
 
     // Auto-size based on content
     // biome-ignore lint/suspicious/noExplicitAny: preferred-size-changed is not in Electron's TS defs
-    (this.extensionPopup.webContents as any).on(
+    (popup.webContents as any).on(
       "preferred-size-changed",
       (_event: unknown, size: { width: number; height: number }) => {
-        if (this.extensionPopup && !this.extensionPopup.isDestroyed()) {
-          const w = Math.min(800, Math.max(100, size.width));
-          const h = Math.min(600, Math.max(100, size.height));
-          this.extensionPopup.setContentSize(w, h);
-          // Re-position to keep right-aligned
-          const pb = parent.getBounds();
-          this.extensionPopup.setBounds({
-            x: pb.x + pb.width - w - 8,
-            y: pb.y + 40,
-            width: w,
-            height: h,
-          });
-        }
+        if (popup.isDestroyed()) return;
+        const w = Math.min(800, Math.max(100, size.width));
+        const h = Math.min(600, Math.max(100, size.height));
+        popup.setContentSize(w, h);
+        // Re-position to keep right-aligned
+        const pb = parent.getBounds();
+        popup.setBounds({
+          x: pb.x + pb.width - w - 8,
+          y: pb.y + 40,
+          width: w,
+          height: h,
+        });
       },
     );
 
     // Preserve the extension origin and Electron runtime/storage/content-script APIs.
     const popupUrl = `chrome-extension://${extensionId}/${popupRelativePath.replace(/^\//, "")}`;
-    this.extensionPopup.loadURL(popupUrl);
+    popup.loadURL(popupUrl);
 
-    this.extensionPopup.webContents.once("did-finish-load", () => {
-      if (this.extensionPopup && !this.extensionPopup.isDestroyed()) {
-        this.extensionPopup.show();
-        this.extensionPopup.focus();
-
-        // Register blur-to-close AFTER showing, with a short delay so the
-        // initial focus transfer doesn't immediately trigger it.
-        setTimeout(() => {
-          if (this.extensionPopup && !this.extensionPopup.isDestroyed()) {
-            this.extensionPopup.on("blur", () => {
-              if (
-                this.extensionPopup &&
-                !this.extensionPopup.isDestroyed() &&
-                !this.extensionPopup.webContents.isDevToolsOpened()
-              ) {
-                this.extensionPopup.close();
-              }
-            });
-          }
-        }, 200);
-      }
+    popup.webContents.once("did-finish-load", () => {
+      if (popup.isDestroyed()) return;
+      popup.show();
+      popup.focus();
+      closePopupOnBlur(popup, parent, () => BrowserWindow.getFocusedWindow());
     });
 
-    this.extensionPopup.on("closed", () => {
-      this.extensionPopup = null;
+    popup.on("closed", () => {
+      if (this.extensionPopup === popup) this.extensionPopup = null;
     });
   }
 
