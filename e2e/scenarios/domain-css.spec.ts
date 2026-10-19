@@ -33,6 +33,7 @@ test("domain CSS is applied again after reloads that race tab updates and leaks 
 
   // Every tab update re-applies domain CSS. Spread updates across each reload so some
   // CSS calls reach the page while its new document commits, as busy sessions do.
+  // Electron's own insertCSS leaked the tab for each such call (#127).
   const target = await session.target((item) => item.kind === "tab" && item.url === url);
   await session.app.evaluate(
     ({ webContents }, { contentsId, tabId }) => {
@@ -41,10 +42,28 @@ test("domain CSS is applied again after reloads that race tab updates and leaks 
           __testHooks: { commandBus: { send(name: string, payload: unknown): Promise<unknown> } };
         }
       ).__testHooks.commandBus;
+      const contents = webContents.fromId(contentsId);
+      if (!contents) throw new Error("Tab contents missing");
       let reloads = 0;
-      webContents.fromId(contentsId)?.on("did-start-loading", () => {
+      let committing = false;
+      contents.on("did-start-loading", () => {
+        committing = true;
         setTimeout(() => void bus.send("tabs:activate", { tabId }), reloads++ % 25);
       });
+      contents.on("did-navigate", () => {
+        committing = false;
+      });
+      // Also lose the first CSS request sent while a reload commits, as the replaced
+      // document can, so a run abandons a call even when the timing above misses.
+      const send = contents.send.bind(contents);
+      contents.send = (channel: string, ...args: unknown[]) => {
+        const state = globalThis as unknown as { __droppedCssRequest?: boolean };
+        if (committing && !state.__droppedCssRequest && channel === "tab:css-insert") {
+          state.__droppedCssRequest = true;
+          return;
+        }
+        send(channel, ...args);
+      };
     },
     { contentsId: target.webContentsId, tabId: target.tabId },
   );
@@ -80,4 +99,10 @@ test("domain CSS is applied again after reloads that race tab updates and leaks 
     (collected) => collected,
     10_000,
   );
+  // The collection above covered at least one abandoned request.
+  expect(
+    await session.app.evaluate(
+      () => (globalThis as unknown as { __droppedCssRequest?: boolean }).__droppedCssRequest,
+    ),
+  ).toBe(true);
 });
