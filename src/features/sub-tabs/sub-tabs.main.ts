@@ -463,8 +463,9 @@ export default defineFeature<Deps>({
             platform.animateTabBounds(top.id, cfb, exitBounds, ANIM_DURATION),
             platform.hideSubTabWindow(),
           ]);
-          // Typing in the closed sub-tab continues in the page underneath.
-          platform.returnFocusFromSubTabWindow(parentTabId);
+          // Typing in the closed sub-tab continues in the page underneath, unless the user
+          // switched tabs during the animation.
+          if (getActiveTabId() === parentTabId) platform.returnFocusFromSubTabWindow(parentTabId);
           platform.detachTabFromSubTabWindow(top.id);
           await closeSubTab(parentTabId, top.id);
           if (getActiveTabId() === parentTabId) platform.hideSubTabWindowInstant();

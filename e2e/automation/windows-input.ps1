@@ -2,8 +2,9 @@
 # activate a window first: the click itself decides which window becomes active.
 param(
   [Parameter(Mandatory=$true)][long]$AppWindow,
-  [int]$X = -1,
-  [int]$Y = -1,
+  # Physical screen coordinates; negative on monitors left of or above the primary one.
+  [int]$X,
+  [int]$Y,
   [switch]$Click,
   # System.Windows.Forms.SendKeys syntax, for example 'hi' or '{ESC}'.
   [string]$Keys = ''
@@ -33,11 +34,16 @@ function Owner([IntPtr]$window) {
   return $process
 }
 $app = Owner ([IntPtr]::new($AppWindow))
-# Never send input to another application's window.
-$foreground = [VerificationInput]::GetForegroundWindow()
-if ((Owner $foreground) -ne $app) { throw "Foreground window $($foreground.ToInt64()) belongs to another process" }
-$result = @{ foregroundBefore = $foreground.ToInt64() }
-if ($X -ge 0 -and $Y -ge 0) {
+# Never send input to another application's window: check right before every input.
+function Assert-AppForeground {
+  $foreground = [VerificationInput]::GetForegroundWindow()
+  if ((Owner $foreground) -ne $app) { throw "Foreground window $($foreground.ToInt64()) belongs to another process" }
+  return $foreground
+}
+$result = @{ foregroundBefore = (Assert-AppForeground).ToInt64() }
+$hasPoint = $PSBoundParameters.ContainsKey('X') -and $PSBoundParameters.ContainsKey('Y')
+if ($Click -and -not $hasPoint) { throw 'A click needs -X and -Y' }
+if ($hasPoint) {
   if (-not [VerificationInput]::SetCursorPos($X, $Y)) { throw 'Cannot move desktop pointer' }
   $point = New-Object VerificationInput+POINT
   [VerificationInput]::GetCursorPos([ref]$point) | Out-Null
@@ -46,10 +52,16 @@ if ($X -ge 0 -and $Y -ge 0) {
   if ((Owner $root) -ne $app) { throw "Window $($root.ToInt64()) under the pointer belongs to another process" }
   $result.pointerWindow = $root.ToInt64()
   if ($Click) {
+    Assert-AppForeground | Out-Null
     [VerificationInput]::mouse_event(2, 0, 0, 0, [UIntPtr]::Zero)
     [VerificationInput]::mouse_event(4, 0, 0, 0, [UIntPtr]::Zero)
   }
 }
-if ($Keys -ne '') { [System.Windows.Forms.SendKeys]::SendWait($Keys) }
+# One key at a time, with any modifiers, so that a window of another process that becomes
+# active in between gets none of the remaining keys.
+foreach ($key in [regex]::Matches($Keys, '[\^%+]*(\{[^}]+\}|\(.*?\)|.)')) {
+  Assert-AppForeground | Out-Null
+  [System.Windows.Forms.SendKeys]::SendWait($key.Value)
+}
 $result.foregroundAfter = [VerificationInput]::GetForegroundWindow().ToInt64()
 $result | ConvertTo-Json -Compress

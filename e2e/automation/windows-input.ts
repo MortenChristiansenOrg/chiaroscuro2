@@ -48,7 +48,8 @@ export async function windowsInput(
     { webContentsId: input.click?.webContentsId ?? -1, box },
   );
   const args = ["-AppWindow", native.appWindow];
-  if (native.point) args.push("-X", String(native.point.x), "-Y", String(native.point.y), "-Click");
+  // The colon form keeps negative coordinates from being read as parameter names.
+  if (native.point) args.push(`-X:${native.point.x}`, `-Y:${native.point.y}`, "-Click");
   if (input.keys) args.push("-Keys", input.keys);
   const result = await run(
     "powershell.exe",

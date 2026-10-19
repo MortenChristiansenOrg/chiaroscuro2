@@ -433,6 +433,31 @@ describe("keyboard focus in the sub-tab window", () => {
     );
   });
 
+  it("leaves focus alone when another tab is activated while the last sub-tab closes", async () => {
+    let finishHide = () => {};
+    const ctx = setup({
+      hideSubTabWindow: vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            finishHide = resolve;
+          }),
+      ),
+    });
+    const { tabId: first } = await createParentTab(ctx);
+    const { tabId: second } = await createParentTab(ctx);
+    await ctx.commands.send(TABS_ACTIVATE, { tabId: first });
+    await ctx.commands.send(SUB_TABS_OPEN, { parentTabId: first, url: "https://child1.com" });
+
+    const closing = ctx.commands.send(SUB_TABS_CLOSE, { parentTabId: first });
+    await vi.waitFor(() => expect(ctx.platform.hideSubTabWindow).toHaveBeenCalled());
+    await ctx.commands.send(TABS_ACTIVATE, { tabId: second });
+    vi.mocked(ctx.platform.returnFocusFromSubTabWindow).mockClear();
+    finishHide();
+    await closing;
+
+    expect(ctx.platform.returnFocusFromSubTabWindow).not.toHaveBeenCalled();
+  });
+
   it("keeps focus in the sub-tab window when a nested sub-tab closes", async () => {
     const ctx = setup();
     const { tabId: parentId } = await createParentTab(ctx);
