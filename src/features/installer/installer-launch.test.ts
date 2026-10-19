@@ -157,6 +157,37 @@ describe("InstallerLauncher with electron-updater", () => {
     expect(spawn).toHaveBeenCalledOnce();
   });
 
+  it("does not end a launch for errors of other updater work", async () => {
+    mockSpawn("ENOENT");
+    const { updater, launcher, openPath, errors } = createHarness(INSTALLER);
+    const opened = Promise.withResolvers<void>();
+    openPath.mockReturnValueOnce(opened.promise);
+
+    const launching = launcher.launch();
+    await vi.waitFor(() => expect(openPath).toHaveBeenCalledOnce());
+    const networkError = new Error("Network error");
+    updater.emit("error", networkError);
+    opened.resolve();
+
+    await expect(launching).resolves.toBeUndefined();
+    expect(errors).toEqual([networkError]);
+  });
+
+  it("follows a launch in progress after teardown, so quitting does not install again", async () => {
+    const spawn = mockSpawn("EACCES", undefined);
+    const { updater, launcher, quit } = createHarness(INSTALLER);
+
+    const launching = launcher.launch();
+    launcher.dispose();
+    await expect(launching).resolves.toBeUndefined();
+    expect(spawn.mock.calls[1]?.[0]).toBe(ELEVATE);
+    // biome-ignore lint/suspicious/noExplicitAny: electron-updater internals
+    expect(Object.hasOwn(updater as any, "spawnLog")).toBe(false);
+
+    quit();
+    expect(spawn).toHaveBeenCalledTimes(2);
+  });
+
   it("rejects when the installer is missing and leaves it to install on quit", async () => {
     const spawn = mockSpawn("ENOENT", undefined);
     const { launcher, openPath, quit } = createHarness(INSTALLER);

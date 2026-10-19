@@ -16,6 +16,10 @@ interface Attempt {
   promise: Promise<void>;
   /** The latest process start electron-updater requested for this attempt. */
   spawn?: Promise<boolean>;
+  /** Within `install()`: errors electron-updater reports now are about this attempt. */
+  installing: boolean;
+  /** The latest process start failed and electron-updater is reporting it or retrying. */
+  spawnFailed: boolean;
   settled: boolean;
   launched(): void;
   failed(error: unknown): void;
@@ -52,13 +56,16 @@ function launchFailure(error: unknown): string {
  * starts asynchronously (`doInstall` → `spawnLog`), so a failure arrives too late. This calls
  * `install()` instead and follows each `spawnLog` it makes: a started process means launched.
  * `doInstall` retries `EACCES`/`UNKNOWN` through `elevate.exe` (followed as the next spawn) and
- * reports other failures as an `error` event (passed to `fail`). For `ENOENT` it would open the
- * installer with the shell and never report the outcome, so that is done here instead.
+ * reports other failures as an `error` event, which `fail` attributes to the attempt only while
+ * a failure of the attempt is being reported. For `ENOENT` it would open the installer with the
+ * shell and never report the outcome, so that is done here instead.
  */
 export class InstallerLauncher {
   private attempt: Attempt | undefined;
   /** The installer started; electron-updater will not start it again. */
   private started = false;
+  /** The feature stopped; stop following process starts once a launch in progress settled. */
+  private disposed = false;
   private readonly restoreSpawn: () => void;
 
   constructor(
@@ -94,10 +101,13 @@ export class InstallerLauncher {
       if (attempt.settled) return false;
       attempt.settled = true;
       if (this.attempt === attempt) this.attempt = undefined;
+      if (this.disposed) this.restoreSpawn();
       return true;
     };
     const attempt: Attempt = {
       promise,
+      installing: true,
+      spawnFailed: false,
       settled: false,
       launched: () => {
         if (!settle()) return;
@@ -120,6 +130,8 @@ export class InstallerLauncher {
       requested = this.updater.install(false, this.updater.autoRunAppAfterInstall);
     } catch (error) {
       attempt.failed(error);
+    } finally {
+      attempt.installing = false;
     }
     // A failure electron-updater reported has already ended the attempt with its error.
     if (!requested) attempt.failed(new Error("The update could not be installed."));
@@ -129,24 +141,33 @@ export class InstallerLauncher {
   }
 
   /**
-   * An error electron-updater reported. Returns whether it ended the launch in progress, and so
-   * is reported by `launch()`.
+   * An error electron-updater reported. Returns whether it is a failure of the launch in
+   * progress, and so reported by `launch()`. Errors of update checks and downloads running at
+   * the same time are not.
    */
   fail(error: unknown): boolean {
     const attempt = this.attempt;
     if (!attempt) return false;
-    attempt.failed(error);
-    return true;
+    if (attempt.installing) {
+      attempt.failed(error);
+      return true;
+    }
+    // The failed process start ends the attempt itself unless electron-updater retries.
+    return attempt.spawnFailed;
   }
 
-  /** Stop following electron-updater's process starts. A launch in progress still settles. */
+  /**
+   * Stop following electron-updater's process starts. A launch in progress is still followed,
+   * including an elevated retry, so its outcome stays known to electron-updater's quit handler.
+   */
   dispose(): void {
-    this.restoreSpawn();
-    this.attempt = undefined;
+    this.disposed = true;
+    if (!this.attempt) this.restoreSpawn();
   }
 
   private async follow(attempt: Attempt, cmd: string, spawn: Promise<boolean>): Promise<boolean> {
     attempt.spawn = spawn;
+    attempt.spawnFailed = false;
     try {
       const started = await spawn;
       attempt.launched();
@@ -164,8 +185,9 @@ export class InstallerLauncher {
           failure = new LaunchFailure("The update installer is missing or could not be opened.");
         }
       }
-      // electron-updater either starts another process right away or reports the error. If it
-      // does neither, this failure ends the attempt.
+      // electron-updater now either starts another process right away or reports the error.
+      // Unless it started another one, this failure ends the attempt.
+      attempt.spawnFailed = true;
       setTimeout(() => {
         if (attempt.spawn === spawn) attempt.failed(failure);
       }, 0);
