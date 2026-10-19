@@ -7,6 +7,14 @@ import { AppSession } from "../automation/session";
 import { waitUntil } from "../automation/wait";
 
 type Tab = { id: number; windowId: number; url: string };
+type Window = {
+  id: number;
+  type: string;
+  left: number;
+  top: number;
+  width: number;
+  height: number;
+};
 type Chrome = {
   runtime: { getURL(path: string): string };
   tabs: {
@@ -15,9 +23,10 @@ type Chrome = {
     remove(id: number): Promise<void>;
   };
   windows: {
-    create(data: unknown): Promise<{ id: number }>;
-    getCurrent(): Promise<{ id: number; type: string }>;
-    update(id: number, data: unknown): Promise<unknown>;
+    create(data: unknown): Promise<Window>;
+    getCurrent(): Promise<Window>;
+    getAll(filter?: unknown): Promise<Window[]>;
+    update(id: number, data: unknown): Promise<Window>;
     remove(id: number): Promise<void>;
   };
 };
@@ -77,9 +86,13 @@ async function openPopout(app: AppSession, search = "?uilocation=popout") {
   );
   // The focused window closes the popup.
   await popup
-    .evaluate((search) => {
+    .evaluate(async (search) => {
       const api = (globalThis as unknown as { chrome: Chrome }).chrome;
+      // Bitwarden places the pop-out at the top right of the current browser window.
+      const browser = await api.windows.getCurrent();
       return api.windows.create({
+        left: browser.left + browser.width - 480 - 15,
+        top: browser.top + 90,
         type: "popup",
         focused: true,
         width: 480,
@@ -241,6 +254,106 @@ test("an extension pop-out window has one tab its extension can find, focus and 
       })
       .catch(() => {});
     await closed(app);
+  } finally {
+    await app.close();
+  }
+});
+
+// Regression for #119: windows reported x/y instead of left/top, so Bitwarden placed its
+// pop-out at NaN; extensions could not position their windows at all.
+test("an extension pop-out window opens at the browser window's top right and stays on screen", async ({
+  playwright: _playwright,
+}, testInfo) => {
+  test.setTimeout(60_000);
+  const app = new AppSession(testInfo.outputPath("app"), [], true);
+  try {
+    await launch(app);
+    // Leave room around the browser window on any screen, including small CI displays.
+    const { workArea, bounds } = await app.app.evaluate(({ BrowserWindow, screen }) => {
+      const browser = BrowserWindow.getAllWindows().find((win) => !win.getParentWindow());
+      const { workArea } = screen.getPrimaryDisplay();
+      browser?.setBounds({
+        x: workArea.x + 20,
+        y: workArea.y + 20,
+        width: Math.min(1400, workArea.width - 40),
+        height: Math.min(900, workArea.height - 40),
+      });
+      return { workArea, bounds: browser?.getBounds() };
+    });
+    if (!bounds) throw new Error("No browser window");
+    // Where Bitwarden asks for it, kept inside the work area.
+    const within = (value: number, start: number, length: number, size: number) =>
+      Math.min(Math.max(value, start), start + length - size);
+    const width = Math.min(480, workArea.width),
+      height = Math.min(630, workArea.height);
+    const expected = {
+      left: within(bounds.x + bounds.width - 495, workArea.x, workArea.width, width),
+      top: within(bounds.y + 90, workArea.y, workArea.height, height),
+      width,
+      height,
+    };
+    const popout = await openPopout(app);
+    const [browser] = await popout.evaluate(() =>
+      (globalThis as unknown as { chrome: Chrome }).chrome.windows.getAll({
+        windowTypes: ["normal"],
+      }),
+    );
+    expect(browser).toMatchObject({
+      type: "normal",
+      left: bounds.x,
+      top: bounds.y,
+      width: bounds.width,
+      height: bounds.height,
+    });
+    expect(browser).not.toHaveProperty("x");
+    if (!browser) throw new Error("No browser window");
+    const current = await popout.evaluate(() =>
+      (globalThis as unknown as { chrome: Chrome }).chrome.windows.getCurrent(),
+    );
+    expect(current).toMatchObject({ type: "popup", ...expected });
+    const [native] = await popoutWindows(app);
+    if (!native) throw new Error("No pop-out window");
+    expect(
+      await app.app.evaluate(
+        ({ BrowserWindow }, id) => BrowserWindow.fromId(id)?.getBounds(),
+        native.id,
+      ),
+    ).toEqual({ x: expected.left, y: expected.top, width, height });
+
+    // Moving it off screen keeps it inside the display's work area.
+    const moved = await popout.evaluate(
+      (id) =>
+        (globalThis as unknown as { chrome: Chrome }).chrome.windows.update(id, {
+          left: -3000,
+          top: 5000,
+        }),
+      current.id,
+    );
+    expect(moved).toMatchObject({
+      left: workArea.x,
+      top: workArea.y + workArea.height - height,
+      width,
+      height,
+    });
+
+    // The browser window itself stays where the user put it.
+    await expect(
+      popout.evaluate(
+        (id) =>
+          (globalThis as unknown as { chrome: Chrome }).chrome.windows.update(id, {
+            left: 0,
+            top: 0,
+          }),
+        browser.id,
+      ),
+    ).rejects.toThrow();
+    expect(
+      await popout.evaluate(() =>
+        (globalThis as unknown as { chrome: Chrome }).chrome.windows.getAll({
+          windowTypes: ["normal"],
+        }),
+      ),
+    ).toEqual([expect.objectContaining({ left: bounds.x, top: bounds.y })]);
   } finally {
     await app.close();
   }

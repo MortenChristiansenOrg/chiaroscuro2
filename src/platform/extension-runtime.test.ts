@@ -7,6 +7,7 @@ const hooks = vi.hoisted(() => ({
   events: new Map<string, (event: unknown) => void>(),
   notifications: [] as { emit(name: string): boolean; close: ReturnType<typeof vi.fn> }[],
   windows: [] as Electron.BrowserWindow[],
+  workAreas: [] as Electron.Rectangle[],
   leave: true,
   closeWhileLoading: false,
 }));
@@ -48,11 +49,14 @@ vi.mock("electron", async () => {
     show = vi.fn();
     showInactive = vi.fn();
     focus = vi.fn();
-    setSize = vi.fn();
+    bounds = { x: 720, y: 220, width: 480, height: 600 };
+    setBounds = vi.fn((bounds: Electron.Rectangle) => {
+      this.bounds = bounds;
+    });
     isFocused = () => true;
     isMaximized = () => false;
     isDestroyed = () => this.destroyed;
-    getBounds = () => ({ left: 0, top: 0, width: 480, height: 600 });
+    getBounds = () => ({ ...this.bounds });
     constructor() {
       super();
       hooks.windows.push(this as unknown as Electron.BrowserWindow);
@@ -74,6 +78,9 @@ vi.mock("electron", async () => {
   return {
     Notification,
     BrowserWindow,
+    screen: {
+      getAllDisplays: () => hooks.workAreas.map((area) => ({ bounds: area, workArea: area })),
+    },
     dialog: { showMessageBoxSync: vi.fn(() => (hooks.leave ? 0 : 1)) },
     webContents: {},
     ipcMain: {
@@ -105,6 +112,7 @@ beforeEach(() => {
   hooks.events.clear();
   hooks.notifications.length = 0;
   hooks.windows.length = 0;
+  hooks.workAreas = [{ x: 0, y: 0, width: 1920, height: 1040 }];
   hooks.leave = true;
   hooks.closeWhileLoading = false;
   vi.mocked(dialog.showMessageBoxSync).mockClear();
@@ -261,7 +269,8 @@ it("gives an extension window one tab that only its extension can find, focus an
     ]),
   ).toMatchObject({ ok: true, value: { id: popout.id } });
   expect(popout.focus).toHaveBeenCalledOnce();
-  expect(popout.setSize).toHaveBeenCalledWith(380, 630);
+  // Its position is still unknown (NaN), so only the size changes.
+  expect(popout.getBounds()).toEqual({ x: 720, y: 220, width: 380, height: 630 });
   expect(await call(opener, "tabs.update", [tabId, { active: true }])).toMatchObject({
     ok: true,
     value: tab,
@@ -286,6 +295,112 @@ it("gives an extension window one tab that only its extension can find, focus an
   expect(other.senderFrame.send).not.toHaveBeenCalled();
   expect(await ids(opener, {})).toEqual([10]);
   expect(await call(opener, "tabs.get", [tabId])).toMatchObject({ ok: false });
+});
+// Regression for #119: Bitwarden opens its pop-out at the browser window's top right.
+it("reports window positions as left and top and keeps placed extension windows on screen", async () => {
+  const { EventEmitter } = await import("node:events");
+  hooks.workAreas = [
+    { x: 0, y: 0, width: 1920, height: 1040 },
+    { x: 1920, y: 0, width: 2560, height: 1400 },
+  ];
+  const main = {
+    id: 1,
+    isFocused: () => true,
+    isDestroyed: () => false,
+    getBounds: () => ({ x: 1920, y: 40, width: 1600, height: 1000 }),
+    isMaximized: () => false,
+    setBounds: vi.fn(),
+  } as unknown as Electron.BrowserWindow;
+  const runtime = new ExtensionRuntime(
+    { create: async () => "tab" as TabId, activate: async () => {}, close: vi.fn() },
+    () => main,
+  );
+  const page = Object.assign(new EventEmitter(), {
+    id: 10,
+    mainFrame: { framesInSubtree: [] },
+    isDestroyed: () => false,
+    getURL: () => "https://example.test/",
+    getTitle: () => "Example",
+    isLoading: () => false,
+    isCurrentlyAudible: () => false,
+  }) as unknown as Electron.WebContents;
+  runtime.addTab("tab" as TabId, page, main);
+  runtime.selectTab("tab" as TabId);
+  const call = hooks.calls.get("extension-browser:call");
+  if (!call) throw new Error("No browser API handler");
+  const opener = {
+    sender: { session: session.defaultSession },
+    senderFrame: { url: `chrome-extension://${"a".repeat(32)}/popup.html`, send: vi.fn() },
+  };
+
+  const current = await call(opener, "windows.getCurrent", [{}]);
+  expect(current).toMatchObject({
+    ok: true,
+    value: { id: 1, left: 1920, top: 40, width: 1600, height: 1000 },
+  });
+  expect(current.value).not.toHaveProperty("x");
+  expect(current.value).not.toHaveProperty("y");
+
+  // Bitwarden: left = window.left + window.width - 380 - 15, top = window.top + 90.
+  const created = await call(opener, "windows.create", [
+    {
+      type: "popup",
+      url: "popup.html?uilocation=popout",
+      left: 3125,
+      top: 130,
+      width: 380,
+      height: 630,
+    },
+  ]);
+  const popout = hooks.windows[0];
+  if (!popout) throw new Error("No extension window");
+  expect(created).toMatchObject({
+    ok: true,
+    value: { id: popout.id, left: 3125, top: 130, width: 380, height: 630 },
+  });
+  expect(created.value).not.toHaveProperty("x");
+
+  const place = async (bounds: Record<string, number>) =>
+    (await call(opener, "windows.update", [popout.id, bounds])).value;
+  // Off every display, it lands at the nearest edge of the nearest display.
+  expect(await place({ left: -5000, top: 5000 })).toMatchObject({
+    left: 0,
+    top: 410,
+    width: 380,
+    height: 630,
+  });
+  // Across two displays, it moves onto the one it overlaps most.
+  expect(await place({ left: 1700, top: 100, width: 600 })).toMatchObject({
+    left: 1920,
+    top: 100,
+    width: 600,
+  });
+  // Larger than the display, it shrinks to its work area.
+  expect(await place({ width: 4000, height: 4000 })).toMatchObject({
+    left: 1920,
+    top: 0,
+    width: 2560,
+    height: 1400,
+  });
+
+  // A coordinate that is not finite is ignored.
+  expect(await place({ left: Number.POSITIVE_INFINITY, top: Number.NaN })).toMatchObject({
+    left: 1920,
+    top: 0,
+  });
+  expect(await call(opener, "windows.update", [popout.id, { left: "0" }])).toMatchObject({
+    ok: false,
+  });
+
+  // Without a position, it stays where Electron put it, shrunk to fit.
+  await call(opener, "windows.create", [{ url: "popup.html", width: 4000, height: 4000 }]);
+  expect(hooks.windows[1]?.getBounds()).toEqual({ x: 1920, y: 0, width: 2560, height: 1400 });
+
+  // Extensions cannot move the browser window.
+  expect(await call(opener, "windows.update", [1, { left: 0, top: 0 }])).toMatchObject({
+    ok: false,
+  });
+  expect(main.setBounds).not.toHaveBeenCalled();
 });
 it("never announces an extension window that closes while it loads", async () => {
   new ExtensionRuntime(
