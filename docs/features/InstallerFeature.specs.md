@@ -72,7 +72,7 @@ acquiring the single-instance lock or creating Chromium sessions.
 - On app start (after a delay) and periodically (every 4 hours), check GitHub Releases for updates.
 - Download update silently in background.
 - After download completes, emit event so renderer shows "Update ready — restart to apply" notification.
-- User clicks restart: app quits and installs update. Pages with unsaved changes are asked about first, as on quit (see [Tabs](TabsFeature.specs.md#quit-or-close-the-browser-window)); staying cancels the restart, shows "Restart cancelled to keep unsaved changes." and keeps the update ready. If the downloaded update is missing, the browser keeps running and asks again on the next quit. If the installer fails to launch, the browser still quits without installing (#141).
+- User clicks restart: app quits and installs update. Pages with unsaved changes are asked about first, as on quit (see [Tabs](TabsFeature.specs.md#quit-or-close-the-browser-window)); staying cancels the restart, shows "Restart cancelled to keep unsaved changes." and keeps the update ready. The browser quits only once the installer has started: if the downloaded update is missing or the installer fails to launch (removed, blocked, or cannot start), the browser keeps running with its tabs, shows the error and keeps Restart available to retry. The update still installs on a later quit if the installer can start then (#141).
 - Restart disables immediately and shows a loading indicator until exit. Dismiss
   is disabled while applying so feedback remains visible. If starting the update
   fails, show the error and re-enable Restart to retry the downloaded installer.
@@ -115,7 +115,7 @@ acquiring the single-instance lock or creating Chromium sessions.
 1. App starts, waits 3 seconds, then checks for updates in its channel.
 2. If update available, downloads silently.
 3. Notification appears: "Update ready — restart to apply".
-4. User clicks "Restart" — pages with unsaved changes ask first; then the app quits, the update installs and the app relaunches.
+4. User clicks "Restart" — pages with unsaved changes ask first; then the installer starts, the app quits, the update installs and the app relaunches.
 5. User dismisses — notification hidden until next check/restart.
 
 ### External Protocol Launch
@@ -152,7 +152,9 @@ The base `electron-builder.yml` rejects direct packaging without a release chann
 ### Verification
 
 Unit tests cover tag validation, profile selection, package metadata, icon sizes,
-numeric beta selection/pagination and update rejection. PR CI builds both NSIS
+numeric beta selection/pagination and update rejection. Update restarts are tested
+against electron-updater's real `NsisUpdater`, with process starts mocked and, outside
+Windows, harmless scripts started in place of the installer and `elevate.exe`. PR CI builds both NSIS
 editions and a second beta on a disposable Windows runner, installs them together,
 runs them alongside Dev, checks distinct profiles/cookies and registry entries,
 upgrades/reinstalls Early Access, and verifies both uninstall directions preserve

@@ -34,7 +34,9 @@ vi.mock("electron-updater", () => {
       setFeedURL: vi.fn(),
       checkForUpdates: vi.fn(async () => undefined),
       downloadUpdate: vi.fn(async () => undefined),
-      quitAndInstall: vi.fn(),
+      autoRunAppAfterInstall: true,
+      // Starts the installer; the real updater reports failures as "error" events.
+      install: vi.fn(() => true),
       on: vi.fn((event: string, cb: (...args: unknown[]) => void) => {
         const list = listeners.get(event) ?? [];
         list.push(cb);
@@ -450,57 +452,71 @@ describe("installer feature", () => {
       );
     });
 
-    it("apply-update command calls autoUpdater.quitAndInstall", async () => {
-      const { commands, deps } = setup({ isDev: false });
-      await feature.start(deps);
+    async function startUpdater() {
+      const setupResult = setup({ isDev: false });
+      await feature.start(setupResult.deps);
       await vi.advanceTimersByTimeAsync(3_000);
-
       const { autoUpdater } = await import("electron-updater");
+      // biome-ignore lint/suspicious/noExplicitAny: test mock helper
+      return { ...setupResult, autoUpdater: autoUpdater as any };
+    }
+
+    it("asks about unsaved changes, starts the installer, then quits", async () => {
+      const { commands, platform, autoUpdater } = await startUpdater();
       await commands.send(INSTALLER_APPLY_UPDATE, undefined);
 
-      expect(autoUpdater.quitAndInstall).toHaveBeenCalled();
+      expect(autoUpdater.install).toHaveBeenCalledExactlyOnceWith(false, true);
+      expect(platform.quit).toHaveBeenCalledOnce();
+      const order = (fn: { mock: { invocationCallOrder: number[] } }) =>
+        fn.mock.invocationCallOrder[0] ?? Number.NaN;
+      expect(order(vi.mocked(platform.confirmQuit))).toBeLessThan(order(autoUpdater.install));
+      expect(order(autoUpdater.install)).toBeLessThan(order(vi.mocked(platform.quit)));
+      expect(platform.cancelQuit).not.toHaveBeenCalled();
     });
 
-    it("asks about unsaved changes first and keeps running when the user stays", async () => {
-      const { commands, deps, platform } = setup({ isDev: false });
+    it("keeps running when the user stays", async () => {
+      const { commands, platform, autoUpdater } = await startUpdater();
       vi.mocked(platform.confirmQuit).mockResolvedValue(false);
-      await feature.start(deps);
-      await vi.advanceTimersByTimeAsync(3_000);
 
-      const { autoUpdater } = await import("electron-updater");
       await expect(commands.send(INSTALLER_APPLY_UPDATE, undefined)).rejects.toThrow(
         "Restart cancelled to keep unsaved changes.",
       );
-      expect(platform.confirmQuit).toHaveBeenCalled();
-      expect(autoUpdater.quitAndInstall).not.toHaveBeenCalled();
+      expect(autoUpdater.install).not.toHaveBeenCalled();
+      expect(platform.quit).not.toHaveBeenCalled();
     });
 
-    it("keeps the browser running when the installer fails to start", async () => {
-      const { commands, deps, platform } = setup({ isDev: false });
-      await feature.start(deps);
-      await vi.advanceTimersByTimeAsync(3_000);
-
-      const { autoUpdater } = await import("electron-updater");
-      // electron-updater reports an installer it cannot start before scheduling the quit.
-      vi.mocked(autoUpdater.quitAndInstall).mockImplementationOnce(() => {
-        // biome-ignore lint/suspicious/noExplicitAny: test mock helper
-        (autoUpdater as any)._emit("error", new Error("Cannot start installer"));
+    it("keeps running and keeps closed pages' tabs when the installer fails to start", async () => {
+      const { commands, events, platform, autoUpdater } = await startUpdater();
+      const onError = vi.fn();
+      events.on(INSTALLER_UPDATE_ERROR, onError);
+      autoUpdater.install.mockImplementationOnce(() => {
+        autoUpdater._emit("error", new Error("spawn EPERM"));
+        return false;
       });
-      await commands.send(INSTALLER_APPLY_UPDATE, undefined);
+
+      await expect(commands.send(INSTALLER_APPLY_UPDATE, undefined)).rejects.toThrow(
+        "The update installer could not start: spawn EPERM",
+      );
       expect(platform.cancelQuit).toHaveBeenCalledOnce();
+      expect(platform.quit).not.toHaveBeenCalled();
+      // The restart reports the error itself.
+      expect(onError).not.toHaveBeenCalled();
+
+      // Restart can be tried again.
+      await commands.send(INSTALLER_APPLY_UPDATE, undefined);
+      expect(platform.quit).toHaveBeenCalledOnce();
     });
 
     it("does not cancel the quit once the installer started", async () => {
-      const { commands, deps, platform } = setup({ isDev: false });
-      await feature.start(deps);
-      await vi.advanceTimersByTimeAsync(3_000);
-
-      const { autoUpdater } = await import("electron-updater");
+      const { commands, events, platform, autoUpdater } = await startUpdater();
+      const onError = vi.fn();
+      events.on(INSTALLER_UPDATE_ERROR, onError);
       await commands.send(INSTALLER_APPLY_UPDATE, undefined);
+
       // The browser is already quitting; restoring tabs now would race the teardown.
-      // biome-ignore lint/suspicious/noExplicitAny: test mock helper
-      (autoUpdater as any)._emit("error", new Error("Installer exited"));
+      autoUpdater._emit("error", new Error("Installer exited"));
       expect(platform.cancelQuit).not.toHaveBeenCalled();
+      expect(onError).toHaveBeenCalledOnce();
     });
   });
 

@@ -26,9 +26,16 @@
 - Quitting never waits on pages: 3 s per page and 5 s in total, excluding time spent in
   prompts (`leavePromptTime`). A page passed over keeps its prompt: staying on it while later
   pages are checked cancels the quit, and once the quit is confirmed it leaves without asking.
-  An explicit tab close during a quit wins over restoring the tab. Update restarts ask first;
-  an installer that cannot start is reported inside `quitAndInstall` and cancels the quit,
-  while later failures arrive after the browser began quitting and are not cancelled. A hung renderer's `beforeunload` is ended by Chromium after
+  An explicit tab close during a quit wins over restoring the tab. Update restarts ask first,
+  then start the installer and quit only once its process started (#141). electron-updater's
+  `quitAndInstall()` quits before an asynchronous start failure is known, so
+  `InstallerLauncher` (`src/features/installer/installer-launch.ts`) calls `install()` and
+  follows each `spawnLog` it makes: `EACCES`/`UNKNOWN` retry through `elevate.exe`, other
+  failures arrive as `error` events, and `ENOENT` is opened with the shell here rather than by
+  electron-updater, which would not report the outcome. A failed start cancels the quit (closed
+  pages stay as unloaded tabs) and resets `quitAndInstallCalled`, so Restart can retry and the
+  update still installs on a later quit; a started installer keeps it set, so quitting does not
+  run the installer again. Failures after the start are not cancelled. A hung renderer's `beforeunload` is ended by Chromium after
   about 1 s. Windows `session-end` and `powerMonitor` `shutdown` skip asking. Termination
   signals reach Chromium's own handler, which quits normally and may ask; Node signal
   listeners never run, and a second signal kills the process.

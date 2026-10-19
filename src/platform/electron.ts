@@ -811,6 +811,10 @@ export class ElectronPlatform implements Platform {
     this.restoreUnloadedTabs();
   }
 
+  quit(): void {
+    app.quit();
+  }
+
   /** Quit without asking about unsaved changes, because the operating system ends the session. */
   skipQuitConfirmation(): void {
     this.quitConfirmation.skip();

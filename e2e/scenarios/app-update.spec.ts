@@ -20,7 +20,9 @@ test("downloaded update shows pending feedback and recovers from installation er
     hooks.commandBus.unhandle("installer:apply-update");
     hooks.commandBus.handle("installer:apply-update", () => {
       hooks.updateApplyCount++;
-      if (hooks.updateApplyCount === 2) throw new Error("Installer launch rejected");
+      // As a restart reports an installer that could not start.
+      if (hooks.updateApplyCount === 2)
+        throw new Error("The update installer was blocked from starting.");
     });
     const shell = BrowserWindow.getAllWindows().find((win) => !win.getParentWindow());
     if (!shell) throw new Error("Shell unavailable");
@@ -60,8 +62,11 @@ test("downloaded update shows pending feedback and recovers from installation er
   await expect(restart).toBeEnabled();
   expect((await session.capture("update-apply-error")).status).toBe("complete");
   await restart.click();
-  await expect(session.shell.getByRole("alert")).toContainText("Installer launch rejected");
+  await expect(session.shell.getByRole("alert")).toHaveText(
+    "The update installer was blocked from starting.",
+  );
   await expect(restart).toBeEnabled();
+  expect((await session.capture("update-launch-error")).status).toBe("complete");
   await restart.click();
   await expect(pending).toBeDisabled();
   await expect(session.shell.getByRole("alert")).toHaveCount(0);
