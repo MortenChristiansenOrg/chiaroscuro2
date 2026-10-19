@@ -60,16 +60,20 @@ function createHarness(installerPath: string | null): Harness {
   return { updater, launcher, openPath, quit: () => onQuit?.(0), errors };
 }
 
-/** What Node's spawn returns: a process id once started, otherwise an error event. */
-function fakeChild(code?: string) {
+/**
+ * What Node's spawn returns: a process id once started, otherwise an error event. A started
+ * process exits with the given exit code, or 0 (elevate.exe's result).
+ */
+function fakeChild(code?: string | number) {
   const child = Object.assign(new EventEmitter(), {
-    pid: code ? undefined : 4242,
+    pid: typeof code === "string" ? undefined : 4242,
     unref: () => {},
   });
-  if (code)
-    process.nextTick(() =>
-      child.emit("error", Object.assign(new Error(`spawn ${code}`), { code })),
-    );
+  process.nextTick(() => {
+    if (typeof code === "string")
+      child.emit("error", Object.assign(new Error(`spawn ${code}`), { code }));
+    else child.emit("exit", code ?? 0, null);
+  });
   return child as unknown as ReturnType<typeof childProcess.spawn>;
 }
 
@@ -86,7 +90,7 @@ afterEach(() => {
 describe("InstallerLauncher with electron-updater", () => {
   const INSTALLER = join(tmpdir(), "Chiaroscuro-Setup-2.0.0.exe");
 
-  function mockSpawn(...codes: (string | undefined)[]) {
+  function mockSpawn(...codes: (string | number | undefined)[]) {
     const spawn = vi.spyOn(childProcess, "spawn");
     for (const code of codes) spawn.mockImplementationOnce(() => fakeChild(code));
     return spawn;
@@ -114,6 +118,16 @@ describe("InstallerLauncher with electron-updater", () => {
     expect(spawn.mock.calls[1]?.[0]).toBe(ELEVATE);
     expect(spawn.mock.calls[1]?.[1]?.[0]).toBe(INSTALLER);
     expect(openPath).not.toHaveBeenCalled();
+  });
+
+  it("rejects when elevate.exe could not start the installer", async () => {
+    mockSpawn("EACCES", 1223);
+    const { launcher, errors } = createHarness(INSTALLER);
+
+    await expect(launcher.launch()).rejects.toThrow(
+      "The update installer did not start with administrator rights.",
+    );
+    expect(errors).toEqual([]);
   });
 
   it("rejects when neither the installer nor elevate.exe starts, and can retry", async () => {
@@ -241,9 +255,9 @@ describe.skipIf(process.platform === "win32")("InstallerLauncher starting proces
   let dir: string;
   let marker: string;
 
-  function script(name: string, mode: number) {
+  function script(name: string, mode: number, exitCode = 0) {
     const file = join(dir, name);
-    writeFileSync(file, `#!/bin/sh\necho "$0 $*" > "${marker}"\n`);
+    writeFileSync(file, `#!/bin/sh\necho "$0 $*" > "${marker}"\nexit ${exitCode}\n`);
     chmodSync(file, mode);
     return file;
   }
@@ -287,6 +301,17 @@ describe.skipIf(process.platform === "win32")("InstallerLauncher starting proces
     await expect(launcher.launch()).rejects.toThrow(
       "The update installer is missing or could not be opened.",
     );
+  });
+
+  it("rejects when elevate.exe exits without starting the installer", async () => {
+    const installer = script("Setup.exe", 0o644);
+    script("elevate.exe", 0o755, 1);
+    const { launcher } = createHarness(installer);
+
+    await expect(launcher.launch()).rejects.toThrow(
+      "The update installer did not start with administrator rights.",
+    );
+    expect(await waitForMarker()).toContain("elevate.exe");
   });
 
   it("rejects when neither the installer nor elevate.exe may run", async () => {

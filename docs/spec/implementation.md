@@ -30,9 +30,11 @@
   then start the installer and quit only once its process started (#141). electron-updater's
   `quitAndInstall()` quits before an asynchronous start failure is known, so
   `InstallerLauncher` (`src/features/installer/installer-launch.ts`) calls `install()` and
-  follows each `spawnLog` it makes: `EACCES`/`UNKNOWN` retry through `elevate.exe`, other
-  failures arrive as `error` events, and `ENOENT` is opened with the shell here rather than by
-  electron-updater, which would not report the outcome. A failed start cancels the quit (closed
+  follows each `spawnLog` it makes: `EACCES`/`UNKNOWN` retry through `elevate.exe`, whose exit
+  code (non-zero when it could not start the installer or the user declined) is awaited here,
+  other failures arrive as `error` events, and `ENOENT` is opened with the shell here rather
+  than by electron-updater, which would not report the outcome. Updater errors of concurrent
+  checks or downloads do not end the launch. A failed start cancels the quit (closed
   pages stay as unloaded tabs) and resets `quitAndInstallCalled`, so Restart can retry and the
   update still installs on a later quit; a started installer keeps it set, so quitting does not
   run the installer again. Failures after the start are not cancelled. A hung renderer's `beforeunload` is ended by Chromium after

@@ -1,3 +1,5 @@
+import childProcess from "node:child_process";
+import path from "node:path";
 import { logWarn } from "../../shared/log";
 
 /**
@@ -49,6 +51,32 @@ function launchFailure(error: unknown): string {
 }
 
 /**
+ * Start `elevate.exe` as electron-updater's `spawnLog` does, but resolve only once it exited
+ * having started the installer.
+ */
+function runElevate(
+  cmd: string,
+  args: string[] = [],
+  env?: unknown,
+  stdio: unknown = "ignore",
+): Promise<boolean> {
+  return new Promise((resolve, reject) => {
+    const child = childProcess.spawn(cmd, args, {
+      stdio: stdio as childProcess.StdioOptions,
+      env: env as NodeJS.ProcessEnv | undefined,
+      detached: true,
+    });
+    child.once("error", reject);
+    child.once("exit", (code) => {
+      if (code === 0) resolve(true);
+      else
+        reject(new LaunchFailure("The update installer did not start with administrator rights."));
+    });
+    child.unref();
+  });
+}
+
+/**
  * Starts electron-updater's installer and settles once it is known whether the installer
  * process started, so the browser quits only then.
  *
@@ -59,6 +87,10 @@ function launchFailure(error: unknown): string {
  * reports other failures as an `error` event, which `fail` attributes to the attempt only while
  * a failure of the attempt is being reported. For `ENOENT` it would open the installer with the
  * shell and never report the outcome, so that is done here instead.
+ *
+ * `elevate.exe` starts the installer with administrator rights and exits, with a non-zero code
+ * when it could not start it (also when the user declines the prompt). electron-updater only
+ * waits for the helper process to start, so its start is done here and waits for that exit.
  */
 export class InstallerLauncher {
   private attempt: Attempt | undefined;
@@ -79,9 +111,13 @@ export class InstallerLauncher {
     }
     const hadOwn = Object.hasOwn(updater, "spawnLog");
     updater.spawnLog = (cmd, args, env, stdio) => {
-      const spawn = spawnLog.call(updater, cmd, args, env, stdio);
       const attempt = this.attempt;
-      return attempt ? this.follow(attempt, cmd, spawn) : spawn;
+      if (!attempt) return spawnLog.call(updater, cmd, args, env, stdio);
+      const spawn =
+        path.win32.basename(cmd).toLowerCase() === "elevate.exe"
+          ? runElevate(cmd, args, env, stdio)
+          : spawnLog.call(updater, cmd, args, env, stdio);
+      return this.follow(attempt, cmd, spawn);
     };
     this.restoreSpawn = () => {
       if (hadOwn) updater.spawnLog = spawnLog;
