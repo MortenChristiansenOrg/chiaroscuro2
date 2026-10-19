@@ -30,6 +30,7 @@ export class WindowContentFocus {
   private focusedAtBlur: FocusableContents | undefined;
   private shellFocus: NodeJS.Immediate | undefined;
   private readonly tracked = new WeakSet<FocusableContents>();
+  private readonly pressListeners = new Set<() => void>();
 
   constructor(
     private readonly window: FocusWindow,
@@ -80,9 +81,19 @@ export class WindowContentFocus {
     this.window.focus();
   }
 
+  /** Follow mouse and touch presses in this window's own contents and the contents it shows. */
+  onPress(listener: () => void): () => void {
+    this.pressListeners.add(listener);
+    return () => this.pressListeners.delete(listener);
+  }
+
   private trackPresses(contents: FocusableContents): void {
     contents.on("input-event", (_event, input) => {
       if (!PRESS_EVENTS.has(input.type)) return;
+      // Contents tracked here may have moved to another window since.
+      if (contents === this.window.webContents || this.canRestore(contents)) {
+        for (const listener of this.pressListeners) listener();
+      }
       // The click came before the window's focus event: nothing to restore.
       this.focusedAtBlur = undefined;
       // The click came after focus was restored elsewhere: follow the click.

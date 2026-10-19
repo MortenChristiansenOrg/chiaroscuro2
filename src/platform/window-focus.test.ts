@@ -269,3 +269,29 @@ describe("activating the window for a page", () => {
     expect(owner.current).toBe(shell);
   });
 });
+
+describe("presses in the window (#131)", () => {
+  it("reports presses in the window's own contents and in pages it shows", () => {
+    const { shell, page, focus } = fixture();
+    const listener = vi.fn();
+    focus.onPress(listener);
+    shell.press();
+    page.press("touchStart");
+    expect(listener).toHaveBeenCalledTimes(2);
+  });
+
+  it("ignores other input and pages shown in another window now", () => {
+    let shown = true;
+    const { shell, page, focus } = fixture(() => shown);
+    const listener = vi.fn();
+    const stop = focus.onPress(listener);
+    shell.press("mouseMove");
+    // A page moved to the sub-tab window stays tracked here.
+    shown = false;
+    page.press();
+    expect(listener).not.toHaveBeenCalled();
+    stop();
+    shell.press();
+    expect(listener).not.toHaveBeenCalled();
+  });
+});
