@@ -71,6 +71,11 @@ has no dependency on `electron-chrome-extensions`.
   window and `tabs.update`/`windows.update` focus it. Bitwarden finds, focuses and
   closes its single-action pop-outs this way. Current-window tab queries still return
   the browser window's tabs, even from inside an extension window.
+- Report window positions as Chrome's `left`/`top`. `windows.create` and
+  `windows.update` honour `left`/`top`/`width`/`height` for extension windows, fitted
+  inside the work area of the display they overlap most (or the nearest one), so
+  Bitwarden's pop-out opens at the browser window's top right. Extensions cannot move
+  or resize the browser window.
 - Use native WebContents IDs for extension tabs, and the browser's selected tab
   for active-tab queries. Redact URLs/titles without tabs or matching host permissions.
 - Relay native storage invalidations to MV3 workers, whose storage events are

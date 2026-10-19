@@ -5,6 +5,7 @@ import {
   type MenuItemConstructorOptions,
   Notification,
   type ServiceWorkerMain,
+  screen,
   session,
   type WebContents,
   type WebFrameMain,
@@ -21,12 +22,28 @@ import {
 import { matchesUrl } from "./extension-match-pattern";
 import { confirmLeave } from "./leave-prompt";
 import type { ExtensionTabActions } from "./types";
+import { fitToWorkArea } from "./window-placement";
 
 type Host = WebFrameMain | ServiceWorkerMain;
 type Caller = { extension: Electron.Extension; host: Host; contents?: WebContents };
 type Tab = { id: TabId; contents: WebContents; window: BrowserWindow };
 const object = z.record(z.string(), z.unknown());
 const idSchema = z.number().int().nonnegative();
+const sizeSchema = z.number().int().positive().max(4000).optional();
+// A coordinate computed from a missing value (NaN) is ignored rather than failing the call.
+const coordinateSchema = z
+  .union([z.number(), z.nan()])
+  .optional()
+  .transform((value) =>
+    value !== undefined && Number.isFinite(value) ? Math.round(value) : undefined,
+  );
+const boundsSchema = z.object({
+  left: coordinateSchema,
+  top: coordinateSchema,
+  width: sizeSchema,
+  height: sizeSchema,
+});
+type RequestedBounds = z.infer<typeof boundsSchema>;
 const menuSchema = z
   .object({
     id: z.string().min(1),
@@ -449,7 +466,7 @@ export class ExtensionRuntime {
       focused: window.isFocused(),
       type: this.extensionWindows.has(window.id) ? "popup" : "normal",
       incognito: false,
-      ...window.getBounds(),
+      ...this.windowBounds(window),
       state: window.isMaximized() ? "maximized" : "normal",
       tabs: (this.extensionWindows.has(window.id)
         ? [this.windowTab(window)]
@@ -458,6 +475,28 @@ export class ExtensionRuntime {
             .map((tab) => this.tabDetails(tab.contents.id))
       ).map((tab) => (extension ? this.visibleTab(tab, extension) : tab)),
     };
+  }
+
+  /** Chrome reports a window's position as left and top. */
+  private windowBounds(window: BrowserWindow) {
+    const { x, y, width, height } = window.getBounds();
+    return { left: x, top: y, width, height };
+  }
+
+  /** Move or resize an extension window as requested, keeping it inside a display's work area. */
+  private placeWindow(window: BrowserWindow, requested: RequestedBounds) {
+    const current = window.getBounds();
+    window.setBounds(
+      fitToWorkArea(
+        {
+          x: requested.left ?? current.x,
+          y: requested.top ?? current.y,
+          width: requested.width ?? current.width,
+          height: requested.height ?? current.height,
+        },
+        screen.getAllDisplays().map((display) => display.workArea),
+      ),
+    );
   }
 
   private permissions(extension: Electron.Extension) {
@@ -629,13 +668,8 @@ export class ExtensionRuntime {
         return this.windowDetails(win, caller.extension);
       }
       case "windows.create": {
-        const data = z
-          .object({
-            url: z.string(),
-            focused: z.boolean().optional(),
-            width: z.number().int().positive().max(4000).optional(),
-            height: z.number().int().positive().max(4000).optional(),
-          })
+        const data = boundsSchema
+          .extend({ url: z.string(), focused: z.boolean().optional() })
           .parse(args[0]);
         const url = this.navigationUrl(data.url, caller.extension);
         const win = new BrowserWindow({
@@ -652,6 +686,8 @@ export class ExtensionRuntime {
         });
         // The application menu holds browser accelerators that act on the main window.
         win.removeMenu();
+        // Bitwarden places its pop-out at the browser window's top right.
+        if (data.left !== undefined || data.top !== undefined) this.placeWindow(win, data);
         this.extensionWindows.set(win.id, { extensionId: extId, window: win });
         const windowId = win.id;
         const contents = win.webContents;
@@ -695,19 +731,11 @@ export class ExtensionRuntime {
             : undefined;
         if (own) {
           // Bitwarden focuses an open single-action pop-out instead of opening a duplicate.
-          // Like windows.create, this honours the size but not the position.
-          const data = z
-            .object({
-              focused: z.boolean().optional(),
-              width: z.number().int().positive().max(4000).optional(),
-              height: z.number().int().positive().max(4000).optional(),
-            })
-            .parse(args[1]);
-          if (data.width || data.height) {
-            const { width, height } = own.getBounds();
-            own.setSize(data.width ?? width, data.height ?? height);
-          }
-          if (data.focused) own.focus();
+          const data = boundsSchema.extend({ focused: z.boolean().optional() }).parse(args[1]);
+          const { focused, ...bounds } = data;
+          if (Object.values(bounds).some((value) => value !== undefined))
+            this.placeWindow(own, bounds);
+          if (focused) own.focus();
           return this.windowDetails(own, caller.extension);
         }
         const win = this.getWindow();
