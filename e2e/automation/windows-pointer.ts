@@ -13,7 +13,11 @@ export async function windowsPointer(
 ): Promise<{ x: number; y: number; window: number; foreground: number; hitTest: number }> {
   if (process.platform !== "win32") throw new Error("UNSUPPORTED: Windows desktop input required");
   const native = await session.app.evaluate(({ BrowserWindow, screen }, point) => {
-    const win = BrowserWindow.getAllWindows().find((candidate) => !candidate.getParentWindow());
+    // Other top-level windows of the app, such as a website's popup, are not the shell.
+    const win = BrowserWindow.getAllWindows().find(
+      (candidate) =>
+        !candidate.getParentWindow() && candidate.webContents.getURL().includes("/out/renderer/"),
+    );
     if (!win) throw new Error("No owned shell window");
     win.show();
     win.focus();

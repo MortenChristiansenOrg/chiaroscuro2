@@ -54,9 +54,9 @@ Sub-tabs keep the user's context by avoiding full tab switches for casual link-f
 ### Keyboard focus
 
 - A newly opened sub-tab takes keyboard focus from the browser, so typing reaches its page. Revealing the previous sub-tab after closing the top one keeps focus in the sub-tabs.
-- Switching back to the browser (Alt-Tab, closing the command palette, restoring the minimized window) returns focus to the sub-tab page that had it.
+- Switching back to the browser (Alt-Tab, the taskbar, closing the command palette, restoring the minimized window, or another program activating the browser) returns focus to the sub-tab page that had it, wherever the pointer is. A click or touch on the browser's own UI, such as its sidebar or toolbar, keeps the focus it gives.
 - When the sub-tab page that has focus goes away, because the last sub-tab closes, is promoted or its tab is switched away from, focus moves to the page of the now active tab, or to that tab's own sub-tab. Like any tab switch, switching tabs from the browser's own UI leaves focus there.
-- While a sub-tab page has focus, the browser window keeps looking active and browser shortcuts and Escape keep working. Alt+F4 closes the browser window. On Windows, Win+Up maximizes the browser window and Win+Down restores or minimizes it.
+- While a sub-tab page has focus, the browser window keeps looking active and browser shortcuts and Escape keep working. Alt+F4 closes the browser window. On Windows, the window keys act on the browser window as they do while it has focus: Win+Left and Win+Right snap it to a side of the screen, Win+Up and Win+Down maximize, restore, minimize or snap it to a corner, Win+Shift+Up stretches it to the full screen height, and Win+Shift+Left and Win+Shift+Right move it to another monitor. Typing stays in the sub-tab page. Windows' Snap Assist does not appear for these.
 - Escape in the command palette opened over a sub-tab closes only the palette. Focus returns to the sub-tab page.
 - Opening a sub-tab never takes focus from another application or from the command palette.
 

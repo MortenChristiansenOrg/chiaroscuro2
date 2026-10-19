@@ -8,7 +8,8 @@ param(
   [switch]$Click,
   # System.Windows.Forms.SendKeys syntax, for example 'hi' or '{ESC}'.
   [string]$Keys = '',
-  # Arrow keys pressed with the Windows key, which SendKeys cannot send, for example 'Down,Up'.
+  # Arrow keys pressed with the Windows key, which SendKeys cannot send, for example
+  # 'Down,Up,Shift+Left'.
   [string]$WindowsArrows = ''
 )
 $ErrorActionPreference = 'Stop'
@@ -67,13 +68,17 @@ foreach ($key in [regex]::Matches($Keys, '[\^%+]*(\{[^}]+\}|\(.*?\)|.)')) {
   [System.Windows.Forms.SendKeys]::SendWait($key.Value)
 }
 $arrowKeys = @{ Left = 0x25; Up = 0x26; Right = 0x27; Down = 0x28 }
-foreach ($arrow in ($WindowsArrows -split ',' | Where-Object { $_ })) {
-  if (-not $arrowKeys.ContainsKey($arrow)) { throw "Unknown arrow key $arrow" }
+foreach ($gesture in ($WindowsArrows -split ',' | Where-Object { $_ })) {
+  $shift = $gesture.StartsWith('Shift+')
+  $arrow = $gesture -replace '^Shift\+', ''
+  if (-not $arrowKeys.ContainsKey($arrow)) { throw "Unknown arrow key $gesture" }
   Assert-AppForeground | Out-Null
   # Extended keys: the left Windows key and the arrows outside the numeric keypad.
   [VerificationInput]::keybd_event(0x5B, 0, 1, [UIntPtr]::Zero)
+  if ($shift) { [VerificationInput]::keybd_event(0xA0, 0, 0, [UIntPtr]::Zero) }
   [VerificationInput]::keybd_event([byte]$arrowKeys[$arrow], 0, 1, [UIntPtr]::Zero)
   [VerificationInput]::keybd_event([byte]$arrowKeys[$arrow], 0, 3, [UIntPtr]::Zero)
+  if ($shift) { [VerificationInput]::keybd_event(0xA0, 0, 2, [UIntPtr]::Zero) }
   [VerificationInput]::keybd_event(0x5B, 0, 3, [UIntPtr]::Zero)
   # Let the shell act on the window before the next key or observation.
   Start-Sleep -Milliseconds 500
