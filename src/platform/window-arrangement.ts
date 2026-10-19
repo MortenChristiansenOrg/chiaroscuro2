@@ -82,18 +82,19 @@ export function arrangementOf(bounds: Rect, area: Rect, maximized: boolean): Arr
 
 const center = (area: Rect) => area.x + area.width / 2;
 
+const middle = (area: Rect) => area.y + area.height / 2;
+
 /**
- * The work area next to this one in a direction. Past the last display, Windows continues from the
- * display at the other end, which is this one if it is the only display.
+ * The work area next to this one in a direction: displays in order from left to right, and from
+ * top to bottom where they are stacked. Past the last display, Windows continues from the display
+ * at the other end, which is this one if it is the only display.
  */
 export function nextArea(areas: readonly Rect[], from: Rect, side: Side): Rect {
-  const sign = side === "left" ? -1 : 1;
-  const beyond = areas.filter((area) => sign * (center(area) - center(from)) > 0);
-  const nearest = (candidates: readonly Rect[], pick: (a: number, b: number) => boolean) =>
-    candidates.reduce((best, area) => (pick(center(area), center(best)) ? area : best));
-  if (beyond.length) return nearest(beyond, (a, b) => sign * (a - b) < 0);
-  // Wrap around to the display furthest the other way.
-  return nearest([from, ...areas], (a, b) => sign * (a - b) < 0);
+  const order = [...areas].sort((a, b) => center(a) - center(b) || middle(a) - middle(b));
+  const index = order.findIndex((area) => sameRect(area, from));
+  if (index < 0) return from;
+  const step = side === "left" ? -1 : 1;
+  return order[(index + step + order.length) % order.length] ?? from;
 }
 
 /** The same place on another display, as Windows moves a window there (Win+Shift+Left/Right). */
@@ -205,7 +206,6 @@ export function defaultRestoreBounds(area: Rect): Rect {
 interface ArrangedWindow {
   getBounds(): Rect;
   setBounds(bounds: Rect): void;
-  getNormalBounds(): Rect;
   isMaximized(): boolean;
   isMinimized(): boolean;
   isFullScreen(): boolean;
@@ -254,11 +254,9 @@ export class WindowArranger {
         break;
       case "maximize":
         if (win.isMaximized()) win.unmaximize();
-        if (!sameRect(this.screen.getDisplayMatching(win.getBounds()).workArea, action.area)) {
-          const normal = win.getNormalBounds();
-          const from = this.screen.getDisplayMatching(normal).workArea;
-          win.setBounds(moveToArea(normal, from, action.area));
-        }
+        // Restoring the window on the other display later returns it to its bounds from before.
+        if (!sameRect(this.screen.getDisplayMatching(win.getBounds()).workArea, action.area))
+          win.setBounds(this.restoreBoundsIn(action.area));
         win.maximize();
         break;
       case "restore": {

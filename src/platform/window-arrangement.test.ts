@@ -114,6 +114,16 @@ describe("window keys with more displays", () => {
     expect(nextArea([area], area, "left")).toBe(area);
   });
 
+  it("orders displays stacked above one another from top to bottom", () => {
+    const below: Rect = { x: 0, y: 1080, width: 1920, height: 1032 };
+    expect(nextArea([below, area], area, "right")).toBe(below);
+    expect(nextArea([below, area], area, "left")).toBe(below);
+    expect(nextArea([below, area], below, "right")).toBe(area);
+    expect(action("shift+right", restored, false, [area, below])).toEqual(
+      to({ ...restored, y: 1080 + 100 }),
+    );
+  });
+
   it("Win+Left on a window snapped left snaps it right on the display to the left", () => {
     expect(action("left", left, false, areas)).toEqual(
       to({ x: -640, y: 0, width: 640, height: 984 }),
@@ -230,6 +240,34 @@ describe("WindowArranger", () => {
     expect(win.bounds).toEqual(right);
     arranger.press("left");
     expect(win.bounds).toEqual(restored);
+  });
+
+  it("restores a window moved to another display maximized to its bounds from before", () => {
+    const second: Rect = { x: 1920, y: 0, width: 2560, height: 1392 };
+    const contains = (outer: Rect, rect: Rect) => {
+      const x = rect.x + rect.width / 2;
+      const y = rect.y + rect.height / 2;
+      return (
+        x >= outer.x && x < outer.x + outer.width && y >= outer.y && y < outer.y + outer.height
+      );
+    };
+    const twoDisplays = {
+      getDisplayMatching: (rect: Rect) => ({
+        workArea: contains(second, rect) ? second : area,
+      }),
+      getAllDisplays: () => [{ workArea: area }, { workArea: second }],
+    };
+    const win = new FakeWindow();
+    const arranger = new WindowArranger(win, twoDisplays);
+    arranger.press("left");
+    arranger.press("up");
+    arranger.press("up");
+    expect(win.maximized).toBe(true);
+    arranger.press("shift+right");
+    expect(win.maximized).toBe(true);
+    expect(twoDisplays.getDisplayMatching(win.bounds).workArea).toBe(second);
+    arranger.press("down");
+    expect(win.bounds).toEqual({ x: 1920 + 133, y: 135, width: 1200, height: 800 });
   });
 
   it("minimizes, and ignores keys while minimized", () => {

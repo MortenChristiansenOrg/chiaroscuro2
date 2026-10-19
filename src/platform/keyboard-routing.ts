@@ -90,6 +90,9 @@ export function routeShortcutsToFocus<W extends RoutedWindow>(options: {
   });
 }
 
+/** How long before an arrow's release a release of Shift still counts as Shift held for it. */
+const SHIFT_RELEASE_MS = 150;
+
 const WINDOW_ARROWS: Record<string, "up" | "down" | "left" | "right"> = {
   ArrowUp: "up",
   ArrowDown: "down",
@@ -110,8 +113,13 @@ export class WindowArrowKeys {
   private windowsKeyHeld = false;
   /** The Windows key is held, or was released with no key pressed since. */
   private windowsKey = false;
+  /** When Shift was last released while the Windows key was held. */
+  private shiftReleasedAt: number | undefined;
 
-  constructor(private readonly platform = process.platform) {}
+  constructor(
+    private readonly platform = process.platform,
+    private readonly now = Date.now,
+  ) {}
 
   /** Follow a key event of the window; returns a completed window key. */
   input(input: KeyInput): WindowKey | undefined {
@@ -122,6 +130,7 @@ export class WindowArrowKeys {
         this.windowsKey = true;
       } else {
         this.windowsKey = this.windowsKeyHeld;
+        if (input.key !== "Shift") this.shiftReleasedAt = undefined;
         if (WINDOW_ARROWS[input.key]) this.pressed.add(input.key);
       }
       return undefined;
@@ -131,16 +140,27 @@ export class WindowArrowKeys {
       this.windowsKeyHeld = false;
       return undefined;
     }
+    if (input.key === "Shift") {
+      if (this.windowsKeyHeld) this.shiftReleasedAt = this.now();
+      return undefined;
+    }
     const arrow = WINDOW_ARROWS[input.key];
     if (!arrow) return undefined;
     if (this.pressed.delete(input.key)) return undefined;
     if (!this.windowsKey || input.control || input.alt) return undefined;
-    if (!input.shift) return arrow;
+    // The arrow's press is not seen. Shift released just before the arrow was most likely held
+    // for its press, while a tap of Shift before Win+arrow ends well before the arrow's release.
+    const shift =
+      input.shift ||
+      (this.shiftReleasedAt !== undefined && this.now() - this.shiftReleasedAt <= SHIFT_RELEASE_MS);
+    this.shiftReleasedAt = undefined;
+    if (!shift) return arrow;
     return arrow === "down" ? undefined : `shift+${arrow}`;
   }
 
   /** Key events of a window that lost focus go elsewhere. */
   reset(): void {
+    this.shiftReleasedAt = undefined;
     this.pressed.clear();
     this.windowsKeyHeld = false;
     this.windowsKey = false;
