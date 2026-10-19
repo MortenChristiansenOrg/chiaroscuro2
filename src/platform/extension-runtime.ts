@@ -20,7 +20,7 @@ import {
   suggestedShortcut,
 } from "./extension-commands";
 import { matchesUrl } from "./extension-match-pattern";
-import { confirmLeave } from "./leave-prompt";
+import { askBeforeClosingWindow } from "./leave-prompt";
 import type { ExtensionTabActions } from "./types";
 import { fitToDisplay } from "./window-placement";
 
@@ -695,9 +695,7 @@ export class ExtensionRuntime {
         const contents = win.webContents;
         const tabId = contents.id;
         // Electron cancels a close vetoed by beforeunload without asking; Chrome asks.
-        contents.on("will-prevent-unload", (event) => {
-          if (confirmLeave(win, caller.extension.name)) event.preventDefault();
-        });
+        askBeforeClosingWindow(win, () => caller.extension.name);
         // Announce the window and its tab once loaded; a window closed while loading never was.
         let announced = false;
         win.on("closed", () => {

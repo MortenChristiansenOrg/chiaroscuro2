@@ -1,5 +1,6 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { answerLeavePrompts, leavePrompts, warnBeforeUnload } from "../automation/leave-prompt";
 import { startSite } from "../automation/site";
 import { expect, test } from "../fixtures/electron-app";
 
@@ -77,6 +78,17 @@ test("restored tabs create native views on demand and keep extension inventories
     expect(await nativeTabs()).toHaveLength(5);
     expect((await nativeTabs()).some((t) => t.tabId === ids[1])).toBe(false);
     expect((await session.capture("restored-tabs")).status).toBe("complete");
+
+    // A quit the user cancels unloads pages it asked about, but extensions keep a native
+    // view for every tab: the tabs whose pages closed get new, unloaded ones.
+    const tabIds = (await nativeTabs()).map((t) => t.tabId).sort();
+    await warnBeforeUnload(await session.page(activated));
+    await answerLeavePrompts(session.app, [false]);
+    await session.app.evaluate(({ app }) => app.quit());
+    await expect.poll(() => leavePrompts(session.app)).toHaveLength(1);
+    await session.target((t) => t.tabId === ids[0] && t.visible);
+    expect((await nativeTabs()).map((t) => t.tabId).sort()).toEqual(tabIds);
+    await answerLeavePrompts(session.app, [true]);
   } finally {
     await site.close();
   }

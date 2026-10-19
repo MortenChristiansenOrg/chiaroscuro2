@@ -53,6 +53,24 @@ export interface Platform {
     options?: { lazy?: boolean; cloneFrom?: TabId },
   ): Promise<TabId>;
   closeTab(tabId: TabId): Promise<void>;
+
+  // Quitting
+  /**
+   * Ask about every page with unsaved changes before the browser window closes or the app
+   * quits, closing pages in turn to run their warnings. Resolves whether to proceed: false
+   * once the user stays on a page. Overlapping calls share one answer, and a confirmed quit
+   * is not asked again until `cancelQuit`.
+   */
+  confirmQuit(): Promise<boolean>;
+  /** A confirmed quit did not happen: keep the tabs whose pages were closed and ask next time. */
+  cancelQuit(): void;
+  /**
+   * A quit did not happen after pages were closed to ask about them. Their tabs remain as
+   * unloaded tabs that load again when shown; `stayedTabId` is the page the user stayed on.
+   */
+  onQuitCancelled(
+    callback: (details: { unloadedTabIds: TabId[]; stayedTabId?: TabId }) => void,
+  ): () => void;
   navigateTab(tabId: TabId, url: string): Promise<void>;
   getTabUrl(tabId: TabId): string | undefined;
   /** Missing or dormant pages are not ready for scripts. */

@@ -57,6 +57,8 @@ let checkTimer: ReturnType<typeof setInterval> | undefined;
 let initialCheckTimer: ReturnType<typeof setTimeout> | undefined;
 let stopProtocolListener: (() => void) | undefined;
 let stopProtocolAllowedListener: (() => void) | undefined;
+// An update install was requested and the browser is quitting for it.
+let installRequested = false;
 // Shared autoUpdater reference — populated in start(), used by command handlers.
 // Dynamic import("electron-updater") doesn't expose getter-defined exports reliably
 // across ESM/CJS boundary, so we cache the reference after the first successful import.
@@ -91,7 +93,20 @@ export default defineFeature<Deps>({
 
     commands.handle(INSTALLER_APPLY_UPDATE, async () => {
       if (!cachedAutoUpdater) throw new Error("Auto-updater not initialized");
-      cachedAutoUpdater.quitAndInstall();
+      // Ask about unsaved changes before the installer starts: after that the browser must quit.
+      if (!(await platform.confirmQuit()))
+        throw new Error("Restart cancelled to keep unsaved changes.");
+      installRequested = true;
+      try {
+        cachedAutoUpdater.quitAndInstall();
+      } catch (error) {
+        installRequested = false;
+        platform.cancelQuit();
+        throw error;
+      }
+      // An installer that cannot start is reported during quitAndInstall. Otherwise the browser
+      // now quits, and a later failure must not restore tabs while it tears down.
+      installRequested = false;
     });
 
     commands.handle(INSTALLER_DISMISS_UPDATE, async () => {
@@ -225,6 +240,11 @@ export default defineFeature<Deps>({
             // electron-updater emits "error" AND rejects the checkForUpdates() promise
             // for the same failure. We handle it here; callers swallow the rejection.
             console.error("[installer] Update error:", err);
+            // The installer could not start, so the browser keeps running.
+            if (installRequested) {
+              installRequested = false;
+              platform.cancelQuit();
+            }
             events.emit(INSTALLER_UPDATE_ERROR, {
               message: err instanceof Error ? err.message : String(err),
             });
@@ -281,6 +301,7 @@ export default defineFeature<Deps>({
 
   teardown() {
     updateGeneration++;
+    installRequested = false;
     if (checkTimer) {
       clearInterval(checkTimer);
       checkTimer = undefined;

@@ -7,7 +7,31 @@
 - Tab switching = show/hide views, not destroy/create
 - Closing a tab or sub-tab runs `beforeunload`. Electron cancels a vetoed close silently, so
   `will-prevent-unload` asks the shared "Leave this page?" prompt (`src/platform/leave-prompt.ts`)
-  synchronously; Leave overrides the veto. Window close and quit do not unload tab pages.
+  synchronously; Leave overrides the veto.
+- Quitting, closing the browser window and update restarts ask about unsaved changes first
+  (#121). `before-quit` and the browser window's `close` are prevented until
+  `ElectronPlatform.confirmQuit()` (`src/platform/quit-confirmation.ts`) has closed the pages
+  in turn: page windows newest first (pop-ups and extension windows, registered with
+  `askBeforeClosingWindow`; closing an opener destroys its pop-ups without `beforeunload`),
+  top sub-tab, shown tab, hidden tabs. Electron 44 runs a vetoing `beforeunload` on
+  close even on pages without a user gesture, and offers no way to run it without closing, so
+  every live page is closed (about 4 ms each when it does not warn). Overlapping requests share
+  one answer; once confirmed, the real quit tears down features and closes windows without
+  asking. Stay resolves false before anything is torn down. Tabs whose pages closed become
+  unloaded tabs again: pending entries, or new unloaded native views while an extension is
+  loaded, since extensions identify tabs by native contents. `onTabEvent` subscriptions are kept
+  per tab and move to the new contents. The tabs feature marks them unloaded and shows the
+  page the user stayed on (or reloads the shown tab), the workspaces feature switches to the
+  stayed page's workspace, and the sub-tabs feature reloads sub-tab pages in place. Tabs were persisted as they changed, so the next session restores them all.
+- Quitting never waits on pages: 3 s per page and 5 s in total, excluding time spent in
+  prompts (`leavePromptTime`). A page passed over keeps its prompt: staying on it while later
+  pages are checked cancels the quit, and once the quit is confirmed it leaves without asking.
+  An explicit tab close during a quit wins over restoring the tab. Update restarts ask first;
+  an installer that cannot start is reported inside `quitAndInstall` and cancels the quit,
+  while later failures arrive after the browser began quitting and are not cancelled. A hung renderer's `beforeunload` is ended by Chromium after
+  about 1 s. Windows `session-end` and `powerMonitor` `shutdown` skip asking. Termination
+  signals reach Chromium's own handler, which quits normally and may ask; Node signal
+  listeners never run, and a second signal kills the process.
 - Keyboard focus: outside macOS, Electron focuses the window's own (shell) WebContents whenever the window is activated. `WindowContentFocus` (`src/platform/window-focus.ts`) remembers which shown page had focus when the window was deactivated and focuses it again, so a page input stays typeable after switching to another app or closing the command palette. A click or touch that activates the window keeps the focus it gives (#114). Sub-tabs are shown in a child window that can be activated so their pages can take keyboard focus (#124). It has its own `WindowContentFocus`; `returnFocusFromSubTabWindow` moves focus back to the browser window's page when the last sub-tab closes.
 - Web tabs use `setZoomMode("isolated")`: zoom belongs to each WebContents, including sub-tabs and adopted contents, while cookies/session sharing is unchanged. Keyboard zoom targets the topmost sub-tab when open. PDF reader zoom is independent.
 - Multi-window support from day 1
@@ -178,6 +202,9 @@ Three-tier lifecycle: **active → suspended → evicted**. Thresholds are user-
 2. `webContents.navigationHistory.getAllEntries()` → save nav stack
 3. Save URL, title, favicon, scroll position
 4. `webContents.close()` → kill renderer process
+
+A quit the user cancels after closing pages to ask about unsaved changes leaves their
+tabs in the same unloaded state as restored tabs (no renderer, loaded when shown).
 
 **Restoration flow:**
 

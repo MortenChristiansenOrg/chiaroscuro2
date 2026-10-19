@@ -59,7 +59,7 @@ None.
 
 - `window:minimize` — Minimize the window.
 - `window:maximize-restore` — Toggle maximize/restore.
-- `window:close` — Close the window.
+- `window:close` — Close the window. Pages with unsaved changes ask first (see [Tabs](TabsFeature.specs.md#quit-or-close-the-browser-window)).
 - `window:copy-address` — Copy the active tab's address to clipboard (with tracking parameter stripping).
 
 ### Events

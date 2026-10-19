@@ -31,6 +31,7 @@ import {
   TABS_NAVIGATE,
   TABS_REORDER,
   TABS_REPORT_CONTENT_BOUNDS,
+  TABS_SET_WORKSPACE,
   TABS_TOGGLE_BOOKMARK,
   TABS_UPDATED,
   type Tab,
@@ -521,6 +522,90 @@ describe("tabs commands", () => {
         width: 100,
         height: 200,
       });
+    });
+  });
+
+  describe("cancelled quit", () => {
+    type QuitCancelled = Parameters<ReturnType<typeof createMockPlatform>["onQuitCancelled"]>[0];
+    function setupQuit() {
+      let cancelled: QuitCancelled | undefined;
+      const result = setup({
+        onQuitCancelled: vi.fn((callback: QuitCancelled) => {
+          cancelled = callback;
+          return () => {};
+        }),
+      });
+      return {
+        ...result,
+        cancelQuit: (details: Parameters<QuitCancelled>[0]) => cancelled?.(details),
+      };
+    }
+
+    it("keeps tabs whose pages were closed and loads them again when shown", async () => {
+      const { commands, platform, cancelQuit } = setupQuit();
+      await commands.send(TABS_CREATE, { url: "https://a.com" });
+      await commands.send(TABS_CREATE, { url: "https://b.com", activate: false });
+      await commands.send(TABS_REPORT_CONTENT_BOUNDS, { x: 0, y: 0, width: 100, height: 100 });
+      vi.mocked(platform.navigateTab).mockClear();
+
+      cancelQuit({ unloadedTabIds: ["tab-1", "tab-2"] as TabId[] });
+      // The shown tab loads again at once.
+      await vi.waitFor(() =>
+        expect(platform.navigateTab).toHaveBeenCalledWith("tab-1", "https://a.com"),
+      );
+      expect(platform.navigateTab).toHaveBeenCalledTimes(1);
+      for (const tabId of ["tab-1", "tab-2"] as TabId[]) {
+        expect(await commands.send(TABS_GET, { tabId })).toBeDefined();
+      }
+
+      // The other one loads once it is shown.
+      await commands.send(TABS_ACTIVATE, { tabId: "tab-2" as TabId });
+      expect(platform.navigateTab).toHaveBeenCalledWith("tab-2", "https://b.com");
+      await commands.send(TABS_ACTIVATE, { tabId: "tab-1" as TabId });
+      expect(platform.navigateTab).toHaveBeenCalledTimes(2);
+    });
+
+    it("shows the page the user stayed on", async () => {
+      const { commands, platform, cancelQuit, getActiveTabId } = setupQuit();
+      await commands.send(TABS_CREATE, { url: "https://a.com" });
+      await commands.send(TABS_CREATE, { url: "https://unsaved.com", activate: false });
+      vi.mocked(platform.navigateTab).mockClear();
+
+      cancelQuit({ unloadedTabIds: ["tab-1"] as TabId[], stayedTabId: "tab-2" as TabId });
+
+      await vi.waitFor(() => expect(getActiveTabId()).toBe("tab-2"));
+      // The unloaded tab waits until it is shown again.
+      expect(platform.navigateTab).not.toHaveBeenCalled();
+    });
+
+    it("leaves a page stayed on in another workspace to the workspaces feature", async () => {
+      const { commands, platform, cancelQuit, getActiveTabId } = setupQuit();
+      await commands.send(TABS_CREATE, { url: "https://a.com" });
+      await commands.send(TABS_CREATE, { url: "https://unsaved.com", activate: false });
+      await commands.send(TABS_SET_WORKSPACE, {
+        tabId: "tab-2" as TabId,
+        workspaceId: "ws-other" as WorkspaceId,
+      });
+      vi.mocked(platform.navigateTab).mockClear();
+
+      cancelQuit({ unloadedTabIds: ["tab-1"] as TabId[], stayedTabId: "tab-2" as TabId });
+
+      await Promise.resolve();
+      expect(getActiveTabId()).toBe("tab-1");
+      // Switching workspaces shows the stayed page, so the shown tab is not loaded first.
+      expect(platform.navigateTab).not.toHaveBeenCalled();
+    });
+
+    it("ignores pages that are not tabs", async () => {
+      const { commands, platform, cancelQuit, getActiveTabId } = setupQuit();
+      await commands.send(TABS_CREATE, { url: "https://a.com" });
+      vi.mocked(platform.navigateTab).mockClear();
+
+      cancelQuit({ unloadedTabIds: ["sub-tab"] as TabId[], stayedTabId: "sub-tab" as TabId });
+
+      await Promise.resolve();
+      expect(getActiveTabId()).toBe("tab-1");
+      expect(platform.navigateTab).not.toHaveBeenCalled();
     });
   });
 });
