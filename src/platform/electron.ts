@@ -51,7 +51,7 @@ import {
 } from "./quit-confirmation";
 import { TabBoundsAnimation } from "./tab-bounds-animation";
 import { insertTabCss, removeTabCss } from "./tab-css";
-import { closeTabContents, createTabView } from "./tab-view";
+import { closeTabContents, closeTabContentsAsking, createTabView } from "./tab-view";
 import type { ExtensionTabActions, Platform, PlatformDownload } from "./types";
 import { isAllowedNavigation, isAllowedUrl } from "./url-policy";
 import { runWebsiteScript } from "./website-script";
@@ -844,7 +844,7 @@ export class ElectronPlatform implements Platform {
     const contents = view.webContents;
     this.closingTabs.add(tabId);
     try {
-      await closeTabContents(contents, () => confirmLeave(this.getWin(), pageName(contents)));
+      await closeTabContentsAsking(contents, () => confirmLeave(this.getWin(), pageName(contents)));
     } finally {
       this.closingTabs.delete(tabId);
     }
@@ -919,6 +919,7 @@ export class ElectronPlatform implements Platform {
               close: (leave) => closePageWindow(win, leave),
               show: () => this.showWindowToAsk(win),
               ask: () => confirmLeaveWindow(win),
+              closed: () => win.isDestroyed(),
             },
             this.showBeforeAsking,
           ),
@@ -998,6 +999,7 @@ export class ElectronPlatform implements Platform {
         close: (leave) => closeTabContents(contents, leave),
         show: () => this.showTabToAsk(tabId, contents),
         ask: () => confirmLeave(this.getWin(), pageName(contents)),
+        closed: () => contents.isDestroyed(),
       },
       this.showBeforeAsking,
     );

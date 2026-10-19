@@ -655,8 +655,10 @@ export default defineFeature<Deps>({
     stopShowPage = platform.onShowPageBeforeAsking(async (tabId) => {
       const parentTabId = resolveParent(tabId, stacks);
       if (parentTabId === tabId) {
-        // The workspaces feature showed the tab; its empty sub-tab frame would cover it.
+        // The workspaces feature showed the tab; its sub-tab frame would cover it.
         if (topSubTab(tabId) && getActiveTabId() === tabId) {
+          // A sub-tab passed over while it was being closed may still have its page.
+          hideAllSubTabs(tabId);
           platform.hideSubTabWindowInstant();
           hiddenWhileAsking = tabId;
         }

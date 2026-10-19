@@ -61,6 +61,28 @@ export function closeTabContents(
   return result;
 }
 
+/**
+ * Close a tab the user closes, asking with `confirmLeave` if its page warns. A close that joined
+ * one which kept the page without asking (quitting checks pages for warnings that way) is tried
+ * again, so the user is asked.
+ */
+export async function closeTabContentsAsking(
+  contents: Electron.WebContents,
+  confirmLeave: () => boolean,
+): Promise<void> {
+  let asked = false;
+  const ask = () => {
+    asked = true;
+    return confirmLeave();
+  };
+  try {
+    await closeTabContents(contents, ask);
+  } catch (error) {
+    if (asked || !(error instanceof StayedOnPage)) throw error;
+    await closeTabContents(contents, ask);
+  }
+}
+
 function requestClose(contents: Electron.WebContents, confirmLeave: () => boolean) {
   return new Promise<void>((resolve, reject) => {
     const cleanup = () => {

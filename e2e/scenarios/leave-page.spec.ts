@@ -268,6 +268,8 @@ test("quitting asks about a pop-up before the page that opened it", async ({
   await answerLeavePrompts(session.app, [false]);
   await quit(session);
   await expect.poll(() => leavePrompts(session.app)).toEqual([leavePrompt("popup")]);
+  // The pop-up is shown while it is asked about.
+  expect((await leavePromptsShown(session.app))[0]?.shown).toContain(`${site.url}/popup`);
   // Staying keeps the pop-up and the page that opened it.
   await expect(popup.message).toHaveValue("unsaved popup");
   await expect(opener.tab.message).toHaveValue("unsaved opener");

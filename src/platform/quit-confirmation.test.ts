@@ -154,16 +154,24 @@ describe("showing a page before asking about it", () => {
     inTurn,
   });
 
-  /** A page whose beforeunload warns while `warns` is true, and whose prompt answers `leaves`. */
-  function page({ warns = true, leaves = true } = {}) {
+  /**
+   * A page whose beforeunload warns when `warns` is true (only the first time when `once`),
+   * and whose prompt answers `leaves`.
+   */
+  function page({ warns = true, once = false, leaves = true } = {}) {
     const steps: string[] = [];
     let open = true;
+    let warnings = 0;
     return {
       steps,
       isOpen: () => open,
+      closed: () => !open,
       close: vi.fn(async (leave: () => boolean) => {
         steps.push("close");
-        if (warns && !leave()) throw new StayedOnPage();
+        if (warns && !(once && warnings > 0)) {
+          warnings++;
+          if (!leave()) throw new StayedOnPage();
+        }
         open = false;
       }),
       show: vi.fn(async () => {
@@ -183,18 +191,57 @@ describe("showing a page before asking about it", () => {
     expect(quiet.isOpen()).toBe(false);
   });
 
-  it("keeps a page that warns, shows it, then closes it again and asks", async () => {
+  it("keeps a page that warns, shows it, asks, then closes it", async () => {
     const warning = page();
     await closeShowingWarning(warning, options());
-    expect(warning.steps).toEqual(["close", "show", "close", "leave"]);
+    expect(warning.steps).toEqual(["close", "show", "leave", "close"]);
     expect(warning.isOpen()).toBe(false);
   });
 
   it("keeps a page the user stays on", async () => {
     const warning = page({ leaves: false });
     await expect(closeShowingWarning(warning, options())).rejects.toBeInstanceOf(StayedOnPage);
-    expect(warning.steps).toEqual(["close", "show", "close", "stay"]);
+    expect(warning.steps).toEqual(["close", "show", "stay"]);
     expect(warning.isOpen()).toBe(true);
+  });
+
+  it("asks about a page whose warning runs only once", async () => {
+    const warning = page({ once: true, leaves: false });
+    await expect(closeShowingWarning(warning, options())).rejects.toBeInstanceOf(StayedOnPage);
+    expect(warning.steps).toEqual(["close", "show", "stay"]);
+    expect(warning.isOpen()).toBe(true);
+  });
+
+  it("keeps a page without asking when the quit was cancelled while it was shown", async () => {
+    const warning = page();
+    warning.show.mockImplementationOnce(async () => {
+      warning.steps.push("show");
+      asking = false;
+    });
+    await expect(closeShowingWarning(warning, options())).rejects.toBeInstanceOf(StayedOnPage);
+    expect(warning.steps).toEqual(["close", "show"]);
+    expect(warning.isOpen()).toBe(true);
+  });
+
+  it("leaves a page without asking when quitting was confirmed while it was shown", async () => {
+    const warning = page();
+    warning.show.mockImplementationOnce(async () => {
+      warning.steps.push("show");
+      confirmed = true;
+    });
+    await closeShowingWarning(warning, options());
+    expect(warning.steps).toEqual(["close", "show", "close"]);
+    expect(warning.isOpen()).toBe(false);
+  });
+
+  it("does not ask about a page that was closed while it was shown", async () => {
+    let open = true;
+    const warning = { ...page(), closed: () => !open };
+    warning.show.mockImplementationOnce(async () => {
+      open = false;
+    });
+    await closeShowingWarning(warning, options());
+    expect(warning.ask).not.toHaveBeenCalled();
   });
 
   it("leaves a page without showing or asking once quitting is confirmed", async () => {
@@ -254,8 +301,8 @@ describe("showing a page before asking about it", () => {
     expect(second.steps).toEqual(["close"]);
     shown();
     await Promise.all(closing);
-    expect(first.steps).toEqual(["close", "show", "close", "leave"]);
-    expect(second.steps).toEqual(["close", "show", "close", "leave"]);
+    expect(first.steps).toEqual(["close", "show", "leave", "close"]);
+    expect(second.steps).toEqual(["close", "show", "leave", "close"]);
   });
 });
 

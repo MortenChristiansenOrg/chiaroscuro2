@@ -22,12 +22,18 @@ export function answerLeavePrompts(app: ElectronApplication, answers: boolean[])
     dialog.showMessageBoxSync = ((...args: unknown[]) => {
       const options = args.at(-1) as Electron.MessageBoxSyncOptions;
       // Pages the user can see while the prompt is open: the window cannot repaint then.
-      const shown = BrowserWindow.getAllWindows()
-        .filter((win) => !win.isDestroyed() && win.isVisible() && !win.isMinimized())
-        .flatMap((win) => win.contentView.children)
-        .filter((view): view is Electron.WebContentsView => view instanceof WebContentsView)
-        .filter((view) => view.getBounds().width > 0 && view.getBounds().height > 0)
-        .map((view) => view.webContents.getURL());
+      const visible = BrowserWindow.getAllWindows().filter(
+        (win) => !win.isDestroyed() && win.isVisible() && !win.isMinimized(),
+      );
+      const shown = [
+        // Pop-up windows show their page in the window itself.
+        ...visible.map((win) => win.webContents.getURL()).filter((url) => url.startsWith("http")),
+        ...visible
+          .flatMap((win) => win.contentView.children)
+          .filter((view): view is Electron.WebContentsView => view instanceof WebContentsView)
+          .filter((view) => view.getBounds().width > 0 && view.getBounds().height > 0)
+          .map((view) => view.webContents.getURL()),
+      ];
       record.leavePrompts?.push({
         title: options.title,
         message: options.message,

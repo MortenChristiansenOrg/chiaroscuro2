@@ -1127,9 +1127,13 @@ describe("showing a page before asking about it when quitting", () => {
     vi.mocked(ctx.platform.showSubTabWindowStatic).mockClear();
     vi.mocked(ctx.platform.hideSubTabWindowInstant).mockClear();
 
+    vi.mocked(ctx.platform.hideTab).mockClear();
+
     await ctx.showPage(parentId);
 
     expect(ctx.platform.hideSubTabWindowInstant).toHaveBeenCalled();
+    // A sub-tab passed over while quitting may still be attached over its parent.
+    expect(ctx.platform.hideTab).toHaveBeenCalledWith(child);
     ctx.cancelQuit({ unloadedTabIds: [child], stayedTabId: parentId });
     expect(ctx.platform.showSubTabWindowStatic).toHaveBeenCalledWith(
       expect.anything(),

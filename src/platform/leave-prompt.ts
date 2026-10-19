@@ -82,7 +82,8 @@ export function confirmLeave(window: BrowserWindow | null | undefined, page: Pag
         : dialog.showMessageBoxSync(options);
     return answer === leave;
   } finally {
-    askingMs += Date.now() - start;
+    // Time spent showing a page already counts while a prompt opens meanwhile.
+    if (showing === 0) askingMs += Date.now() - start;
   }
 }
 

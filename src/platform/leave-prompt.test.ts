@@ -124,6 +124,21 @@ describe("leaving a page", () => {
     now += 1_000;
     expect(leavePromptTime() - before).toBe(500);
   });
+
+  it("counts a prompt that opens while a page is shown only once", async () => {
+    let now = 20_000;
+    vi.spyOn(Date, "now").mockImplementation(() => now);
+    showMessageBoxSync.mockImplementation(() => {
+      now += 2_000;
+      return STAY;
+    });
+    const before = leavePromptTime();
+    await whileShowingPage(async () => {
+      now += 100;
+      confirmLeave(null, { title: "Form" });
+    });
+    expect(leavePromptTime() - before).toBe(2_100);
+  });
 });
 
 describe("closing a page window", () => {

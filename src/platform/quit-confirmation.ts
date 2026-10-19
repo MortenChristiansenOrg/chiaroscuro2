@@ -102,6 +102,8 @@ export interface PageThatMayWarn {
   show(): Promise<void>;
   /** Ask the user whether to leave the page. */
   ask(): boolean;
+  /** The page is gone, for example because the user closed it meanwhile. */
+  closed(): boolean;
 }
 
 export interface ShowBeforeAskingOptions {
@@ -117,9 +119,11 @@ export interface ShowBeforeAskingOptions {
  * Close a page before quitting, and if it warns about unsaved changes, show it before asking
  * about it, as Chrome does. Electron says a page warns only by running its beforeunload, which
  * must be answered at once while nothing can repaint. So the first close keeps a page that
- * warns without asking; once the page is shown and has painted, it is closed again and asked
- * about. Pages without a warning close on the first attempt at no extra cost. Rejects with
- * `StayedOnPage` if the user stays, or the quit was cancelled while the page was closing.
+ * warns without asking. The page is then shown and, once it has painted, the user is asked;
+ * leaving closes it again, overriding its warning. A page whose warning ran only once is still
+ * asked about. Pages without a warning close on the first attempt at no extra cost. Rejects
+ * with `StayedOnPage` if the user stays, or the quit was cancelled before the page was asked
+ * about; the page is then kept.
  */
 export async function closeShowingWarning(
   page: PageThatMayWarn,
@@ -137,12 +141,14 @@ export async function closeShowingWarning(
     if (!warned || !(error instanceof StayedOnPage)) throw error;
   }
   await inTurn(async () => {
-    if (!confirmed()) {
-      if (!asking()) throw new StayedOnPage();
-      await page.show();
-    }
-    await page.close(() => confirmed() || page.ask());
+    if (confirmed()) return;
+    if (!asking()) throw new StayedOnPage();
+    await page.show();
+    if (page.closed() || confirmed()) return;
+    // The user stayed on another page while this one was being shown.
+    if (!asking() || !page.ask()) throw new StayedOnPage();
   });
+  await page.close(() => true);
 }
 
 /**
