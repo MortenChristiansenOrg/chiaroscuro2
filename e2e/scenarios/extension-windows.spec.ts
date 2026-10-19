@@ -62,8 +62,13 @@ async function launch(app: AppSession) {
 const popoutWindows = (app: AppSession) =>
   app.app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()
-      // A closing window, such as the action popup, can still be listed after it is destroyed.
-      .filter((win) => !win.isDestroyed() && win.webContents.getURL().includes("uilocation=popout"))
+      // A closing window, such as the action popup, stays listed after its contents are destroyed.
+      .filter(
+        (win) =>
+          !win.isDestroyed() &&
+          !win.webContents.isDestroyed() &&
+          win.webContents.getURL().includes("uilocation=popout"),
+      )
       .map((win) => ({ id: win.id, menuBar: win.isMenuBarVisible() })),
   );
 

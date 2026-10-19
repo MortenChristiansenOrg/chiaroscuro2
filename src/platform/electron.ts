@@ -2295,7 +2295,8 @@ export class ElectronPlatform implements Platform {
     popup.loadURL(popupUrl);
 
     popup.webContents.once("did-finish-load", () => {
-      if (popup.isDestroyed()) return;
+      // A popup replaced while it was loading must not show and take focus from its successor.
+      if (popup.isDestroyed() || this.extensionPopup !== popup) return;
       popup.show();
       popup.focus();
       closePopupOnBlur(popup, parent, () => BrowserWindow.getFocusedWindow());
