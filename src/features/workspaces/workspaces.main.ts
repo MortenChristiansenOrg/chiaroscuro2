@@ -367,21 +367,50 @@ export default defineFeature<Deps>({
       }
     });
 
-    // Show a page with unsaved changes before asking about it when quitting, even in another
-    // workspace. The sub-tabs feature shows sub-tabs.
+    // Show a page with unsaved changes before asking about it, even in another workspace. The
+    // sub-tabs feature shows sub-tabs. When the user closed the page's tab, go back to the page
+    // they were on afterwards, unless they moved on meanwhile or that page is gone.
     stopShowPage?.();
     stopShowPage = platform.onShowPageBeforeAsking(async (tabId) => {
+      const fromWorkspaceId = getActiveWorkspaceId();
+      const fromTabId = getActiveTabId();
+      // Showing the page makes it the tab its workspace remembers, and so does going back to a
+      // pinned tab or switching back from another workspace. Restore what each remembered.
+      const remembered = new Map<Workspace, TabId | null>();
+      const remember = (ws: Workspace | undefined) => {
+        if (ws && !remembered.has(ws)) remembered.set(ws, ws.activeTabId);
+      };
+      remember(fromWorkspaceId ? workspaces.get(fromWorkspaceId) : undefined);
       if (!isPinned(tabId)) {
         const ws = [...workspaces.values()].find((candidate) =>
           getTabsForWorkspace(candidate.id).some((tab) => tab.id === tabId),
         );
         if (!ws) return;
+        remember(ws);
         if (ws.id !== getActiveWorkspaceId()) {
           ws.activeTabId = tabId;
           await commands.send(WORKSPACES_SWITCH, { workspaceId: ws.id });
         }
       }
       if (getActiveTabId() !== tabId) await commands.send(TABS_ACTIVATE, { tabId });
+      const shownInWorkspaceId = getActiveWorkspaceId();
+      const exists = (id: TabId, workspaceId: WorkspaceId) =>
+        isPinned(id) || getTabsForWorkspace(workspaceId).some((tab) => tab.id === id);
+      return async () => {
+        // The user moved on while the page was shown.
+        if (getActiveTabId() !== tabId || getActiveWorkspaceId() !== shownInWorkspaceId) return;
+        // The page they were on is gone: stay on this one.
+        if (!fromWorkspaceId || !workspaces.has(fromWorkspaceId)) return;
+        if (fromTabId && !exists(fromTabId, fromWorkspaceId)) return;
+        if (fromWorkspaceId !== getActiveWorkspaceId())
+          await commands.send(WORKSPACES_SWITCH, { workspaceId: fromWorkspaceId });
+        if (fromTabId && getActiveTabId() !== fromTabId)
+          await commands.send(TABS_ACTIVATE, { tabId: fromTabId });
+        for (const [ws, tab] of remembered) {
+          if (ws.activeTabId !== tabId) continue;
+          ws.activeTabId = tab && exists(tab, ws.id) ? tab : null;
+        }
+      };
     });
   },
 

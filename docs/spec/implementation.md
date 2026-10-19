@@ -7,7 +7,18 @@
 - Tab switching = show/hide views, not destroy/create
 - Closing a tab or sub-tab runs `beforeunload`. Electron cancels a vetoed close silently, so
   `will-prevent-unload` asks the shared "Leave this page?" prompt (`src/platform/leave-prompt.ts`)
-  synchronously; Leave overrides the veto.
+  synchronously; Leave overrides the veto. `tabs:close` passes `showBeforeAsking`: a tab that is
+  not shown (closed from the sidebar, by clearing ephemeral tabs or by an extension) is closed
+  like a page when quitting (`closeShowingWarning`, below), so it is shown before it is asked
+  about (#150). The `onShowPageBeforeAsking` callbacks then return how to go back (workspaces
+  switches back to the workspace and tab the user was on and restores the remembered tab of the
+  page's workspace; sub-tabs shows a tab's sub-tabs again if it is still active), which run
+  once the user answered, before a left page closes, waiting at most 1 s. They do not run when
+  the user moved to another tab or workspace meanwhile, when the tab or workspace they were on
+  is gone, while a quit asks about pages, or when staying on the page cancelled a quit (the quit
+  shows it). Going back to a pinned tab restores the tab its workspace remembered. The shown
+  tab and sub-tabs are asked about directly, as before. Overlapping closes of one tab share one
+  close.
 - Quitting, closing the browser window and update restarts ask about unsaved changes first
   (#121). `before-quit` and the browser window's `close` are prevented until
   `ElectronPlatform.confirmQuit()` (`src/platform/quit-confirmation.ts`) has closed the pages
@@ -45,8 +56,17 @@
   page passed over cannot ask over another page being shown; a turn is given up after 3 s
   beyond time spent showing pages and answering prompts. A page found to warn after the
   user stayed elsewhere, or while it was being shown, is kept without asking. A tab the user
-  closes during the probe is asked about directly (`closeTabContentsAsking`). `confirmLeave` names the page by title and
-  address (`pageAddress`).
+  closes during the probe is asked about directly (`closeTabContentsAsking`), or shown first
+  if it is not shown. `confirmLeave` names the page by title and address (`pageAddress`).
+- A quit and the tabs the user closes while it asks share their answers (#151): `QuitAnswers`
+  (`src/platform/quit-confirmation.ts`), created for each quit attempt, records the answer
+  given for each page, in the quit's own prompts or by a tab close (and a pop-up closed by the
+  user, through `wrapWindowLeavePrompt`). A tab close requested during the attempt keeps using
+  its answers after the quit ended. A page answered once is neither shown nor asked about
+  again: Leave lets the other close leave it, and Stay keeps it. A Stay given by a tab close
+  cancels the quit exactly like Stay in the quit's own prompt (`closePagesInTurn`'s `stayed`):
+  the page is kept and shown, the pages after it are untouched. A probe that joins another
+  close which kept the page without asking (`StayedOnPage.asked` false) still asks.
 - Quitting never waits on pages: 3 s per page and 5 s in total, excluding time spent in
   prompts (`leavePromptTime`). A page passed over keeps its prompt: staying on it while later
   pages are checked cancels the quit, and once the quit is confirmed it leaves without asking.

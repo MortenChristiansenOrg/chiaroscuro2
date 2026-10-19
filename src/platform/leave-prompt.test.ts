@@ -13,6 +13,7 @@ import {
   StayedOnPage,
   whileShowingPage,
   windowsWithPages,
+  wrapWindowLeavePrompt,
 } from "./leave-prompt";
 
 const LEAVE = 0;
@@ -204,5 +205,26 @@ describe("closing a page window", () => {
     window.close();
     expect(showMessageBoxSync).toHaveBeenCalledTimes(2);
     expect((window as unknown as EventEmitter).listenerCount("closed")).toBe(1);
+  });
+
+  // #151: a pop-up the user closes while a quit asks shares the quit's answer.
+  it("asks through the wrapper when the user closes a page window", () => {
+    const { window, warn } = pageWindow();
+    askBeforeClosingWindow(window, () => ({ title: "Pop-up" }));
+    warn();
+    const answered = new Set<Electron.BrowserWindow>();
+    wrapWindowLeavePrompt((win, ask) => answered.has(win) || ask());
+    try {
+      showMessageBoxSync.mockReturnValue(STAY);
+      window.close();
+      expect(showMessageBoxSync).toHaveBeenCalledTimes(1);
+      expect(window.isDestroyed()).toBe(false);
+      answered.add(window);
+      window.close();
+      expect(showMessageBoxSync).toHaveBeenCalledTimes(1);
+      expect(window.isDestroyed()).toBe(true);
+    } finally {
+      wrapWindowLeavePrompt((_win, ask) => ask());
+    }
   });
 });

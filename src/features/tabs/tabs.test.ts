@@ -311,8 +311,25 @@ describe("tabs commands", () => {
       events.on(TABS_CLOSED, closed);
       await commands.send(TABS_CLOSE, { tabId: "tab-1" as TabId });
 
-      expect(platform.closeTab).toHaveBeenCalledWith("tab-1");
+      expect(platform.closeTab).toHaveBeenCalledWith("tab-1", { showBeforeAsking: true });
       expect(closed).toHaveBeenCalledWith(expect.objectContaining({ tabId: "tab-1" }));
+    });
+
+    // #150: a tab shown to ask about it, with no page to go back to, is the active one.
+    it("activates MRU tab when closing a tab that was shown to ask about it", async () => {
+      const { commands, events, platform, deps } = setup();
+      await commands.send(TABS_CREATE, { url: "https://first.com" });
+      await commands.send(TABS_CREATE, { url: "https://second.com" });
+      await commands.send(TABS_ACTIVATE, { tabId: "tab-1" as TabId });
+      vi.mocked(platform.closeTab).mockImplementationOnce(async () => {
+        deps.setActiveTabId("tab-2" as TabId);
+      });
+
+      const closed = vi.fn();
+      events.on(TABS_CLOSED, closed);
+      await commands.send(TABS_CLOSE, { tabId: "tab-2" as TabId });
+
+      expect(closed).toHaveBeenCalledWith(expect.objectContaining({ activatedTabId: "tab-1" }));
     });
 
     it("activates MRU tab when closing active tab", async () => {
@@ -434,8 +451,8 @@ describe("tabs commands", () => {
       await commands.send(TABS_CLEAR_EPHEMERAL, {});
 
       // Only tab-2 should be closed
-      expect(platform.closeTab).toHaveBeenCalledWith("tab-2");
-      expect(platform.closeTab).not.toHaveBeenCalledWith("tab-1");
+      expect(platform.closeTab).toHaveBeenCalledWith("tab-2", { showBeforeAsking: true });
+      expect(platform.closeTab).not.toHaveBeenCalledWith("tab-1", expect.anything());
     });
 
     it("keeps a tab whose page the user stays on and closes the rest", async () => {

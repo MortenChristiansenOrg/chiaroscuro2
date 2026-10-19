@@ -1,6 +1,9 @@
 import type { ContextMenuItemData } from "../features/context-menu/context-menu.shared";
 import type { Bounds, TabId, WindowId } from "../shared/types";
 
+/** Go back to what was shown before a page was shown to ask about it. */
+export type GoBack = () => Promise<void> | void;
+
 export type { Bounds };
 
 /** Abstraction over a single file download in progress. */
@@ -52,7 +55,14 @@ export interface Platform {
     tabId?: TabId,
     options?: { lazy?: boolean; cloneFrom?: TabId },
   ): Promise<TabId>;
-  closeTab(tabId: TabId): Promise<void>;
+  /**
+   * Close a tab's page. If it warns about unsaved changes, ask "Leave this page?"; reject with
+   * `StayedOnPage` if the user stays. With `showBeforeAsking`, a page that is not shown is
+   * shown before asking, as when quitting (`onShowPageBeforeAsking`), and the user is then
+   * returned to what was shown before, whether they leave or stay (#150). A quit asking at the
+   * same time shares the answer: staying cancels the quit, and the quit does not ask again (#151).
+   */
+  closeTab(tabId: TabId, options?: { showBeforeAsking?: boolean }): Promise<void>;
 
   // Quitting
   /**
@@ -74,12 +84,16 @@ export interface Platform {
     callback: (details: { unloadedTabIds: TabId[]; stayedTabId?: TabId }) => void,
   ): () => void;
   /**
-   * Before asking whether to leave a page with unsaved changes when quitting, show it, as
-   * Chrome does: switch to its workspace and tab, or to its sub-tab. Pages asked about earlier
-   * are gone, including the sub-tabs above it. Callbacks run in turn, in the order they were
-   * registered, and the prompt waits for them only briefly.
+   * Before asking whether to leave a page with unsaved changes, show it, as Chrome does: switch
+   * to its workspace and tab, or to its sub-tab. When quitting, pages asked about earlier are
+   * gone, including the sub-tabs above it. Callbacks run in turn, in the order they were
+   * registered, and the prompt waits for them only briefly. A callback may return how to go
+   * back to what was shown before; when the user closed the tab, these run in the same order
+   * once the user answered, unless a quit is asking.
    */
-  onShowPageBeforeAsking(callback: (tabId: TabId) => Promise<void> | void): () => void;
+  onShowPageBeforeAsking(
+    callback: (tabId: TabId) => Promise<GoBack | undefined> | GoBack | undefined,
+  ): () => void;
   navigateTab(tabId: TabId, url: string): Promise<void>;
   getTabUrl(tabId: TabId): string | undefined;
   /** Missing or dormant pages are not ready for scripts. */

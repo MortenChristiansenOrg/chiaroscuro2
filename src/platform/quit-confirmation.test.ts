@@ -6,8 +6,10 @@ import { StayedOnPage } from "./leave-prompt";
 import {
   closePagesInTurn,
   closeShowingWarning,
+  type GoBack,
   oneAtATime,
   type PageToClose,
+  QuitAnswers,
   QuitConfirmation,
 } from "./quit-confirmation";
 
@@ -129,6 +131,20 @@ describe("closing pages in turn before quitting", () => {
     expect(later.close).not.toHaveBeenCalled();
   });
 
+  // #151: staying on a tab the user closed while the quit asks cancels the quit.
+  it("stops when the user stays on a page elsewhere", async () => {
+    let stayElsewhere = (_id: string) => {};
+    const stayed = new Promise<string>((resolve) => {
+      stayElsewhere = resolve;
+    });
+    const later = closes("c");
+    const result = closePagesInTurn([closes("a"), hangs("b"), later], { ...options(), stayed });
+    await vi.advanceTimersByTimeAsync(0);
+    stayElsewhere("b");
+    await expect(result).resolves.toEqual({ left: false, closed: ["a"], stayedOn: "b" });
+    expect(later.close).not.toHaveBeenCalled();
+  });
+
   it("continues past a page that fails to close", async () => {
     const failing = closes("a", async () => {
       throw new Error("native close failed");
@@ -174,8 +190,9 @@ describe("showing a page before asking about it", () => {
         }
         open = false;
       }),
-      show: vi.fn(async () => {
+      show: vi.fn(async (): Promise<GoBack | undefined> => {
         steps.push("show");
+        return undefined;
       }),
       ask: vi.fn(() => {
         steps.push(leaves ? "leave" : "stay");
@@ -280,15 +297,95 @@ describe("showing a page before asking about it", () => {
     expect(shared.ask).not.toHaveBeenCalled();
   });
 
+  // #150: closing a tab in the background shows it, then goes back to the page the user was on.
+  it.each([
+    [true, ["close", "show", "leave", "back", "close"]],
+    [false, ["close", "show", "stay", "back"]],
+  ])(
+    "goes back after the user answers, before leaving the page (leaves: %s)",
+    async (leaves, steps) => {
+      const warning = page({ leaves });
+      warning.show.mockImplementationOnce(async () => {
+        warning.steps.push("show");
+        return async () => {
+          warning.steps.push("back");
+        };
+      });
+      const closing = closeShowingWarning(warning, options());
+      if (leaves) await closing;
+      else await expect(closing).rejects.toBeInstanceOf(StayedOnPage);
+      expect(warning.steps).toEqual(steps);
+      expect(warning.isOpen()).toBe(!leaves);
+    },
+  );
+
+  it("goes back when quitting was confirmed while the page was shown", async () => {
+    const warning = page();
+    warning.show.mockImplementationOnce(async () => {
+      warning.steps.push("show");
+      confirmed = true;
+      return async () => {
+        warning.steps.push("back");
+      };
+    });
+    await closeShowingWarning(warning, options());
+    expect(warning.steps).toEqual(["close", "show", "back", "close"]);
+  });
+
+  it("shows and asks about a page another close kept without asking", async () => {
+    const shared = page();
+    // Another close checked the page without asking at the same time.
+    shared.close.mockRejectedValueOnce(new StayedOnPage(false));
+    await closeShowingWarning(shared, options());
+    expect(shared.steps).toEqual(["show", "leave", "close"]);
+  });
+
+  // #151: a page answered once while a quit asks is not asked about again.
+  it.each([
+    [true, ["close", "close"], false],
+    [false, ["close"], true],
+  ])(
+    "neither shows nor asks about a page answered elsewhere (left: %s)",
+    async (left, steps, open) => {
+      const answered = { ...page(), answered: () => left };
+      const closing = closeShowingWarning(answered, options());
+      if (left) await closing;
+      else await expect(closing).rejects.toBeInstanceOf(StayedOnPage);
+      expect(answered.steps).toEqual(steps);
+      expect(answered.isOpen()).toBe(open);
+    },
+  );
+
+  it.each([
+    [true, ["close", "show", "close"], false],
+    [false, ["close", "show"], true],
+  ])(
+    "does not ask about a page answered elsewhere while it was shown (left: %s)",
+    async (left, steps, open) => {
+      let answer: boolean | undefined;
+      const warning = { ...page(), answered: () => answer };
+      warning.show.mockImplementationOnce(async () => {
+        warning.steps.push("show");
+        answer = left;
+      });
+      const closing = closeShowingWarning(warning, options());
+      if (left) await closing;
+      else await expect(closing).rejects.toBeInstanceOf(StayedOnPage);
+      expect(warning.ask).not.toHaveBeenCalled();
+      expect(warning.steps).toEqual(steps);
+      expect(warning.isOpen()).toBe(open);
+    },
+  );
+
   it("shows and asks about one page at a time", async () => {
     const inTurn = oneAtATime(3_000);
     const first = page();
     let shown = () => {};
     first.show.mockImplementationOnce(
       () =>
-        new Promise<void>((resolve) => {
+        new Promise<undefined>((resolve) => {
           first.steps.push("show");
-          shown = resolve;
+          shown = () => resolve(undefined);
         }),
     );
     const second = page();
@@ -355,6 +452,34 @@ describe("one at a time", () => {
     await vi.advanceTimersByTimeAsync(1);
     await result;
     expect(next).toHaveBeenCalled();
+  });
+});
+
+// #151: answers given while a quit asks, in its prompts or by closing a tab meanwhile.
+describe("quit answers", () => {
+  it("asks about a page once and keeps the answer", () => {
+    const answers = new QuitAnswers<string>();
+    const page = {};
+    const ask = vi.fn(() => true);
+    expect(answers.answer(page)).toBeUndefined();
+    expect(answers.ask(page, "a", ask)).toBe(true);
+    expect(answers.ask(page, "a", () => false)).toBe(true);
+    expect(ask).toHaveBeenCalledTimes(1);
+    expect(answers.answer(page)).toBe(true);
+    expect(answers.cancelled).toBe(false);
+    expect(answers.stayedOn).toBeUndefined();
+  });
+
+  it("cancels the quit at the first page the user stays on", async () => {
+    const answers = new QuitAnswers<string>();
+    const first = {};
+    const second = {};
+    expect(answers.ask(first, "a", () => false)).toBe(false);
+    expect(answers.ask(second, "b", () => false)).toBe(false);
+    expect(answers.ask(first, "a", () => true)).toBe(false);
+    expect(answers.cancelled).toBe(true);
+    expect(answers.stayedOn).toBe("a");
+    await expect(answers.stayed).resolves.toBe("a");
   });
 });
 

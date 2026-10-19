@@ -105,6 +105,17 @@ const pageWindows = new Set<BrowserWindow>();
 const pageNames = new WeakMap<BrowserWindow, () => PageName>();
 const stayListeners = new WeakMap<BrowserWindow, Set<() => void>>();
 const vetoAnswers = new WeakMap<BrowserWindow, () => boolean>();
+let askAboutWindow = (_window: BrowserWindow, ask: () => boolean) => ask();
+
+/**
+ * Wrap the prompt asked when the user closes a page window, for example so a quit asking at
+ * the same time shares the answer.
+ */
+export function wrapWindowLeavePrompt(
+  wrap: (window: BrowserWindow, ask: () => boolean) => boolean,
+): void {
+  askAboutWindow = wrap;
+}
 
 /**
  * Ask "Leave this page?" when the page shown in its own window (a pop-up or an extension
@@ -115,7 +126,8 @@ export function askBeforeClosingWindow(window: BrowserWindow, name: () => PageNa
   pageNames.set(window, name);
   window.once("closed", () => pageWindows.delete(window));
   window.webContents.on("will-prevent-unload", (event) => {
-    const answer = vetoAnswers.get(window) ?? (() => confirmLeaveWindow(window));
+    const answer =
+      vetoAnswers.get(window) ?? (() => askAboutWindow(window, () => confirmLeaveWindow(window)));
     if (answer()) {
       event.preventDefault();
       return;

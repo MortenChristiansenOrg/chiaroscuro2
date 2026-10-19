@@ -1148,6 +1148,43 @@ describe("showing a page before asking about it when quitting", () => {
     );
   });
 
+  // #150: a tab the user closes is shown without its sub-tabs, which come back afterwards.
+  it("shows a tab's sub-tabs again when there is no other page to go back to", async () => {
+    const ctx = setupAsking();
+    const { tabId: parentId } = await createParentTab(ctx);
+    const child = await ctx.commands.send(SUB_TABS_OPEN, {
+      parentTabId: parentId,
+      url: "https://child.com",
+    });
+    const goBack = await ctx.showPage(parentId);
+    expect(ctx.platform.hideSubTabWindowInstant).toHaveBeenCalled();
+    vi.mocked(ctx.platform.showSubTabWindowStatic).mockClear();
+    vi.mocked(ctx.platform.attachTabToSubTabWindow).mockClear();
+
+    await goBack?.();
+
+    expect(ctx.platform.showSubTabWindowStatic).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      parentId,
+    );
+    expect(ctx.platform.attachTabToSubTabWindow).toHaveBeenLastCalledWith(child, expect.anything());
+  });
+
+  it("keeps a tab's sub-tabs hidden when going back to another tab", async () => {
+    const ctx = setupAsking();
+    const { tabId: parentId } = await createParentTab(ctx);
+    await ctx.commands.send(SUB_TABS_OPEN, { parentTabId: parentId, url: "https://child.com" });
+    const goBack = await ctx.showPage(parentId);
+    const { tabId: otherId } = await createParentTab(ctx);
+    expect(ctx.getActiveTabId()).toBe(otherId);
+    vi.mocked(ctx.platform.showSubTabWindowStatic).mockClear();
+
+    await goBack?.();
+
+    expect(ctx.platform.showSubTabWindowStatic).not.toHaveBeenCalled();
+  });
+
   it("leaves a tab without sub-tabs to the workspaces feature", async () => {
     const ctx = setupAsking();
     const { tabId: parentId } = await createParentTab(ctx);

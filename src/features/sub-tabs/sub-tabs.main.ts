@@ -650,26 +650,33 @@ export default defineFeature<Deps>({
     let hiddenWhileAsking: TabId | undefined;
 
     // Show a sub-tab with unsaved changes before asking about it when quitting. Pages are asked
-    // about newest first, so the sub-tabs above it, and those above a parent tab, are gone.
+    // about newest first, so the sub-tabs above it, and those above a parent tab, are gone. A
+    // tab the user closes is shown before asking without the sub-tabs above it.
     stopShowPage?.();
     stopShowPage = platform.onShowPageBeforeAsking(async (tabId) => {
       const parentTabId = resolveParent(tabId, stacks);
       if (parentTabId === tabId) {
         // The workspaces feature showed the tab; its sub-tab frame would cover it.
-        if (topSubTab(tabId) && getActiveTabId() === tabId) {
-          // A sub-tab passed over while it was being closed may still have its page.
-          hideAllSubTabs(tabId);
-          platform.hideSubTabWindowInstant();
-          hiddenWhileAsking = tabId;
-        }
-        return;
+        if (!topSubTab(tabId) || getActiveTabId() !== tabId) return undefined;
+        // A sub-tab passed over while it was being closed may still have its page.
+        hideAllSubTabs(tabId);
+        platform.hideSubTabWindowInstant();
+        hiddenWhileAsking = tabId;
+        // Going back to another tab hides them anyway; with none, show them again.
+        return () => {
+          if (hiddenWhileAsking !== tabId) return;
+          hiddenWhileAsking = undefined;
+          if (getActiveTabId() !== tabId || !topSubTab(tabId) || contentBounds.width === 0) return;
+          platform.showSubTabWindowStatic(contentBounds, computeFrameBounds(contentBounds), tabId);
+          showTopSubTab(tabId);
+        };
       }
       const workspaceId = getTab(parentTabId)?.workspaceId;
       if (workspaceId && workspaceId !== getActiveWorkspaceId() && !isPinned(parentTabId))
         await commands.send(WORKSPACES_SWITCH, { workspaceId });
       if (getActiveTabId() !== parentTabId)
         await commands.send(TABS_ACTIVATE, { tabId: parentTabId });
-      if (contentBounds.width === 0) return;
+      if (contentBounds.width === 0) return undefined;
       if (hiddenWhileAsking === parentTabId) {
         hiddenWhileAsking = undefined;
         platform.showSubTabWindowStatic(
@@ -679,6 +686,7 @@ export default defineFeature<Deps>({
         );
       }
       platform.attachTabToSubTabWindow(tabId, computeChildFrameBounds(contentBounds));
+      return undefined;
     });
 
     // A quit the user cancelled closed some sub-tab pages to ask about unsaved changes. Load them
