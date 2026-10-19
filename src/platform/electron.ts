@@ -27,6 +27,7 @@ import { migrateExtensionBootstrap } from "./extension-migration";
 import { closePopupOnBlur } from "./extension-popup";
 import { ExtensionRuntime } from "./extension-runtime";
 import type { GithubSessionDiagnostics } from "./github-session-diagnostics";
+import { routeShortcutsToFocus, shortcutWindow, windowArrowKey } from "./keyboard-routing";
 import { confirmLeave } from "./leave-prompt";
 import { PdfResponses } from "./pdf-responses";
 import { checkPermission, matchesGrantedDevice } from "./permission-check";
@@ -291,7 +292,7 @@ $('input').addEventListener('input',function(){
 });
 
 $('input').addEventListener('keydown',function(e){
-  if(e.key==='Escape'){closePalette();return}
+  if(e.key==='Escape'){e.preventDefault();closePalette();return}
   if(suggestions.length>0){
     if(e.key==='ArrowDown'){e.preventDefault();selIdx=Math.min(selIdx+1,suggestions.length-1);renderSuggestions();return}
     if(e.key==='ArrowUp'){e.preventDefault();selIdx=Math.max(selIdx-1,-1);renderSuggestions();return}
@@ -307,7 +308,8 @@ $('suggestions').addEventListener('click',function(e){
   var i=parseInt(t.dataset.i);if(suggestions[i])execute(suggestions[i].url,false,suggestions[i].scriptId);
 });
 
-document.addEventListener('keydown',function(e){if(e.key==='Escape')closePalette()});
+// The palette handles Escape. Keys it handles do not go on to the browser's shortcuts (#130).
+document.addEventListener('keydown',function(e){if(e.key==='Escape'){e.preventDefault();closePalette()}});
 </script></body></html>`;
 
 export class ElectronPlatform implements Platform {
@@ -606,7 +608,6 @@ export class ElectronPlatform implements Platform {
           action: "allow" as const,
           overrideBrowserWindowOptions: {
             parent,
-            autoHideMenuBar: true,
             webPreferences: { sandbox: true, contextIsolation: true },
           },
         };
@@ -649,7 +650,11 @@ export class ElectronPlatform implements Platform {
         }
       });
 
-      this.hookWebContents(wc);
+      // The popup is a window of its own: the browser's shortcuts do nothing in it (see
+      // `shortcutWindow`). It keeps the hidden menu: on Windows, the menu's accelerators of a window
+      // without one reach the browser window that owns it, which then takes focus (#115).
+      popupWin.setAutoHideMenuBar(false);
+      popupWin.setMenuBarVisibility(false);
     });
 
     view.webContents.on("will-navigate", (event, navUrl) => {
@@ -926,6 +931,40 @@ export class ElectronPlatform implements Platform {
 
   private shortcutsActive = false;
 
+  /** The browser window that shortcuts pressed in this window act on (see `shortcutWindow`). */
+  private shortcutWindow(win: Electron.BaseWindow | null | undefined): BrowserWindow | undefined {
+    return shortcutWindow<Electron.BaseWindow>(win, this.getWin(), [
+      this.subTabWin,
+      this.paletteWin,
+      this.extensionPopup,
+    ]) as BrowserWindow | undefined;
+  }
+
+  /** The window that shows these contents, as its own or in one of its views. */
+  private windowShowing(contents: Electron.WebContents): BrowserWindow | undefined {
+    return BrowserWindow.getAllWindows().find(
+      (win) =>
+        !win.isDestroyed() &&
+        (win.webContents === contents ||
+          win.contentView.children.some(
+            (view) => (view as WebContentsView).webContents === contents,
+          )),
+    );
+  }
+
+  /** Keep browser shortcuts with the browser window while other windows have focus. */
+  startShortcutRouting(): void {
+    // The browser window has focus when it is created.
+    this.activateShortcuts();
+    routeShortcutsToFocus({
+      app,
+      focusedWindow: () => BrowserWindow.getFocusedWindow(),
+      shortcutWindow: (win) => this.shortcutWindow(win),
+      setShortcutsActive: (active) =>
+        active ? this.activateShortcuts() : this.deactivateShortcuts(),
+    });
+  }
+
   /** Register all stored shortcuts as OS-level global shortcuts. */
   activateShortcuts(): void {
     if (this.shortcutsActive) return;
@@ -1027,7 +1066,13 @@ export class ElectronPlatform implements Platform {
       .map(([accelerator, click]) => ({
         label: accelerator,
         accelerator,
-        click,
+        click: () => {
+          // On Windows, keys that a website popup or extension pop-out does not handle reach the
+          // menu of the browser window that owns it. They belong to the popup (#115).
+          const contents = webContents.getFocusedWebContents();
+          const win = contents && this.windowShowing(contents);
+          if (!win || this.shortcutWindow(win)) click();
+        },
       }));
     Menu.setApplicationMenu(Menu.buildFromTemplate(template));
   }
@@ -1039,6 +1084,7 @@ export class ElectronPlatform implements Platform {
       const key = input.code || input.key.toLowerCase();
       if (input.type === "keyUp") {
         heldWebsiteKeys.delete(key);
+        this.forwardWindowArrowKey(input);
         return;
       }
       if (input.type !== "keyDown") return;
@@ -1067,6 +1113,28 @@ export class ElectronPlatform implements Platform {
         return;
       }
     });
+  }
+
+  /**
+   * Windows ignores Win+Up and Win+Down in the sub-tab window, which cannot be maximized or
+   * minimized on its own. Like other keys pressed there, they act on the browser window (#129).
+   */
+  private forwardWindowArrowKey(input: Electron.Input): void {
+    const arrow = windowArrowKey(input);
+    const overlay = this.subTabWin;
+    if (!arrow || !overlay || overlay.isDestroyed() || !overlay.isFocused()) return;
+    const win = this.shortcutWindow(overlay);
+    if (!win || win.isDestroyed()) return;
+    if (arrow === "down" && !win.isMaximized()) {
+      // Restoring the browser window returns focus to the sub-tab page.
+      win.minimize();
+      return;
+    }
+    if (arrow === "up" && win.isMaximized()) return;
+    if (arrow === "up") win.maximize();
+    else win.unmaximize();
+    // Maximizing and restoring activate the browser window. Typing stays in the sub-tab page.
+    if (!overlay.isDestroyed()) overlay.focus();
   }
 
   private matchesAccelerator(input: Electron.Input, accelerator: string): boolean {

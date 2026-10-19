@@ -41,7 +41,7 @@ vi.mock("electron", async () => {
       isLoading: () => false,
       isCurrentlyAudible: () => false,
     });
-    removeMenu = vi.fn();
+    setMenuBarVisibility = vi.fn();
     loadURL = vi.fn(async (url: string) => {
       this.url = url;
       if (hooks.closeWhileLoading) this.close();
@@ -137,8 +137,8 @@ it("lets an extension close its own popup window from inside it, after confirmin
   expect(created).toMatchObject({ ok: true, value: { type: "popup", tabs: [{ index: 0 }] } });
   const popout = hooks.windows[0];
   if (!popout) throw new Error("No extension window");
-  // Browser accelerators in the application menu act on the main window, not this one.
-  expect(popout.removeMenu).toHaveBeenCalledOnce();
+  // The browser's accelerator menu stays hidden. It must not be removed (#115).
+  expect(popout.setMenuBarVisibility).toHaveBeenCalledWith(false);
   const inside = {
     sender: Object.assign(popout.webContents, { session: session.defaultSession }),
     senderFrame: { url: `chrome-extension://${id}/popup.html?uilocation=popout`, send: vi.fn() },

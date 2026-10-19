@@ -7,7 +7,9 @@ param(
   [int]$Y,
   [switch]$Click,
   # System.Windows.Forms.SendKeys syntax, for example 'hi' or '{ESC}'.
-  [string]$Keys = ''
+  [string]$Keys = '',
+  # Arrow keys pressed with the Windows key, which SendKeys cannot send, for example 'Down,Up'.
+  [string]$WindowsArrows = ''
 )
 $ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms
@@ -24,6 +26,7 @@ public class VerificationInput {
   [DllImport("user32.dll")] public static extern IntPtr WindowFromPoint(POINT point);
   [DllImport("user32.dll")] public static extern IntPtr GetAncestor(IntPtr window, uint flags);
   [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint dx, uint dy, uint data, UIntPtr extra);
+  [DllImport("user32.dll")] public static extern void keybd_event(byte key, byte scan, uint flags, UIntPtr extra);
 }
 '@
 # Electron supplies physical screen coordinates. Avoid PowerShell DPI virtualization.
@@ -62,6 +65,18 @@ if ($hasPoint) {
 foreach ($key in [regex]::Matches($Keys, '[\^%+]*(\{[^}]+\}|\(.*?\)|.)')) {
   Assert-AppForeground | Out-Null
   [System.Windows.Forms.SendKeys]::SendWait($key.Value)
+}
+$arrowKeys = @{ Left = 0x25; Up = 0x26; Right = 0x27; Down = 0x28 }
+foreach ($arrow in ($WindowsArrows -split ',' | Where-Object { $_ })) {
+  if (-not $arrowKeys.ContainsKey($arrow)) { throw "Unknown arrow key $arrow" }
+  Assert-AppForeground | Out-Null
+  # Extended keys: the left Windows key and the arrows outside the numeric keypad.
+  [VerificationInput]::keybd_event(0x5B, 0, 1, [UIntPtr]::Zero)
+  [VerificationInput]::keybd_event([byte]$arrowKeys[$arrow], 0, 1, [UIntPtr]::Zero)
+  [VerificationInput]::keybd_event([byte]$arrowKeys[$arrow], 0, 3, [UIntPtr]::Zero)
+  [VerificationInput]::keybd_event(0x5B, 0, 3, [UIntPtr]::Zero)
+  # Let the shell act on the window before the next key or observation.
+  Start-Sleep -Milliseconds 500
 }
 $result.foregroundAfter = [VerificationInput]::GetForegroundWindow().ToInt64()
 $result | ConvertTo-Json -Compress
