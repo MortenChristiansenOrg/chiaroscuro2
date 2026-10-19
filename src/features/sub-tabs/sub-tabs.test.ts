@@ -989,6 +989,50 @@ describe("cancelled quit", () => {
       );
   });
 
+  it("shows the parent of a sub-tab stayed on, not the shown tab whose page was closed", async () => {
+    const ctx = setupQuit();
+    const { tabId: parentId } = await createParentTab(ctx);
+    const child = await ctx.commands.send(SUB_TABS_OPEN, {
+      parentTabId: parentId,
+      url: "https://unsaved.com",
+    });
+    const { tabId: shownId } = await createParentTab(ctx);
+    // Loading the shown tab again would take a while.
+    vi.mocked(ctx.platform.navigateTab).mockImplementation(
+      () => new Promise((resolve) => setTimeout(resolve, 20)),
+    );
+
+    ctx.cancelQuit({ unloadedTabIds: [shownId], stayedTabId: child });
+
+    await vi.waitFor(() => expect(ctx.getActiveTabId()).toBe(parentId));
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(ctx.getActiveTabId()).toBe(parentId);
+    expect(ctx.platform.navigateTab).not.toHaveBeenCalledWith(shownId, expect.anything());
+  });
+
+  it("loads the shown parent again when the user stays on a sub-tab beneath others", async () => {
+    const ctx = setupQuit();
+    const { tabId: parentId } = await createParentTab(ctx);
+    const lower = await ctx.commands.send(SUB_TABS_OPEN, {
+      parentTabId: parentId,
+      url: "https://lower.com",
+    });
+    const upper = await ctx.commands.send(SUB_TABS_OPEN, {
+      parentTabId: parentId,
+      url: "https://upper.com",
+    });
+    vi.mocked(ctx.platform.navigateTab).mockClear();
+
+    ctx.cancelQuit({ unloadedTabIds: [upper, parentId], stayedTabId: lower });
+
+    await vi.waitFor(() =>
+      expect(ctx.platform.navigateTab).toHaveBeenCalledWith(parentId, "https://parent.com"),
+    );
+    const stack = await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: parentId });
+    expect(stack.map((subTab) => subTab.id)).toEqual([lower]);
+    expect(ctx.getActiveTabId()).toBe(parentId);
+  });
+
   it("switches to the workspace of the sub-tab the user stayed on", async () => {
     const ctx = setupQuit();
     const { tabId: parentId } = await createParentTab(ctx);

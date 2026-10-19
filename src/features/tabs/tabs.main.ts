@@ -720,12 +720,13 @@ export default defineFeature<Deps>({
       const stayed = stayedTabId ? tabs.get(stayedTabId) : undefined;
       const stayedHere =
         stayed && (stayed.workspaceId === getActiveWorkspaceId() || isPinned(stayed.id));
-      // The workspaces feature switches to a page stayed on in another workspace.
+      // The workspaces feature shows a page stayed on in another workspace, and the sub-tabs
+      // feature a sub-tab, loading the shown tab again if it is the sub-tab's parent.
       const show = stayedHere
         ? stayed.id !== activeTabId
           ? stayed.id
           : undefined
-        : !stayed && activeTabId && unloadedTabs.has(activeTabId)
+        : !stayedTabId && activeTabId && unloadedTabs.has(activeTabId)
           ? activeTabId
           : undefined;
       if (show)

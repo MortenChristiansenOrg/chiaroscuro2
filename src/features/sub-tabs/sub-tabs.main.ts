@@ -675,7 +675,8 @@ export default defineFeature<Deps>({
       const showStayed = async () => {
         for (const _ of dismissed)
           await commands.send(SUB_TABS_CLOSE, { parentTabId: stayedParent });
-        if (stayedParent === getActiveTabId()) return;
+        // Showing the parent also loads it again if its page was closed while asking.
+        if (stayedParent === getActiveTabId() && !unloaded.has(stayedParent)) return;
         const workspaceId = getTab(stayedParent)?.workspaceId;
         if (workspaceId && workspaceId !== getActiveWorkspaceId() && !isPinned(stayedParent))
           await commands.send(WORKSPACES_SWITCH, { workspaceId });
