@@ -26,6 +26,8 @@ export const BUILD_INPUTS = [
   "tsconfig.json",
   "tsconfig.node.json",
   "tsconfig.web.json",
+  // Generates sources in src/shared before every build.
+  "scripts/generate-fa-icons.ts",
 ];
 export const BUILD_OUTPUTS = ["out/main", "out/preload", "out/renderer"];
 
@@ -56,8 +58,9 @@ function isBuildInput(relativePath: string): boolean {
 
 function hashFile(file: string, normalizeLineEndings: boolean): string {
   let content = fs.readFileSync(file);
-  // Windows checkouts may convert LF to CRLF; the Linux CI build must still match them.
-  if (normalizeLineEndings)
+  // Windows checkouts may convert LF to CRLF in text files; the Linux CI build must still match
+  // them. Like Git, treat a file with a NUL byte in its first 8000 bytes as binary.
+  if (normalizeLineEndings && !content.subarray(0, 8000).includes(0))
     content = Buffer.from(content.toString("latin1").replaceAll("\r\n", "\n"), "latin1");
   return createHash("sha256").update(content).digest("hex");
 }

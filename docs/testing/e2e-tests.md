@@ -18,7 +18,8 @@ The session tests whatever is in `out/`, so it refuses a build that no longer
 matches the sources; otherwise old behavior looks like a new bug. `bun run build`
 writes `out/build-stamp.json` with content hashes of the build inputs (`src/`
 without unit tests and `src/test-utils/`, `resources/`, `electron.vite.config.ts`,
-`package.json`, `bun.lock` and the root `tsconfig*.json`) and of the outputs in
+`package.json`, `bun.lock`, the root `tsconfig*.json` and the icon generator
+`scripts/generate-fa-icons.ts`) and of the outputs in
 `out/main`, `out/preload` and `out/renderer`. A failed build leaves no stamp.
 Before any worker starts, the Playwright global setup
 (`e2e/automation/global-setup.ts`) stops `bun run e2e` and `bun run verify:app`
@@ -30,8 +31,8 @@ when:
 
 The error names the first differing files and says to run `bun run build`.
 `AppSession.launch` runs the same check for entry points outside Playwright, such
-as `agent:app` and the diagnostics. Line endings are normalized before inputs are
-hashed, so a Linux build matches a Windows checkout with CRLF files. CI builds
+as `agent:app` and the diagnostics. Line endings in text inputs are normalized before
+they are hashed, so a Linux build matches a Windows checkout with CRLF files. CI builds
 once and the E2E and Windows jobs check that build against their own checkouts.
 `verify:app:win` builds before it copies `out/`, the inputs and `scripts/` to
 Windows. The check is skipped with `CHIAROSCURO_PACKAGED_EXECUTABLE`. Set

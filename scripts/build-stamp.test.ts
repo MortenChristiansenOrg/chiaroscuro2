@@ -91,6 +91,14 @@ describe("build stamp", () => {
     expect(checkBuild(root)).toEqual({ fresh: true });
   });
 
+  it("keeps line endings in binary files", () => {
+    write("resources/icon.png", "\u0000PNG\r\n");
+    build();
+    write("resources/icon.png", "\u0000PNG\n");
+
+    expect(reason()).toContain("resources/icon.png changed");
+  });
+
   it("reports outputs rewritten after the build as stale", () => {
     build();
     write("out/main/index.js", "devMain();\n");
