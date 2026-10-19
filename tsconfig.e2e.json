@@ -16,6 +16,7 @@
     "src/features/ai/ai.contracts.ts",
     "e2e/**/*",
     "playwright*.config.ts",
+    "scripts/build-stamp.ts",
     "src/features/debug-server/targets.shared.ts",
     "src/features/debug-server/recorder.ts",
     "src/bus/command-bus.ts",

@@ -1,6 +1,7 @@
 import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
+  globalSetup: "./e2e/automation/global-setup.ts",
   testDir: "./e2e/scenarios",
   // Each scenario includes evidence collection and may include a complete process restart.
   timeout: 30_000,

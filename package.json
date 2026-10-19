@@ -12,7 +12,7 @@
   "scripts": {
     "generate:icons": "bun scripts/generate-fa-icons.ts",
     "dev": "bun run generate:icons && electron-vite dev",
-    "build": "bun run generate:icons && electron-vite build",
+    "build": "bun run generate:icons && bun scripts/stamp-build.ts begin && electron-vite build && bun scripts/stamp-build.ts commit",
     "package:win": "bun scripts/package-win.ts",
     "preview": "electron-vite preview",
     "test": "vitest run",

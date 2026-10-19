@@ -12,6 +12,32 @@ with an explicit 1920×1080 virtual screen, 5s test deadlines, no retries and 2 
 Each worker's profile and debug ports are isolated. `bun run setup:electron`
 prepares Electron before parallel workers start.
 
+### Stale builds
+
+The session tests whatever is in `out/`, so it refuses a build that no longer
+matches the sources; otherwise old behavior looks like a new bug. `bun run build`
+writes `out/build-stamp.json` with content hashes of the build inputs (`src/`
+without unit tests and `src/test-utils/`, `resources/`, `electron.vite.config.ts`,
+`package.json`, `bun.lock` and the root `tsconfig*.json`) and of the outputs in
+`out/main`, `out/preload` and `out/renderer`. A failed build leaves no stamp.
+Before any worker starts, the Playwright global setup
+(`e2e/automation/global-setup.ts`) stops `bun run e2e` and `bun run verify:app`
+when:
+
+- the stamp is missing,
+- an input changed, was added or was removed since the build, or
+- an output changed since the build, for example because `bun dev` rewrote `out/`.
+
+The error names the first differing files and says to run `bun run build`.
+`AppSession.launch` runs the same check for entry points outside Playwright, such
+as `agent:app` and the diagnostics. Line endings are normalized before inputs are
+hashed, so a Linux build matches a Windows checkout with CRLF files. CI builds
+once and the E2E and Windows jobs check that build against their own checkouts.
+`verify:app:win` builds before it copies `out/`, the inputs and `scripts/` to
+Windows. The check is skipped with `CHIAROSCURO_PACKAGED_EXECUTABLE`. Set
+`CHIAROSCURO_SKIP_BUILD_CHECK=1` to test an old build on purpose, such as when
+bisecting. `bun scripts/stamp-build.ts check` runs the check by itself.
+
 For coordinated scenarios, native Windows, composed screenshots, restart and
 failure diagnostics, read [Agent Verification](./agent-verification.md). Run
 `bun run verify:app`; this uses the same session under Linux Xvfb/Openbox/xcompmgr or native
