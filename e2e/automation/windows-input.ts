@@ -28,6 +28,8 @@ export async function windowsInput(
   if (process.platform !== "win32") throw new Error("UNSUPPORTED: Windows desktop input required");
   if (input.click && input.hover) throw new Error("Click or hover, not both");
   const element = input.click ?? input.hover;
+  // A small window can leave the element outside the page's viewport.
+  if (element) await element.locator.scrollIntoViewIfNeeded();
   const box = element ? await element.locator.boundingBox() : null;
   if (element && !box) throw new Error("Element has no geometry");
   const native = await session.app.evaluate(
