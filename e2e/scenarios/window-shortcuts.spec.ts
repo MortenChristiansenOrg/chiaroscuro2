@@ -302,6 +302,31 @@ test("Windows desktop keys in a sub-tab and a popup act on the right window", as
     await expect(child.message).toHaveValue("a");
     expect(await hasSubTab(session)).toBe(true);
 
+    await session.app.evaluate(({ BrowserWindow, webContents }) => {
+      const log: string[] = [];
+      (globalThis as unknown as { diag: string[] }).diag = log;
+      const t0 = Date.now();
+      const note = (what: string) =>
+        log.push(
+          `${Date.now() - t0} ${what} focused=${webContents.getFocusedWebContents()?.id} win=${BrowserWindow.getFocusedWindow()?.webContents.id}`,
+        );
+      for (const win of BrowserWindow.getAllWindows()) {
+        const id = win.webContents.id;
+        win.on("focus", () => {
+          note(`win${id} focus`);
+          setTimeout(() => note(`win${id} focus+0`));
+          setTimeout(() => note(`win${id} focus+50`), 50);
+        });
+        win.on("blur", () => note(`win${id} blur`));
+        win.on("maximize", () => note(`win${id} maximize`));
+        win.on("unmaximize", () => note(`win${id} unmaximize`));
+      }
+      for (const wc of webContents.getAllWebContents()) {
+        wc.on("focus", () => note(`wc${wc.id} focus`));
+        wc.on("blur", () => note(`wc${wc.id} blur`));
+      }
+      note("start");
+    });
     // Win+Up maximizes the browser window and Win+Down restores it. Typing stays in the page.
     await windowsInput(session, { windowsArrows: ["Up"] });
     await expect
@@ -319,6 +344,10 @@ test("Windows desktop keys in a sub-tab and a popup act on the right window", as
         maximized: false,
         minimized: false,
       });
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    console.log(
+      `DIAG ${JSON.stringify(await session.app.evaluate(() => (globalThis as unknown as { diag: string[] }).diag))}`,
+    );
     await windowsInput(session, { keys: "c" });
     await expect(child.message).toHaveValue("abc");
     // Win+Down again minimizes it. Restoring it returns typing to the sub-tab page.
