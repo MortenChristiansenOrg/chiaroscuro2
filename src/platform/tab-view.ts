@@ -47,43 +47,42 @@ const closing = new WeakMap<Electron.WebContents, Promise<void>>();
 /**
  * Resolve on native destruction. A page that prevents beforeunload is closed only if
  * `confirmLeave` agrees; otherwise it is retained and the close rejects. Overlapping
- * requests share one close and one answer, so a later Stay cannot be overridden.
+ * requests share one close and one answer, so a later Stay cannot be overridden. `asks` says
+ * whether `confirmLeave` asks the user; quitting first checks pages without asking.
  */
 export function closeTabContents(
   contents: Electron.WebContents,
   confirmLeave: () => boolean,
+  { asks = true }: { asks?: boolean } = {},
 ): Promise<void> {
   if (contents.isDestroyed()) return Promise.resolve();
   const pending = closing.get(contents);
   if (pending) return pending;
-  const result = requestClose(contents, confirmLeave).finally(() => closing.delete(contents));
+  const result = requestClose(contents, confirmLeave, asks).finally(() => closing.delete(contents));
   closing.set(contents, result);
   return result;
 }
 
 /**
- * Close a tab the user closes, asking with `confirmLeave` if its page warns. A close that joined
- * one which kept the page without asking (quitting checks pages for warnings that way) is tried
- * again, so the user is asked.
+ * Close a tab the user closes, asking with `confirmLeave` if its page warns. If the close
+ * joined one that found the page warns but kept it without asking, ask now and leave it on
+ * Leave: its beforeunload may not warn a second time.
  */
 export async function closeTabContentsAsking(
   contents: Electron.WebContents,
   confirmLeave: () => boolean,
 ): Promise<void> {
-  let asked = false;
-  const ask = () => {
-    asked = true;
-    return confirmLeave();
-  };
   try {
-    await closeTabContents(contents, ask);
+    await closeTabContents(contents, confirmLeave);
   } catch (error) {
-    if (asked || !(error instanceof StayedOnPage)) throw error;
-    await closeTabContents(contents, ask);
+    if (!(error instanceof StayedOnPage) || error.asked) throw error;
+    if (contents.isDestroyed()) return;
+    if (!confirmLeave()) throw new StayedOnPage();
+    await closeTabContents(contents, () => true);
   }
 }
 
-function requestClose(contents: Electron.WebContents, confirmLeave: () => boolean) {
+function requestClose(contents: Electron.WebContents, confirmLeave: () => boolean, asks: boolean) {
   return new Promise<void>((resolve, reject) => {
     const cleanup = () => {
       contents.removeListener("destroyed", onDestroyed);
@@ -100,7 +99,7 @@ function requestClose(contents: Electron.WebContents, confirmLeave: () => boolea
         return;
       }
       cleanup();
-      reject(new StayedOnPage());
+      reject(new StayedOnPage(asks));
     };
     contents.once("destroyed", onDestroyed);
     contents.on("will-prevent-unload", onPreventUnload);

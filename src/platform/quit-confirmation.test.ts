@@ -327,6 +327,23 @@ describe("one at a time", () => {
     expect(order).toEqual(["a", "b"]);
   });
 
+  it("keeps waiting on an action while a prompt is open", async () => {
+    vi.useFakeTimers();
+    let prompts = 0;
+    const inTurn = oneAtATime(1_000, () => prompts);
+    void inTurn(() => new Promise<void>(() => {}));
+    const next = vi.fn(async () => {});
+    const result = inTurn(next);
+    await vi.advanceTimersByTimeAsync(500);
+    // A prompt was open for 2 seconds.
+    prompts += 2_000;
+    await vi.advanceTimersByTimeAsync(2_499);
+    expect(next).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    await result;
+    expect(next).toHaveBeenCalled();
+  });
+
   it("stops waiting on an action that hangs", async () => {
     vi.useFakeTimers();
     const inTurn = oneAtATime(1_000);

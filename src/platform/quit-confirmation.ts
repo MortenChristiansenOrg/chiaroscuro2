@@ -94,8 +94,8 @@ export async function closePagesInTurn<Id>(
 /** A page that may warn about unsaved changes when it is closed before quitting. */
 export interface PageThatMayWarn {
   /**
-   * Close the page. When it warns, `leave` decides whether to leave it anyway; if not, the
-   * page is kept and the close rejects with `StayedOnPage`.
+   * Close the page without asking. When it warns, `leave` decides whether to leave it anyway;
+   * if not, the page is kept and the close rejects with `StayedOnPage`.
    */
   close(leave: () => boolean): Promise<void>;
   /** Show the page to the user, for example by switching to its tab. Must not hang. */
@@ -153,16 +153,31 @@ export async function closeShowingWarning(
 
 /**
  * Run actions one at a time, in the order they were requested. An action that takes longer
- * than `timeoutMs` no longer holds up the next one, so a hung page cannot stop the others.
+ * than `timeoutMs`, beyond time spent showing pages and answering prompts (`promptTime`), no
+ * longer holds up the next one, so a hung page cannot stop the others. Time a prompt blocks
+ * the process is excluded, so an action is not passed over while it waits on a prompt and
+ * then shows its page under the next action's prompt.
  */
-export function oneAtATime(timeoutMs: number): <T>(action: () => Promise<T>) => Promise<T> {
+export function oneAtATime(
+  timeoutMs: number,
+  promptTime: () => number = () => 0,
+  now: () => number = Date.now,
+): <T>(action: () => Promise<T>) => Promise<T> {
   let previous: Promise<void> = Promise.resolve();
   return <T>(action: () => Promise<T>) => {
     const result = previous.then(action);
     previous = previous.then(
       () =>
         new Promise<void>((resolve) => {
-          const timer = setTimeout(resolve, timeoutMs);
+          const start = now();
+          const promptsBefore = promptTime();
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          const check = () => {
+            const left = timeoutMs - (now() - start - (promptTime() - promptsBefore));
+            if (left <= 0) resolve();
+            else timer = setTimeout(check, left);
+          };
+          check();
           result
             .finally(() => {
               clearTimeout(timer);

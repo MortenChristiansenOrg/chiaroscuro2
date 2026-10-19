@@ -42,9 +42,10 @@
   the page, the browser window and the sub-tab window (an isolated world, so page scripts are
   untouched). Showing waits at most 1 s plus 0.5 s for painting, and counts as prompt time
   (`whileShowingPage`). One page is shown and asked about at a time (`oneAtATime`), so a
-  page passed over cannot ask over another page being shown. A page found to warn after the
+  page passed over cannot ask over another page being shown; a turn is given up after 3 s
+  beyond time spent showing pages and answering prompts. A page found to warn after the
   user stayed elsewhere, or while it was being shown, is kept without asking. A tab the user
-  closes during the probe is closed again so the user is asked (`closeTabContentsAsking`). `confirmLeave` names the page by title and
+  closes during the probe is asked about directly (`closeTabContentsAsking`). `confirmLeave` names the page by title and
   address (`pageAddress`).
 - Quitting never waits on pages: 3 s per page and 5 s in total, excluding time spent in
   prompts (`leavePromptTime`). A page passed over keeps its prompt: staying on it while later

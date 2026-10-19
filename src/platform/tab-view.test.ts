@@ -144,24 +144,38 @@ describe("closing a tab the user closes", () => {
   it("asks when it joined a close that kept the page without asking", async () => {
     const contents = fixture();
     // Quitting checks whether the page warns, keeping it without asking.
-    const probe = closeTabContents(contents, () => false).catch(() => {});
+    const probe = closeTabContents(contents, () => false, { asks: false }).catch(() => {});
     const ask = vi.fn(() => true);
     const closing = closeTabContentsAsking(contents, ask);
     contents.emit("will-prevent-unload", { preventDefault: vi.fn() });
     await probe;
     await vi.waitFor(() => expect(contents.close).toHaveBeenCalledTimes(2));
-    contents.emit("will-prevent-unload", { preventDefault: vi.fn() });
+    // Asked without waiting for the page to warn again: its warning may have run only once.
+    expect(ask).toHaveBeenCalledOnce();
     contents.emit("destroyed");
     await closing;
-    expect(ask).toHaveBeenCalledOnce();
   });
 
-  it("does not ask again after the user stayed", async () => {
+  it("keeps the page when the user stays after joining such a close", async () => {
     const contents = fixture();
+    const probe = closeTabContents(contents, () => false, { asks: false }).catch(() => {});
     const ask = vi.fn(() => false);
     const closing = closeTabContentsAsking(contents, ask);
     contents.emit("will-prevent-unload", { preventDefault: vi.fn() });
+    await probe;
     await expect(closing).rejects.toThrow("Page prevented closing");
+    expect(ask).toHaveBeenCalledOnce();
+    expect(contents.close).toHaveBeenCalledOnce();
+  });
+
+  it("asks once for overlapping closes", async () => {
+    const contents = fixture();
+    const ask = vi.fn(() => false);
+    const first = closeTabContentsAsking(contents, ask);
+    const second = closeTabContentsAsking(contents, ask);
+    contents.emit("will-prevent-unload", { preventDefault: vi.fn() });
+    await expect(first).rejects.toThrow("Page prevented closing");
+    await expect(second).rejects.toThrow("Page prevented closing");
     expect(ask).toHaveBeenCalledOnce();
     expect(contents.close).toHaveBeenCalledOnce();
   });

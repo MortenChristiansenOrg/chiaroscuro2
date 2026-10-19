@@ -2,7 +2,8 @@ import { type BrowserWindow, dialog } from "electron";
 
 /** The user stayed on a page that warned about unsaved changes, so it was not closed. */
 export class StayedOnPage extends Error {
-  constructor() {
+  /** @param asked Whether the user was asked; false if the page was kept without asking. */
+  constructor(readonly asked = true) {
     super("Page prevented closing");
     this.name = "StayedOnPage";
   }

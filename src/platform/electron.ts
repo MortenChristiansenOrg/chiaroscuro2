@@ -475,7 +475,7 @@ export class ElectronPlatform implements Platform {
   >();
   private showPageCallbacks = new Set<(tabId: TabId) => Promise<void> | void>();
   /** Pages that warn about unsaved changes are shown and asked about one at a time. */
-  private readonly askInTurn = oneAtATime(QUIT_PAGE_TIMEOUT_MS);
+  private readonly askInTurn = oneAtATime(QUIT_PAGE_TIMEOUT_MS, leavePromptTime);
   private readonly showBeforeAsking: ShowBeforeAskingOptions = {
     confirmed: () => this.quitConfirmation.settled,
     asking: () => this.quitConfirmation.asking,
@@ -996,7 +996,7 @@ export class ElectronPlatform implements Platform {
     const url = contents.getURL();
     await closeShowingWarning(
       {
-        close: (leave) => closeTabContents(contents, leave),
+        close: (leave) => closeTabContents(contents, leave, { asks: false }),
         show: () => this.showTabToAsk(tabId, contents),
         ask: () => confirmLeave(this.getWin(), pageName(contents)),
         closed: () => contents.isDestroyed(),
