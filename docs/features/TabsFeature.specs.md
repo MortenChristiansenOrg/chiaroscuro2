@@ -61,15 +61,18 @@ It also keeps the in-app tab list (the Sidebar) in sync with the actual set of o
 
 - Close a tab from the Sidebar tab list.
 - If the closed tab was active, the UI may select another tab (most recently used), otherwise no active tab change is required.
-- If the page warns about unsaved changes (`beforeunload`), a native prompt asks "Leave this page?". **Leave** closes the tab; **Stay** keeps it with its unsaved state. Clearing ephemeral tabs asks once per such page and still closes the others.
+- If the page warns about unsaved changes (`beforeunload`), a native prompt asks "Leave this page?", naming the page by title and address. **Leave** closes the tab; **Stay** keeps it with its unsaved state. Clearing ephemeral tabs asks once per such page and still closes the others.
 
 ### Quit or close the browser window
 
 - Quitting, closing the browser window (also Alt+F4 in a sub-tab) and restarting to apply an update ask "Leave this page?" once for each page that warns about unsaved changes, as Chrome does. There is no combined prompt: the app learns that a page warns only by closing it.
 - Pages are closed one at a time to run their warnings: pop-up and extension windows first (closing the page that opened a pop-up would close it without asking), then the sub-tab on top, the shown tab and the other tabs.
+- Before asking about a page, the browser shows it, as Chrome does (#140): it switches to the page's workspace and tab, or to its sub-tab, or brings its pop-up or extension window to the front, and waits briefly for it to paint. The prompt thus appears over the page it asks about, not over another page or one already left. Pages that do not warn are closed without being shown or slowing quitting.
+- The prompt names the page: its title in the title bar and above the message, followed by its address (without `https://`, shortened past 100 characters), so pages with the same title can be told apart.
+- After **Leave** on every prompt, the last page shown is the active tab and workspace of the next session.
 - **Leave** on every prompt quits. Every tab is kept for the next session, including the ones whose pages were closed while asking.
 - **Stay** cancels the quit or window close. The tab list stays intact, nothing is torn down, and the page the user stayed on is shown with its unsaved changes, switching to its workspace if needed. Pages checked before it are gone, but their tabs remain as unloaded tabs that load again when shown (the shown tab loads at once). Pages after it are untouched.
-- Unloaded tabs that never loaded a page and crashed pages are not asked about. Quitting never waits on pages: a page that does not finish closing within 3 seconds is passed over, and after 5 seconds of waiting in total (time spent answering prompts excluded) the rest are not asked about. A page passed over that asks later still stops the quit if the user stays while other pages are being asked about; once quitting is confirmed it closes without asking.
+- Unloaded tabs that never loaded a page and crashed pages are not asked about. Quitting never waits on pages: a page that does not finish closing within 3 seconds is passed over, and after 5 seconds of waiting in total (time spent answering prompts excluded) the rest are not asked about. Showing a page before asking about it counts as time spent answering, and waits at most 1.5 seconds. A page passed over that asks later still stops the quit if the user stays while other pages are being asked about; once quitting is confirmed it closes without asking.
 - The operating system ending the session (Windows log off, shutdown or restart; Linux and macOS shutdown or restart) quits without asking. A termination signal (`SIGTERM`, `SIGINT`) quits like the user did and may ask; a second signal terminates the app at once.
 
 ### Switch workspace

@@ -91,6 +91,84 @@ export async function closePagesInTurn<Id>(
   return { left: true, closed };
 }
 
+/** A page that may warn about unsaved changes when it is closed before quitting. */
+export interface PageThatMayWarn {
+  /**
+   * Close the page. When it warns, `leave` decides whether to leave it anyway; if not, the
+   * page is kept and the close rejects with `StayedOnPage`.
+   */
+  close(leave: () => boolean): Promise<void>;
+  /** Show the page to the user, for example by switching to its tab. Must not hang. */
+  show(): Promise<void>;
+  /** Ask the user whether to leave the page. */
+  ask(): boolean;
+}
+
+export interface ShowBeforeAskingOptions {
+  /** Quitting was confirmed: leave pages without asking. */
+  confirmed: () => boolean;
+  /** Pages are still being asked about; false once the user stayed and the quit was cancelled. */
+  asking: () => boolean;
+  /** Show and ask about one page at a time. */
+  inTurn: <T>(action: () => Promise<T>) => Promise<T>;
+}
+
+/**
+ * Close a page before quitting, and if it warns about unsaved changes, show it before asking
+ * about it, as Chrome does. Electron says a page warns only by running its beforeunload, which
+ * must be answered at once while nothing can repaint. So the first close keeps a page that
+ * warns without asking; once the page is shown and has painted, it is closed again and asked
+ * about. Pages without a warning close on the first attempt at no extra cost. Rejects with
+ * `StayedOnPage` if the user stays, or the quit was cancelled while the page was closing.
+ */
+export async function closeShowingWarning(
+  page: PageThatMayWarn,
+  { confirmed, asking, inTurn }: ShowBeforeAskingOptions,
+): Promise<void> {
+  let warned = false;
+  try {
+    await page.close(() => {
+      warned = true;
+      return confirmed();
+    });
+    return;
+  } catch (error) {
+    // Another close of the same page may have asked, and the user stayed there.
+    if (!warned || !(error instanceof StayedOnPage)) throw error;
+  }
+  await inTurn(async () => {
+    if (!confirmed()) {
+      if (!asking()) throw new StayedOnPage();
+      await page.show();
+    }
+    await page.close(() => confirmed() || page.ask());
+  });
+}
+
+/**
+ * Run actions one at a time, in the order they were requested. An action that takes longer
+ * than `timeoutMs` no longer holds up the next one, so a hung page cannot stop the others.
+ */
+export function oneAtATime(timeoutMs: number): <T>(action: () => Promise<T>) => Promise<T> {
+  let previous: Promise<void> = Promise.resolve();
+  return <T>(action: () => Promise<T>) => {
+    const result = previous.then(action);
+    previous = previous.then(
+      () =>
+        new Promise<void>((resolve) => {
+          const timer = setTimeout(resolve, timeoutMs);
+          result
+            .finally(() => {
+              clearTimeout(timer);
+              resolve();
+            })
+            .catch(() => {});
+        }),
+    );
+    return result;
+  };
+}
+
 /**
  * Whether the browser may close its window or quit, asked once for every attempt. Overlapping
  * requests (quitting while the window is closing) share one answer. Once confirmed, closing

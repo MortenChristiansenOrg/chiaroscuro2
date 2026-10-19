@@ -102,6 +102,7 @@ interface Deps {
 }
 
 let stopQuitCancelled: (() => void) | undefined;
+let stopShowPage: (() => void) | undefined;
 
 const _state = featureState<{
   stacks: Map<TabId, SubTab[]>;
@@ -645,10 +646,50 @@ export default defineFeature<Deps>({
       }).catch(logError("sub-tabs", "close children after parent close"));
     });
 
+    // A parent tab whose sub-tab window was hidden to show the tab while asking about it.
+    let hiddenWhileAsking: TabId | undefined;
+
+    // Show a sub-tab with unsaved changes before asking about it when quitting. Pages are asked
+    // about newest first, so the sub-tabs above it, and those above a parent tab, are gone.
+    stopShowPage?.();
+    stopShowPage = platform.onShowPageBeforeAsking(async (tabId) => {
+      const parentTabId = resolveParent(tabId, stacks);
+      if (parentTabId === tabId) {
+        // The workspaces feature showed the tab; its empty sub-tab frame would cover it.
+        if (topSubTab(tabId) && getActiveTabId() === tabId) {
+          platform.hideSubTabWindowInstant();
+          hiddenWhileAsking = tabId;
+        }
+        return;
+      }
+      const workspaceId = getTab(parentTabId)?.workspaceId;
+      if (workspaceId && workspaceId !== getActiveWorkspaceId() && !isPinned(parentTabId))
+        await commands.send(WORKSPACES_SWITCH, { workspaceId });
+      if (getActiveTabId() !== parentTabId)
+        await commands.send(TABS_ACTIVATE, { tabId: parentTabId });
+      if (contentBounds.width === 0) return;
+      if (hiddenWhileAsking === parentTabId) {
+        hiddenWhileAsking = undefined;
+        platform.showSubTabWindowStatic(
+          contentBounds,
+          computeFrameBounds(contentBounds),
+          parentTabId,
+        );
+      }
+      platform.attachTabToSubTabWindow(tabId, computeChildFrameBounds(contentBounds));
+    });
+
     // A quit the user cancelled closed some sub-tab pages to ask about unsaved changes. Load them
     // again so every stack stays as it was, and show a sub-tab the user stayed on.
     stopQuitCancelled?.();
     stopQuitCancelled = platform.onQuitCancelled(({ unloadedTabIds, stayedTabId }) => {
+      // Show the sub-tabs of a tab shown without them while asking about it.
+      const hidden = hiddenWhileAsking;
+      hiddenWhileAsking = undefined;
+      if (hidden && hidden === getActiveTabId() && topSubTab(hidden) && contentBounds.width > 0) {
+        platform.showSubTabWindowStatic(contentBounds, computeFrameBounds(contentBounds), hidden);
+        showTopSubTab(hidden);
+      }
       const unloaded = new Set(unloadedTabIds);
       const parentTabId = stayedTabId && resolveParent(stayedTabId, stacks);
       const stayedParent = parentTabId && parentTabId !== stayedTabId ? parentTabId : undefined;
@@ -702,6 +743,8 @@ export default defineFeature<Deps>({
     _state.reset();
     stopQuitCancelled?.();
     stopQuitCancelled = undefined;
+    stopShowPage?.();
+    stopShowPage = undefined;
   },
 });
 

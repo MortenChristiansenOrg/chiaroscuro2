@@ -8,25 +8,67 @@ export class StayedOnPage extends Error {
   }
 }
 
-let promptMs = 0;
+/** The page a leave prompt asks about. */
+export interface PageName {
+  title: string;
+  /** The page's address. Omitted for pages whose address means nothing to the user. */
+  url?: string;
+}
 
-/** Total time the leave prompt has been shown, so waits can exclude time the user spends deciding. */
+let askingMs = 0;
+let showing = 0;
+let showingSince = 0;
+
+/**
+ * Total time spent asking about pages: prompts shown and pages being shown before a prompt,
+ * so waits can exclude time the user spends deciding.
+ */
 export function leavePromptTime(): number {
-  return promptMs;
+  return askingMs + (showing > 0 ? Date.now() - showingSince : 0);
+}
+
+/** Count the time a page is being shown before asking about it as time spent asking. */
+export async function whileShowingPage<T>(show: () => Promise<T>): Promise<T> {
+  if (showing++ === 0) showingSince = Date.now();
+  try {
+    return await show();
+  } finally {
+    if (--showing === 0) askingMs += Date.now() - showingSince;
+  }
+}
+
+const MAX_ADDRESS_LENGTH = 100;
+
+/** A page's address as the prompt shows it: without `https://`, and shortened when long. */
+export function pageAddress(url: string): string {
+  let address = url;
+  try {
+    address = decodeURI(url);
+  } catch {
+    // Keep a malformed address as it is.
+  }
+  address = address.replace(/^https?:\/\//, "").replace(/^([^/?#]+)\/$/, "$1");
+  return address.length > MAX_ADDRESS_LENGTH
+    ? `${address.slice(0, MAX_ADDRESS_LENGTH - 1)}…`
+    : address;
 }
 
 /**
  * Ask before leaving a page whose beforeunload handler vetoed closing it, as Chrome does.
  * Electron otherwise cancels the close silently. It must answer synchronously, inside
- * `will-prevent-unload`, so the prompt is a modal native dialog.
+ * `will-prevent-unload`, so the prompt is a modal native dialog. It names the page by title
+ * and address, since it may not be the page shown.
  */
-export function confirmLeave(window: BrowserWindow | null | undefined, title: string): boolean {
+export function confirmLeave(window: BrowserWindow | null | undefined, page: PageName): boolean {
   const leave = 0;
+  const address = page.url ? pageAddress(page.url) : "";
+  const title = (page.title || "").trim() || address;
+  const name = [...new Set([title, address])].filter(Boolean).join("\n");
   const options: Electron.MessageBoxSyncOptions = {
     type: "question",
     title,
     message: "Leave this page?",
-    detail: "Changes you made may not be saved.",
+    detail: `${name ? `${name}\n\n` : ""}Changes you made may not be saved.`,
     buttons: ["Leave", "Stay"],
     defaultId: leave,
     cancelId: 1,
@@ -40,28 +82,36 @@ export function confirmLeave(window: BrowserWindow | null | undefined, title: st
         : dialog.showMessageBoxSync(options);
     return answer === leave;
   } finally {
-    promptMs += Date.now() - start;
+    askingMs += Date.now() - start;
   }
 }
 
 const pageWindows = new Set<BrowserWindow>();
+const pageNames = new WeakMap<BrowserWindow, () => PageName>();
 const stayListeners = new WeakMap<BrowserWindow, Set<() => void>>();
-const leaveWithoutAsking = new WeakMap<BrowserWindow, () => boolean>();
+const vetoAnswers = new WeakMap<BrowserWindow, () => boolean>();
 
 /**
  * Ask "Leave this page?" when the page shown in its own window (a pop-up or an extension
  * window) vetoes closing it. The window is closed with the browser when it quits.
  */
-export function askBeforeClosingWindow(window: BrowserWindow, title: () => string): void {
+export function askBeforeClosingWindow(window: BrowserWindow, name: () => PageName): void {
   pageWindows.add(window);
+  pageNames.set(window, name);
   window.once("closed", () => pageWindows.delete(window));
   window.webContents.on("will-prevent-unload", (event) => {
-    if (leaveWithoutAsking.get(window)?.() || confirmLeave(window, title())) {
+    const answer = vetoAnswers.get(window) ?? (() => confirmLeaveWindow(window));
+    if (answer()) {
       event.preventDefault();
       return;
     }
     for (const stayed of stayListeners.get(window) ?? []) stayed();
   });
+}
+
+/** Ask before leaving the page in a window registered with `askBeforeClosingWindow`. */
+export function confirmLeaveWindow(window: BrowserWindow): boolean {
+  return confirmLeave(window, pageNames.get(window)?.() ?? { title: window.getTitle() });
 }
 
 /** Windows that show a page and ask before closing it. */
@@ -71,12 +121,12 @@ export function windowsWithPages(): BrowserWindow[] {
 
 /**
  * Close a page window. Resolves once it closed; rejects with `StayedOnPage` if the user stays.
- * While `leave` is true, the page is left without asking, for example when it was too slow to
- * ask before quitting was confirmed.
+ * When the page warns about unsaved changes, `leave` answers in place of the prompt, for
+ * example to leave a page that was too slow to ask before quitting was confirmed.
  */
 export function closePageWindow(
   window: BrowserWindow,
-  leave: () => boolean = () => false,
+  leave: () => boolean = () => confirmLeaveWindow(window),
 ): Promise<void> {
   if (window.isDestroyed()) return Promise.resolve();
   return new Promise<void>((resolve, reject) => {
@@ -88,7 +138,7 @@ export function closePageWindow(
     const cleanup = () => {
       window.removeListener("closed", onClosed);
       listeners.delete(onStayed);
-      if (leaveWithoutAsking.get(window) === leave) leaveWithoutAsking.delete(window);
+      if (vetoAnswers.get(window) === leave) vetoAnswers.delete(window);
     };
     const onClosed = () => {
       cleanup();
@@ -100,7 +150,7 @@ export function closePageWindow(
     };
     window.once("closed", onClosed);
     listeners.add(onStayed);
-    leaveWithoutAsking.set(window, leave);
+    vetoAnswers.set(window, leave);
     try {
       window.close();
     } catch (error) {

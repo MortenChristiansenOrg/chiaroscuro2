@@ -73,6 +73,13 @@ export interface Platform {
   onQuitCancelled(
     callback: (details: { unloadedTabIds: TabId[]; stayedTabId?: TabId }) => void,
   ): () => void;
+  /**
+   * Before asking whether to leave a page with unsaved changes when quitting, show it, as
+   * Chrome does: switch to its workspace and tab, or to its sub-tab. Pages asked about earlier
+   * are gone, including the sub-tabs above it. Callbacks run in turn, in the order they were
+   * registered, and the prompt waits for them only briefly.
+   */
+  onShowPageBeforeAsking(callback: (tabId: TabId) => Promise<void> | void): () => void;
   navigateTab(tabId: TabId, url: string): Promise<void>;
   getTabUrl(tabId: TabId): string | undefined;
   /** Missing or dormant pages are not ready for scripts. */

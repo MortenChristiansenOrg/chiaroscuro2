@@ -3,7 +3,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("electron", () => ({ dialog: {} }));
 
 import { StayedOnPage } from "./leave-prompt";
-import { closePagesInTurn, type PageToClose, QuitConfirmation } from "./quit-confirmation";
+import {
+  closePagesInTurn,
+  closeShowingWarning,
+  oneAtATime,
+  type PageToClose,
+  QuitConfirmation,
+} from "./quit-confirmation";
 
 describe("closing pages in turn before quitting", () => {
   let promptMs = 0;
@@ -131,6 +137,160 @@ describe("closing pages in turn before quitting", () => {
       left: true,
       closed: ["b"],
     });
+  });
+});
+
+// #140: as Chrome does, a page that warns is shown before it is asked about.
+describe("showing a page before asking about it", () => {
+  let confirmed = false;
+  let asking = true;
+  beforeEach(() => {
+    confirmed = false;
+    asking = true;
+  });
+  const options = (inTurn = oneAtATime(3_000)) => ({
+    confirmed: () => confirmed,
+    asking: () => asking,
+    inTurn,
+  });
+
+  /** A page whose beforeunload warns while `warns` is true, and whose prompt answers `leaves`. */
+  function page({ warns = true, leaves = true } = {}) {
+    const steps: string[] = [];
+    let open = true;
+    return {
+      steps,
+      isOpen: () => open,
+      close: vi.fn(async (leave: () => boolean) => {
+        steps.push("close");
+        if (warns && !leave()) throw new StayedOnPage();
+        open = false;
+      }),
+      show: vi.fn(async () => {
+        steps.push("show");
+      }),
+      ask: vi.fn(() => {
+        steps.push(leaves ? "leave" : "stay");
+        return leaves;
+      }),
+    };
+  }
+
+  it("closes a page that does not warn at once, without showing it", async () => {
+    const quiet = page({ warns: false });
+    await closeShowingWarning(quiet, options());
+    expect(quiet.steps).toEqual(["close"]);
+    expect(quiet.isOpen()).toBe(false);
+  });
+
+  it("keeps a page that warns, shows it, then closes it again and asks", async () => {
+    const warning = page();
+    await closeShowingWarning(warning, options());
+    expect(warning.steps).toEqual(["close", "show", "close", "leave"]);
+    expect(warning.isOpen()).toBe(false);
+  });
+
+  it("keeps a page the user stays on", async () => {
+    const warning = page({ leaves: false });
+    await expect(closeShowingWarning(warning, options())).rejects.toBeInstanceOf(StayedOnPage);
+    expect(warning.steps).toEqual(["close", "show", "close", "stay"]);
+    expect(warning.isOpen()).toBe(true);
+  });
+
+  it("leaves a page without showing or asking once quitting is confirmed", async () => {
+    confirmed = true;
+    const warning = page();
+    await closeShowingWarning(warning, options());
+    expect(warning.steps).toEqual(["close"]);
+    expect(warning.isOpen()).toBe(false);
+  });
+
+  it("leaves a page that warned without asking when quitting was confirmed meanwhile", async () => {
+    const warning = page();
+    const inTurn = <T>(action: () => Promise<T>) => {
+      confirmed = true;
+      return action();
+    };
+    await closeShowingWarning(warning, options(inTurn));
+    expect(warning.steps).toEqual(["close", "close"]);
+    expect(warning.isOpen()).toBe(false);
+  });
+
+  it("keeps a page that warned without asking when the quit was cancelled meanwhile", async () => {
+    const warning = page();
+    asking = false;
+    await expect(closeShowingWarning(warning, options())).rejects.toBeInstanceOf(StayedOnPage);
+    expect(warning.steps).toEqual(["close"]);
+    expect(warning.isOpen()).toBe(true);
+  });
+
+  it("does not ask again about a page the user stayed on from another close", async () => {
+    const shared = page();
+    // The page was already being closed elsewhere, which asked; the user stayed.
+    shared.close.mockRejectedValueOnce(new StayedOnPage());
+    await expect(closeShowingWarning(shared, options())).rejects.toBeInstanceOf(StayedOnPage);
+    expect(shared.show).not.toHaveBeenCalled();
+    expect(shared.ask).not.toHaveBeenCalled();
+  });
+
+  it("shows and asks about one page at a time", async () => {
+    const inTurn = oneAtATime(3_000);
+    const first = page();
+    let shown = () => {};
+    first.show.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          first.steps.push("show");
+          shown = resolve;
+        }),
+    );
+    const second = page();
+    const closing = [
+      closeShowingWarning(first, options(inTurn)),
+      closeShowingWarning(second, options(inTurn)),
+    ];
+    await vi.waitFor(() => expect(first.show).toHaveBeenCalled());
+    // The second page warned too, but waits until the first was asked about.
+    expect(second.steps).toEqual(["close"]);
+    shown();
+    await Promise.all(closing);
+    expect(first.steps).toEqual(["close", "show", "close", "leave"]);
+    expect(second.steps).toEqual(["close", "show", "close", "leave"]);
+  });
+});
+
+describe("one at a time", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("runs actions in turn, even after one fails", async () => {
+    const inTurn = oneAtATime(1_000);
+    const order: string[] = [];
+    const failing = inTurn(async () => {
+      order.push("a");
+      throw new Error("broken");
+    });
+    const next = inTurn(async () => {
+      order.push("b");
+      return "b";
+    });
+    await expect(failing).rejects.toThrow("broken");
+    await expect(next).resolves.toBe("b");
+    expect(order).toEqual(["a", "b"]);
+  });
+
+  it("stops waiting on an action that hangs", async () => {
+    vi.useFakeTimers();
+    const inTurn = oneAtATime(1_000);
+    void inTurn(() => new Promise<void>(() => {}));
+    const next = vi.fn(async () => {});
+    const result = inTurn(next);
+    await vi.advanceTimersByTimeAsync(999);
+    expect(next).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    await result;
+    expect(next).toHaveBeenCalled();
   });
 });
 
