@@ -89,3 +89,54 @@ function requestClose(contents: Electron.WebContents, confirmLeave: () => boolea
     }
   });
 }
+
+/**
+ * Electron settles insertCSS and removeInsertedCSS when the renderer replies. A call that
+ * reaches a document as a navigation commits never settles, so reject when the main frame
+ * commits a page or an error page, crashes or closes. CSS belongs to a document; callers
+ * apply it again to the new one. `discardLate` undoes a result that arrives after that.
+ */
+export function untilDocumentReplaced<T>(
+  contents: Electron.WebContents,
+  operation: () => Promise<T>,
+  discardLate?: (value: T) => void,
+): Promise<T> {
+  if (contents.isDestroyed()) return Promise.reject(new Error("The page was closed"));
+  const emitter: NodeJS.EventEmitter = contents;
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const finish = (complete: () => void) => {
+      settled = true;
+      emitter.removeListener("did-navigate", onReplaced);
+      emitter.removeListener("did-fail-load", onFailedLoad);
+      emitter.removeListener("render-process-gone", onReplaced);
+      emitter.removeListener("destroyed", onReplaced);
+      complete();
+    };
+    const onReplaced = () =>
+      finish(() => reject(new Error("The page changed before its CSS was updated")));
+    // Error pages commit without did-navigate, and did-fail-load does not say whether the
+    // failure kept the old page. Reject either way: `discardLate` removes a late answer's
+    // style, and the did-stop-loading that follows every failure makes callers apply again.
+    const onFailedLoad = (...args: unknown[]) => {
+      if (args[4] === true) onReplaced();
+    };
+    emitter.on("did-navigate", onReplaced);
+    emitter.on("did-fail-load", onFailedLoad);
+    emitter.on("render-process-gone", onReplaced);
+    emitter.on("destroyed", onReplaced);
+    try {
+      operation().then(
+        (value) => {
+          if (settled) discardLate?.(value);
+          else finish(() => resolve(value));
+        },
+        (error: unknown) => {
+          if (!settled) finish(() => reject(error));
+        },
+      );
+    } catch (error) {
+      finish(() => reject(error));
+    }
+  });
+}

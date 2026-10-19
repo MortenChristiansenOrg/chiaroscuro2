@@ -1,7 +1,7 @@
 import type { Locator, Page } from "@playwright/test";
 import type { AppSession } from "../automation/session";
 import { startSite } from "../automation/site";
-import { waitUntil } from "../automation/wait";
+import { waitForNewDocument, waitUntil } from "../automation/wait";
 import { expect, test } from "../fixtures/electron-app";
 import { VerificationPage } from "../pages/verification.page";
 import { WindowChromePage } from "../pages/window-chrome.page";
@@ -63,6 +63,10 @@ async function selectTab(session: AppSession, url: string) {
   const target = await session.target((target) => target.kind === "tab" && target.url === url);
   await session.shell.locator(`[data-tab-id="${target.tabId}"]`).click();
   return session.page(target);
+}
+
+function reload(session: AppSession, page: Page) {
+  return waitForNewDocument(page, () => new WindowChromePage(session.shell).reloadButton.click());
 }
 
 async function openPalette(session: AppSession) {
@@ -146,7 +150,7 @@ test("website scripts UI manages automatic scripts with exact host/path scope an
   let page = await selectTab(session, originalUrl);
   // Saving an automatic script does not rewrite an already loaded document.
   await expect(page.locator("#result")).toHaveText("");
-  await new WindowChromePage(session.shell).reloadButton.click();
+  await reload(session, page);
   await expect(page.locator("#result")).toHaveText("automatic /scripts/initial");
   const matched = await VerificationPage.navigate(session, `${site.url}/scripts/next`);
   await expect(matched.result).toHaveText("automatic /scripts/next");
@@ -175,14 +179,14 @@ test("website scripts UI manages automatic scripts with exact host/path scope an
     "document.querySelector('#result').textContent = 'edited automatic script';",
   );
   page = await selectTab(session, originalUrl);
-  await new WindowChromePage(session.shell).reloadButton.click();
+  await reload(session, page);
   await expect(page.locator("#result")).toHaveText("edited automatic script");
   section = await openScripts(session);
   card = section.getByRole("article", { name: "Automatic fixture", exact: true });
   await card.getByRole("switch").click();
   await expect(card.getByRole("switch")).not.toBeChecked();
   page = await selectTab(session, originalUrl);
-  await new WindowChromePage(session.shell).reloadButton.click();
+  await reload(session, page);
   await expectNoAutomaticChange(page);
   section = await openScripts(session);
   card = section.getByRole("article", { name: "Automatic fixture", exact: true });

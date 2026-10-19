@@ -42,9 +42,13 @@ proof that a button or shortcut works. Electron shortcuts sometimes need
 `VerificationPage.navigate` for the actual palette input path.
 
 Use Playwright assertions, `waitUntil`, and history cursors/event waits for
-conditions. Do not use fixed sleeps or retry mutating actions. The fixture saves
-traces for each process generation and captures state, target inventory,
-accessibility, console/network errors and available screenshots on failure.
+conditions. Do not use fixed sleeps or retry mutating actions. When an action
+reloads or navigates a page you then inspect, wrap it in `waitForNewDocument`
+(`e2e/automation/wait.ts`): `waitForLoadState` and locators can still observe
+the old document, which passes too early or fails when the old context goes
+away. The fixture saves traces for each process generation and captures state,
+target inventory, accessibility, console/network errors and available
+screenshots on failure.
 `result.json` includes the error and a rerun command.
 
 ## CI

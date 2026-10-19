@@ -1,6 +1,7 @@
 import type { AiProvider } from "../../src/features/ai/chatgpt-client.main";
 import { parseModelCatalog } from "../../src/features/ai/model-catalog.main";
 import { startSite } from "../automation/site";
+import { waitForNewDocument } from "../automation/wait";
 import { expect, test } from "../fixtures/electron-app";
 import { VerificationPage } from "../pages/verification.page";
 import { WindowChromePage } from "../pages/window-chrome.page";
@@ -244,7 +245,7 @@ test("AI settings and generated drafts use the real app with a simulated ChatGPT
   const page = await session.page(target);
   await expect(page.locator("h1")).toHaveCSS("color", "rgb(180, 30, 70)");
   await session.capture("ai-css-applied");
-  await new WindowChromePage(session.shell).reloadButton.click();
+  await waitForNewDocument(page, () => new WindowChromePage(session.shell).reloadButton.click());
   await expect(page.locator("h1")).toHaveCSS("color", "rgb(180, 30, 70)");
 
   // A follow-up starts from the saved CSS, preserves the color, and changes size.
