@@ -52,6 +52,7 @@ export function createMockPlatform(overrides: Partial<Platform> = {}): Platform 
     hideSubTabWindow: vi.fn(async () => {}),
     showSubTabWindowStatic: vi.fn(),
     hideSubTabWindowInstant: vi.fn(),
+    returnFocusFromSubTabWindow: vi.fn(),
     updateSubTabWindowBounds: vi.fn(),
     attachTabToSubTabWindow: vi.fn(),
     detachTabFromSubTabWindow: vi.fn(),

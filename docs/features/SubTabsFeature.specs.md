@@ -50,6 +50,14 @@ Sub-tabs keep the user's context by avoiding full tab switches for casual link-f
 - If adoption fails while no workspace is active, retain the child for recovery and retry when a workspace is selected.
 - Switching to a different parent tab hides that parent's sub-tab stack; switching back reveals it.
 
+### Keyboard focus
+
+- A newly opened sub-tab takes keyboard focus from the browser, so typing reaches its page. Revealing the previous sub-tab after closing the top one keeps focus in the sub-tabs.
+- Switching back to the browser (Alt-Tab, closing the command palette, restoring the minimized window) returns focus to the sub-tab page that had it.
+- Closing the last sub-tab, promoting it or switching tabs returns focus to the page of the now active tab.
+- While a sub-tab page has focus, the browser window keeps looking active and browser shortcuts and Escape keep working. Alt+F4 closes the browser window.
+- Opening a sub-tab never takes focus from another application or from the command palette.
+
 ### Promotion
 
 - Clicking the promote button converts the sub-tab into a standalone ephemeral tab.

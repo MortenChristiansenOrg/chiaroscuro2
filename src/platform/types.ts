@@ -120,6 +120,11 @@ export interface Platform {
   hideSubTabWindow(): Promise<void>;
   showSubTabWindowStatic(contentBounds: Bounds, frameBounds: Bounds, parentTabId: string): void;
   hideSubTabWindowInstant(): void;
+  /**
+   * If the sub-tab window has keyboard focus, move it to this tab's page in the browser window,
+   * or to the browser window when the page is not shown there.
+   */
+  returnFocusFromSubTabWindow(tabId?: TabId): void;
   updateSubTabWindowBounds(contentBounds: Bounds, frameBounds: Bounds): void;
   /** Move a WCV from the main window into the sub-tab child window. */
   attachTabToSubTabWindow(tabId: TabId, frameBounds: Bounds): void;

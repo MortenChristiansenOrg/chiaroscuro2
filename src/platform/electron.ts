@@ -399,6 +399,12 @@ export class ElectronPlatform implements Platform {
   private subTabWinReady = false;
   private subTabWinParentListenersSet = false;
   private subTabWinContentBounds: Bounds | null = null;
+  /** Quitting or closing the browser window closes the sub-tab window as well. */
+  private subTabWinParentClosing = false;
+  /** The sub-tab window had keyboard focus when the command palette opened over it. */
+  private paletteOverSubTab = false;
+  /** The sub-tab window had keyboard focus when the app was last deactivated or minimized. */
+  private subTabWinHadFocus = false;
   private tabBoundsAnimations = new TabBoundsAnimation();
   private subTabWindowTransition = 0;
   private pendingPaletteJs: string | null = null;
@@ -1209,7 +1215,12 @@ export class ElectronPlatform implements Platform {
       parent,
       frame: false,
       transparent: true,
-      focusable: false,
+      // Pages shown in it take keyboard focus, which needs an activatable window (#124).
+      focusable: true,
+      // It moves and minimizes with the browser window; it must not be minimized or maximized on its own.
+      minimizable: false,
+      maximizable: false,
+      fullscreenable: false,
       skipTaskbar: true,
       resizable: false,
       show: false,
@@ -1219,6 +1230,26 @@ export class ElectronPlatform implements Platform {
         contextIsolation: true,
         preload: path.join(__dirname, "../preload/index.js"),
       },
+    });
+    const overlay = this.subTabWin;
+    // Escape and browser shortcuts must work after clicking the backdrop or its buttons.
+    this.hookWebContents(overlay.webContents);
+    // Returning to the browser must give focus back to the sub-tab page, not the backdrop.
+    this.contentFocus(overlay);
+    overlay.on("focus", () => {
+      // The window stays shown but transparent and click-through while no sub-tab is open.
+      // If Windows activates it anyway, for example after another window closed, move on.
+      if (!this.subTabWinContentBounds) {
+        this.getWin()?.focus();
+        return;
+      }
+      this.subTabWinHadFocus = true;
+    });
+    // Alt+F4 closes the active window. In a sub-tab, it is meant for the browser window.
+    overlay.on("close", (event) => {
+      if (this.subTabWinParentClosing || parent.isDestroyed()) return;
+      event.preventDefault();
+      parent.close();
     });
 
     const html = buildSubTabWindowHtml();
@@ -1241,8 +1272,50 @@ export class ElectronPlatform implements Platform {
     if (!this.subTabWinParentListenersSet) {
       parent.on("move", () => this.syncSubTabWinBounds());
       parent.on("resize", () => this.syncSubTabWinBounds());
+      // Windows moves a minimized window off-screen and does not report its return as a move.
+      parent.on("restore", () => this.syncSubTabWinBounds());
+      // The taskbar, Alt-Tab and restoring the minimized window can activate the browser window
+      // instead of the sub-tab window. Typing then still belongs in the sub-tab page.
+      parent.on("focus", () => setImmediate(() => this.forwardFocusToSubTabWindow(parent)));
+      parent.on("close", () => {
+        this.subTabWinParentClosing = true;
+        // Closing the browser window can be cancelled.
+        setImmediate(() => {
+          this.subTabWinParentClosing = false;
+        });
+      });
+      app.once("before-quit", () => {
+        this.subTabWinParentClosing = true;
+      });
       this.subTabWinParentListenersSet = true;
     }
+  }
+
+  private forwardFocusToSubTabWindow(parent: BrowserWindow): void {
+    const overlay = this.subTabWin;
+    if (!this.subTabWinHadFocus || !overlay || overlay.isDestroyed() || parent.isDestroyed())
+      return;
+    if (!parent.isFocused()) return;
+    if (!this.subTabWinContentBounds) {
+      this.subTabWinHadFocus = false;
+      return;
+    }
+    // Minimizing hides the sub-tab window and activates the browser window on its way out.
+    if (parent.isMinimized() || !overlay.isVisible()) return;
+    // With the pointer over the browser window, a click there may have activated it. Keep the
+    // focus the click gives. The taskbar and window switchers are outside the window.
+    const pointer = screen.getCursorScreenPoint();
+    const bounds = parent.getBounds();
+    if (
+      pointer.x >= bounds.x &&
+      pointer.y >= bounds.y &&
+      pointer.x < bounds.x + bounds.width &&
+      pointer.y < bounds.y + bounds.height
+    ) {
+      this.subTabWinHadFocus = false;
+      return;
+    }
+    overlay.focus();
   }
 
   private positionSubTabWin(contentBounds: Bounds): void {
@@ -1316,6 +1389,16 @@ export class ElectronPlatform implements Platform {
     this.subTabWinContentBounds = null;
   }
 
+  returnFocusFromSubTabWindow(tabId?: TabId): void {
+    const overlay = this.subTabWin;
+    if (!overlay || overlay.isDestroyed() || !overlay.isFocused()) return;
+    const win = this.getWin();
+    if (!win || win.isDestroyed()) return;
+    const view = tabId ? this.views.get(tabId) : undefined;
+    if (view && !view.webContents.isDestroyed()) this.contentFocus(win).activate(view.webContents);
+    else win.focus();
+  }
+
   showSubTabWindowStatic(contentBounds: Bounds, frameBounds: Bounds, parentTabId: string): void {
     this.subTabWindowTransition++;
     this.ensureSubTabWindow();
@@ -1372,12 +1455,18 @@ export class ElectronPlatform implements Platform {
       }
     }
 
+    const overlay = this.subTabWin;
+    const added = !overlay.contentView.children.includes(view);
+    const { width, height } = view.getBounds();
+    const revealed = added || width === 0 || height === 0;
     // Add to child window (may already be there — addChildView is idempotent for existing children)
     try {
-      this.subTabWin.contentView.addChildView(view);
+      overlay.contentView.addChildView(view);
     } catch {
       // already a child
     }
+    const focus = this.contentFocus(overlay);
+    focus.track(view.webContents);
 
     view.setBounds({
       x: Math.round(frameBounds.x),
@@ -1386,6 +1475,12 @@ export class ElectronPlatform implements Platform {
       height: Math.round(frameBounds.height),
     });
     view.setBorderRadius(8);
+
+    // A newly opened sub-tab takes keyboard focus from the browser, and the sub-tab shown after
+    // closing a nested one takes it from the closed page. Switching tabs does not move focus,
+    // nor does anything take it from another application or the command palette.
+    if (revealed && (overlay.isFocused() || (added && mainWin?.isFocused())))
+      focus.activate(view.webContents);
   }
 
   detachTabFromSubTabWindow(tabId: TabId): void {
@@ -1423,7 +1518,7 @@ export class ElectronPlatform implements Platform {
     if (!this.subTabWinContentBounds) return;
     if (!this.subTabWin || this.subTabWin.isDestroyed()) return;
     const win = this.getWin();
-    if (!win || win.isDestroyed()) return;
+    if (!win || win.isDestroyed() || win.isMinimized()) return;
     const cb = win.getContentBounds();
     const ab = this.subTabWinContentBounds;
     this.subTabWin.setBounds({
@@ -1535,6 +1630,8 @@ export class ElectronPlatform implements Platform {
       this.pendingPaletteJs = null;
     }
     this.paletteWin.webContents.executeJavaScript("resetPalette()").catch(() => {});
+    this.paletteOverSubTab =
+      !!this.subTabWin && !this.subTabWin.isDestroyed() && this.subTabWin.isFocused();
     this.paletteWin.focus();
   }
 
@@ -1545,7 +1642,13 @@ export class ElectronPlatform implements Platform {
       .executeJavaScript("document.getElementById('backdrop').classList.remove('open')")
       .catch(() => {});
     this.paletteWin.setIgnoreMouseEvents(true);
-    // Refocus parent
+    // Refocus the window the palette was opened from: the sub-tab, if it is still shown, or the browser.
+    const subTab = this.paletteOverSubTab && this.subTabWinContentBounds ? this.subTabWin : null;
+    this.paletteOverSubTab = false;
+    if (subTab && !subTab.isDestroyed()) {
+      subTab.focus();
+      return;
+    }
     const win = this.getWin();
     if (win && !win.isDestroyed()) win.focus();
   }
