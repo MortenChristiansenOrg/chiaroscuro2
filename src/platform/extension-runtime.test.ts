@@ -8,6 +8,7 @@ const hooks = vi.hoisted(() => ({
   notifications: [] as { emit(name: string): boolean; close: ReturnType<typeof vi.fn> }[],
   windows: [] as Electron.BrowserWindow[],
   leave: true,
+  closeWhileLoading: false,
 }));
 vi.mock("electron", async () => {
   const { EventEmitter } = await import("node:events");
@@ -30,11 +31,24 @@ vi.mock("electron", async () => {
     id = hooks.windows.length + 100;
     destroyed = false;
     vetoUnload = false;
-    webContents = new EventEmitter();
+    url = "";
+    webContents = Object.assign(new EventEmitter(), {
+      id: hooks.windows.length + 200,
+      audioMuted: false,
+      getURL: () => this.url,
+      getTitle: () => "Bitwarden",
+      isLoading: () => false,
+      isCurrentlyAudible: () => false,
+    });
     removeMenu = vi.fn();
-    loadURL = vi.fn(async () => {});
+    loadURL = vi.fn(async (url: string) => {
+      this.url = url;
+      if (hooks.closeWhileLoading) this.close();
+    });
     show = vi.fn();
     showInactive = vi.fn();
+    focus = vi.fn();
+    setSize = vi.fn();
     isFocused = () => true;
     isMaximized = () => false;
     isDestroyed = () => this.destroyed;
@@ -92,6 +106,7 @@ beforeEach(() => {
   hooks.notifications.length = 0;
   hooks.windows.length = 0;
   hooks.leave = true;
+  hooks.closeWhileLoading = false;
   vi.mocked(dialog.showMessageBoxSync).mockClear();
 });
 
@@ -111,7 +126,7 @@ it("lets an extension close its own popup window from inside it, after confirmin
   const created = await call(opener, "windows.create", [
     { type: "popup", url: "popup.html?uilocation=popout", width: 480, height: 630 },
   ]);
-  expect(created).toMatchObject({ ok: true, value: { type: "popup", tabs: [] } });
+  expect(created).toMatchObject({ ok: true, value: { type: "popup", tabs: [{ index: 0 }] } });
   const popout = hooks.windows[0];
   if (!popout) throw new Error("No extension window");
   // Browser accelerators in the application menu act on the main window, not this one.
@@ -147,6 +162,150 @@ it("lets an extension close its own popup window from inside it, after confirmin
   popout.close();
   expect(popout.isDestroyed()).toBe(true);
   expect(await call(inside, "windows.remove", [popout.id])).toMatchObject({ ok: false });
+});
+it("gives an extension window one tab that only its extension can find, focus and close", async () => {
+  const { EventEmitter } = await import("node:events");
+  const main = {
+    id: 1,
+    isFocused: () => true,
+    isDestroyed: () => false,
+    getBounds: () => ({}),
+    isMaximized: () => false,
+  } as unknown as Electron.BrowserWindow;
+  const runtime = new ExtensionRuntime(
+    { create: async () => "tab" as TabId, activate: async () => {}, close: vi.fn() },
+    () => main,
+  );
+  const page = Object.assign(new EventEmitter(), {
+    id: 10,
+    mainFrame: { framesInSubtree: [] },
+    isDestroyed: () => false,
+    getURL: () => "https://example.test/",
+    getTitle: () => "Example",
+    isLoading: () => false,
+    isCurrentlyAudible: () => false,
+  }) as unknown as Electron.WebContents;
+  runtime.addTab("tab" as TabId, page, main);
+  runtime.selectTab("tab" as TabId);
+  const call = hooks.calls.get("extension-browser:call");
+  if (!call) throw new Error("No browser API handler");
+  const frame = (id: string, page = "popup/index.html") => ({
+    url: `chrome-extension://${id}/${page}`,
+    send: vi.fn(),
+  });
+  const id = "a".repeat(32);
+  const opener = { sender: { session: session.defaultSession }, senderFrame: frame(id) };
+  const other = { sender: { session: session.defaultSession }, senderFrame: frame("b".repeat(32)) };
+  hooks.events.get("extension-browser:subscribe")?.(opener);
+  hooks.events.get("extension-browser:subscribe")?.(other);
+  const url = `chrome-extension://${id}/popup/index.html?uilocation=popout&singleActionPopout=add`;
+  await call(opener, "windows.create", [{ type: "popup", url, width: 380, height: 630 }]);
+  const popout = hooks.windows[0];
+  if (!popout) throw new Error("No extension window");
+  const tabId = popout.webContents.id;
+  const tab = { id: tabId, windowId: popout.id, index: 0, active: true, url };
+  expect(opener.senderFrame.send).toHaveBeenCalledWith(
+    "extension-browser:event",
+    "tabs.onCreated",
+    [expect.objectContaining(tab)],
+  );
+  expect(other.senderFrame.send).not.toHaveBeenCalled();
+
+  // Bitwarden finds its single-action pop-outs by URL, then acts through the tab's window.
+  const query = (caller: typeof opener, info: unknown) => call(caller, "tabs.query", [info]);
+  const pattern = `chrome-extension://${id}/popup/index.html*`;
+  expect(await query(opener, { url: pattern })).toEqual({
+    ok: true,
+    value: [expect.objectContaining(tab)],
+  });
+  expect(await call(opener, "tabs.get", [tabId])).toMatchObject({ ok: true, value: tab });
+  const inside = {
+    sender: Object.assign(popout.webContents, { session: session.defaultSession }),
+    senderFrame: frame(id, "popup/index.html?uilocation=popout&singleActionPopout=add"),
+  };
+  expect(await call(inside, "tabs.getCurrent", [])).toMatchObject({ ok: true, value: tab });
+  expect(await call(opener, "windows.getAll", [{ populate: true }])).toMatchObject({
+    ok: true,
+    value: [{ id: 1 }, { id: popout.id, type: "popup", tabs: [tab] }],
+  });
+  const ids = async (caller: typeof opener, info: unknown) =>
+    ((await query(caller, info)).value as { id: number }[]).map((tab) => tab.id);
+  expect(await ids(opener, {})).toEqual([10, tabId]);
+  expect(await ids(opener, { active: true })).toEqual([10, tabId]);
+  expect(await ids(opener, { windowType: "popup" })).toEqual([tabId]);
+  expect(await ids(opener, { windowType: "normal" })).toEqual([10]);
+  expect(await ids(opener, { windowId: popout.id })).toEqual([tabId]);
+  // Current-window queries still mean the browser window, even from inside the pop-out.
+  expect(await ids(inside, { active: true, currentWindow: true })).toEqual([10]);
+  expect(await ids(inside, { active: true, windowId: -2 })).toEqual([10]);
+
+  // Other extensions cannot see, focus or close it.
+  expect(await ids(other, {})).toEqual([10]);
+  expect(await query(other, { url: pattern })).toEqual({ ok: true, value: [] });
+  expect(await call(other, "windows.getAll", [])).toMatchObject({ value: [{ id: 1 }] });
+  for (const [method, args] of [
+    ["tabs.get", [tabId]],
+    ["tabs.update", [tabId, { active: true }]],
+    ["tabs.remove", [tabId]],
+    ["windows.update", [popout.id, { focused: true }]],
+  ] as const)
+    expect(await call(other, method, [...args])).toMatchObject({ ok: false });
+  expect(popout.focus).not.toHaveBeenCalled();
+  expect(popout.isDestroyed()).toBe(false);
+
+  // Opening the same single-action pop-out again focuses the existing one.
+  expect(
+    await call(opener, "windows.update", [
+      popout.id,
+      { focused: true, width: 380, height: 630, top: Number.NaN, left: Number.NaN },
+    ]),
+  ).toMatchObject({ ok: true, value: { id: popout.id } });
+  expect(popout.focus).toHaveBeenCalledOnce();
+  expect(popout.setSize).toHaveBeenCalledWith(380, 630);
+  expect(await call(opener, "tabs.update", [tabId, { active: true }])).toMatchObject({
+    ok: true,
+    value: tab,
+  });
+  expect(popout.focus).toHaveBeenCalledTimes(2);
+
+  popout.webContents.emit("did-navigate-in-page", {}, `${url}#/add`, true);
+  expect(opener.senderFrame.send).toHaveBeenCalledWith(
+    "extension-browser:event",
+    "tabs.onUpdated",
+    [tabId, { url, status: "complete" }, expect.objectContaining(tab)],
+  );
+
+  // Cancelling closes the pop-out through its tab.
+  expect(await call(inside, "tabs.remove", [tabId])).toEqual({ ok: true });
+  expect(popout.isDestroyed()).toBe(true);
+  expect(opener.senderFrame.send).toHaveBeenCalledWith(
+    "extension-browser:event",
+    "tabs.onRemoved",
+    [tabId, { windowId: popout.id, isWindowClosing: true }],
+  );
+  expect(other.senderFrame.send).not.toHaveBeenCalled();
+  expect(await ids(opener, {})).toEqual([10]);
+  expect(await call(opener, "tabs.get", [tabId])).toMatchObject({ ok: false });
+});
+it("never announces an extension window that closes while it loads", async () => {
+  new ExtensionRuntime(
+    { create: async () => "tab" as TabId, activate: async () => {}, close: async () => {} },
+    () => undefined,
+  );
+  const call = hooks.calls.get("extension-browser:call");
+  if (!call) throw new Error("No browser API handler");
+  const opener = {
+    sender: { session: session.defaultSession },
+    senderFrame: { url: `chrome-extension://${"a".repeat(32)}/popup.html`, send: vi.fn() },
+  };
+  hooks.events.get("extension-browser:subscribe")?.(opener);
+  hooks.closeWhileLoading = true;
+  expect(await call(opener, "windows.create", [{ url: "popup.html" }])).toMatchObject({
+    ok: false,
+  });
+  hooks.windows[0]?.webContents.emit("did-stop-loading");
+  expect(opener.senderFrame.send).not.toHaveBeenCalled();
+  expect(await call(opener, "tabs.query", [{}])).toEqual({ ok: true, value: [] });
 });
 it("keeps replacement notifications tracked when an older close event arrives", async () => {
   new ExtensionRuntime(

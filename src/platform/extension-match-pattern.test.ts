@@ -24,4 +24,19 @@ describe("extension host permissions", () => {
     expect(matchesUrl("<all_urls>", "file:///private")).toBe(false);
     expect(matchesUrl("<all_urls>", "invalid")).toBe(false);
   });
+
+  it("matches extension pages only for tab queries that name the extension scheme", () => {
+    const page = "chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/popup/index.html?a=1";
+    const pattern = "chrome-extension://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/popup/index.html*";
+    expect(matchesUrl(pattern, page, true)).toBe(true);
+    expect(matchesUrl(pattern, page)).toBe(false);
+    expect(matchesUrl("chrome-extension://bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb/*", page, true)).toBe(
+      false,
+    );
+    expect(matchesUrl("*://*/*", page, true)).toBe(false);
+    expect(matchesUrl("<all_urls>", page, true)).toBe(false);
+    expect(
+      matchesUrl(pattern, "https://aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/popup/index.html", true),
+    ).toBe(false);
+  });
 });
