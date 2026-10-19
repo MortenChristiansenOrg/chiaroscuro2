@@ -5,7 +5,7 @@ import type { Platform } from "../../platform/types";
 import { APP_CHANNELS, type AppChannel, isChannelVersion } from "../../shared/app-channel";
 import { defineFeature } from "../../shared/define-feature";
 import { logError, logWarn } from "../../shared/log";
-import { earlyAccessFeed } from "./early-access-feed";
+import { earlyAccessFeed, hasCustomFeed } from "./early-access-feed";
 import {
   INSTALLER_ALLOW_PROTOCOL,
   INSTALLER_APPLY_UPDATE,
@@ -192,6 +192,8 @@ export default defineFeature<Deps>({
       initialization ??= (async () => {
         try {
           const mod = await import("electron-updater");
+          // Early Access looks up its GitHub release unless the installation names another feed.
+          const customFeed = await hasCustomFeed(process.resourcesPath);
           if (!isCurrent()) return;
           // ESM/CJS interop: getter-defined exports may be on mod directly or mod.default
           // biome-ignore lint/suspicious/noExplicitAny: CJS interop fallback
@@ -251,7 +253,7 @@ export default defineFeature<Deps>({
           let pendingCheck: Promise<void> | undefined;
           checkForUpdates = () => {
             pendingCheck ??= (async () => {
-              if (appChannel === "early-access") {
+              if (appChannel === "early-access" && !customFeed) {
                 try {
                   const url = await earlyAccessFeed();
                   if (!isCurrent()) return;
