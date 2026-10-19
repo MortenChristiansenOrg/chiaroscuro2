@@ -41,6 +41,12 @@ export class WindowContentFocus {
     private readonly window: FocusWindow,
     /** Only contents that are still shown in this window may take focus back. */
     private readonly canRestore: (contents: FocusableContents) => boolean,
+    /**
+     * For a window whose own contents only frame a page, such as the sub-tab window: the page to
+     * return to instead of the frame. Electron reports focus moving to the frame on activation
+     * before it reports the window's earlier deactivation, so the frame can look like it had focus.
+     */
+    private readonly framedPage?: () => FocusableContents | undefined,
   ) {
     const shell = window.webContents;
     shell.on("focus", () => {
@@ -128,7 +134,10 @@ export class WindowContentFocus {
       this.cancelShellFocus();
       return;
     }
-    const contents = this.focusedAtBlur;
+    const contents =
+      this.focusedAtBlur === this.window.webContents && this.framedPage
+        ? this.framedPage()
+        : this.focusedAtBlur;
     this.focusedAtBlur = undefined;
     this.awaitingRestore = false;
     if (

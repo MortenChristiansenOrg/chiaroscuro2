@@ -488,18 +488,33 @@ export class ElectronPlatform implements Platform {
     return BrowserWindow.fromId(Number(id)) ?? undefined;
   }
 
-  /** Return keyboard focus to the page shown in this window when the user switches back to it. */
-  private contentFocus(win: BrowserWindow): WindowContentFocus {
+  /**
+   * Return keyboard focus to the page shown in this window when the user switches back to it.
+   * With `framesPage`, the window's own contents only frame the page it shows, which then takes
+   * focus instead of them.
+   */
+  private contentFocus(win: BrowserWindow, framesPage = false): WindowContentFocus {
     let focus = this.windowFocus.get(win);
     if (!focus) {
-      focus = new WindowContentFocus(win, (contents) =>
-        [...this.views.values()].some((view) => {
-          if (view.webContents !== contents || !win.contentView.children.includes(view)) {
-            return false;
-          }
-          const { width, height } = view.getBounds();
-          return width > 0 && height > 0;
-        }),
+      const shown = (view: WebContentsView) => {
+        if (!win.contentView.children.includes(view)) return false;
+        const { width, height } = view.getBounds();
+        return width > 0 && height > 0;
+      };
+      focus = new WindowContentFocus(
+        win,
+        (contents) =>
+          [...this.views.values()].some((view) => view.webContents === contents && shown(view)),
+        framesPage
+          ? () => {
+              // The topmost page shown.
+              const views = new Set<unknown>(this.views.values());
+              const page = [...win.contentView.children]
+                .reverse()
+                .find((view) => views.has(view) && shown(view as WebContentsView));
+              return (page as WebContentsView | undefined)?.webContents;
+            }
+          : undefined,
       );
       this.windowFocus.set(win, focus);
     }
@@ -1510,7 +1525,7 @@ export class ElectronPlatform implements Platform {
     // Escape and browser shortcuts must work after clicking the backdrop or its buttons.
     this.hookWebContents(overlay.webContents);
     // Returning to the browser must give focus back to the sub-tab page, not the backdrop.
-    this.contentFocus(overlay);
+    this.contentFocus(overlay, true);
     overlay.on("focus", () => {
       // The window stays shown but transparent and click-through while no sub-tab is open.
       // If Windows activates it anyway, for example after another window closed, move on.
