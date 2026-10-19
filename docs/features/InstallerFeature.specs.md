@@ -85,7 +85,11 @@ acquiring the single-instance lock or creating Chromium sessions.
   alpha and RC releases are ignored. The manifest is also checked before download.
   Lookup errors (including GitHub rate limits) fail the check without falling back
   to stable. The unauthenticated API lookup has a 15-second timeout per page and
-  a ten-page bound. A check typically makes one API request.
+  a ten-page bound. A check typically makes one API request. An installation whose
+  `resources/app-update.yml` names a provider other than GitHub uses that feed
+  instead of the lookup. Installers always write the GitHub provider; only the
+  on-demand update restart check replaces it, on a disposable installation, to serve
+  updates from a local feed.
 - Channel selection never permits a version downgrade.
 
 ### Release Workflow
@@ -160,6 +164,27 @@ runs them alongside Dev, checks distinct profiles/cookies and registry entries,
 upgrades/reinstalls Early Access, and verifies both uninstall directions preserve
 the other editions. `e2e/packaging/installed-channels.ts` refuses to run outside
 GitHub Actions on Windows so it cannot alter a developer's installations.
+
+#### Update restart on a real installation (on demand)
+
+Run the **Update restart** workflow when changing `src/features/installer/`, the
+packaging/installer configuration or electron-updater (its version or how it is
+called). It is not part of PR CI. Dispatch it against the branch to test:
+
+```sh
+gh workflow run update-restart.yml --ref <branch>
+gh run watch "$(gh run list --workflow update-restart.yml --branch <branch> --limit 1 --json databaseId --jq '.[0].databaseId')"
+```
+
+`e2e/packaging/update-restart.ts` installs Early Access `99.1.0-beta.1` on a disposable
+Windows runner and serves `99.1.0-beta.2` from a local feed. The browser downloads it,
+then Restart is tried with the downloaded installer missing, not executable and
+blocked: each time the browser keeps running with its tabs and shows the error. With
+the installer back, Restart starts it and the browser quits. The test then acts as the
+user of the installer, which shows its install options and finish pages, and checks
+that the installer starts the new version and that it keeps the tabs. Screenshots,
+logs and each installer page are uploaded as the `windows-update-restart` artifact.
+Like the installed-editions check, it refuses to run outside GitHub Actions on Windows.
 
 ## Interactions
 

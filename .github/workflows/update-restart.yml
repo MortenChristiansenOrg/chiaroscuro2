@@ -1,0 +1,54 @@
+# On demand: restart to update against a real Early Access installation (#147).
+# Run it when changing src/features/installer/ or upgrading electron-updater:
+#   gh workflow run update-restart.yml --ref <branch>
+# See docs/features/InstallerFeature.specs.md#verification.
+name: Update restart
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Branch, tag or commit to test (defaults to the branch the workflow runs from)
+        required: false
+        default: ""
+
+concurrency:
+  group: update-restart-${{ inputs.ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  update-restart:
+    name: Windows update restart
+    runs-on: windows-latest
+    permissions:
+      contents: read
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.11
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+      # The installed build, then the update: the feed serves the last packaged beta.yml.
+      - run: bun run package:win v99.1.0-beta.1
+      - run: bun run package:win v99.1.0-beta.2
+      - name: Restart to update a real installation without publishing
+        timeout-minutes: 12
+        run: |
+          bun build e2e/packaging/update-restart.ts --target=node --packages=external --outfile=out/verification/update-restart.mjs
+          node out/verification/update-restart.mjs
+      - uses: actions/upload-artifact@v4
+        if: ${{ always() }}
+        with:
+          name: windows-update-restart
+          path: |
+            test-results/packaging/
+            dist/early-access/*.yml
+          retention-days: 7

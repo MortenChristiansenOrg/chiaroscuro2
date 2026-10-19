@@ -21,6 +21,11 @@ bun test:watch        # watch mode
 bun run verify        # full pipeline (typecheck + lint + test)
 ```
 
+Restarting to update against a real installation runs only on demand, on a Windows
+runner: dispatch `gh workflow run update-restart.yml --ref <branch>` when changing
+`src/features/installer/` or electron-updater. See
+[Installer verification](../features/InstallerFeature.specs.md#update-restart-on-a-real-installation-on-demand).
+
 ## Test Stack
 
 | Layer | Tool | Environment |

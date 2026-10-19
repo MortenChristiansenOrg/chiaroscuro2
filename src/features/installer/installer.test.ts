@@ -1,3 +1,6 @@
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CommandBus } from "../../bus/command-bus";
 import { EventBus } from "../../bus/event-bus";
@@ -289,6 +292,32 @@ describe("installer feature", () => {
         expect(autoUpdater.isUpdateSupported({ version } as never)).toBe(false);
       }
       expect(autoUpdater.isUpdateSupported({ version: "1.9.0-beta.10" } as never)).toBe(true);
+    });
+
+    it("uses an installation's own non-GitHub feed without the release lookup", async () => {
+      const resources = mkdtempSync(path.join(tmpdir(), "installer-resources-"));
+      writeFileSync(
+        path.join(resources, "app-update.yml"),
+        "provider: generic\nurl: http://127.0.0.1:8080/\nchannel: beta\n",
+      );
+      const original = Object.getOwnPropertyDescriptor(process, "resourcesPath");
+      Object.defineProperty(process, "resourcesPath", { value: resources, configurable: true });
+      try {
+        vi.stubGlobal("fetch", vi.fn());
+        const { deps, commands } = setup({ appChannel: "early-access" });
+        await feature.start(deps);
+        const { autoUpdater } = await import("electron-updater");
+        await commands.send(INSTALLER_CHECK_FOR_UPDATES, undefined);
+        expect(fetch).not.toHaveBeenCalled();
+        expect(autoUpdater.setFeedURL).not.toHaveBeenCalled();
+        expect(autoUpdater.checkForUpdates).toHaveBeenCalledOnce();
+        expect(autoUpdater.channel).toBe("beta");
+        expect(autoUpdater.isUpdateSupported({ version: "2.0.0" } as never)).toBe(false);
+      } finally {
+        if (original) Object.defineProperty(process, "resourcesPath", original);
+        else delete (process as { resourcesPath?: string }).resourcesPath;
+        rmSync(resources, { recursive: true, force: true });
+      }
     });
 
     it("reports lookup failure without falling back to the stable feed", async () => {

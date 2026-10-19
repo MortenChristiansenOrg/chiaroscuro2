@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 import { RELEASE_REPOSITORY, releaseTag } from "../../shared/app-channel";
 
 interface Release {
@@ -42,4 +44,20 @@ export async function earlyAccessFeed(fetcher: typeof fetch = fetch): Promise<st
     }
   }
   throw new Error("Early Access release lookup exceeded the pagination limit");
+}
+
+/**
+ * Whether the packaged updater config (`resources/app-update.yml`) names a feed other than GitHub
+ * releases. Installers always configure GitHub; packaging CI replaces the config of a disposable
+ * installation to serve updates from a local feed. A missing or unreadable config counts as GitHub.
+ */
+export async function hasCustomFeed(resourcesPath: string | undefined): Promise<boolean> {
+  if (!resourcesPath) return false;
+  try {
+    const config = await readFile(path.join(resourcesPath, "app-update.yml"), "utf8");
+    const provider = /^provider:\s*["']?([\w-]+)/m.exec(config)?.[1];
+    return provider !== undefined && provider !== "github";
+  } catch {
+    return false;
+  }
 }
