@@ -372,7 +372,7 @@ test("Windows: activations without a click return typing to the sub-tab page, cl
 
     // Another program activates it, with the pointer over the browser window.
     await activateOtherWindow(session);
-    await windowsPointer(session, { x: 4, y: 400 });
+    await windowsPointer(session, { x: 4, y: 400 }, false, false);
     await expect.poll(() => focusedContents(session)).toBe(childTab.webContentsId);
     await windowsInput(session, { keys: "c" });
     await expect(child.message).toHaveValue("abc");
