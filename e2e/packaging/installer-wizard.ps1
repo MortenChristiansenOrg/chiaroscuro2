@@ -1,7 +1,7 @@
 # Acts as the user of an update installer the browser started: waits for the installer process,
 # presses through its pages as a user would (Next, Install, Finish), records each page's text,
 # check box states and a desktop screenshot, and exits once the installer process ended.
-# Runs only on a disposable GitHub Windows runner, from e2e/packaging/installed-channels.ts.
+# Runs only on a disposable GitHub Windows runner, from e2e/packaging/update-restart.ts.
 param(
   # Process name of the installer, without .exe.
   [Parameter(Mandatory=$true)][string]$ProcessName,
