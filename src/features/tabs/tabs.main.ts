@@ -421,7 +421,8 @@ export default defineFeature<Deps>({
 
       const wasActive = getActiveTabId() === tabId;
       if (!tab.builtIn) {
-        await platform.closeTab(tabId);
+        // A tab in the background is shown before asking about unsaved changes (#150).
+        await platform.closeTab(tabId, { showBeforeAsking: true });
       }
       // A beforeunload veto must leave the tab's listeners attached.
       tabScope.cleanup(tabId);
@@ -431,7 +432,8 @@ export default defineFeature<Deps>({
       unloadedTabs.delete(tabId);
 
       let activatedTabId: TabId | null = null;
-      if (wasActive) {
+      // A tab shown to ask about it stays active if there was no page to go back to.
+      if (wasActive || getActiveTabId() === tabId) {
         const mru = findMruTab(tab.workspaceId);
         if (mru) {
           activatedTabId = mru.id;

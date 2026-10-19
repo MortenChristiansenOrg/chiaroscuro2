@@ -539,6 +539,81 @@ describe("showing a page before asking about it when quitting", () => {
     vi.mocked(isPinned).mockReturnValue(false);
   });
 
+  // #150: after asking about a tab the user closed, go back to the page they were on.
+  describe("going back after asking", () => {
+    async function setupGoingBack(where: "this" | "other") {
+      let showPage: ShowPage = () => {};
+      const ctx = setup({
+        onShowPageBeforeAsking: vi.fn((callback: ShowPage) => {
+          showPage = callback;
+          return () => {};
+        }),
+      });
+      const here = await ctx.commands.send(WORKSPACES_CREATE, {
+        name: "Work",
+        color: "blue",
+        icon: "W",
+      });
+      const other = await ctx.commands.send(WORKSPACES_CREATE, {
+        name: "Personal",
+        color: "red",
+        icon: "P",
+      });
+      const current = makeTab({ id: "current" as TabId, workspaceId: here });
+      const remembered = makeTab({ id: "remembered" as TabId, workspaceId: other });
+      const asked = makeTab({
+        id: "asked" as TabId,
+        workspaceId: where === "other" ? other : here,
+      });
+      vi.mocked(getTabsForWorkspace).mockImplementation((id) =>
+        [current, remembered, asked].filter((tab) => tab.workspaceId === id),
+      );
+      ctx.commands.unhandle(TABS_ACTIVATE);
+      ctx.commands.handle(TABS_ACTIVATE, async ({ tabId }) => {
+        ctx.setActiveTabId(tabId);
+      });
+      // The other workspace was last left on another tab.
+      await ctx.commands.send(WORKSPACES_SWITCH, { workspaceId: other });
+      await ctx.commands.send(TABS_ACTIVATE, { tabId: remembered.id });
+      await ctx.commands.send(WORKSPACES_SWITCH, { workspaceId: here });
+      await ctx.commands.send(TABS_ACTIVATE, { tabId: current.id });
+      return {
+        ...ctx,
+        here,
+        other,
+        current,
+        remembered,
+        asked,
+        showPage: () => showPage(asked.id),
+      };
+    }
+
+    it.each(["this", "other"] as const)("goes back from a page in %s workspace", async (where) => {
+      const ctx = await setupGoingBack(where);
+      const goBack = await ctx.showPage();
+      expect(ctx.deps.getActiveTabId()).toBe(ctx.asked.id);
+
+      await goBack?.();
+
+      expect(ctx.deps.getActiveWorkspaceId()).toBe(ctx.here);
+      expect(ctx.deps.getActiveTabId()).toBe(ctx.current.id);
+      // The other workspace still opens on the tab it was left on.
+      await ctx.commands.send(WORKSPACES_SWITCH, { workspaceId: ctx.other });
+      expect(ctx.deps.getActiveTabId()).toBe(ctx.remembered.id);
+    });
+
+    it("stays where the user went while the page was shown", async () => {
+      const ctx = await setupGoingBack("this");
+      const goBack = await ctx.showPage();
+      const elsewhere = "elsewhere" as TabId;
+      await ctx.commands.send(TABS_ACTIVATE, { tabId: elsewhere });
+
+      await goBack?.();
+
+      expect(ctx.deps.getActiveTabId()).toBe(elsewhere);
+    });
+  });
+
   it("leaves sub-tabs to the sub-tabs feature", async () => {
     let showPage: ShowPage = () => {};
     const ctx = setup({

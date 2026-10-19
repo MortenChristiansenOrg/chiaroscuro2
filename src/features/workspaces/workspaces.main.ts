@@ -367,21 +367,36 @@ export default defineFeature<Deps>({
       }
     });
 
-    // Show a page with unsaved changes before asking about it when quitting, even in another
-    // workspace. The sub-tabs feature shows sub-tabs.
+    // Show a page with unsaved changes before asking about it, even in another workspace. The
+    // sub-tabs feature shows sub-tabs. When the user closed the page's tab, go back to the page
+    // they were on afterwards, unless they moved on meanwhile.
     stopShowPage?.();
     stopShowPage = platform.onShowPageBeforeAsking(async (tabId) => {
+      const fromWorkspaceId = getActiveWorkspaceId();
+      const fromTabId = getActiveTabId();
+      let shownIn: { ws: Workspace; activeTabId: TabId | null } | undefined;
       if (!isPinned(tabId)) {
         const ws = [...workspaces.values()].find((candidate) =>
           getTabsForWorkspace(candidate.id).some((tab) => tab.id === tabId),
         );
         if (!ws) return;
         if (ws.id !== getActiveWorkspaceId()) {
+          shownIn = { ws, activeTabId: ws.activeTabId };
           ws.activeTabId = tabId;
           await commands.send(WORKSPACES_SWITCH, { workspaceId: ws.id });
         }
       }
       if (getActiveTabId() !== tabId) await commands.send(TABS_ACTIVATE, { tabId });
+      return async () => {
+        if (getActiveTabId() !== tabId) return;
+        if (fromWorkspaceId && fromWorkspaceId !== getActiveWorkspaceId()) {
+          await commands.send(WORKSPACES_SWITCH, { workspaceId: fromWorkspaceId });
+          // Switching back remembered the page shown for asking as its workspace's tab.
+          if (shownIn?.ws.activeTabId === tabId) shownIn.ws.activeTabId = shownIn.activeTabId;
+        }
+        if (fromTabId && getActiveTabId() !== fromTabId)
+          await commands.send(TABS_ACTIVATE, { tabId: fromTabId });
+      };
     });
   },
 

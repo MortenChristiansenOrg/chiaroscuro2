@@ -38,6 +38,7 @@ import {
   type PageName,
   whileShowingPage,
   windowsWithPages,
+  wrapWindowLeavePrompt,
 } from "./leave-prompt";
 import { PdfResponses } from "./pdf-responses";
 import { checkPermission, matchesGrantedDevice } from "./permission-check";
@@ -46,13 +47,19 @@ import {
   closeShowingWarning,
   oneAtATime,
   type PageToClose,
+  QuitAnswers,
   QuitConfirmation,
   type ShowBeforeAskingOptions,
 } from "./quit-confirmation";
 import { TabBoundsAnimation } from "./tab-bounds-animation";
 import { insertTabCss, removeTabCss } from "./tab-css";
 import { closeTabContents, closeTabContentsAsking, createTabView } from "./tab-view";
-import type { ExtensionTabActions, Platform, PlatformDownload } from "./types";
+import type {
+  ExtensionTabActions,
+  GoBack as GoBackFromPage,
+  Platform,
+  PlatformDownload,
+} from "./types";
 import { isAllowedNavigation, isAllowedUrl } from "./url-policy";
 import { runWebsiteScript } from "./website-script";
 import { WindowContentFocus } from "./window-focus";
@@ -473,14 +480,15 @@ export class ElectronPlatform implements Platform {
   private quitCancelledCallbacks = new Set<
     (details: { unloadedTabIds: TabId[]; stayedTabId?: TabId }) => void
   >();
-  private showPageCallbacks = new Set<(tabId: TabId) => Promise<void> | void>();
+  private showPageCallbacks = new Set<
+    (tabId: TabId) => Promise<GoBackFromPage | undefined> | GoBackFromPage | undefined
+  >();
   /** Pages that warn about unsaved changes are shown and asked about one at a time. */
   private readonly askInTurn = oneAtATime(QUIT_PAGE_TIMEOUT_MS, leavePromptTime);
-  private readonly showBeforeAsking: ShowBeforeAskingOptions = {
-    confirmed: () => this.quitConfirmation.settled,
-    asking: () => this.quitConfirmation.asking,
-    inTurn: (action) => this.askInTurn(action),
-  };
+  /** Answers given while the current quit or window close asks about pages (#151). */
+  private quitAnswers: QuitAnswers<TabId | BrowserWindow> | undefined;
+  /** Closes of tabs the user closes, so overlapping closes ask only once. */
+  private userCloses = new WeakMap<Electron.WebContents, Promise<void>>();
   private tooltipWin: BrowserWindow | null = null;
   private paletteWin: BrowserWindow | null = null;
   private paletteParentListenersSet = false;
@@ -538,7 +546,10 @@ export class ElectronPlatform implements Platform {
   constructor(
     private getActiveWindowId: () => WindowId | undefined,
     private readonly sessionDiagnostics?: GithubSessionDiagnostics,
-  ) {}
+  ) {
+    // A pop-up the user closes while a quit asks shares the quit's answers (#151).
+    wrapWindowLeavePrompt((win, ask) => this.quitAnswers?.ask(win, win, ask) ?? ask());
+  }
 
   private getWin(windowId?: WindowId): BrowserWindow | undefined {
     const id = windowId ?? this.getActiveWindowId();
@@ -828,7 +839,7 @@ export class ElectronPlatform implements Platform {
     return tabId;
   }
 
-  async closeTab(tabId: TabId): Promise<void> {
+  async closeTab(tabId: TabId, { showBeforeAsking = false } = {}): Promise<void> {
     this.pendingTabs.delete(tabId);
     this.unloadedForQuit.delete(tabId);
     const view = this.views.get(tabId);
@@ -844,7 +855,16 @@ export class ElectronPlatform implements Platform {
     const contents = view.webContents;
     this.closingTabs.add(tabId);
     try {
-      await closeTabContentsAsking(contents, () => confirmLeave(this.getWin(), pageName(contents)));
+      let closing = this.userCloses.get(contents);
+      if (!closing) {
+        closing = (
+          showBeforeAsking && !this.isViewShown(view)
+            ? this.closeHiddenTab(tabId, contents)
+            : closeTabContentsAsking(contents, this.askAboutTab(tabId, contents))
+        ).finally(() => this.userCloses.delete(contents));
+        this.userCloses.set(contents, closing);
+      }
+      await closing;
     } finally {
       this.closingTabs.delete(tabId);
     }
@@ -854,6 +874,52 @@ export class ElectronPlatform implements Platform {
     this.unloadedForQuit.delete(tabId);
     this.tabListeners.delete(tabId);
     this.tabSequence.delete(tabId);
+  }
+
+  /**
+   * Ask whether to leave a tab the user closes. While a quit asks about pages, or if it was
+   * asking when the user closed the tab, the answer is shared with it (#151): the quit does not
+   * ask again, and staying cancels it. An answer the quit already got is not asked again.
+   */
+  private askAboutTab(tabId: TabId, contents: Electron.WebContents): () => boolean {
+    const requestedWhileQuitting = this.quitAnswers;
+    return () => {
+      const ask = () => confirmLeave(this.getWin(), pageName(contents));
+      const answers = this.quitAnswers ?? requestedWhileQuitting;
+      return answers ? answers.ask(contents, tabId, ask) : ask();
+    };
+  }
+
+  /**
+   * Close a tab that is not shown, as from the sidebar or by clearing ephemeral tabs (#150). If
+   * its page warns about unsaved changes, it is shown before asking, as when quitting, and the
+   * user is then returned to the page they were on, whether they leave or stay. While a quit
+   * asks about pages, the quit decides what is shown instead.
+   */
+  private closeHiddenTab(tabId: TabId, contents: Electron.WebContents): Promise<void> {
+    const requestedWhileQuitting = this.quitAnswers;
+    const quitting = () =>
+      requestedWhileQuitting !== undefined ||
+      this.quitAnswers !== undefined ||
+      this.quitConfirmation.settled;
+    return closeShowingWarning(
+      {
+        close: (leave) => closeTabContents(contents, leave, { asks: false }),
+        show: async () => {
+          const goBack = await this.showTabToAsk(tabId, contents);
+          return () => (quitting() ? Promise.resolve() : this.goBackAfterAsking(goBack));
+        },
+        ask: this.askAboutTab(tabId, contents),
+        answered: () => (this.quitAnswers ?? requestedWhileQuitting)?.answer(contents),
+        closed: () => contents.isDestroyed(),
+      },
+      {
+        confirmed: () => this.quitConfirmation.settled,
+        // The user asked to close the tab, so it is asked about unless a quit was confirmed.
+        asking: () => true,
+        inTurn: (action) => this.askInTurn(action),
+      },
+    );
   }
 
   // ── Quitting ────────────────────────────────────────────────────
@@ -896,6 +962,22 @@ export class ElectronPlatform implements Platform {
    * Each page that warns is shown before it is asked about (`closeShowingWarning`).
    */
   private async closePagesBeforeQuit(): Promise<boolean> {
+    const answers = new QuitAnswers<TabId | BrowserWindow>();
+    this.quitAnswers = answers;
+    try {
+      return await this.closePagesAsking(answers);
+    } finally {
+      if (this.quitAnswers === answers) this.quitAnswers = undefined;
+    }
+  }
+
+  private async closePagesAsking(answers: QuitAnswers<TabId | BrowserWindow>): Promise<boolean> {
+    const showBeforeAsking: ShowBeforeAskingOptions = {
+      confirmed: () => this.quitConfirmation.settled,
+      // Staying on a tab the user closed meanwhile cancels the quit too.
+      asking: () => this.quitConfirmation.asking && !answers.cancelled,
+      inTurn: (action) => this.askInTurn(action),
+    };
     const subTabWin = this.subTabWin && !this.subTabWin.isDestroyed() ? this.subTabWin : null;
     const subTab: PageToClose<TabId | BrowserWindow>[] = [];
     const shown: PageToClose<TabId | BrowserWindow>[] = [];
@@ -904,7 +986,10 @@ export class ElectronPlatform implements Platform {
       const contents = view.webContents;
       // Crashed pages and views that never loaded a page have nothing to lose.
       if (contents.isDestroyed() || contents.isCrashed() || !contents.getURL()) continue;
-      const page = { id: tabId, close: () => this.unloadTabForQuit(tabId, view) };
+      const page = {
+        id: tabId,
+        close: () => this.unloadTabForQuit(tabId, view, answers, showBeforeAsking),
+      };
       if (!this.isViewShown(view)) hidden.push(page);
       else if (subTabWin?.contentView.children.includes(view)) subTab.push(page);
       else shown.push(page);
@@ -917,11 +1002,15 @@ export class ElectronPlatform implements Platform {
           closeShowingWarning(
             {
               close: (leave) => closePageWindow(win, leave),
-              show: () => this.showWindowToAsk(win),
-              ask: () => confirmLeaveWindow(win),
+              show: async () => {
+                await this.showWindowToAsk(win);
+                return undefined;
+              },
+              ask: () => answers.ask(win, win, () => confirmLeaveWindow(win)),
+              answered: () => answers.answer(win),
               closed: () => win.isDestroyed(),
             },
-            this.showBeforeAsking,
+            showBeforeAsking,
           ),
       }));
     // Newest hidden pages first, so a sub-tab is asked about before the one beneath it.
@@ -932,6 +1021,7 @@ export class ElectronPlatform implements Platform {
       pageTimeoutMs: QUIT_PAGE_TIMEOUT_MS,
       budgetMs: QUIT_BUDGET_MS,
       promptTime: leavePromptTime,
+      stayed: answers.stayed,
     });
     if (result.left) return true;
     const { stayedOn } = result;
@@ -957,25 +1047,42 @@ export class ElectronPlatform implements Platform {
     );
   }
 
-  onShowPageBeforeAsking(callback: (tabId: TabId) => Promise<void> | void): () => void {
+  onShowPageBeforeAsking(
+    callback: (tabId: TabId) => Promise<GoBackFromPage | undefined> | GoBackFromPage | undefined,
+  ): () => void {
     this.showPageCallbacks.add(callback);
     return () => this.showPageCallbacks.delete(callback);
   }
 
   /**
    * Show a tab or sub-tab before asking whether to leave it, and wait until it has painted:
-   * the window cannot repaint while the prompt is open.
+   * the window cannot repaint while the prompt is open. Resolves with how to go back.
    */
-  private showTabToAsk(tabId: TabId, contents: Electron.WebContents): Promise<void> {
+  private showTabToAsk(tabId: TabId, contents: Electron.WebContents): Promise<GoBackFromPage[]> {
     return whileShowingPage(async () => {
       const win = this.getWin();
       if (win?.isMinimized()) win.restore();
+      const goBack: GoBackFromPage[] = [];
       const show = async () => {
-        for (const callback of this.showPageCallbacks) await callback(tabId);
+        for (const callback of this.showPageCallbacks) {
+          const back = await callback(tabId);
+          if (back) goBack.push(back);
+        }
       };
       await within(show().catch(logError("quit", "show page before asking")), SHOW_PAGE_TIMEOUT_MS);
       const subTabWin = this.subTabWin?.isDestroyed() ? null : this.subTabWin;
       await painted([contents, win?.webContents, subTabWin?.webContents], PAINT_TIMEOUT_MS);
+      return goBack;
+    });
+  }
+
+  /** Go back to what was shown before a page was shown to ask about it. Waits only briefly. */
+  private goBackAfterAsking(goBack: GoBackFromPage[]): Promise<void> {
+    return whileShowingPage(async () => {
+      const back = async () => {
+        for (const step of goBack) await step();
+      };
+      await within(back().catch(logError("tabs", "go back after asking")), SHOW_PAGE_TIMEOUT_MS);
     });
   }
 
@@ -991,17 +1098,28 @@ export class ElectronPlatform implements Platform {
   }
 
   /** Close a tab's page to run its unsaved-changes warning. The tab itself stays. */
-  private async unloadTabForQuit(tabId: TabId, view: WebContentsView): Promise<void> {
+  private async unloadTabForQuit(
+    tabId: TabId,
+    view: WebContentsView,
+    answers: QuitAnswers<TabId | BrowserWindow>,
+    showBeforeAsking: ShowBeforeAskingOptions,
+  ): Promise<void> {
     const contents = view.webContents;
     const url = contents.getURL();
     await closeShowingWarning(
       {
         close: (leave) => closeTabContents(contents, leave, { asks: false }),
-        show: () => this.showTabToAsk(tabId, contents),
-        ask: () => confirmLeave(this.getWin(), pageName(contents)),
+        // The quit shows the next page, or the page stayed on, so it does not go back.
+        show: async () => {
+          await this.showTabToAsk(tabId, contents);
+          return undefined;
+        },
+        ask: () =>
+          answers.ask(contents, tabId, () => confirmLeave(this.getWin(), pageName(contents))),
+        answered: () => answers.answer(contents),
         closed: () => contents.isDestroyed(),
       },
-      this.showBeforeAsking,
+      showBeforeAsking,
     );
     // A tab the user closed at the same time is gone for good.
     if (this.closingTabs.has(tabId) || !this.removeClosedView(tabId, view)) return;

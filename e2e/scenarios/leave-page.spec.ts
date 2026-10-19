@@ -1,5 +1,6 @@
 import {
   answerLeavePrompts,
+  answerLeavePromptsByPage,
   leavePrompts,
   leavePromptsShown,
   warnBeforeUnload,
@@ -40,6 +41,17 @@ const quit = (session: AppSession) => session.app.evaluate(({ app }) => app.quit
 const tabPaths = async (session: AppSession) =>
   (await session.targets()).filter((t) => t.kind === "tab").map((t) => new URL(t.url).pathname);
 
+/** Wait until the tab showing `page` is the one visible. */
+const showing = (session: AppSession, page: string) =>
+  session.target((t) => t.kind === "tab" && t.url.endsWith(`/${page}`) && t.visible);
+
+/** Each prompt's page and the pages visible behind it, by path. */
+const promptsAndPagesShown = async (session: AppSession) =>
+  (await leavePromptsShown(session.app)).map(({ title, shown }) => ({
+    title,
+    shown: shown.map((url) => new URL(url).pathname),
+  }));
+
 // Regression for #117: closing such a tab silently did nothing.
 test("closing a tab with unsaved changes asks before leaving it", async ({
   appSession: session,
@@ -78,6 +90,11 @@ test("clearing tabs asks once per page with unsaved changes and keeps the ones y
     "Page prevented closing",
   );
   expect(await leavePrompts(session.app)).toEqual([leavePrompt("kept"), leavePrompt("left")]);
+  // #150: each page is shown before it is asked about.
+  expect(await promptsAndPagesShown(session)).toEqual([
+    { title: "Verification /kept", shown: ["/kept"] },
+    { title: "Verification /left", shown: ["/left"] },
+  ]);
   await expect(kept.row).toHaveCount(1);
   await expect(kept.tab.message).toHaveValue("unsaved kept");
   await expect(left.row).toHaveCount(0);
@@ -87,6 +104,123 @@ test("clearing tabs asks once per page with unsaved changes and keeps the ones y
   ]);
   await leaveAll(session);
 });
+
+// #150: like Chrome, closing a tab in the background shows it before asking about it.
+test("closing a tab in the background shows it before asking, then goes back to the page you were on", async ({
+  appSession: session,
+}) => {
+  const { tab, row } = await unsavedTab(session, "form");
+  await VerificationPage.navigate(session, `${site.url}/saved`);
+  await showing(session, "saved");
+  const asked = [{ title: "Verification /form", shown: ["/form"] }];
+  const closeRow = async () => {
+    await row.hover();
+    await row.getByRole("button", { name: "Close tab", exact: true }).click();
+  };
+
+  // Staying keeps the tab and what was typed into it.
+  await answerLeavePrompts(session.app, [false]);
+  await closeRow();
+  await expect.poll(() => promptsAndPagesShown(session)).toEqual(asked);
+  await showing(session, "saved");
+  await expect(row).toHaveCount(1);
+  await expect(tab.message).toHaveValue("unsaved form");
+
+  await answerLeavePrompts(session.app, [true]);
+  await closeRow();
+  await expect(row).toHaveCount(0);
+  expect(await promptsAndPagesShown(session)).toEqual(asked);
+  await showing(session, "saved");
+  expect(await tabPaths(session)).toEqual(["/saved"]);
+});
+
+test("closing a tab in another workspace shows it there, then goes back", async ({
+  appSession: session,
+}) => {
+  const home = (await session.debug<{ activeWorkspaceId: string }>("/state/workspaces"))
+    .activeWorkspaceId;
+  await VerificationPage.navigate(session, `${site.url}/saved`);
+  const personal = await session.command<string>("workspaces:create", {
+    name: "Personal",
+    color: "#cc6677",
+    icon: "P",
+  });
+  await session.command("workspaces:switch", { workspaceId: personal });
+  const { tab } = await unsavedTab(session, "form");
+  const target = await showing(session, "form");
+  await session.command("workspaces:switch", { workspaceId: home });
+  await showing(session, "saved");
+
+  // Extensions, for example, can close a tab in another workspace.
+  await answerLeavePrompts(session.app, [false]);
+  await expect(session.command("tabs:close", { tabId: target.tabId })).rejects.toThrow(
+    "Page prevented closing",
+  );
+  expect(await promptsAndPagesShown(session)).toEqual([
+    { title: "Verification /form", shown: ["/form"] },
+  ]);
+  await showing(session, "saved");
+  expect(
+    (await session.debug<{ activeWorkspaceId: string }>("/state/workspaces")).activeWorkspaceId,
+  ).toBe(home);
+  // The other workspace still shows the page that was kept.
+  await session.command("workspaces:switch", { workspaceId: personal });
+  await showing(session, "form");
+  await expect(tab.message).toHaveValue("unsaved form");
+  await leaveAll(session);
+});
+
+// #151: a tab the user closes while quitting is asked about once, whatever the answer.
+for (const stay of [true, false]) {
+  test(`a tab closed while quitting is asked about once, and ${stay ? "staying on it cancels the quit" : "leaving it closes it"}`, async ({
+    appSession: session,
+  }) => {
+    const closed = await unsavedTab(session, "closed");
+    const other = await unsavedTab(session, "other");
+    await unsavedTab(session, "shown");
+    const tabId = await closed.row.getAttribute("data-tab-id");
+
+    // The quit asks about the shown page first. Meanwhile the user closes another tab. Leaving
+    // it lets the quit go on, so staying on the remaining page then cancels the quit.
+    await answerLeavePromptsByPage(
+      session.app,
+      [stay ? "closed" : "other"],
+      `[data-tab-id="${tabId}"] button[aria-label="Close tab"]`,
+    );
+    await quit(session);
+    const asked = async () => (await leavePrompts(session.app)).map(({ title }) => title);
+    await expect
+      .poll(asked)
+      .toEqual(expect.arrayContaining(["Verification /shown", "Verification /closed"]));
+    // Give a second prompt about the closed tab time to appear.
+    await new Promise((resolve) => setTimeout(resolve, 1_500));
+    const titles = await asked();
+    expect(titles[0]).toBe("Verification /shown");
+    expect(titles.filter((title) => title === "Verification /closed")).toHaveLength(1);
+    expect(titles.filter((title) => title === "Verification /other").length).toBeLessThanOrEqual(1);
+
+    if (stay) {
+      // The tab close was asked and stayed, which cancelled the quit.
+      const history = await session.debug<{ entries: { payload?: unknown; error?: string }[] }>(
+        `/history?name=tabs:close&payload=true&errors=true`,
+      );
+      expect(history.entries).toContainEqual(
+        expect.objectContaining({
+          payload: { tabId },
+          error: expect.stringContaining("prevented"),
+        }),
+      );
+      await showing(session, "closed");
+      await expect(closed.row).toHaveCount(1);
+      await expect(closed.tab.message).toHaveValue("unsaved closed");
+    } else {
+      await expect(closed.row).toHaveCount(0);
+      await expect(other.row).toHaveCount(1);
+      await expect(other.tab.message).toHaveValue("unsaved other");
+    }
+    await leaveAll(session);
+  });
+}
 
 // #121: quitting asks about every page with unsaved changes, as Chrome does.
 test("quitting asks about each page with unsaved changes and staying keeps every tab", async ({

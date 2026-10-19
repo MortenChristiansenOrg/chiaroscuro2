@@ -15,10 +15,30 @@ type Record = { leavePrompts?: LeavePromptShown[]; leaveAnswers?: boolean[] };
  * once they run out, and start recording the prompts shown.
  */
 export function answerLeavePrompts(app: ElectronApplication, answers: boolean[]): Promise<void> {
-  return app.evaluate(({ BrowserWindow, dialog, WebContentsView }, answers) => {
+  return mockLeavePrompts(app, { answers, stayOn: [] });
+}
+
+/**
+ * Answer the native "Leave this page?" prompt by page: stay on pages whose address ends with
+ * `/` and one of `stayOn`, and leave the others. While the first prompt is open, `click` is
+ * clicked in the browser window, as a user would right after answering it.
+ */
+export function answerLeavePromptsByPage(
+  app: ElectronApplication,
+  stayOn: string[],
+  click?: string,
+): Promise<void> {
+  return mockLeavePrompts(app, { stayOn, click });
+}
+
+function mockLeavePrompts(
+  app: ElectronApplication,
+  options: { answers?: boolean[]; stayOn: string[]; click?: string },
+): Promise<void> {
+  return app.evaluate(({ BrowserWindow, dialog, WebContentsView }, { answers, stayOn, click }) => {
     const record = globalThis as unknown as Record;
     record.leavePrompts = [];
-    record.leaveAnswers = [...answers];
+    record.leaveAnswers = answers && [...answers];
     dialog.showMessageBoxSync = ((...args: unknown[]) => {
       const options = args.at(-1) as Electron.MessageBoxSyncOptions;
       // Pages the user can see while the prompt is open: the window cannot repaint then.
@@ -40,9 +60,19 @@ export function answerLeavePrompts(app: ElectronApplication, answers: boolean[])
         detail: options.detail,
         shown,
       });
-      return record.leaveAnswers?.shift() ? 0 : 1;
+      if (click && record.leavePrompts?.length === 1) {
+        // Runs in the browser window once the prompt is answered and the process is free.
+        void BrowserWindow.getAllWindows()
+          .find((win) => !win.getParentWindow())
+          ?.webContents.executeJavaScript(
+            `document.querySelector(${JSON.stringify(click)})?.click()`,
+          );
+      }
+      if (record.leaveAnswers) return record.leaveAnswers.shift() ? 0 : 1;
+      const address = options.detail?.split("\n")[1] ?? "";
+      return stayOn.some((page) => address.endsWith(`/${page}`)) ? 1 : 0;
     }) as typeof dialog.showMessageBoxSync;
-  }, answers);
+  }, options);
 }
 
 /** The leave prompts shown since `answerLeavePrompts`. */
