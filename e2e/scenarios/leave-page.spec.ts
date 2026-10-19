@@ -1,4 +1,9 @@
-import { answerLeavePrompts, leavePrompts, warnBeforeUnload } from "../automation/leave-prompt";
+import {
+  answerLeavePrompts,
+  leavePrompts,
+  leavePromptsShown,
+  warnBeforeUnload,
+} from "../automation/leave-prompt";
 import type { AppSession } from "../automation/session";
 import { startSite } from "../automation/site";
 import { waitUntil } from "../automation/wait";
@@ -142,6 +147,45 @@ test("quitting asks about each page with unsaved changes and staying keeps every
   }
 });
 
+// #140: like Chrome, quitting shows each page before asking about it, and the prompt names it.
+test("quitting shows each page with unsaved changes before asking about it, even in another workspace", async ({
+  appSession: session,
+}) => {
+  // Two drafts of the same form have the same title; their addresses tell them apart.
+  const first = await unsavedTab(session, "form?draft=1");
+  const home = (await session.debug<{ activeWorkspaceId: string }>("/state/workspaces"))
+    .activeWorkspaceId;
+  const personal = await session.command<string>("workspaces:create", {
+    name: "Personal",
+    color: "#cc6677",
+    icon: "P",
+  });
+  await session.command("workspaces:switch", { workspaceId: personal });
+  await unsavedTab(session, "form?draft=2");
+  await VerificationPage.navigate(session, `${site.url}/saved`);
+
+  const asked = (page: string) => ({
+    title: "Verification /form",
+    message: "Leave this page?",
+    detail: `Verification /form\n${new URL(site.url).host}/${page}\n\nChanges you made may not be saved.`,
+    // Only the page asked about is visible behind its prompt.
+    shown: [`${site.url}/${page}`],
+  });
+  await answerLeavePrompts(session.app, [true, false]);
+  await quit(session);
+  await expect
+    .poll(() => leavePromptsShown(session.app))
+    .toEqual([asked("form?draft=2"), asked("form?draft=1")]);
+
+  // The page the user stayed on stays shown, in its own workspace.
+  await session.target((t) => t.kind === "tab" && t.url.endsWith("draft=1") && t.visible);
+  await expect(first.tab.message).toHaveValue("unsaved form?draft=1");
+  expect(
+    (await session.debug<{ activeWorkspaceId: string }>("/state/workspaces")).activeWorkspaceId,
+  ).toBe(home);
+  await leaveAll(session);
+});
+
 test("closing the browser window asks about unsaved changes and staying keeps it", async ({
   appSession: session,
 }) => {
@@ -181,12 +225,16 @@ test("quitting asks about a sub-tab first and pages closed while asking come bac
   await expect(child.message).toHaveValue("unsaved child");
   expect((await tabPaths(session)).sort()).toEqual(["/other", "/parent"]);
 
-  // Leaving the sub-tab closes it and the tab beneath; staying on the other tab shows it.
+  // Leaving the sub-tab closes it and the tab beneath; the other tab is shown before asking.
   await answerLeavePrompts(session.app, [true, false]);
   await quit(session);
   await expect
     .poll(() => leavePrompts(session.app))
     .toEqual([leavePrompt("child"), leavePrompt("other")]);
+  const shown = (await leavePromptsShown(session.app)).map((prompt) =>
+    prompt.shown.map((url) => new URL(url).pathname).sort(),
+  );
+  expect(shown).toEqual([["/child", "/parent"], ["/other"]]);
   await session.target((t) => t.kind === "tab" && t.url.endsWith("/other") && t.visible);
   await expect(other.tab.message).toHaveValue("unsaved other");
   expect(await tabPaths(session)).toEqual(["/other"]);
@@ -220,6 +268,8 @@ test("quitting asks about a pop-up before the page that opened it", async ({
   await answerLeavePrompts(session.app, [false]);
   await quit(session);
   await expect.poll(() => leavePrompts(session.app)).toEqual([leavePrompt("popup")]);
+  // The pop-up is shown while it is asked about.
+  expect((await leavePromptsShown(session.app))[0]?.shown).toContain(`${site.url}/popup`);
   // Staying keeps the pop-up and the page that opened it.
   await expect(popup.message).toHaveValue("unsaved popup");
   await expect(opener.tab.message).toHaveValue("unsaved opener");

@@ -695,7 +695,7 @@ export class ExtensionRuntime {
         const contents = win.webContents;
         const tabId = contents.id;
         // Electron cancels a close vetoed by beforeunload without asking; Chrome asks.
-        askBeforeClosingWindow(win, () => caller.extension.name);
+        askBeforeClosingWindow(win, () => ({ title: caller.extension.name }));
         // Announce the window and its tab once loaded; a window closed while loading never was.
         let announced = false;
         win.on("closed", () => {

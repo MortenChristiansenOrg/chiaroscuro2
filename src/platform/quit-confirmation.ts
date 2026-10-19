@@ -91,6 +91,105 @@ export async function closePagesInTurn<Id>(
   return { left: true, closed };
 }
 
+/** A page that may warn about unsaved changes when it is closed before quitting. */
+export interface PageThatMayWarn {
+  /**
+   * Close the page without asking. When it warns, `leave` decides whether to leave it anyway;
+   * if not, the page is kept and the close rejects with `StayedOnPage`.
+   */
+  close(leave: () => boolean): Promise<void>;
+  /** Show the page to the user, for example by switching to its tab. Must not hang. */
+  show(): Promise<void>;
+  /** Ask the user whether to leave the page. */
+  ask(): boolean;
+  /** The page is gone, for example because the user closed it meanwhile. */
+  closed(): boolean;
+}
+
+export interface ShowBeforeAskingOptions {
+  /** Quitting was confirmed: leave pages without asking. */
+  confirmed: () => boolean;
+  /** Pages are still being asked about; false once the user stayed and the quit was cancelled. */
+  asking: () => boolean;
+  /** Show and ask about one page at a time. */
+  inTurn: <T>(action: () => Promise<T>) => Promise<T>;
+}
+
+/**
+ * Close a page before quitting, and if it warns about unsaved changes, show it before asking
+ * about it, as Chrome does. Electron says a page warns only by running its beforeunload, which
+ * must be answered at once while nothing can repaint. So the first close keeps a page that
+ * warns without asking. The page is then shown and, once it has painted, the user is asked;
+ * leaving closes it again, overriding its warning. A page whose warning ran only once is still
+ * asked about. Pages without a warning close on the first attempt at no extra cost. Rejects
+ * with `StayedOnPage` if the user stays, or the quit was cancelled before the page was asked
+ * about; the page is then kept.
+ */
+export async function closeShowingWarning(
+  page: PageThatMayWarn,
+  { confirmed, asking, inTurn }: ShowBeforeAskingOptions,
+): Promise<void> {
+  let warned = false;
+  try {
+    await page.close(() => {
+      warned = true;
+      return confirmed();
+    });
+    return;
+  } catch (error) {
+    // Another close of the same page may have asked, and the user stayed there.
+    if (!warned || !(error instanceof StayedOnPage)) throw error;
+  }
+  await inTurn(async () => {
+    if (confirmed()) return;
+    if (!asking()) throw new StayedOnPage();
+    await page.show();
+    if (page.closed() || confirmed()) return;
+    // The user stayed on another page while this one was being shown.
+    if (!asking() || !page.ask()) throw new StayedOnPage();
+  });
+  await page.close(() => true);
+}
+
+/**
+ * Run actions one at a time, in the order they were requested. An action that takes longer
+ * than `timeoutMs`, beyond time spent showing pages and answering prompts (`promptTime`), no
+ * longer holds up the next one, so a hung page cannot stop the others. Time a prompt blocks
+ * the process is excluded, so an action is not passed over while it waits on a prompt and
+ * then shows its page under the next action's prompt.
+ */
+export function oneAtATime(
+  timeoutMs: number,
+  promptTime: () => number = () => 0,
+  now: () => number = Date.now,
+): <T>(action: () => Promise<T>) => Promise<T> {
+  let previous: Promise<void> = Promise.resolve();
+  return <T>(action: () => Promise<T>) => {
+    const result = previous.then(action);
+    previous = previous.then(
+      () =>
+        new Promise<void>((resolve) => {
+          const start = now();
+          const promptsBefore = promptTime();
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          const check = () => {
+            const left = timeoutMs - (now() - start - (promptTime() - promptsBefore));
+            if (left <= 0) resolve();
+            else timer = setTimeout(check, left);
+          };
+          check();
+          result
+            .finally(() => {
+              clearTimeout(timer);
+              resolve();
+            })
+            .catch(() => {});
+        }),
+    );
+    return result;
+  };
+}
+
 /**
  * Whether the browser may close its window or quit, asked once for every attempt. Overlapping
  * requests (quitting while the window is closing) share one answer. Once confirmed, closing

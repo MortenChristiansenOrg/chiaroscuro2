@@ -33,15 +33,25 @@ import {
   askBeforeClosingWindow,
   closePageWindow,
   confirmLeave,
+  confirmLeaveWindow,
   leavePromptTime,
+  type PageName,
+  whileShowingPage,
   windowsWithPages,
 } from "./leave-prompt";
 import { PdfResponses } from "./pdf-responses";
 import { checkPermission, matchesGrantedDevice } from "./permission-check";
-import { closePagesInTurn, type PageToClose, QuitConfirmation } from "./quit-confirmation";
+import {
+  closePagesInTurn,
+  closeShowingWarning,
+  oneAtATime,
+  type PageToClose,
+  QuitConfirmation,
+  type ShowBeforeAskingOptions,
+} from "./quit-confirmation";
 import { TabBoundsAnimation } from "./tab-bounds-animation";
 import { insertTabCss, removeTabCss } from "./tab-css";
-import { closeTabContents, createTabView } from "./tab-view";
+import { closeTabContents, closeTabContentsAsking, createTabView } from "./tab-view";
 import type { ExtensionTabActions, Platform, PlatformDownload } from "./types";
 import { isAllowedNavigation, isAllowedUrl } from "./url-policy";
 import { runWebsiteScript } from "./website-script";
@@ -324,6 +334,51 @@ document.addEventListener('keydown',function(e){if(e.key==='Escape'){e.preventDe
 const QUIT_PAGE_TIMEOUT_MS = 3_000;
 /** Longest total wait for pages before quitting, excluding prompts. */
 const QUIT_BUDGET_MS = 5_000;
+/** Longest wait for a page that warns to be shown before asking about it. */
+const SHOW_PAGE_TIMEOUT_MS = 1_000;
+/** Longest wait for a page shown before asking about it to paint. */
+const PAINT_TIMEOUT_MS = 500;
+/** Script world for waiting on frames without touching the page's own scripts. */
+const PAINT_WORLD_ID = 1_040;
+
+/** Name a page for the leave prompt. */
+function pageName(contents: Electron.WebContents): PageName {
+  return { title: contents.getTitle(), url: contents.getURL() };
+}
+
+/** Resolve once each page has painted twice, or after `timeoutMs`. */
+async function painted(pages: (Electron.WebContents | undefined)[], timeoutMs: number) {
+  const frames = pages
+    .filter((page) => page && !page.isDestroyed())
+    .map((page) =>
+      page
+        ?.executeJavaScriptInIsolatedWorld(PAINT_WORLD_ID, [
+          {
+            code: "new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done())))",
+          },
+        ])
+        .catch(() => {}),
+    );
+  await within(Promise.all(frames), timeoutMs);
+}
+
+/** Resolve once `work` settles or after `timeoutMs`, whichever comes first. */
+async function within(work: Promise<unknown>, timeoutMs: number): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      work.then(
+        () => {},
+        () => {},
+      ),
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, timeoutMs);
+      }),
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 export class ElectronPlatform implements Platform {
   /** Read-only native inventory shared by HTTP discovery and Electron verification. */
@@ -418,6 +473,14 @@ export class ElectronPlatform implements Platform {
   private quitCancelledCallbacks = new Set<
     (details: { unloadedTabIds: TabId[]; stayedTabId?: TabId }) => void
   >();
+  private showPageCallbacks = new Set<(tabId: TabId) => Promise<void> | void>();
+  /** Pages that warn about unsaved changes are shown and asked about one at a time. */
+  private readonly askInTurn = oneAtATime(QUIT_PAGE_TIMEOUT_MS, leavePromptTime);
+  private readonly showBeforeAsking: ShowBeforeAskingOptions = {
+    confirmed: () => this.quitConfirmation.settled,
+    asking: () => this.quitConfirmation.asking,
+    inTurn: (action) => this.askInTurn(action),
+  };
   private tooltipWin: BrowserWindow | null = null;
   private paletteWin: BrowserWindow | null = null;
   private paletteParentListenersSet = false;
@@ -681,7 +744,7 @@ export class ElectronPlatform implements Platform {
       // without one reach the browser window that owns it, which then takes focus (#115).
       popupWin.setAutoHideMenuBar(false);
       popupWin.setMenuBarVisibility(false);
-      askBeforeClosingWindow(popupWin, () => wc.getTitle() || wc.getURL());
+      askBeforeClosingWindow(popupWin, () => pageName(wc));
     });
 
     view.webContents.on("will-navigate", (event, navUrl) => {
@@ -781,9 +844,7 @@ export class ElectronPlatform implements Platform {
     const contents = view.webContents;
     this.closingTabs.add(tabId);
     try {
-      await closeTabContents(contents, () =>
-        confirmLeave(this.getWin(), contents.getTitle() || contents.getURL()),
-      );
+      await closeTabContentsAsking(contents, () => confirmLeave(this.getWin(), pageName(contents)));
     } finally {
       this.closingTabs.delete(tabId);
     }
@@ -832,6 +893,7 @@ export class ElectronPlatform implements Platform {
    * extension windows go first, newest first, because closing the page that opened a pop-up
    * destroys it without asking. Shown pages follow, the sub-tab on top before the tab beneath
    * it: the user is likeliest to be editing them, and staying on one keeps the pages after it.
+   * Each page that warns is shown before it is asked about (`closeShowingWarning`).
    */
   private async closePagesBeforeQuit(): Promise<boolean> {
     const subTabWin = this.subTabWin && !this.subTabWin.isDestroyed() ? this.subTabWin : null;
@@ -851,8 +913,16 @@ export class ElectronPlatform implements Platform {
       .reverse()
       .map((win) => ({
         id: win,
-        // A window too slow to ask in time leaves without asking once quitting is confirmed.
-        close: () => closePageWindow(win, () => this.quitConfirmation.settled),
+        close: () =>
+          closeShowingWarning(
+            {
+              close: (leave) => closePageWindow(win, leave),
+              show: () => this.showWindowToAsk(win),
+              ask: () => confirmLeaveWindow(win),
+              closed: () => win.isDestroyed(),
+            },
+            this.showBeforeAsking,
+          ),
       }));
     // Newest hidden pages first, so a sub-tab is asked about before the one beneath it.
     const sequence = (page: PageToClose<TabId | BrowserWindow>) =>
@@ -887,15 +957,51 @@ export class ElectronPlatform implements Platform {
     );
   }
 
+  onShowPageBeforeAsking(callback: (tabId: TabId) => Promise<void> | void): () => void {
+    this.showPageCallbacks.add(callback);
+    return () => this.showPageCallbacks.delete(callback);
+  }
+
+  /**
+   * Show a tab or sub-tab before asking whether to leave it, and wait until it has painted:
+   * the window cannot repaint while the prompt is open.
+   */
+  private showTabToAsk(tabId: TabId, contents: Electron.WebContents): Promise<void> {
+    return whileShowingPage(async () => {
+      const win = this.getWin();
+      if (win?.isMinimized()) win.restore();
+      const show = async () => {
+        for (const callback of this.showPageCallbacks) await callback(tabId);
+      };
+      await within(show().catch(logError("quit", "show page before asking")), SHOW_PAGE_TIMEOUT_MS);
+      const subTabWin = this.subTabWin?.isDestroyed() ? null : this.subTabWin;
+      await painted([contents, win?.webContents, subTabWin?.webContents], PAINT_TIMEOUT_MS);
+    });
+  }
+
+  /** Bring a pop-up or extension window to the front before asking whether to leave it. */
+  private showWindowToAsk(win: BrowserWindow): Promise<void> {
+    return whileShowingPage(async () => {
+      if (win.isDestroyed()) return;
+      if (win.isMinimized()) win.restore();
+      win.show();
+      win.focus();
+      await painted([win.webContents], PAINT_TIMEOUT_MS);
+    });
+  }
+
   /** Close a tab's page to run its unsaved-changes warning. The tab itself stays. */
   private async unloadTabForQuit(tabId: TabId, view: WebContentsView): Promise<void> {
     const contents = view.webContents;
     const url = contents.getURL();
-    // A page too slow to ask in time leaves without asking once quitting is confirmed.
-    await closeTabContents(
-      contents,
-      () =>
-        this.quitConfirmation.settled || confirmLeave(this.getWin(), contents.getTitle() || url),
+    await closeShowingWarning(
+      {
+        close: (leave) => closeTabContents(contents, leave, { asks: false }),
+        show: () => this.showTabToAsk(tabId, contents),
+        ask: () => confirmLeave(this.getWin(), pageName(contents)),
+        closed: () => contents.isDestroyed(),
+      },
+      this.showBeforeAsking,
     );
     // A tab the user closed at the same time is gone for good.
     if (this.closingTabs.has(tabId) || !this.removeClosedView(tabId, view)) return;

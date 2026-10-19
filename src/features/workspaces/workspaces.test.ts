@@ -488,6 +488,74 @@ describe("cancelled quit", () => {
   });
 });
 
+// #140: quitting shows a page with unsaved changes before asking about it.
+describe("showing a page before asking about it when quitting", () => {
+  type ShowPage = Parameters<ReturnType<typeof createMockPlatform>["onShowPageBeforeAsking"]>[0];
+
+  it.each([
+    ["in another workspace", "other", "none", "other"],
+    ["in another workspace while a pinned tab is shown", "other", "pinned-active", "other"],
+    ["in this workspace", "this", "none", "this"],
+    ["pinned", "other", "asked", "this"],
+  ] as const)("shows a page %s", async (_, where, pinned, workspaceAfter) => {
+    let showPage: ShowPage = () => {};
+    const ctx = setup({
+      onShowPageBeforeAsking: vi.fn((callback: ShowPage) => {
+        showPage = callback;
+        return () => {};
+      }),
+    });
+    const here = await ctx.commands.send(WORKSPACES_CREATE, {
+      name: "Work",
+      color: "blue",
+      icon: "W",
+    });
+    const other = await ctx.commands.send(WORKSPACES_CREATE, {
+      name: "Personal",
+      color: "red",
+      icon: "P",
+    });
+    const asked = makeTab({ id: "asked" as TabId, workspaceId: where === "other" ? other : here });
+    const pinnedTab = "pinned" as TabId;
+    vi.mocked(getTabsForWorkspace).mockImplementation((id) =>
+      id === asked.workspaceId ? [asked] : [],
+    );
+    vi.mocked(isPinned).mockImplementation((id) =>
+      pinned === "asked" ? id === asked.id : pinned === "pinned-active" && id === pinnedTab,
+    );
+    ctx.setActiveWsId(here);
+    ctx.setActiveTabId(pinned === "pinned-active" ? pinnedTab : undefined);
+    ctx.commands.unhandle(TABS_ACTIVATE);
+    ctx.commands.handle(TABS_ACTIVATE, async ({ tabId }) => {
+      ctx.setActiveTabId(tabId);
+    });
+
+    // The prompt waits for the page to be shown.
+    await showPage(asked.id);
+
+    expect(ctx.deps.getActiveWorkspaceId()).toBe(workspaceAfter === "other" ? other : here);
+    expect(ctx.deps.getActiveTabId()).toBe(asked.id);
+    vi.mocked(isPinned).mockReset();
+    vi.mocked(isPinned).mockReturnValue(false);
+  });
+
+  it("leaves sub-tabs to the sub-tabs feature", async () => {
+    let showPage: ShowPage = () => {};
+    const ctx = setup({
+      onShowPageBeforeAsking: vi.fn((callback: ShowPage) => {
+        showPage = callback;
+        return () => {};
+      }),
+    });
+    vi.mocked(getTabsForWorkspace).mockReturnValue([]);
+    const activate = vi.fn(async () => {});
+    ctx.commands.unhandle(TABS_ACTIVATE);
+    ctx.commands.handle(TABS_ACTIVATE, activate);
+    await showPage("sub-tab" as TabId);
+    expect(activate).not.toHaveBeenCalled();
+  });
+});
+
 describe("start()", () => {
   it("restores persisted workspaces", async () => {
     const dataStore = new MemoryDataStore();

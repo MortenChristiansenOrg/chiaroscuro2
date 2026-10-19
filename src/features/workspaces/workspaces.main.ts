@@ -68,6 +68,7 @@ export function isPrivacyWorkspace(id: WorkspaceId): boolean {
 }
 
 let stopQuitCancelled: (() => void) | undefined;
+let stopShowPage: (() => void) | undefined;
 
 export default defineFeature<Deps>({
   register(deps) {
@@ -365,12 +366,31 @@ export default defineFeature<Deps>({
         return;
       }
     });
+
+    // Show a page with unsaved changes before asking about it when quitting, even in another
+    // workspace. The sub-tabs feature shows sub-tabs.
+    stopShowPage?.();
+    stopShowPage = platform.onShowPageBeforeAsking(async (tabId) => {
+      if (!isPinned(tabId)) {
+        const ws = [...workspaces.values()].find((candidate) =>
+          getTabsForWorkspace(candidate.id).some((tab) => tab.id === tabId),
+        );
+        if (!ws) return;
+        if (ws.id !== getActiveWorkspaceId()) {
+          ws.activeTabId = tabId;
+          await commands.send(WORKSPACES_SWITCH, { workspaceId: ws.id });
+        }
+      }
+      if (getActiveTabId() !== tabId) await commands.send(TABS_ACTIVATE, { tabId });
+    });
   },
 
   teardown() {
     _state.reset();
     stopQuitCancelled?.();
     stopQuitCancelled = undefined;
+    stopShowPage?.();
+    stopShowPage = undefined;
   },
 
   async start(deps) {

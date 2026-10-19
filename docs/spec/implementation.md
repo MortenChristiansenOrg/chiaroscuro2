@@ -23,6 +23,30 @@
   per tab and move to the new contents. The tabs feature marks them unloaded and shows the
   page the user stayed on (or reloads the shown tab), the workspaces feature switches to the
   stayed page's workspace, and the sub-tabs feature reloads sub-tab pages in place. Tabs were persisted as they changed, so the next session restores them all.
+- Like Chrome, a page is shown before it is asked about (#140). Electron says a page warns
+  only by running its `beforeunload` on close, and `will-prevent-unload` must be answered
+  synchronously while the window cannot repaint. So `closeShowingWarning`
+  (`src/platform/quit-confirmation.ts`) closes each page once without asking: a page without a
+  warning closes at no extra cost, and one that warns is kept. It is then shown and the user
+  is asked directly (`confirmLeave`, outside `will-prevent-unload`); **Leave** closes it again,
+  overriding a second warning, so a handler that warns only once is still asked about. Electron
+  runs a vetoing `beforeunload` on every close attempt, in every frame, so the probe finds the
+  pages Chromium would ask about. Pre-detection was rejected: the DevTools protocol (`DOMDebugger.getEventListeners`)
+  needs `webContents.debugger`, which a single client can attach and which conflicts with
+  user DevTools, misses out-of-process iframes and cannot tell whether a listener will veto;
+  a main-world preload hook is visible to pages and misses frames without the preload.
+  Showing runs the `onShowPageBeforeAsking` callbacks in registration order (workspaces
+  switches workspace and activates the tab; sub-tabs activates a sub-tab's parent and attaches
+  that sub-tab, or hides the sub-tab frame over a parent whose sub-tabs were left), restores a
+  minimized window or brings a page window forward, then waits for two animation frames in
+  the page, the browser window and the sub-tab window (an isolated world, so page scripts are
+  untouched). Showing waits at most 1 s plus 0.5 s for painting, and counts as prompt time
+  (`whileShowingPage`). One page is shown and asked about at a time (`oneAtATime`), so a
+  page passed over cannot ask over another page being shown; a turn is given up after 3 s
+  beyond time spent showing pages and answering prompts. A page found to warn after the
+  user stayed elsewhere, or while it was being shown, is kept without asking. A tab the user
+  closes during the probe is asked about directly (`closeTabContentsAsking`). `confirmLeave` names the page by title and
+  address (`pageAddress`).
 - Quitting never waits on pages: 3 s per page and 5 s in total, excluding time spent in
   prompts (`leavePromptTime`). A page passed over keeps its prompt: staying on it while later
   pages are checked cancels the quit, and once the quit is confirmed it leaves without asking.

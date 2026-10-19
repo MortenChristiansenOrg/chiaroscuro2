@@ -10,7 +10,7 @@ vi.mock("electron", () => ({
   },
 }));
 
-import { closeTabContents, createTabView } from "./tab-view";
+import { closeTabContents, closeTabContentsAsking, createTabView } from "./tab-view";
 
 describe("cloned tab initialization", () => {
   it("restores zoom on main-frame failure and stops restoring after the initial load", () => {
@@ -130,5 +130,67 @@ describe("native tab close completion", () => {
     contents.isDestroyed.mockReturnValue(true);
     await closeTabContents(contents as unknown as Electron.WebContents, stay);
     expect(contents.close).not.toHaveBeenCalled();
+  });
+});
+
+describe("closing a tab the user closes", () => {
+  function fixture() {
+    return Object.assign(new EventEmitter(), {
+      isDestroyed: vi.fn(() => false),
+      close: vi.fn(),
+    }) as unknown as Electron.WebContents & EventEmitter & { close: ReturnType<typeof vi.fn> };
+  }
+
+  it("asks when it joined a close that kept the page without asking", async () => {
+    const contents = fixture();
+    // Quitting checks whether the page warns, keeping it without asking.
+    const probe = closeTabContents(contents, () => false, { asks: false }).catch(() => {});
+    const ask = vi.fn(() => true);
+    const closing = closeTabContentsAsking(contents, ask);
+    contents.emit("will-prevent-unload", { preventDefault: vi.fn() });
+    await probe;
+    await vi.waitFor(() => expect(contents.close).toHaveBeenCalledTimes(2));
+    // Asked without waiting for the page to warn again: its warning may have run only once.
+    expect(ask).toHaveBeenCalledOnce();
+    contents.emit("destroyed");
+    await closing;
+  });
+
+  it("keeps the page when the user stays after joining such a close", async () => {
+    const contents = fixture();
+    const probe = closeTabContents(contents, () => false, { asks: false }).catch(() => {});
+    const ask = vi.fn(() => false);
+    const closing = closeTabContentsAsking(contents, ask);
+    contents.emit("will-prevent-unload", { preventDefault: vi.fn() });
+    await probe;
+    await expect(closing).rejects.toThrow("Page prevented closing");
+    expect(ask).toHaveBeenCalledOnce();
+    expect(contents.close).toHaveBeenCalledOnce();
+  });
+
+  it("asks once for overlapping closes that joined such a close", async () => {
+    const contents = fixture();
+    const probe = closeTabContents(contents, () => false, { asks: false }).catch(() => {});
+    const ask = vi.fn(() => false);
+    const first = closeTabContentsAsking(contents, ask);
+    const second = closeTabContentsAsking(contents, ask);
+    contents.emit("will-prevent-unload", { preventDefault: vi.fn() });
+    await probe;
+    await expect(first).rejects.toThrow("Page prevented closing");
+    await expect(second).rejects.toThrow("Page prevented closing");
+    expect(ask).toHaveBeenCalledOnce();
+    expect(contents.close).toHaveBeenCalledOnce();
+  });
+
+  it("asks once for overlapping closes", async () => {
+    const contents = fixture();
+    const ask = vi.fn(() => false);
+    const first = closeTabContentsAsking(contents, ask);
+    const second = closeTabContentsAsking(contents, ask);
+    contents.emit("will-prevent-unload", { preventDefault: vi.fn() });
+    await expect(first).rejects.toThrow("Page prevented closing");
+    await expect(second).rejects.toThrow("Page prevented closing");
+    expect(ask).toHaveBeenCalledOnce();
+    expect(contents.close).toHaveBeenCalledOnce();
   });
 });
