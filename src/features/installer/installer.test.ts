@@ -26,6 +26,7 @@ type AllEvents = InstallerEvents;
 // Mock electron-updater — dynamic import in installer.main.ts
 vi.mock("electron-updater", () => {
   const listeners = new Map<string, ((...args: unknown[]) => void)[]>();
+  const spawnLog = vi.fn(async (_cmd: string) => true);
   return {
     autoUpdater: {
       autoDownload: false,
@@ -37,6 +38,11 @@ vi.mock("electron-updater", () => {
       autoRunAppAfterInstall: true,
       // Starts the installer; the real updater reports failures as "error" events.
       install: vi.fn(() => true),
+      installerPath: "C:\\Setup.exe",
+      // Starts a process; the restart follows it through this method.
+      spawnLog,
+      // Test helper: the process start behind the followed method.
+      _spawnLog: spawnLog,
       on: vi.fn((event: string, cb: (...args: unknown[]) => void) => {
         const list = listeners.get(event) ?? [];
         list.push(cb);
@@ -505,6 +511,38 @@ describe("installer feature", () => {
       // Restart can be tried again.
       await commands.send(INSTALLER_APPLY_UPDATE, undefined);
       expect(platform.quit).toHaveBeenCalledOnce();
+    });
+
+    it("starts the installer once for overlapping restarts", async () => {
+      const { commands, platform, autoUpdater } = await startUpdater();
+      await Promise.all([
+        commands.send(INSTALLER_APPLY_UPDATE, undefined),
+        commands.send(INSTALLER_APPLY_UPDATE, undefined),
+      ]);
+      expect(autoUpdater.install).toHaveBeenCalledOnce();
+      expect(platform.cancelQuit).not.toHaveBeenCalled();
+    });
+
+    it("neither restores tabs nor quits when the browser quit during the launch", async () => {
+      const { commands, platform, autoUpdater } = await startUpdater();
+      const spawned = Promise.withResolvers<boolean>();
+      autoUpdater._spawnLog.mockReturnValueOnce(spawned.promise);
+      autoUpdater.install.mockImplementationOnce(() => {
+        autoUpdater.spawnLog("C:\\Setup.exe").catch(() => {});
+        return true;
+      });
+
+      const applying = commands.send(INSTALLER_APPLY_UPDATE, undefined);
+      const settled = applying.catch((error: unknown) => error);
+      await vi.advanceTimersByTimeAsync(0);
+      expect(autoUpdater.install).toHaveBeenCalledOnce();
+      feature.teardown();
+      spawned.reject(Object.assign(new Error("spawn EPERM"), { code: "EPERM" }));
+      await vi.advanceTimersByTimeAsync(1);
+
+      expect(await settled).toEqual(new Error("The update installer was blocked from starting."));
+      expect(platform.cancelQuit).not.toHaveBeenCalled();
+      expect(platform.quit).not.toHaveBeenCalled();
     });
 
     it("does not cancel the quit once the installer started", async () => {
