@@ -1,3 +1,5 @@
+import type { WindowKey } from "./window-arrangement";
+
 /**
  * Which window a key press acts on (#115).
  *
@@ -88,13 +90,19 @@ export function routeShortcutsToFocus<W extends RoutedWindow>(options: {
   });
 }
 
-const WINDOW_ARROWS: Record<string, "up" | "down"> = { ArrowUp: "up", ArrowDown: "down" };
+const WINDOW_ARROWS: Record<string, "up" | "down" | "left" | "right"> = {
+  ArrowUp: "up",
+  ArrowDown: "down",
+  ArrowLeft: "left",
+  ArrowRight: "right",
+};
 
 /**
- * Recognizes Win+Up and Win+Down, which Windows applies to the active window itself. The shell
- * takes the arrow's key press, so only its release reaches the app, while the Windows key is held
- * or just after its release. An arrow release counts when its press did not reach the app and the
- * Windows key was held for it: held now, or released with no key pressed since.
+ * Recognizes Windows' window keys, Win+arrows and Win+Shift+Up/Left/Right, which Windows applies
+ * to the active window itself. The shell takes the arrow's key press, so only its release reaches
+ * the app, while the Windows key is held or just after its release. An arrow release counts when
+ * its press did not reach the app and the Windows key was held for it: held now, or released with
+ * no key pressed since.
  */
 export class WindowArrowKeys {
   /** Arrows whose press reached the app, so the shell did not take it. */
@@ -105,8 +113,8 @@ export class WindowArrowKeys {
 
   constructor(private readonly platform = process.platform) {}
 
-  /** Follow a key event of the window; returns the arrow of a completed Win+Up or Win+Down. */
-  input(input: KeyInput): "up" | "down" | undefined {
+  /** Follow a key event of the window; returns a completed window key. */
+  input(input: KeyInput): WindowKey | undefined {
     if (this.platform !== "win32") return undefined;
     if (input.type === "keyDown" || input.type === "rawKeyDown") {
       if (input.key === "Meta") {
@@ -126,8 +134,9 @@ export class WindowArrowKeys {
     const arrow = WINDOW_ARROWS[input.key];
     if (!arrow) return undefined;
     if (this.pressed.delete(input.key)) return undefined;
-    if (!this.windowsKey || input.control || input.alt || input.shift) return undefined;
-    return arrow;
+    if (!this.windowsKey || input.control || input.alt) return undefined;
+    if (!input.shift) return arrow;
+    return arrow === "down" ? undefined : `shift+${arrow}`;
   }
 
   /** Key events of a window that lost focus go elsewhere. */
