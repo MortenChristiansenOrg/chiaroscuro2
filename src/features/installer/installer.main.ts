@@ -22,6 +22,7 @@ import {
   type InstallerCommands,
   type InstallerEvents,
 } from "./installer.shared";
+import { InstallerLauncher, type InstallingUpdater } from "./installer-launch";
 
 type AllCommands = InstallerCommands;
 type AllEvents = InstallerEvents;
@@ -57,12 +58,9 @@ let checkTimer: ReturnType<typeof setInterval> | undefined;
 let initialCheckTimer: ReturnType<typeof setTimeout> | undefined;
 let stopProtocolListener: (() => void) | undefined;
 let stopProtocolAllowedListener: (() => void) | undefined;
-// An update install was requested and the browser is quitting for it.
-let installRequested = false;
-// Shared autoUpdater reference — populated in start(), used by command handlers.
-// Dynamic import("electron-updater") doesn't expose getter-defined exports reliably
-// across ESM/CJS boundary, so we cache the reference after the first successful import.
-let cachedAutoUpdater: Awaited<typeof import("electron-updater")>["autoUpdater"] | undefined;
+// Starts the update installer for a restart, following whether its process started. Set in
+// start() once electron-updater has loaded, and used by the apply-update command.
+let installerLauncher: InstallerLauncher | undefined;
 let checkForUpdates: (() => Promise<void>) | undefined;
 let initializeUpdates: (() => Promise<void>) | undefined;
 let restoreUpdateSupport: (() => void) | undefined;
@@ -92,21 +90,21 @@ export default defineFeature<Deps>({
     });
 
     commands.handle(INSTALLER_APPLY_UPDATE, async () => {
-      if (!cachedAutoUpdater) throw new Error("Auto-updater not initialized");
+      const launcher = installerLauncher;
+      if (!launcher) throw new Error("Auto-updater not initialized");
+      const generation = updateGeneration;
       // Ask about unsaved changes before the installer starts: after that the browser must quit.
       if (!(await platform.confirmQuit()))
         throw new Error("Restart cancelled to keep unsaved changes.");
-      installRequested = true;
       try {
-        cachedAutoUpdater.quitAndInstall();
+        // Quit only once the installer is running, so a failed start keeps the browser open.
+        await launcher.launch();
       } catch (error) {
-        installRequested = false;
-        platform.cancelQuit();
+        // Pages closed while asking stay as unloaded tabs, unless the browser quit meanwhile.
+        if (generation === updateGeneration) platform.cancelQuit();
         throw error;
       }
-      // An installer that cannot start is reported during quitAndInstall. Otherwise the browser
-      // now quits, and a later failure must not restore tabs while it tears down.
-      installRequested = false;
+      if (generation === updateGeneration) platform.quit();
     });
 
     commands.handle(INSTALLER_DISMISS_UPDATE, async () => {
@@ -199,7 +197,10 @@ export default defineFeature<Deps>({
           // biome-ignore lint/suspicious/noExplicitAny: CJS interop fallback
           const autoUpdater = mod.autoUpdater ?? (mod as any).default?.autoUpdater;
           if (!autoUpdater) throw new Error("electron-updater: autoUpdater not found");
-          cachedAutoUpdater = autoUpdater;
+          installerLauncher = new InstallerLauncher(
+            autoUpdater as unknown as InstallingUpdater,
+            (path) => platform.openPath(path),
+          );
           autoUpdater.channel = APP_CHANNELS[appChannel].updateChannel;
           autoUpdater.allowPrerelease = appChannel === "early-access";
           // Setting channel enables downgrades in electron-updater; reset explicitly.
@@ -240,11 +241,8 @@ export default defineFeature<Deps>({
             // electron-updater emits "error" AND rejects the checkForUpdates() promise
             // for the same failure. We handle it here; callers swallow the rejection.
             console.error("[installer] Update error:", err);
-            // The installer could not start, so the browser keeps running.
-            if (installRequested) {
-              installRequested = false;
-              platform.cancelQuit();
-            }
+            // The installer could not start: the restart reports it and the browser keeps running.
+            if (installerLauncher?.fail(err)) return;
             events.emit(INSTALLER_UPDATE_ERROR, {
               message: err instanceof Error ? err.message : String(err),
             });
@@ -301,7 +299,8 @@ export default defineFeature<Deps>({
 
   teardown() {
     updateGeneration++;
-    installRequested = false;
+    installerLauncher?.dispose();
+    installerLauncher = undefined;
     if (checkTimer) {
       clearInterval(checkTimer);
       checkTimer = undefined;
@@ -320,7 +319,6 @@ export default defineFeature<Deps>({
     }
     allowedProtocols = [];
     pendingRequests.clear();
-    cachedAutoUpdater = undefined;
     checkForUpdates = undefined;
     initializeUpdates = undefined;
     restoreUpdateSupport?.();

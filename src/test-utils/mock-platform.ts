@@ -17,6 +17,7 @@ export function createMockPlatform(overrides: Partial<Platform> = {}): Platform 
     closeTab: vi.fn(),
     confirmQuit: vi.fn(async () => true),
     cancelQuit: vi.fn(),
+    quit: vi.fn(),
     onQuitCancelled: vi.fn(() => () => {}),
     navigateTab: vi.fn(),
     getTabUrl: vi.fn(() => undefined),

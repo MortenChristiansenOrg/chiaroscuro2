@@ -64,6 +64,8 @@ export interface Platform {
   confirmQuit(): Promise<boolean>;
   /** A confirmed quit did not happen: keep the tabs whose pages were closed and ask next time. */
   cancelQuit(): void;
+  /** Quit the browser, asking about unsaved changes first unless the quit is confirmed. */
+  quit(): void;
   /**
    * A quit did not happen after pages were closed to ask about them. Their tabs remain as
    * unloaded tabs that load again when shown; `stayedTabId` is the page the user stayed on.
