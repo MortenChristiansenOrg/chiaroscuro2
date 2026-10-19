@@ -13,7 +13,12 @@ const run = promisify(execFile);
  */
 export async function windowsInput(
   session: AppSession,
-  input: { click?: { webContentsId: number; locator: Locator }; keys?: string },
+  input: {
+    click?: { webContentsId: number; locator: Locator };
+    keys?: string;
+    /** Arrow keys pressed with the Windows key, one after another. */
+    windowsArrows?: ("Up" | "Down" | "Left" | "Right")[];
+  },
 ): Promise<{ foregroundBefore: number; foregroundAfter: number; pointerWindow?: number }> {
   if (process.platform !== "win32") throw new Error("UNSUPPORTED: Windows desktop input required");
   const box = input.click ? await input.click.locator.boundingBox() : null;
@@ -51,6 +56,7 @@ export async function windowsInput(
   // The colon form keeps negative coordinates from being read as parameter names.
   if (native.point) args.push(`-X:${native.point.x}`, `-Y:${native.point.y}`, "-Click");
   if (input.keys) args.push("-Keys", input.keys);
+  if (input.windowsArrows?.length) args.push("-WindowsArrows", input.windowsArrows.join(","));
   const result = await run(
     "powershell.exe",
     ["-NoProfile", "-File", path.resolve("e2e/automation/windows-input.ps1"), ...args],

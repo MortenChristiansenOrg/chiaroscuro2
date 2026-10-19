@@ -72,7 +72,7 @@ In command palette:
 
 - **Enter**: Navigate to page in new tab.
 - **Ctrl-Enter**: Navigate to page in current tab.
-- **Escape**: Close command palette.
+- **Escape**: Close command palette. It does nothing else, such as closing a sub-tab under the palette.
 - **Arrow Up/Down**: Navigate suggestions.
 
 ### Mouse interactions

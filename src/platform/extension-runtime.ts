@@ -684,8 +684,9 @@ export class ExtensionRuntime {
             nodeIntegration: false,
           },
         });
-        // The application menu holds browser accelerators that act on the main window.
-        win.removeMenu();
+        // The application menu's accelerators do nothing in this window (#115). Without a menu,
+        // Windows would pass them to the browser window that owns it, which would take focus.
+        win.setMenuBarVisibility(false);
         // Bitwarden places its pop-out at the browser window's top right; without a position
         // the window stays where Electron centred it.
         this.placeWindow(win, data);

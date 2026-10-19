@@ -27,6 +27,16 @@ See `docs/features/SidebarFeature.specs.md`, `docs/features/TabsFeature.specs.md
 
 - `globalShortcut` for system-wide shortcuts
 - `Menu` accelerators for app shortcuts
+- Browser shortcuts act on the browser window. They work while it or a window shown as part
+  of it has focus: the sub-tab window, the command palette and an extension's toolbar popup
+  (`shortcutWindow` in `src/platform/keyboard-routing.ts`). Global shortcuts are only
+  registered then, and menu accelerators check which window holds the focused contents.
+  Website popups and extension pop-outs are windows of their own: browser shortcuts do
+  nothing there, and Ctrl+W closes them (#115). They keep the hidden application menu,
+  because on Windows the accelerators of an owned window without a menu reach its owner,
+  which then takes focus.
+- A window shown as part of the browser handles its own keys first. The command palette
+  consumes its Escape, so it never reaches the sub-tab's Escape (#130).
 - Custom shortcut registry with rebinding support
 - Vim-style keybindings optional
 
@@ -66,7 +76,7 @@ has no dependency on `electron-chrome-extensions`.
   and notification APIs through `src/platform/extension-runtime.ts`. Only loaded
   extension frames/workers in the shared session can invoke these operations.
 - Open `windows.create` windows (Bitwarden's pop-out) as framed `popup` windows
-  without the browser's accelerator menu. Inside one, `windows.getCurrent` is that
+  with the browser's accelerator menu hidden. Inside one, `windows.getCurrent` is that
   window, so the extension can close it with `windows.remove`. A `beforeunload`
   veto asks "Leave this page?" natively instead of silently cancelling the close.
 - Give each extension window one active tab (its page, ID = native WebContents ID),

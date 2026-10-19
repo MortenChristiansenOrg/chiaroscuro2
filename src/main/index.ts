@@ -585,17 +585,9 @@ if (gotLock) {
     const win = createWindow(appStateData.windowBounds);
     initOverlays();
 
-    // Activate keyboard shortcuts immediately (window is focused on creation)
-    // and toggle on focus/blur so they don't intercept keys from other apps.
-    platform.activateShortcuts();
-
-    app.on("browser-window-focus", () => platform.activateShortcuts());
-    app.on("browser-window-blur", () => {
-      // Small delay: focus may transfer between app windows (e.g. context menu)
-      setTimeout(() => {
-        if (!BrowserWindow.getFocusedWindow()) platform.deactivateShortcuts();
-      }, 100);
-    });
+    // Browser shortcuts act on the browser window, and only while it or a window shown as part
+    // of it has focus, so they don't take keys from other apps or windows.
+    platform.startShortcutRouting();
 
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) {

@@ -6,11 +6,6 @@ import { featureState } from "../../shared/feature-state";
 import { logError } from "../../shared/log";
 import { TabScope } from "../../shared/tab-scope";
 import type { TabId, WindowId, WorkspaceId } from "../../shared/types";
-import type { CommandPaletteEvents } from "../command-palette/command-palette.shared";
-import {
-  COMMAND_PALETTE_HIDDEN,
-  COMMAND_PALETTE_SHOWN,
-} from "../command-palette/command-palette.shared";
 import { getContentBounds } from "../tabs/tabs.main";
 import type { TabsCommands, TabsEvents } from "../tabs/tabs.shared";
 import {
@@ -87,10 +82,7 @@ function computeChildFrameBounds(cb: Bounds): Bounds {
 }
 
 type AllCommands = SubTabsCommands & TabsCommands;
-type AllEvents = SubTabsEvents &
-  TabsEvents &
-  Pick<WorkspacesEvents, typeof WORKSPACES_SWITCHED> &
-  Pick<CommandPaletteEvents, typeof COMMAND_PALETTE_SHOWN | typeof COMMAND_PALETTE_HIDDEN>;
+type AllEvents = SubTabsEvents & TabsEvents & Pick<WorkspacesEvents, typeof WORKSPACES_SWITCHED>;
 
 interface Deps {
   commands: CommandBus<AllCommands>;
@@ -642,20 +634,9 @@ export default defineFeature<Deps>({
       }).catch(logError("sub-tabs", "close children after parent close"));
     });
 
-    // Track command palette state to avoid Escape race condition.
-    // Menu accelerators fire globally — when the palette is open and user presses
-    // Escape, both the palette's handler and the sub-tab dismiss fire simultaneously.
-    let commandPaletteOpen = false;
-    events.on(COMMAND_PALETTE_SHOWN, () => {
-      commandPaletteOpen = true;
-    });
-    events.on(COMMAND_PALETTE_HIDDEN, () => {
-      commandPaletteOpen = false;
-    });
-
-    // Escape to dismiss topmost sub-tab (skip if command palette is open)
+    // Escape in a sub-tab or the browser window dismisses the topmost sub-tab. The command
+    // palette handles its own Escape, which does not reach this shortcut (#130).
     const dismissTopSubTab = () => {
-      if (commandPaletteOpen) return;
       const activeTabId = getActiveTabId();
       if (!activeTabId) return;
       if (!topSubTab(activeTabId)) return;
