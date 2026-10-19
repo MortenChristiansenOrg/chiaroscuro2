@@ -372,7 +372,26 @@ test("Windows: activations without a click return typing to the sub-tab page, cl
 
     // Another program activates it, with the pointer over the browser window.
     await activateOtherWindow(session);
+    await session.app.evaluate(({ BrowserWindow, webContents }) => {
+      const log: string[] = [];
+      (globalThis as unknown as { diag: string[] }).diag = log;
+      const t0 = Date.now();
+      const note = (what: string) =>
+        log.push(`${Date.now() - t0} ${what} focused=${webContents.getFocusedWebContents()?.id} win=${BrowserWindow.getFocusedWindow()?.webContents.id}`);
+      for (const win of BrowserWindow.getAllWindows()) {
+        const id = win.webContents.id;
+        win.on("focus", () => { note(`win${id} focus`); setTimeout(() => note(`win${id} focus+0`)); setTimeout(() => note(`win${id} focus+50`), 50); });
+        win.on("blur", () => note(`win${id} blur`));
+      }
+      for (const wc of webContents.getAllWebContents()) {
+        wc.on("focus", () => note(`wc${wc.id} focus`));
+        wc.on("blur", () => note(`wc${wc.id} blur`));
+      }
+      note("start");
+    });
     await windowsPointer(session, { x: 4, y: 400 });
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    console.log(`DIAG ${JSON.stringify(await session.app.evaluate(() => (globalThis as unknown as { diag: string[] }).diag))}`);
     await expect.poll(() => focusedContents(session)).toBe(childTab.webContentsId);
     await windowsInput(session, { keys: "c" });
     await expect(child.message).toHaveValue("abc");
