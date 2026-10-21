@@ -1,18 +1,32 @@
 import path from "node:path";
-import { type WebContents, WebContentsView } from "electron";
+import { type WebContents, WebContentsView, type WebPreferences } from "electron";
 import { StayedOnPage } from "./leave-prompt";
+
+const TAB_PRELOAD = path.join(__dirname, "../preload/tab.js");
+
+/** The preferences clone() copies. Electron exposes this accessor but does not type it. */
+function lastWebPreferences(contents: WebContents): WebPreferences | null {
+  return (
+    contents as WebContents & { getLastWebPreferences(): WebPreferences | null }
+  ).getLastWebPreferences();
+}
 
 /** Construct normal and duplicated tabs without replacing a clone's session or preferences. */
 export function createTabView(source?: WebContents): WebContentsView {
   const view = source
-    ? new WebContentsView({ webContents: source.clone() })
+    ? new WebContentsView({
+        webContents: source.clone(),
+        // clone() copies preferences without the preload, which every tab needs (#51). Given
+        // with webContents, these replace the clone's preferences, so pass all of them.
+        webPreferences: { ...lastWebPreferences(source), preload: TAB_PRELOAD },
+      })
     : new WebContentsView({
         webPreferences: {
           sandbox: true,
           contextIsolation: true,
           nodeIntegration: false,
           webSecurity: true,
-          preload: path.join(__dirname, "../preload/tab.js"),
+          preload: TAB_PRELOAD,
         },
       });
   // Isolate zoom without partitioning the session's cookies or storage.

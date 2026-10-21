@@ -16,8 +16,11 @@ test("Windows top-bar native clicks in restored and maximized windows", async ({
   const before = await session.app.evaluate(({ clipboard }) => clipboard.readText());
   const site = await startSite();
   try {
+    // Geometry is measured once per step; the URL pill's crossfade must not move it later.
+    await session.shell.emulateMedia({ reducedMotion: "reduce" });
     // A site's own app-region must not drag the browser window (#51).
-    await VerificationPage.navigate(session, `${site.url}/app-region`);
+    const dragUrl = `${site.url}/app-region`;
+    await VerificationPage.navigate(session, dragUrl);
     const tab = await session.target((target) => target.kind === "tab" && target.visible);
     const page = await session.page(tab);
     const header = await page.locator("header").boundingBox();
@@ -25,16 +28,30 @@ test("Windows top-bar native clicks in restored and maximized windows", async ({
       const r = host.shadowRoot?.firstElementChild?.getBoundingClientRect();
       return r && { x: r.x + r.width / 2, y: r.y + r.height / 2 };
     });
+    const viewport =
+      page.viewportSize() ??
+      (await page.evaluate(() => ({ width: innerWidth, height: innerHeight })));
     if (!header || !shadow || !tab.bounds) throw new Error("Missing page geometry");
-    const toShell = ({ x, y }: { x: number; y: number }) => ({
-      x: tab.bounds!.x + x,
-      y: tab.bounds!.y + y,
-    });
+    const { x: left, y: top } = tab.bounds;
+    const toShell = ({ x, y }: { x: number; y: number }) => ({ x: left + x, y: top + y });
     const pageHits = await windowsHitTests(session, [
       toShell({ x: header.x + header.width - 20, y: header.y + 20 }),
       toShell(shadow),
     ]);
     expect.soft(pageHits, "page app-region in the active tab").toEqual([HTCLIENT, HTCLIENT]);
+    // A modal dialog's ::backdrop is a box of its own, outside every element.
+    await page.locator("dialog").evaluate((dialog: HTMLDialogElement) => dialog.showModal());
+    const backdropHits = await windowsHitTests(session, [
+      toShell({ x: 20, y: viewport.height - 20 }),
+    ]);
+    expect.soft(backdropHits, "page ::backdrop app-region").toEqual([HTCLIENT]);
+    await page.locator("dialog").evaluate((dialog: HTMLDialogElement) => dialog.close());
+    // Electron's clone() drops the preload; a duplicate must suppress the page's regions too.
+    const duplicate = await session.command<string>("tabs:duplicate", { tabId: tab.tabId });
+    const copy = await session.page(
+      await session.target((target) => target.tabId === duplicate && target.url === dragUrl),
+    );
+    await expect(copy.locator("header")).toBeAttached();
 
     for (const maximized of [false, true]) {
       if (maximized)

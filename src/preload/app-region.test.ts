@@ -6,9 +6,19 @@ vi.mock("electron", () => ({ webFrame }));
 import { disableAppRegions, NO_APP_REGION_CSS } from "./app-region";
 
 describe("tab preload app-region", () => {
-  it("overrides every page app-region with a user-origin important rule", () => {
+  it("inserts the override as a user-origin sheet", () => {
     disableAppRegions();
     expect(webFrame.insertCSS).toHaveBeenCalledWith(NO_APP_REGION_CSS, { cssOrigin: "user" });
-    expect(NO_APP_REGION_CSS).toMatch(/app-region:\s*none\s*!important/);
+  });
+
+  it("resets every element and box pseudo-element, leaving one root rect", () => {
+    const rules = NO_APP_REGION_CSS.split("\n");
+    expect(rules[0]).toBe(":root { app-region: none !important; }");
+    expect(
+      rules.slice(1).every((rule) => rule.endsWith("{ app-region: initial !important; }")),
+    ).toBe(true);
+    // One rule per selector, so a pseudo-element Chromium lacks cannot void the others.
+    expect(rules.every((rule) => !rule.includes(","))).toBe(true);
+    expect(rules).toContain("::backdrop { app-region: initial !important; }");
   });
 });

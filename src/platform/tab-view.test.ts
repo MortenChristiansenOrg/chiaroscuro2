@@ -4,8 +4,12 @@ import { describe, expect, it, vi } from "vitest";
 vi.mock("electron", () => ({
   WebContentsView: class {
     webContents: unknown;
-    constructor(options: { webContents: unknown }) {
-      this.webContents = options.webContents;
+    options: { webContents?: unknown; webPreferences?: Record<string, unknown> };
+    constructor(options: { webContents?: unknown; webPreferences?: Record<string, unknown> }) {
+      this.options = options;
+      this.webContents = options.webContents ?? {
+        setZoomMode: vi.fn(),
+      };
     }
   },
 }));
@@ -21,6 +25,7 @@ describe("cloned tab initialization", () => {
     const source = {
       clone: () => contents,
       getZoomLevel: () => 2,
+      getLastWebPreferences: () => ({}),
     } as unknown as Electron.WebContents;
     createTabView(source);
     contents.emit("did-fail-load", {}, -105, "Failed", "https://example.com/frame", false);
@@ -33,6 +38,31 @@ describe("cloned tab initialization", () => {
     contents.emit("did-fail-load", {}, -105, "Failed", "https://example.com", true);
     contents.emit("did-finish-load");
     expect(contents.setZoomLevel).not.toHaveBeenCalled();
+  });
+});
+
+describe("tab preload", () => {
+  type Options = { webPreferences?: Record<string, unknown> };
+  it("keeps a clone's preferences and restores the preload clone() drops (#51)", () => {
+    const contents = Object.assign(new EventEmitter(), { setZoomMode: vi.fn() });
+    const source = {
+      clone: () => contents,
+      getZoomLevel: () => 0,
+      getLastWebPreferences: () => ({
+        sandbox: true,
+        partition: "persist:work",
+        spellcheck: false,
+      }),
+    } as unknown as Electron.WebContents;
+    const fresh = createTabView() as unknown as { options: Options };
+    const clone = createTabView(source) as unknown as { options: Options };
+    expect(clone.options.webPreferences).toEqual({
+      sandbox: true,
+      partition: "persist:work",
+      spellcheck: false,
+      preload: fresh.options.webPreferences?.preload,
+    });
+    expect(String(fresh.options.webPreferences?.preload)).toMatch(/preload[\\/]tab\.js$/);
   });
 });
 
