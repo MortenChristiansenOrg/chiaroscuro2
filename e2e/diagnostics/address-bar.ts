@@ -38,10 +38,14 @@ try {
         ?.maximize(),
     );
   }
+  // Sites built for desktop app shells declare app-region. Left behind as a hidden tab, such a
+  // page used to cover the whole top bar with its drag region (#51).
+  await VerificationPage.navigate(session, `${site.url}/app-region`);
   const cases = [
     { name: "Reload", command: "window:reload" },
     { name: "Copy URL", command: "window:copy-address" },
     { name: "Domain customization", command: "domain-settings:open" },
+    { name: /^Zoom \d+%/, command: "zoom:reset" },
   ];
   for (const input of ["cdp", "windows"] as const) {
     for (const { name, command } of cases) {
@@ -49,21 +53,25 @@ try {
         const url = `${site.url}/address-bar-hit-test`;
         const fixture = await VerificationPage.navigate(session, url);
         await fixture.message.waitFor({ state: "visible" });
+        // The zoom indicator shows only at a non-default zoom.
+        await session.command("zoom:in");
         const button = session.shell.getByRole("button", { name, exact: true });
         await button.waitFor({ state: "visible" });
         const geometry = await button.evaluate((button) => {
-          const rect = (element: Element) => {
+          const rect = (element: Element | Range) => {
             const r = element.getBoundingClientRect();
             return { x: r.x, y: r.y, width: r.width, height: r.height };
           };
-          const icon = button.querySelector("i");
-          if (!icon) throw new Error("Button icon missing");
+          // An icon, or the text of a text button such as the zoom indicator.
+          const range = document.createRange();
+          range.selectNodeContents(button);
+          const icon = button.querySelector("i") ?? range;
           const parent = button.parentElement;
           if (!parent) throw new Error("Button container missing");
           return {
             button: rect(button),
             icon: rect(icon),
-            regions: [icon, button, parent].map((element) => ({
+            regions: [button, parent].map((element) => ({
               tag: element.tagName,
               appRegion: getComputedStyle(element).getPropertyValue("app-region"),
               pointerEvents: getComputedStyle(element).pointerEvents,
@@ -75,7 +83,7 @@ try {
           x: box.x + (part === "icon" ? box.width / 2 : 2),
           y: box.y + box.height / 2,
         };
-        const label = `${input}-${name.replaceAll(" ", "-")}-${part}`;
+        const label = `${input}-${typeof name === "string" ? name.replaceAll(" ", "-") : "Zoom-indicator"}-${part}`;
         await session.writeJson(`${label}.geometry.json`, { geometry, point });
         const native = input === "windows" ? await windowsPointer(session, point) : undefined;
         if (input === "cdp") await session.shell.mouse.move(point.x, point.y);
@@ -115,7 +123,7 @@ try {
             : undefined;
         const observation = {
           input,
-          name,
+          name: typeof name === "string" ? name : "Zoom indicator",
           part,
           ...hover,
           hitTest: native?.hitTest,
@@ -129,32 +137,30 @@ try {
       }
     }
   }
-  const controlWorks = observations.some(
-    (o) => o.input === "windows" && o.name === "Reload" && o.activated,
-  );
-  const affected = observations.filter((o) => o.input === "windows" && o.name !== "Reload");
-  const blockedIcons = affected
-    .filter((o) => o.part === "icon")
-    .every((o) => !o.activated && o.hitTest === 2);
-  const workingPadding = affected.filter((o) => o.part === "padding").every((o) => o.activated);
-  const outcome = !controlWorks
-    ? "inconclusive-control-failed"
-    : blockedIcons
-      ? workingPadding
-        ? "reported-behavior-reproduced"
-        : "icons-blocked-padding-also-blocked"
-      : "reported-behavior-not-reproduced";
+  // Reload is affected as well (#51), so a caption hit test, not a control button, shows that
+  // the window's drag region rather than the desktop input path blocked a click.
+  const native = observations.filter((o) => o.input === "windows");
+  const blocked = native.filter((o) => !o.activated);
+  const blockedIcons = native.filter((o) => o.part === "icon").every((o) => !o.activated);
+  const outcome = blocked.some((o) => o.hitTest !== 2)
+    ? "inconclusive-input-failed"
+    : blocked.length === 0
+      ? "reported-behavior-not-reproduced"
+      : blockedIcons && blocked.every((o) => o.part === "icon")
+        ? "icons-blocked-padding-works"
+        : "caption-blocks-controls";
   const evidence = await session.capture("diagnostic");
   const result = {
     outcome,
-    controlWorks,
+    blocked: blocked.map((o) => `${o.name} ${o.part}`),
     observations,
     evidenceStatus: evidence.status,
     artifactDir,
   };
   await session.writeJson("result.json", result);
   console.log(JSON.stringify(result));
-  if (!controlWorks || evidence.status !== "complete") process.exitCode = 1;
+  if (outcome === "inconclusive-input-failed" || evidence.status !== "complete")
+    process.exitCode = 1;
 } catch (error) {
   process.exitCode = 1;
   await session.writeJson("result.json", {

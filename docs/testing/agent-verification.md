@@ -182,7 +182,7 @@ bun run diagnose:address-bar
 
 This uses the same isolated `AppSession` and local fixture site. It compares
 Playwright/CDP clicks with the Windows desktop pointer at each button's icon
-center and left padding, with Reload as a positive control. The Windows helper
+center and left padding. The Windows helper
 checks the foreground window and window under the pointer before clicking,
 accounts for display scale and renderer zoom, and records `WM_NCHITTEST` results:
 `HTCLIENT` (1) versus `HTCAPTION` (2). A caption region can consume mouse input
@@ -193,11 +193,12 @@ and [Windows hit-test results](https://learn.microsoft.com/en-us/windows/win32/i
 Results, hover screenshots, geometry, native input records and the standard
 evidence bundle are saved under `test-results/address-bar/`, mirrored to
 `test-results/windows/address-bar/` by the WSL launcher. The diagnostic restores
-clipboard text and cleans up its own profile. It distinguishes the exact report
-(blocked icons with working padding), a broader failure (padding also blocked),
-no reproduction, and a failed positive control. Missing desktop screenshots are
+clipboard text and cleans up its own profile. It distinguishes blocked icons with
+working padding (`icons-blocked-padding-works`), a broader caption block
+(`caption-blocks-controls`), no reproduction, and blocked input without a caption
+hit test. Missing desktop screenshots are
 reported as partial evidence with a nonzero exit; renderer screenshots do not
-establish desktop composition. The diagnostic remains optional. `e2e/scenarios/address-bar.spec.ts` is the Windows regression for #51: icon/padding native clicks, hit tests, hover and command effects in restored and maximized windows, including after opening and closing Find.
+establish desktop composition. The diagnostic remains optional. The diagnostic first leaves a page that declares `app-region: drag` in a hidden tab, the condition behind #51, and includes the zoom indicator (at a non-default zoom, measured at its text center). Reload is affected by #51 too, so a blocked click counts as reproduced only when its native hit test is `HTCAPTION`; any other blocked click is reported as `inconclusive-input-failed`. `e2e/scenarios/top-bar.spec.ts` is the Windows regression for #51: with that page in a hidden tab, every title-bar button's icon/text center and padding must hit-test as `HTCLIENT` and empty title-bar space as `HTCAPTION`, in restored and maximized windows, after opening and closing Find. Native clicks on Reload, Copy URL, the zoom indicator and Domain customization must hover and run their commands, and the active page's own drag region must not reach the window.
 
 ### Startup diagnostics
 
