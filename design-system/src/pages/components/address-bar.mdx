@@ -10,7 +10,7 @@ import { DEMO_TABS, makeDemoTabMap, tabId } from "../../lib/demo-data"
 
 The URL "pill" sits centered in the titlebar with an animated loading border, domain customization and copy buttons.
 
-The inactive Find bar is removed from layout. Opacity and `pointer-events: none` alone do not remove Electron native drag regions and can block these buttons on Windows. Icon centers and padding must remain hovered and clickable before and after using Find.
+The inactive Find bar is removed from layout. Opacity and `pointer-events: none` alone do not remove Electron native drag regions and can block these buttons on Windows. Icon centers and padding must remain hovered and clickable before and after using Find. Web pages in tabs cannot add drag regions of their own, so a site's `app-region: drag` never covers these buttons either.
 
 ## Anatomy
 

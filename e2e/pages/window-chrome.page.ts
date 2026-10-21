@@ -33,6 +33,53 @@ export class WindowChromePage {
     return this.page.getByRole("button", { name, exact: true });
   }
 
+  get zoomIndicator() {
+    return this.titleBar.getByRole("button", { name: /^Zoom \d+%/ });
+  }
+
+  /**
+   * Native hit-test targets across the top bar: each control's icon or text center and a point
+   * 2px inside its edge, and empty title-bar space at least 4px from any no-drag element.
+   */
+  async hitTargets() {
+    return this.titleBar.evaluate((bar) => {
+      const center = (r: DOMRect) => ({ x: r.x + r.width / 2, y: r.y + r.height / 2 });
+      const controls = [...bar.querySelectorAll("button, input")].flatMap((control) => {
+        const box = control.getBoundingClientRect();
+        if (box.width === 0 || box.height === 0) return [];
+        const icon = control.querySelector("i");
+        const range = document.createRange();
+        range.selectNodeContents(control);
+        const content = icon ? icon.getBoundingClientRect() : range.getBoundingClientRect();
+        return [
+          {
+            name: control.getAttribute("aria-label") ?? control.getAttribute("placeholder") ?? "",
+            content: center(content),
+            padding: { x: box.x + 2, y: box.y + box.height / 2 },
+          },
+        ];
+      });
+      const region = (element: Element | null) =>
+        element ? getComputedStyle(element).getPropertyValue("app-region") : "";
+      const islands = [...bar.querySelectorAll("*")]
+        .filter(
+          (element) => region(element) === "no-drag" && region(element.parentElement) !== "no-drag",
+        )
+        .map((element) => element.getBoundingClientRect())
+        .filter((r) => r.width > 0 && r.height > 0);
+      const barBox = bar.getBoundingClientRect();
+      const y = barBox.y + barBox.height / 2;
+      const empty: { x: number; y: number }[] = [];
+      for (let x = barBox.x + 4; x < barBox.right - 4; x += 8) {
+        const near = islands.some((r) => x > r.left - 4 && x < r.right + 4);
+        const target = document.elementFromPoint(x, y);
+        if (!near && target && bar.contains(target) && region(target) === "drag")
+          empty.push({ x, y });
+      }
+      return { controls, empty };
+    });
+  }
+
   async isVisible(): Promise<boolean> {
     return this.titleBar.isVisible();
   }

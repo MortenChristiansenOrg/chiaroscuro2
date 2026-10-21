@@ -16,6 +16,8 @@ It also keeps the chrome UI in sync with the active tab's loading state, and all
 
 - The window must be possible to minimize and maximize/restore using the custom chrome controls.
 - The window must be draggable via the title bar area (using `-webkit-app-region: drag` CSS property).
+- Only the window chrome defines drag regions. Web pages in tabs must not: Electron hit-tests every view in the window, and a hidden tab sits at the window's origin, so a page's `app-region: drag` (common on sites built for desktop app shells) would cover the title bar and swallow clicks on its controls. The tab preload overrides `app-region` with a user-origin `!important` rule.
+- Every title-bar control must be clickable across its whole area, icon or text included, on Windows; empty title-bar space stays draggable.
 - The chrome must display a visible loading indicator when the active tab is loading (e.g., a spinner icon in the active tab or a progress bar in the title bar) and hide it when loading finishes.
 - Copying the current address must copy the active tab's address to the clipboard.
 - When copying an address, the copied value should omit common ad-tracking query parameters when present.

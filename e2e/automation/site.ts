@@ -64,6 +64,16 @@ export async function startSite(onRequest?: (request: http.IncomingMessage) => v
       response.end("deterministic download\n");
       return;
     }
+    if (url.pathname === "/app-region") {
+      // Sites built for desktop app shells (e.g. chatgpt.com) declare window drag regions (#51).
+      response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      response.end(`<!doctype html><html lang="en"><meta charset="utf-8"><title>Verification app-region</title>
+        <style>body{margin:0;font:20px system-ui}header{position:fixed;inset:0 0 auto 0;height:160px;background:#cfd8e3;-webkit-app-region:drag !important}button{-webkit-app-region:no-drag;margin:24px}dialog::backdrop{app-region:drag !important}</style>
+        <header style="app-region: drag !important"><button id="header-button">Header button</button></header>
+        <main style="padding-top:180px">Page with a drag region</main><div id="shadow-host"></div><dialog>Modal dialog</dialog>
+        <script>document.querySelector('#shadow-host').attachShadow({mode:'open'}).innerHTML='<div style="position:fixed;inset:160px 0 auto 0;height:40px;app-region:drag"></div>'</script></html>`);
+      return;
+    }
     if (url.pathname === "/failure") {
       response.writeHead(503);
       response.end("Intentional fixture failure");

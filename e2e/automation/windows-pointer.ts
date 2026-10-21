@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import fs from "node:fs/promises";
 import path from "node:path";
 import { promisify } from "node:util";
 import type { AppSession } from "./session";
@@ -91,4 +92,56 @@ export async function windowsPointer(
   const observation = JSON.parse(result.stdout);
   session.record("windows-pointer", { point, click, ...observation });
   return observation;
+}
+
+/**
+ * Native WM_NCHITTEST results for points of the owned shell, without moving the pointer:
+ * `HTCLIENT` (1) or `HTCAPTION` (2). One PowerShell call answers all of them.
+ */
+export async function windowsHitTests(
+  session: AppSession,
+  points: { x: number; y: number }[],
+): Promise<number[]> {
+  if (process.platform !== "win32") throw new Error("UNSUPPORTED: Windows desktop input required");
+  const native = await session.app.evaluate(({ BrowserWindow, screen }, points) => {
+    const win = BrowserWindow.getAllWindows().find(
+      (candidate) =>
+        !candidate.getParentWindow() && candidate.webContents.getURL().includes("/out/renderer/"),
+    );
+    if (!win) throw new Error("No owned shell window");
+    const bounds = win.getContentBounds();
+    const zoom = win.webContents.getZoomFactor();
+    const handle = win.getNativeWindowHandle();
+    return {
+      points: points.map(({ x, y }) => {
+        const point = screen.dipToScreenPoint({
+          x: Math.round(bounds.x + x * zoom),
+          y: Math.round(bounds.y + y * zoom),
+        });
+        return [point.x, point.y];
+      }),
+      handle: (handle.length === 8
+        ? handle.readBigUInt64LE()
+        : BigInt(handle.readUInt32LE())
+      ).toString(),
+    };
+  }, points);
+  const file = path.join(session.artifactDir, `hit-test-${Date.now()}.json`);
+  await fs.writeFile(file, JSON.stringify(native.points));
+  const result = await run(
+    "powershell.exe",
+    [
+      "-NoProfile",
+      "-File",
+      path.resolve("e2e/automation/windows-hit-test.ps1"),
+      "-PointsFile",
+      file,
+      "-Window",
+      native.handle,
+    ],
+    { timeout: 30_000, windowsHide: true },
+  );
+  const hits: number[] = JSON.parse(result.stdout);
+  session.record("windows-hit-tests", { points, hits });
+  return hits;
 }
