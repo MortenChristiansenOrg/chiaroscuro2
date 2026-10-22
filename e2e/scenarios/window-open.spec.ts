@@ -67,6 +67,45 @@ test("blank window handles support deferred navigation and script closing", asyn
   await expect(parent.page).toHaveURL(`${site.url}/window-open`);
 });
 
+test("a child closing under an inactive parent restores input without stealing focus", async ({
+  appSession: session,
+}) => {
+  const parent = await VerificationPage.navigate(session, `${site.url}/inactive-parent`);
+  const root = await session.target(
+    (t) => t.kind === "tab" && t.url === `${site.url}/inactive-parent`,
+  );
+  await parent.subTab.click();
+  const childTarget = await session.target(
+    (t) => t.kind === "sub-tab" && t.url === `${site.url}/child`,
+  );
+  const child = await session.page(childTarget);
+  const other = await VerificationPage.navigate(session, `${site.url}/other-parent`);
+  const otherTarget = await session.target(
+    (t) => t.kind === "tab" && t.url === `${site.url}/other-parent`,
+  );
+  await other.message.click();
+  await expect
+    .poll(async () => (await session.targets()).find((t) => t.id === otherTarget.id)?.focused)
+    .toBe(true);
+
+  await child.evaluate(() => window.close());
+  await expect
+    .poll(() => session.command("sub-tabs:get-stack", { parentTabId: root.tabId }))
+    .toEqual([]);
+  await expect
+    .poll(async () => (await session.targets()).some((t) => t.id === childTarget.id))
+    .toBe(false);
+  expect((await session.targets()).find((t) => t.id === otherTarget.id)?.focused).toBe(true);
+  await expect(other.message).toBeFocused();
+  await other.message.pressSequentially("still focused");
+  await expect(other.message).toHaveValue("still focused");
+
+  await session.shell.locator(`[data-tab-id="${root.tabId}"]`).click();
+  await parent.submit("parent input restored");
+  await expect(parent.result).toHaveText("parent input restored");
+  expect((await session.capture("inactive-parent-input-restored")).status).toBe("complete");
+});
+
 for (const button of ["left", "middle"] as const) {
   test(`a ${button} click on a noopener link opens one ${button === "left" ? "child" : "background"} tab`, async ({
     appSession: session,

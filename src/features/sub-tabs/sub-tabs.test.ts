@@ -616,6 +616,45 @@ describe("window-open interception", () => {
     expect(ctx.platform.navigateTab).not.toHaveBeenCalled();
   });
 
+  it("restores an inactive parent's input after native child closure without disturbing another stack", async () => {
+    const ctx = setup({ insertCSS: vi.fn(async () => "input-block-key") });
+    const { tabId: parentId } = await createParentTab(ctx);
+    const open = vi.mocked(ctx.platform.onWindowOpen).mock.calls[0]?.[0];
+    const route = open?.("https://child.com", parentId, "foreground-tab");
+    const nativeId = "native-child" as TabId;
+    route?.onCreated(nativeId);
+    await vi.waitFor(async () => {
+      expect(await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: parentId })).toHaveLength(
+        1,
+      );
+    });
+    const { tabId: otherId } = await createParentTab(ctx);
+    const otherChild = await ctx.commands.send(SUB_TABS_OPEN, {
+      parentTabId: otherId,
+      url: "https://other-child.com",
+    });
+    vi.mocked(ctx.platform.hideSubTabWindowInstant).mockClear();
+    vi.mocked(ctx.platform.returnFocusFromSubTabWindow).mockClear();
+    vi.mocked(ctx.platform.attachTabToSubTabWindow).mockClear();
+
+    route?.onClosed(nativeId);
+
+    await vi.waitFor(() => {
+      expect(ctx.platform.removeInsertedCSS).toHaveBeenCalledExactlyOnceWith(
+        parentId,
+        "input-block-key",
+      );
+    });
+    expect(await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: parentId })).toEqual([]);
+    expect(await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: otherId })).toMatchObject([
+      { id: otherChild },
+    ]);
+    expect(ctx.getActiveTabId()).toBe(otherId);
+    expect(ctx.platform.hideSubTabWindowInstant).not.toHaveBeenCalled();
+    expect(ctx.platform.returnFocusFromSubTabWindow).not.toHaveBeenCalled();
+    expect(ctx.platform.attachTabToSubTabWindow).not.toHaveBeenCalled();
+  });
+
   it("reconciles a native redirect that completed while adoption was queued", async () => {
     let finishEnter!: () => void;
     const ctx = setup({

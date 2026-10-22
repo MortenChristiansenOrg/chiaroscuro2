@@ -375,11 +375,11 @@ export default defineFeature<Deps>({
             pendingRecovery.delete(tabId);
             removeFromStack(parentTabId, tabId);
             events.emit(SUB_TABS_CLOSED, { parentTabId, subTabId: tabId });
+            if (!topSubTab(parentTabId)) enableParentInput(parentTabId);
             if (getActiveTabId() === parentTabId) {
               if (topSubTab(parentTabId)) showTopSubTab(parentTabId);
               else {
                 platform.hideSubTabWindowInstant();
-                enableParentInput(parentTabId);
                 platform.returnFocusFromSubTabWindow(parentTabId);
               }
             }
