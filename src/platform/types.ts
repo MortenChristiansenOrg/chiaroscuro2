@@ -33,6 +33,13 @@ export interface LoadedExtension {
   manifest: Record<string, unknown>;
 }
 
+/** Route a native window-open into a browser-owned view without reporting a blocked popup. */
+export interface WindowOpenTarget {
+  windowId: WindowId;
+  onCreated(tabId: TabId): void;
+  onClosed(tabId: TabId): void;
+}
+
 export interface Platform {
   /** Native local files dropped on the shell or an unhandled page area. */
   onFilesDropped(callback: (paths: string[]) => void): () => void;
@@ -205,7 +212,11 @@ export interface Platform {
 
   // Window-open interception (target="_blank", window.open)
   onWindowOpen(
-    callback: (url: string, sourceTabId: TabId, disposition: string) => boolean,
+    callback: (
+      url: string,
+      sourceTabId: TabId,
+      disposition: string,
+    ) => WindowOpenTarget | undefined,
   ): () => void;
 
   // Navigation blocking (per-domain)

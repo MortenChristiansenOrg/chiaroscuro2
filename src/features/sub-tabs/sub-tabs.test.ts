@@ -597,6 +597,78 @@ describe("window-open interception", () => {
     const ctx = setup();
     expect(ctx.platform.onWindowOpen).toHaveBeenCalled();
   });
+
+  it("adopts a native foreground view without creating or loading a second view", async () => {
+    const ctx = setup();
+    const { tabId } = await createParentTab(ctx);
+    vi.mocked(ctx.platform.createTab).mockClear();
+    const open = vi.mocked(ctx.platform.onWindowOpen).mock.calls[0]?.[0];
+    const route = open?.("https://child.com", tabId, "foreground-tab");
+    expect(route?.windowId).toBe(WIN_ID);
+    const nativeId = "native-child" as TabId;
+    route?.onCreated(nativeId);
+    await vi.waitFor(async () => {
+      expect(await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: tabId })).toMatchObject([
+        { id: nativeId, parentTabId: tabId, url: `https://example.com/${nativeId}` },
+      ]);
+    });
+    expect(ctx.platform.createTab).not.toHaveBeenCalled();
+    expect(ctx.platform.navigateTab).not.toHaveBeenCalled();
+  });
+
+  it("reconciles a native redirect that completed while adoption was queued", async () => {
+    let finishEnter!: () => void;
+    const ctx = setup({
+      showSubTabWindow: vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            finishEnter = resolve;
+          }),
+      ),
+      getTabUrl: vi.fn(() => "https://child.com/final"),
+      getTabTitle: vi.fn(() => "Redirected product"),
+      isTabLoading: vi.fn(() => false),
+    });
+    const { tabId } = await createParentTab(ctx);
+    const first = ctx.commands.send(SUB_TABS_OPEN, {
+      parentTabId: tabId,
+      url: "https://first.com",
+    });
+    await vi.waitFor(() => expect(ctx.platform.showSubTabWindow).toHaveBeenCalled());
+    const open = vi.mocked(ctx.platform.onWindowOpen).mock.calls[0]?.[0];
+    open?.("https://child.com/redirect", tabId, "foreground-tab")?.onCreated("redirected" as TabId);
+    finishEnter();
+    await first;
+    await vi.waitFor(async () => {
+      expect(await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: tabId })).toMatchObject([
+        {},
+        {
+          id: "redirected",
+          url: "https://child.com/final",
+          title: "Redirected product",
+          loading: false,
+        },
+      ]);
+    });
+  });
+
+  it("adopts a native background view once and leaves explicit popup windows native", async () => {
+    const ctx = setup();
+    const { tabId } = await createParentTab(ctx);
+    vi.mocked(ctx.platform.createTab).mockClear();
+    const open = vi.mocked(ctx.platform.onWindowOpen).mock.calls[0]?.[0];
+    const route = open?.("https://child.com", tabId, "background-tab");
+    const nativeId = "native-background" as TabId;
+    route?.onCreated(nativeId);
+    await vi.waitFor(async () => {
+      expect(await ctx.commands.send(TABS_GET, { tabId: nativeId })).toMatchObject({
+        id: nativeId,
+      });
+    });
+    expect(ctx.getActiveTabId()).toBe(tabId);
+    expect(ctx.platform.createTab).not.toHaveBeenCalled();
+    expect(open?.("https://auth.com", tabId, "new-window")).toBeUndefined();
+  });
 });
 
 describe("interrupted sub-tab transitions", () => {
@@ -860,12 +932,11 @@ describe("parent close with pending or prevented child destruction", () => {
     const openWindow = vi.mocked(ctx.platform.onWindowOpen).mock.calls[0]?.[0];
     expect(openWindow).toBeDefined();
     for (let attempt = 0; attempt < 2; attempt++) {
-      openWindow?.("https://nested.com", child, "foreground-tab");
-      expect(send).toHaveBeenLastCalledWith(SUB_TABS_OPEN, {
-        parentTabId: tabId,
-        url: "https://nested.com",
-      });
-      await expect(send.mock.results.at(-1)?.value).rejects.toThrow("Parent tab was closed");
+      const route = openWindow?.("https://nested.com", child, "foreground-tab");
+      expect(route).toBeDefined();
+      const rejectedId = `rejected-${attempt}` as TabId;
+      route?.onCreated(rejectedId);
+      await vi.waitFor(() => expect(ctx.platform.closeTab).toHaveBeenCalledWith(rejectedId));
     }
     expect(ctx.platform.createTab).toHaveBeenCalledTimes(2);
 
@@ -886,12 +957,14 @@ describe("parent close with pending or prevented child destruction", () => {
     });
     expect(send.mock.calls.filter(([name]) => name === TABS_ADOPT)).toHaveLength(2);
     // After recovery, window-open resolves to the surviving standalone child.
-    openWindow?.("https://nested.com", child, "foreground-tab");
-    expect(send).toHaveBeenLastCalledWith(SUB_TABS_OPEN, {
-      parentTabId: child,
-      url: "https://nested.com",
+    const route = openWindow?.("https://nested.com", child, "foreground-tab");
+    const nestedId = "native-nested" as TabId;
+    route?.onCreated(nestedId);
+    await vi.waitFor(async () => {
+      expect(await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: child })).toMatchObject([
+        { id: nestedId, parentTabId: child, url: `https://example.com/${nestedId}` },
+      ]);
     });
-    await expect(send.mock.results.at(-1)?.value).resolves.toBeDefined();
   });
 });
 

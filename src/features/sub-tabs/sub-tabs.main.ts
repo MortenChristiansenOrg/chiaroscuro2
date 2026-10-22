@@ -13,6 +13,7 @@ import {
   TABS_ACTIVATE,
   TABS_ACTIVATED,
   TABS_ADOPT,
+  TABS_CLOSE,
   TABS_CLOSED,
   TABS_CONTENT_BOUNDS_CHANGED,
 } from "../tabs/tabs.shared";
@@ -358,37 +359,71 @@ export default defineFeature<Deps>({
       }
     });
 
+    function nativeTabClosed(tabId: TabId, parentTabId?: TabId): void {
+      const closeRegularTab = () => commands.send(TABS_CLOSE, { tabId });
+      const cleanup = parentTabId
+        ? transition(parentTabId, async () => {
+            // Promotion may have transferred ownership while this callback was queued.
+            if (getTab(tabId)) {
+              await closeRegularTab();
+              return;
+            }
+            tabScope.cleanup(tabId);
+            pendingRecovery.delete(tabId);
+            removeFromStack(parentTabId, tabId);
+            events.emit(SUB_TABS_CLOSED, { parentTabId, subTabId: tabId });
+            if (getActiveTabId() === parentTabId) {
+              if (topSubTab(parentTabId)) showTopSubTab(parentTabId);
+              else {
+                platform.hideSubTabWindowInstant();
+                enableParentInput(parentTabId);
+                platform.returnFocusFromSubTabWindow(parentTabId);
+              }
+            }
+            emitStackChanged(parentTabId);
+          })
+        : closeRegularTab();
+      cleanup.catch(logError("sub-tabs", "remove script-closed tab"));
+    }
+
     // ── Intercept window-open ──────────────────────────────────────
     platform.onWindowOpen((url, sourceTabId, disposition) => {
-      // Ctrl+click / middle-click → new standalone tab
+      const windowId = getActiveWindowId();
+      if (!windowId) return undefined;
       if (disposition === "background-tab") {
-        commands
-          .send("tabs:create", { url, activate: false })
-          .catch(logError("sub-tabs", "create standalone tab from ctrl+click"));
-        return true;
+        // Ctrl+click / middle-click: adopt the native view as a background tab.
+        return {
+          windowId,
+          onClosed: (tabId) => nativeTabClosed(tabId),
+          onCreated: (tabId) => {
+            commands.send(TABS_ADOPT, { tabId, activate: false }).catch(async (error) => {
+              await platform.closeTab(tabId);
+              logError("sub-tabs", "adopt background window-open")(error);
+            });
+          },
+        };
       }
-
-      // target="_blank" link clicks → sub-tab
       if (disposition === "foreground-tab") {
-        const windowId = getActiveWindowId();
-        if (!windowId) return false;
-
         const parentTabId = resolveParent(sourceTabId, stacks);
-        commands
-          .send(SUB_TABS_OPEN, { parentTabId, url })
-          .catch(logError("sub-tabs", "open sub-tab from window-open"));
-        return true;
+        return {
+          windowId,
+          onClosed: (tabId) => nativeTabClosed(tabId, parentTabId),
+          onCreated: (tabId) => {
+            openSubTab({ parentTabId, url }, tabId).catch(async (error) => {
+              await platform.closeTab(tabId);
+              logError("sub-tabs", "open sub-tab from window-open")(error);
+            });
+          },
+        };
       }
-
-      // window.open() calls (OAuth popups, payment windows, etc.) →
-      // fall through to create a real BrowserWindow so window.opener works
-      return false;
+      // Explicit popup windows retain the native BrowserWindow path for OAuth, etc.
+      return undefined;
     });
 
     // ── Command handlers ───────────────────────────────────────────
 
-    commands.handle(SUB_TABS_OPEN, (payload) =>
-      transition(payload.parentTabId, async () => {
+    function openSubTab(payload: { parentTabId: TabId; url: string }, existingTabId?: TabId) {
+      return transition(payload.parentTabId, async () => {
         const { parentTabId, url } = payload;
         const windowId = getActiveWindowId();
         if (!windowId) throw new Error("No active window");
@@ -400,7 +435,7 @@ export default defineFeature<Deps>({
         }
 
         if (closedParents.has(parentTabId)) throw new Error("Parent tab was closed");
-        const subTabId = await platform.createTab(windowId, url);
+        const subTabId = existingTabId ?? (await platform.createTab(windowId, url));
         if (closedParents.has(parentTabId)) {
           await platform.closeTab(subTabId);
           throw new Error("Parent tab was closed");
@@ -427,6 +462,13 @@ export default defineFeature<Deps>({
 
         stack.push(subTab);
         attachSubTabListeners(subTabId, parentTabId);
+        if (existingTabId) {
+          // A native guest can finish (or redirect) while an earlier transition runs.
+          // Subscribe first, then reconcile the state whose events we may have missed.
+          subTab.url = platform.getTabUrl(subTabId) ?? url;
+          subTab.title = platform.getTabTitle(subTabId) ?? subTab.url;
+          subTab.loading = platform.isTabLoading(subTabId);
+        }
 
         const fb = contentBounds.width > 0 ? computeFrameBounds(contentBounds) : null;
         const cfb = contentBounds.width > 0 ? computeChildFrameBounds(contentBounds) : null;
@@ -453,8 +495,9 @@ export default defineFeature<Deps>({
         emitStackChanged(parentTabId);
 
         return subTabId;
-      }),
-    );
+      });
+    }
+    commands.handle(SUB_TABS_OPEN, (payload) => openSubTab(payload));
 
     commands.handle(SUB_TABS_CLOSE, (payload) =>
       transition(payload.parentTabId, async () => {

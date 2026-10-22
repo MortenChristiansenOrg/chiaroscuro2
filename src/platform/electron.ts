@@ -53,12 +53,18 @@ import {
 } from "./quit-confirmation";
 import { TabBoundsAnimation } from "./tab-bounds-animation";
 import { insertTabCss, removeTabCss } from "./tab-css";
-import { closeTabContents, closeTabContentsAsking, createTabView } from "./tab-view";
+import {
+  closeTabContents,
+  closeTabContentsAsking,
+  createTabView,
+  type TabWindowOpenOptions,
+} from "./tab-view";
 import type {
   ExtensionTabActions,
   GoBack as GoBackFromPage,
   Platform,
   PlatformDownload,
+  WindowOpenTarget,
 } from "./types";
 import { isAllowedNavigation, isAllowedUrl } from "./url-policy";
 import { runWebsiteScript } from "./website-script";
@@ -537,7 +543,7 @@ export class ElectronPlatform implements Platform {
   private zoomIpcHooked = false;
   private protocolRequestCallback: ((url: string, origin: string) => void) | undefined;
   private windowOpenCallback:
-    | ((url: string, sourceTabId: TabId, disposition: string) => boolean)
+    | ((url: string, sourceTabId: TabId, disposition: string) => WindowOpenTarget | undefined)
     | undefined;
   private navigationBlockCallback:
     | ((
@@ -677,6 +683,7 @@ export class ElectronPlatform implements Platform {
     url: string,
     existingTabId?: TabId,
     options?: { lazy?: boolean; cloneFrom?: TabId },
+    windowOpenOptions?: TabWindowOpenOptions,
   ): TabId {
     const win = this.getWin(windowId);
     if (!win) throw new Error("No window found");
@@ -689,7 +696,7 @@ export class ElectronPlatform implements Platform {
     // Prepare identity before construction; clones retain their source session.
     this.prepareSession(source?.session ?? session.defaultSession);
     const tabId = existingTabId ?? (crypto.randomUUID() as TabId);
-    const view = createTabView(source);
+    const view = createTabView(source, windowOpenOptions);
 
     // Match the CSS border-radius of the content area (--radius = 0.5rem = 8px)
     view.setBorderRadius(8);
@@ -703,7 +710,7 @@ export class ElectronPlatform implements Platform {
     // Hide initially — caller will activate
     view.setBounds({ x: 0, y: 0, width: 0, height: 0 });
 
-    view.webContents.setWindowOpenHandler(({ url, disposition }) => {
+    view.webContents.setWindowOpenHandler(({ url, disposition, referrer, postBody }) => {
       // Check per-tab navigation blocking for new tabs/windows
       if (this.navigationBlockCallback) {
         const currentUrl = view.webContents.getURL();
@@ -718,8 +725,52 @@ export class ElectronPlatform implements Platform {
 
       if (isAllowedNavigation(url, view.webContents.getURL())) {
         // Let registered callback handle it (sub-tabs for links, etc.)
-        if (this.windowOpenCallback?.(url, tabId, disposition)) {
-          return { action: "deny" as const };
+        const target = this.windowOpenCallback?.(url, tabId, disposition);
+        if (target) {
+          // Denying after creating our own view makes window.open() return null.
+          // Sites then take their blocked-popup fallback and navigate a second time.
+          return {
+            action: "allow" as const,
+            outlivesOpener: true,
+            createWindow: (options: TabWindowOpenOptions) => {
+              // Reuse Chromium's guest so window.open receives its actual WindowProxy.
+              const openedTabId = this.createNativeTab(
+                target.windowId,
+                url,
+                undefined,
+                { lazy: true },
+                options,
+              );
+              target.onCreated(openedTabId);
+              const openedView = this.views.get(openedTabId);
+              if (!openedView) throw new Error("Missing window-open view");
+              // A page can close its WindowProxy directly. Remove its native view before
+              // Electron destroys it, then let its current feature owner remove metadata.
+              // Electron emits this internal event before destruction but omits its type.
+              const nativeEvents: NodeJS.EventEmitter = openedView.webContents;
+              nativeEvents.on("close", () => {
+                if (this.closingTabs.has(openedTabId) || this.quitConfirmation.asking) return;
+                if (this.removeClosedView(openedTabId, openedView)) {
+                  this.tabSequence.delete(openedTabId);
+                  this.tabListeners.delete(openedTabId);
+                  target.onClosed(openedTabId);
+                }
+              });
+              // Links without an opener (e.g. rel=noopener) have no guest to navigate.
+              if (!options.webContents) {
+                void openedView.webContents
+                  .loadURL(url, {
+                    httpReferrer: referrer,
+                    ...(postBody && {
+                      postData: postBody.data,
+                      extraHeaders: `content-type: ${postBody.contentType}${postBody.boundary ? `; boundary=${postBody.boundary}` : ""}`,
+                    }),
+                  })
+                  .catch(logError("platform", "load window-open link"));
+              }
+              return openedView.webContents;
+            },
+          };
         }
         // Fallback: open as a real popup window so window.opener works
         // (needed for OAuth flows, payment windows, etc.)
@@ -2330,7 +2381,11 @@ export class ElectronPlatform implements Platform {
   // ── Protocol navigation ─────────────────────────────────────────
 
   onWindowOpen(
-    callback: (url: string, sourceTabId: TabId, disposition: string) => boolean,
+    callback: (
+      url: string,
+      sourceTabId: TabId,
+      disposition: string,
+    ) => WindowOpenTarget | undefined,
   ): () => void {
     this.windowOpenCallback = callback;
     return () => {
