@@ -66,6 +66,26 @@ describe("tab preload", () => {
   });
 });
 
+describe("window-open tab initialization", () => {
+  it("retains Chromium's guest and inherited preferences with the tab preload and sandbox", () => {
+    const guest = { setZoomMode: vi.fn() } as unknown as Electron.WebContents;
+    const view = createTabView(undefined, {
+      webContents: guest,
+      webPreferences: { partition: "persist:panel", spellcheck: false },
+    }) as unknown as { webContents: unknown; options: { webPreferences: Record<string, unknown> } };
+    expect(view.webContents).toBe(guest);
+    expect(view.options.webPreferences).toMatchObject({
+      partition: "persist:panel",
+      spellcheck: false,
+      sandbox: true,
+      contextIsolation: true,
+      nodeIntegration: false,
+      webSecurity: true,
+    });
+    expect(String(view.options.webPreferences.preload)).toMatch(/preload[\\/]tab\.js$/);
+  });
+});
+
 describe("native tab close completion", () => {
   const stay = () => false;
   function fixture() {

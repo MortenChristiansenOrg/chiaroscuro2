@@ -87,6 +87,15 @@
   listeners never run, and a second signal kills the process.
 - Keyboard focus: outside macOS, Electron focuses the window's own (shell) WebContents whenever the window is activated. `WindowContentFocus` (`src/platform/window-focus.ts`) remembers which shown page had focus when the window was deactivated and focuses it again, so a page input stays typeable after switching to another app or closing the command palette. A click or touch that activates the window keeps the focus it gives (#114). Sub-tabs are shown in a child window that can be activated so their pages can take keyboard focus (#124). It has its own `WindowContentFocus`; `returnFocusFromSubTabWindow` moves focus back to the browser window's page when the last sub-tab closes. Its own contents only frame the sub-tab page, so activating it returns focus to the page rather than the frame: Electron can report the frame's focus on an activation before the window's earlier blur. An activation that ends before its focus event runs leaves the page to restore for the next one. When the browser window is activated while a sub-tab page had focus, focus moves on to the sub-tab window unless a click or touch on the browser window activated it (`ActivationOrigin`, `src/platform/window-activation.ts`, #131). On Windows, `WM_ACTIVATE`'s `WA_CLICKACTIVE` tells, before the focus event; `WM_MOUSEACTIVATE` does not reach the browser window because Chromium's child window under the pointer handles it. Elsewhere a press in the browser window's contents within 100 ms of its activation counts as the click.
 - Web tabs use `setZoomMode("isolated")`: zoom belongs to each WebContents, including sub-tabs and adopted contents, while cookies/session sharing is unchanged. Keyboard zoom targets the topmost sub-tab when open. PDF reader zoom is independent.
+- Window-open routing accepts native creation through Electron's `createWindow` callback
+  and adopts the resulting view as a sub-tab (foreground) or standalone tab (background).
+  Reuse the supplied guest WebContents when present, including its opener and session;
+  links without a guest are loaded once with their referrer and POST data. Returning
+  `deny` after creating an unrelated view makes `window.open()` return `null`, so
+  blocked-popup fallbacks can navigate the parent to the same destination (#165).
+  Explicit popup dispositions keep the BrowserWindow path. Browser-owned views outlive
+  their opener; the tabs/sub-tabs features own their close and promotion lifecycle,
+  including removing native views and metadata when a script calls `window.close()`.
 - Multi-window support from day 1
 - **Per-tab session isolation**: Use `session.fromPartition('persist:tab-{id}')` for isolated tabs
   - Default: shared session

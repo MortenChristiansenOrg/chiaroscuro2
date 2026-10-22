@@ -74,6 +74,71 @@ export async function startSite(onRequest?: (request: http.IncomingMessage) => v
         <script>document.querySelector('#shadow-host').attachShadow({mode:'open'}).innerHTML='<div style="position:fixed;inset:160px 0 auto 0;height:40px;app-region:drag"></div>'</script></html>`);
       return;
     }
+    if (url.pathname === "/window-open-panel") {
+      response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      const panelOrigin = `http://localhost:${server.address() && (server.address() as AddressInfo).port}`;
+      response.end(
+        `<!doctype html><title>Product panel host</title><h1>Product panel</h1><iframe title="Product panel" src="${panelOrigin}/window-open" style="width:600px;height:400px"></iframe>`,
+      );
+      return;
+    }
+    if (url.pathname === "/nested-opener") {
+      response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      response.end(
+        `<!doctype html><title>Nested product</title><script>window.open('/nested-destination', '_blank');</script>`,
+      );
+      return;
+    }
+    if (url.pathname === "/redirect-destination") {
+      response.writeHead(302, { Location: "/final-destination" });
+      response.end();
+      return;
+    }
+    if (url.pathname === "/posted-destination") {
+      let body = "";
+      request.on("data", (chunk) => {
+        body += chunk;
+      });
+      request.on("end", () => {
+        response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        response.end(
+          `<!doctype html><title>Form destination</title><output>${new URLSearchParams(body).get("message") === "product-form" ? "product-form" : "missing"}</output>`,
+        );
+      });
+      return;
+    }
+    if (url.pathname === "/window-open") {
+      response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      response.end(`<!doctype html><html lang="en"><title>Window-open fixture</title>
+        <h1>Product navigation</h1><a href="/destination" id="product">Scripted product link</a><output id="open-result"></output>
+        <a href="/plain-destination" target="_blank" rel="noopener">Plain product link</a>
+        <button id="nested">Open nested products</button>
+        <button id="rapid">Open two products</button>
+        <button id="deferred">Open blank then navigate</button>
+        <form action="/posted-destination" method="post" target="_blank"><input name="message" value="product-form" type="hidden"><button>Submit product form</button></form>
+        <script>
+        document.querySelector('#nested').onclick = () => {
+          window.open('/first-destination', '_blank');
+          window.open('/nested-opener', '_blank');
+        };
+        document.querySelector('#rapid').onclick = () => {
+          window.open('/first-destination', '_blank');
+          window.open('/redirect-destination', '_blank');
+        };
+        document.querySelector('#deferred').onclick = () => {
+          const opened = window.open('', '_blank');
+          document.querySelector('#open-result').textContent = opened ? 'opened' : 'blocked';
+          if (opened) opened.location.href = '/deferred-destination';
+        };
+        document.querySelector('#product').onclick = (event) => {
+          event.preventDefault();
+          const opened = window.open(event.currentTarget.href, '_blank');
+          document.querySelector('#open-result').textContent = opened ? 'opened' : 'blocked';
+          if (!opened) location.href = event.currentTarget.href;
+        };
+        </script></html>`);
+      return;
+    }
     if (url.pathname === "/failure") {
       response.writeHead(503);
       response.end("Intentional fixture failure");

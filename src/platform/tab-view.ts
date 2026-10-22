@@ -2,6 +2,11 @@ import path from "node:path";
 import { type WebContents, WebContentsView, type WebPreferences } from "electron";
 import { StayedOnPage } from "./leave-prompt";
 
+// Electron passes the renderer-created guest at runtime but omits it from its public type.
+export type TabWindowOpenOptions = Electron.BrowserWindowConstructorOptions & {
+  webContents?: WebContents;
+};
+
 const TAB_PRELOAD = path.join(__dirname, "../preload/tab.js");
 
 /** The preferences clone() copies. Electron exposes this accessor but does not type it. */
@@ -12,7 +17,10 @@ function lastWebPreferences(contents: WebContents): WebPreferences | null {
 }
 
 /** Construct normal and duplicated tabs without replacing a clone's session or preferences. */
-export function createTabView(source?: WebContents): WebContentsView {
+export function createTabView(
+  source?: WebContents,
+  windowOpenOptions?: TabWindowOpenOptions,
+): WebContentsView {
   const view = source
     ? new WebContentsView({
         webContents: source.clone(),
@@ -21,7 +29,9 @@ export function createTabView(source?: WebContents): WebContentsView {
         webPreferences: { ...lastWebPreferences(source), preload: TAB_PRELOAD },
       })
     : new WebContentsView({
+        ...(windowOpenOptions?.webContents && { webContents: windowOpenOptions.webContents }),
         webPreferences: {
+          ...windowOpenOptions?.webPreferences,
           sandbox: true,
           contextIsolation: true,
           nodeIntegration: false,
