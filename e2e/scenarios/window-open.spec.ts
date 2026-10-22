@@ -1,3 +1,4 @@
+import { answerLeavePrompts, leavePrompts, warnBeforeUnload } from "../automation/leave-prompt";
 import { startSite } from "../automation/site";
 import { expect, test } from "../fixtures/electron-app";
 import { VerificationPage } from "../pages/verification.page";
@@ -140,4 +141,56 @@ test("a promoted script-opened child closes through its current tab owner", asyn
     .poll(async () => (await session.targets()).some((t) => t.id === target.id))
     .toBe(false);
   await expect.poll(() => session.command("tabs:get", { tabId: target.tabId })).toBeUndefined();
+});
+
+test("nested opens from a pending child keep the regular parent and close with it", async ({
+  appSession: session,
+}) => {
+  const parent = await VerificationPage.navigate(session, `${site.url}/window-open`);
+  const root = await session.target((t) => t.kind === "tab" && t.url === `${site.url}/window-open`);
+  await parent.page.getByRole("button", { name: "Open nested products" }).click();
+  const nested = await session.target(
+    (t) => t.kind === "sub-tab" && t.url === `${site.url}/nested-destination`,
+  );
+  expect(nested.parentId).toBe(root.id);
+  await expect
+    .poll(() => session.command("sub-tabs:get-stack", { parentTabId: root.tabId }))
+    .toHaveLength(3);
+  await session.command("tabs:close", { tabId: root.tabId });
+  await expect
+    .poll(async () => (await session.targets()).filter((t) => t.kind === "sub-tab"))
+    .toEqual([]);
+});
+
+test("a script-closed child is removed while another page cancels quit", async ({
+  appSession: session,
+}) => {
+  const parent = await VerificationPage.navigate(session, `${site.url}/window-open`);
+  const root = await session.target((t) => t.kind === "tab" && t.url === `${site.url}/window-open`);
+  await parent.page.getByRole("button", { name: "Open blank then navigate" }).click();
+  const child = await session.target(
+    (t) => t.kind === "sub-tab" && t.url === `${site.url}/deferred-destination`,
+  );
+  const blocker = await VerificationPage.navigate(session, `${site.url}/quit-blocker`);
+  await blocker.submit("unsaved changes");
+  await warnBeforeUnload(blocker.page);
+  await answerLeavePrompts(session.app, [false]);
+  try {
+    await session.app.evaluate(({ app, webContents }, childId) => {
+      app.once("before-quit", () => {
+        void webContents.fromId(childId)?.executeJavaScript("window.close()");
+      });
+      app.quit();
+    }, child.webContentsId);
+    await expect.poll(() => leavePrompts(session.app)).toHaveLength(1);
+    await expect
+      .poll(async () => (await session.targets()).some((t) => t.id === child.id))
+      .toBe(false);
+    await expect
+      .poll(() => session.command("sub-tabs:get-stack", { parentTabId: root.tabId }))
+      .toEqual([]);
+    await expect(blocker.message).toHaveValue("unsaved changes");
+  } finally {
+    await answerLeavePrompts(session.app, [true]);
+  }
 });

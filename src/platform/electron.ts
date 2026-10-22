@@ -482,6 +482,7 @@ export class ElectronPlatform implements Platform {
   private unloadedForQuit = new Map<TabId, { url: string }>();
   /** Tabs being closed for good; quitting must not restore them. */
   private closingTabs = new Set<TabId>();
+  private unloadingForQuit = new WeakSet<Electron.WebContents>();
   /** When each tab first got a page, kept when a cancelled quit gives it a new one. */
   private tabSequence = new Map<TabId, number>();
   private lastTabSequence = 0;
@@ -747,9 +748,11 @@ export class ElectronPlatform implements Platform {
               // A page can close its WindowProxy directly. Remove its native view before
               // Electron destroys it, then let its current feature owner remove metadata.
               // Electron emits this internal event before destruction but omits its type.
-              const nativeEvents: NodeJS.EventEmitter = openedView.webContents;
+              const openedContents = openedView.webContents;
+              const nativeEvents: NodeJS.EventEmitter = openedContents;
               nativeEvents.on("close", () => {
-                if (this.closingTabs.has(openedTabId) || this.quitConfirmation.asking) return;
+                if (this.closingTabs.has(openedTabId) || this.unloadingForQuit.has(openedContents))
+                  return;
                 if (this.removeClosedView(openedTabId, openedView)) {
                   this.tabSequence.delete(openedTabId);
                   this.tabListeners.delete(openedTabId);
@@ -1179,28 +1182,37 @@ export class ElectronPlatform implements Platform {
     answers: QuitAnswers<TabId | BrowserWindow>,
     showBeforeAsking: ShowBeforeAskingOptions,
   ): Promise<void> {
+    // The page list was captured before asynchronous prompts; a script may have closed it.
+    if (this.views.get(tabId) !== view) return;
     const contents = view.webContents;
+    if (!contents || contents.isDestroyed()) return;
     const url = contents.getURL();
-    await closeShowingWarning(
-      {
-        close: (leave) => closeTabContents(contents, leave, { asks: false }),
-        // The quit shows the next page, or the page stayed on, so it does not go back.
-        show: async () => {
-          await this.showTabToAsk(tabId, contents);
-          return undefined;
+    this.unloadingForQuit.add(contents);
+    try {
+      await closeShowingWarning(
+        {
+          close: (leave) => closeTabContents(contents, leave, { asks: false }),
+          // The quit shows the next page, or the page stayed on, so it does not go back.
+          show: async () => {
+            await this.showTabToAsk(tabId, contents);
+            return undefined;
+          },
+          ask: () =>
+            answers.ask(contents, tabId, () => confirmLeave(this.getWin(), pageName(contents))),
+          answered: () => answers.answer(contents),
+          closed: () => contents.isDestroyed(),
         },
-        ask: () =>
-          answers.ask(contents, tabId, () => confirmLeave(this.getWin(), pageName(contents))),
-        answered: () => answers.answer(contents),
-        closed: () => contents.isDestroyed(),
-      },
-      showBeforeAsking,
-    );
-    // A tab the user closed at the same time is gone for good.
-    if (this.closingTabs.has(tabId) || !this.removeClosedView(tabId, view)) return;
-    this.unloadedForQuit.set(tabId, { url });
-    // The page took longer to close than quitting waited, and the user has since stayed.
-    if (!this.quitConfirmation.settled && !this.quitConfirmation.asking) this.restoreUnloadedTabs();
+        showBeforeAsking,
+      );
+      // A tab the user closed at the same time is gone for good.
+      if (this.closingTabs.has(tabId) || !this.removeClosedView(tabId, view)) return;
+      this.unloadedForQuit.set(tabId, { url });
+      // The page took longer to close than quitting waited, and the user has since stayed.
+      if (!this.quitConfirmation.settled && !this.quitConfirmation.asking)
+        this.restoreUnloadedTabs();
+    } finally {
+      this.unloadingForQuit.delete(contents);
+    }
   }
 
   /**

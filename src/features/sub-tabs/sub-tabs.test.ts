@@ -652,6 +652,40 @@ describe("window-open interception", () => {
     });
   });
 
+  it("routes nested opens from a native child whose adoption is still queued", async () => {
+    let finishEnter!: () => void;
+    const ctx = setup({
+      showSubTabWindow: vi.fn(
+        () =>
+          new Promise<void>((resolve) => {
+            finishEnter = resolve;
+          }),
+      ),
+    });
+    const { tabId } = await createParentTab(ctx);
+    const first = ctx.commands.send(SUB_TABS_OPEN, {
+      parentTabId: tabId,
+      url: "https://first.com",
+    });
+    await vi.waitFor(() => expect(ctx.platform.showSubTabWindow).toHaveBeenCalled());
+    const open = vi.mocked(ctx.platform.onWindowOpen).mock.calls[0]?.[0];
+    const pendingId = "pending-child" as TabId;
+    open?.("https://pending.com", tabId, "foreground-tab")?.onCreated(pendingId);
+    open?.("https://nested.com", pendingId, "foreground-tab")?.onCreated("nested-child" as TabId);
+    finishEnter();
+    await first;
+    await vi.waitFor(async () => {
+      expect(await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: tabId })).toMatchObject([
+        {},
+        { id: pendingId },
+        { id: "nested-child", parentTabId: tabId },
+      ]);
+      expect(await ctx.commands.send(SUB_TABS_GET_STACK, { parentTabId: pendingId })).toEqual([]);
+    });
+    await ctx.commands.send(TABS_CLOSE, { tabId });
+    expect(ctx.platform.closeTab).toHaveBeenCalledWith("nested-child");
+  });
+
   it("adopts a native background view once and leaves explicit popup windows native", async () => {
     const ctx = setup();
     const { tabId } = await createParentTab(ctx);

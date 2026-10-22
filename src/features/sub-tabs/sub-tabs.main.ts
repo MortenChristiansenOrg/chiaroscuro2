@@ -130,6 +130,8 @@ export default defineFeature<Deps>({
     const stacks = new Map<TabId, SubTab[]>();
     // Keep open/close/promote mutations ordered while their animations yield.
     const transitions = new Map<TabId, Promise<unknown>>();
+    // Native guests can open more windows before their queued adoption starts.
+    const pendingParents = new Map<TabId, TabId>();
     const closedParents = new Set<TabId>();
     const pendingRecovery = new Map<TabId, { parentTabId: TabId; activate: boolean }>();
     function transition<T>(parentTabId: TabId, action: () => Promise<T>): Promise<T> {
@@ -143,6 +145,7 @@ export default defineFeature<Deps>({
           // parent guarded until every child has closed or recovered.
           if (
             !stacks.get(parentTabId)?.length &&
+            ![...pendingParents.values()].includes(parentTabId) &&
             ![...pendingRecovery.values()].some((entry) => entry.parentTabId === parentTabId)
           ) {
             closedParents.delete(parentTabId);
@@ -404,11 +407,12 @@ export default defineFeature<Deps>({
         };
       }
       if (disposition === "foreground-tab") {
-        const parentTabId = resolveParent(sourceTabId, stacks);
+        const parentTabId = pendingParents.get(sourceTabId) ?? resolveParent(sourceTabId, stacks);
         return {
           windowId,
           onClosed: (tabId) => nativeTabClosed(tabId, parentTabId),
           onCreated: (tabId) => {
+            pendingParents.set(tabId, parentTabId);
             openSubTab({ parentTabId, url }, tabId).catch(async (error) => {
               await platform.closeTab(tabId);
               logError("sub-tabs", "open sub-tab from window-open")(error);
@@ -425,6 +429,7 @@ export default defineFeature<Deps>({
     function openSubTab(payload: { parentTabId: TabId; url: string }, existingTabId?: TabId) {
       return transition(payload.parentTabId, async () => {
         const { parentTabId, url } = payload;
+        if (existingTabId) pendingParents.delete(existingTabId);
         const windowId = getActiveWindowId();
         if (!windowId) throw new Error("No active window");
 

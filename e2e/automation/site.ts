@@ -82,6 +82,13 @@ export async function startSite(onRequest?: (request: http.IncomingMessage) => v
       );
       return;
     }
+    if (url.pathname === "/nested-opener") {
+      response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+      response.end(
+        `<!doctype html><title>Nested product</title><script>window.open('/nested-destination', '_blank');</script>`,
+      );
+      return;
+    }
     if (url.pathname === "/redirect-destination") {
       response.writeHead(302, { Location: "/final-destination" });
       response.end();
@@ -105,10 +112,15 @@ export async function startSite(onRequest?: (request: http.IncomingMessage) => v
       response.end(`<!doctype html><html lang="en"><title>Window-open fixture</title>
         <h1>Product navigation</h1><a href="/destination" id="product">Scripted product link</a><output id="open-result"></output>
         <a href="/plain-destination" target="_blank" rel="noopener">Plain product link</a>
+        <button id="nested">Open nested products</button>
         <button id="rapid">Open two products</button>
         <button id="deferred">Open blank then navigate</button>
         <form action="/posted-destination" method="post" target="_blank"><input name="message" value="product-form" type="hidden"><button>Submit product form</button></form>
         <script>
+        document.querySelector('#nested').onclick = () => {
+          window.open('/first-destination', '_blank');
+          window.open('/nested-opener', '_blank');
+        };
         document.querySelector('#rapid').onclick = () => {
           window.open('/first-destination', '_blank');
           window.open('/redirect-destination', '_blank');
