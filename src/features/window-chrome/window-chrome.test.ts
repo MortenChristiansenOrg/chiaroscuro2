@@ -60,6 +60,22 @@ describe("window-chrome commands", () => {
     expect(listener).toHaveBeenCalledWith({ maximized: true });
   });
 
+  it("maximize-restore leaves full screen in one press, whatever the maximized state", async () => {
+    const { commands, platform, events } = setup({
+      isWindowFullScreen: vi.fn(() => true),
+      isWindowMaximized: vi.fn(() => true),
+    });
+    const emitted = vi.fn();
+    events.on(WINDOW_MAXIMIZED_CHANGED, emitted);
+
+    await commands.send(WINDOW_MAXIMIZE_RESTORE, undefined);
+
+    expect(platform.leaveWindowFullScreen).toHaveBeenCalledOnce();
+    expect(platform.unmaximizeWindow).not.toHaveBeenCalled();
+    expect(platform.maximizeWindow).not.toHaveBeenCalled();
+    expect(emitted).not.toHaveBeenCalled();
+  });
+
   it("maximize-restore unmaximizes when maximized", async () => {
     const { commands, events, platform } = setup({
       isWindowMaximized: vi.fn(() => true),

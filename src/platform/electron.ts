@@ -40,6 +40,7 @@ import {
   windowsWithPages,
   wrapWindowLeavePrompt,
 } from "./leave-prompt";
+import { PageFullScreen } from "./page-full-screen";
 import { PdfResponses } from "./pdf-responses";
 import { checkPermission, matchesGrantedDevice } from "./permission-check";
 import {
@@ -395,6 +396,10 @@ async function within(work: Promise<unknown>, timeoutMs: number): Promise<void> 
   }
 }
 
+/** Electron saves window state 200ms after it changes. */
+const WINDOW_STATE_SAVE_MS = 300;
+const WINDOW_LEAVE_FULL_SCREEN_MS = 2_000;
+
 export class ElectronPlatform implements Platform {
   /** Read-only native inventory shared by HTTP discovery and Electron verification. */
   getDebugTargets(): import("../features/debug-server/targets.shared").DebugTarget[] {
@@ -502,6 +507,13 @@ export class ElectronPlatform implements Platform {
   private paletteWin: BrowserWindow | null = null;
   private paletteParentListenersSet = false;
   private subTabWin: BrowserWindow | null = null;
+  private readonly pageFullScreen = new PageFullScreen<WebContentsView>(
+    () => {
+      const win = this.getWin();
+      return win && !win.isDestroyed() ? win : undefined;
+    },
+    () => this.syncSubTabWinBounds(),
+  );
   private subTabWinReady = false;
   private subTabWinParentListenersSet = false;
   private subTabWinContentBounds: Bounds | null = null;
@@ -632,6 +644,33 @@ export class ElectronPlatform implements Platform {
     return this.getWin(windowId)?.isMaximized() ?? false;
   }
 
+  isWindowFullScreen(windowId: WindowId): boolean {
+    return this.getWin(windowId)?.isFullScreen() ?? false;
+  }
+
+  async leaveWindowFullScreen(windowId: WindowId): Promise<void> {
+    this.pageFullScreen.exit();
+    this.getWin(windowId)?.setFullScreen(false);
+  }
+
+  get inPageFullScreen(): boolean {
+    return this.pageFullScreen.isActive;
+  }
+
+  /**
+   * Windows remember full screen across restarts, but the page that asked for it won't be back.
+   * Resolves once Electron has saved the state the window returned to.
+   */
+  async exitPageFullScreen(): Promise<void> {
+    this.pageFullScreen.exit();
+    const win = this.getWin();
+    const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+    // Some window managers leave full screen a moment after being asked.
+    const deadline = Date.now() + WINDOW_LEAVE_FULL_SCREEN_MS;
+    while (win && !win.isDestroyed() && win.isFullScreen() && Date.now() < deadline) await wait(50);
+    await wait(WINDOW_STATE_SAVE_MS);
+  }
+
   async focusWindow(windowId: WindowId): Promise<void> {
     this.getWin(windowId)?.focus();
   }
@@ -700,7 +739,8 @@ export class ElectronPlatform implements Platform {
     const view = createTabView(source, windowOpenOptions);
 
     // Match the CSS border-radius of the content area (--radius = 0.5rem = 8px)
-    view.setBorderRadius(8);
+    this.pageFullScreen.setBorderRadius(view, 8);
+    this.followPageFullScreen(view);
 
     this.views.set(tabId, view);
     if (!this.tabSequence.has(tabId)) this.tabSequence.set(tabId, ++this.lastTabSequence);
@@ -1242,10 +1282,33 @@ export class ElectronPlatform implements Platform {
     for (const callback of this.quitCancelledCallbacks) callback({ unloadedTabIds, stayedTabId });
   }
 
+  private followPageFullScreen(view: WebContentsView): void {
+    const contents = view.webContents;
+    contents.on("enter-html-full-screen", () => {
+      const inOverlay =
+        this.subTabWin &&
+        !this.subTabWin.isDestroyed() &&
+        this.subTabWin.contentView.children.includes(view);
+      const overlay = inOverlay ? (this.subTabWin ?? undefined) : undefined;
+      const hadFocus = overlay?.isFocused();
+      this.pageFullScreen.enter(view, {
+        overlay,
+        exitPage: () => {
+          if (contents.isDestroyed()) return;
+          contents.executeJavaScript("document.exitFullscreen()", true).catch(() => {});
+        },
+      });
+      // Making the browser window full screen activates it, and Escape must still reach the page.
+      if (overlay && hadFocus) this.contentFocus(overlay).activate(contents);
+    });
+    contents.on("leave-html-full-screen", () => this.pageFullScreen.left(view));
+  }
+
   /** Forget a view whose contents were destroyed, unless the tab already has another one. */
   private removeClosedView(tabId: TabId, view: WebContentsView): boolean {
     if (this.views.get(tabId) !== view) return false;
     this.tabBoundsAnimations.cancel(view);
+    this.pageFullScreen.closed(view);
     // Remove from whichever window owns the view (main or sub-tab child window)
     for (const win of [this.getWin(), this.subTabWin]) {
       if (!win || win.isDestroyed()) continue;
@@ -1289,18 +1352,19 @@ export class ElectronPlatform implements Platform {
     const view = this.views.get(tabId);
     if (!view) return;
     this.tabBoundsAnimations.cancel(view);
-    view.setBounds({
+    const rounded = {
       x: Math.round(bounds.x),
       y: Math.round(bounds.y),
       width: Math.round(bounds.width),
       height: Math.round(bounds.height),
-    });
+    };
+    if (!this.pageFullScreen.holdBounds(view, rounded)) view.setBounds(rounded);
   }
 
   setTabBorderRadius(tabId: TabId, radius: number): void {
     const view = this.views.get(tabId);
     if (!view) return;
-    view.setBorderRadius(Math.round(radius));
+    this.pageFullScreen.setBorderRadius(view, Math.round(radius));
   }
 
   setTabBackgroundColor(tabId: TabId, color: string): void {
@@ -1313,6 +1377,7 @@ export class ElectronPlatform implements Platform {
     const view = this.views.get(tabId);
     if (!view) return;
     this.tabBoundsAnimations.cancel(view);
+    this.pageFullScreen.exit(view);
     view.setBounds({ x: 0, y: 0, width: 0, height: 0 });
   }
 
@@ -1912,6 +1977,7 @@ export class ElectronPlatform implements Platform {
     if (!win || win.isDestroyed()) return;
 
     this.subTabWinContentBounds = contentBounds;
+    if (this.pageFullScreen.coversOverlay) return;
     const cb = win.getContentBounds();
     this.subTabWin.setBounds({
       x: Math.round(cb.x + contentBounds.x),
@@ -2031,6 +2097,7 @@ export class ElectronPlatform implements Platform {
     if (!view) return;
     this.tabBoundsAnimations.cancel(view);
     if (!this.subTabWin || this.subTabWin.isDestroyed()) return;
+    if (this.pageFullScreen.holdBounds(view, frameBounds)) return;
 
     const mainWin = this.getWin();
 
@@ -2062,7 +2129,7 @@ export class ElectronPlatform implements Platform {
       width: Math.round(frameBounds.width),
       height: Math.round(frameBounds.height),
     });
-    view.setBorderRadius(8);
+    this.pageFullScreen.setBorderRadius(view, 8);
 
     // A newly opened sub-tab takes keyboard focus from the browser, and the sub-tab shown after
     // closing a nested one takes it from the closed page. Switching tabs does not move focus,
@@ -2075,6 +2142,7 @@ export class ElectronPlatform implements Platform {
     const view = this.views.get(tabId);
     if (!view) return;
     this.tabBoundsAnimations.cancel(view);
+    this.pageFullScreen.exit(view);
 
     // Remove from child window
     if (this.subTabWin && !this.subTabWin.isDestroyed()) {
@@ -2097,13 +2165,14 @@ export class ElectronPlatform implements Platform {
   animateTabBounds(tabId: TabId, from: Bounds, to: Bounds, duration: number): Promise<void> {
     const view = this.views.get(tabId);
     if (!view) return Promise.resolve();
+    this.pageFullScreen.exit(view);
 
     const reducedMotion = systemPreferences.getAnimationSettings().prefersReducedMotion;
     return this.tabBoundsAnimations.animate(view, from, to, reducedMotion ? 0 : duration);
   }
 
   private syncSubTabWinBounds(): void {
-    if (!this.subTabWinContentBounds) return;
+    if (!this.subTabWinContentBounds || this.pageFullScreen.coversOverlay) return;
     if (!this.subTabWin || this.subTabWin.isDestroyed()) return;
     const win = this.getWin();
     if (!win || win.isDestroyed() || win.isMinimized()) return;

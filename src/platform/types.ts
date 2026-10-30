@@ -51,6 +51,8 @@ export interface Platform {
   maximizeWindow(windowId: WindowId): Promise<void>;
   unmaximizeWindow(windowId: WindowId): Promise<void>;
   isWindowMaximized(windowId: WindowId): boolean;
+  isWindowFullScreen(windowId: WindowId): boolean;
+  leaveWindowFullScreen(windowId: WindowId): Promise<void>;
   focusWindow(windowId: WindowId): Promise<void>;
   getWindowBounds(windowId: WindowId): Bounds | undefined;
   setWindowBounds(windowId: WindowId, bounds: Bounds): void;

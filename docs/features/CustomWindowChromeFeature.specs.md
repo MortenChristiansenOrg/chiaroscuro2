@@ -21,6 +21,9 @@ It also keeps the chrome UI in sync with the active tab's loading state, and all
 - The chrome must display a visible loading indicator when the active tab is loading (e.g., a spinner icon in the active tab or a progress bar in the title bar) and hide it when loading finishes.
 - Copying the current address must copy the active tab's address to the clipboard.
 - When copying an address, the copied value should omit common ad-tracking query parameters when present.
+- When a page enters full screen, for example a video, the page must fill the whole screen with no window chrome, sidebar or sub-tab frame in view. This also applies to pages in sub-tabs.
+- When a page leaves full screen, the window must return to the state it had before, maximized or normal, in one step. Switching away from the page or closing it also leaves full screen.
+- A window is never restored in page full screen after a restart. Pressing restore on a window that is in full screen for another reason returns it to its earlier state in one press.
 
 ## Workflows
 
@@ -34,6 +37,12 @@ It also keeps the chrome UI in sync with the active tab's loading state, and all
 - Click the maximize/restore control in the window chrome.
 - If the window was maximized, it returns to normal size.
 - If the window was normal size, it becomes maximized.
+
+### Watch a video in full screen
+
+- Use the page's own full screen control, for example on a video.
+- The page fills the screen and covers the taskbar.
+- Press Escape or the page's control to leave. The window and its chrome return as they were.
 
 ### Copy the current address
 
