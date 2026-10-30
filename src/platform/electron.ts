@@ -398,14 +398,18 @@ async function within(work: Promise<unknown>, timeoutMs: number): Promise<void> 
 
 /**
  * Electron reports full screen before the page has entered it, and a page can't leave what it
- * hasn't entered yet. Give up soon, so that a later request by the page isn't undone.
+ * hasn't entered yet. This checks rather than listens, because pages can stop events from
+ * spreading, and gives up soon, so that a later request by the page isn't undone.
  */
 const PAGE_FULL_SCREEN_WORLD_ID = 1_041;
 const EXIT_PAGE_FULL_SCREEN = `(() => {
   if (document.fullscreenElement) return document.exitFullscreen();
-  const exit = () => document.fullscreenElement && document.exitFullscreen();
-  document.addEventListener("fullscreenchange", exit, { once: true });
-  setTimeout(() => document.removeEventListener("fullscreenchange", exit), 1000);
+  const check = setInterval(() => {
+    if (!document.fullscreenElement) return;
+    clearInterval(check);
+    document.exitFullscreen();
+  }, 20);
+  setTimeout(() => clearInterval(check), 500);
 })()`;
 
 /** Electron saves window state 200ms after it changes. */
