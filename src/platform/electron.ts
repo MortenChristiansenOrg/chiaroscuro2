@@ -512,12 +512,9 @@ export class ElectronPlatform implements Platform {
       const win = this.getWin();
       return win && !win.isDestroyed() ? win : undefined;
     },
-    () => {
-      this.resumeSubTabWin();
-      this.syncSubTabWinBounds();
-    },
+    () => this.syncSubTabWinBounds(),
   );
-  private subTabWinSuspended = false;
+  private leavingPageFullScreen: Promise<void> | undefined;
   private subTabWinReady = false;
   private subTabWinParentListenersSet = false;
   private subTabWinContentBounds: Bounds | null = null;
@@ -1049,7 +1046,12 @@ export class ElectronPlatform implements Platform {
 
   async confirmQuit(): Promise<boolean> {
     // Every way of closing the window or quitting asks first, updates included.
-    if (this.pageFullScreen.isActive) await this.exitPageFullScreen();
+    if (this.pageFullScreen.isActive) {
+      this.leavingPageFullScreen = this.exitPageFullScreen().finally(() => {
+        this.leavingPageFullScreen = undefined;
+      });
+    }
+    await this.leavingPageFullScreen;
     return this.quitConfirmation.confirm();
   }
 
@@ -1064,6 +1066,7 @@ export class ElectronPlatform implements Platform {
 
   /** Quit without asking about unsaved changes, because the operating system ends the session. */
   skipQuitConfirmation(): void {
+    this.pageFullScreen.exit();
     this.quitConfirmation.skip();
   }
 
@@ -1302,24 +1305,10 @@ export class ElectronPlatform implements Platform {
       });
       // Making the browser window full screen activates it, and Escape must still reach the page.
       if (overlay && hadFocus) this.contentFocus(overlay).activate(contents);
-      if (!overlay) this.suspendSubTabWin();
+      // The sub-tab open over this page would cover it, and the page can't be used meanwhile.
+      if (!overlay && this.subTabWinContentBounds) this.pageFullScreen.exit(view);
     });
     contents.on("leave-html-full-screen", () => this.pageFullScreen.left(view));
-  }
-
-  /** An open sub-tab's window sits above the browser window and would cover its full screen parent. */
-  private suspendSubTabWin(): void {
-    const overlay = this.subTabWin;
-    if (!overlay || overlay.isDestroyed() || !overlay.isVisible()) return;
-    overlay.hide();
-    this.subTabWinSuspended = true;
-  }
-
-  private resumeSubTabWin(): void {
-    if (!this.subTabWinSuspended) return;
-    this.subTabWinSuspended = false;
-    const overlay = this.subTabWin;
-    if (overlay && !overlay.isDestroyed()) overlay.showInactive();
   }
 
   /** Forget a view whose contents were destroyed, unless the tab already has another one. */
@@ -2116,6 +2105,8 @@ export class ElectronPlatform implements Platform {
     this.tabBoundsAnimations.cancel(view);
     if (!this.subTabWin || this.subTabWin.isDestroyed()) return;
     if (this.pageFullScreen.holdBounds(view, frameBounds)) return;
+    // A sub-tab opening from a full screen page takes over from it.
+    this.pageFullScreen.exit();
 
     const mainWin = this.getWin();
 

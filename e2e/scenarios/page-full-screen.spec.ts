@@ -149,23 +149,34 @@ test("a full screen sub-tab covers the window and returns to its frame", async (
     .toEqual({ width: frameBefore.bounds?.width, height: frameBefore.bounds?.height });
 });
 
-test("a full screen parent is not covered by its open sub-tab", async ({ appSession: session }) => {
+test("a page under an open sub-tab can't enter full screen", async ({ appSession: session }) => {
   const parent = await VerificationPage.navigate(session, `${site.url}/parent`);
-  const parentTab = await visibleTab(session, "tab");
   await parent.subTab.click();
-  await visibleTab(session, "sub-tab");
-  const frame = () => session.target((target) => target.kind === "sub-tab-frame");
+  const child = await visibleTab(session, "sub-tab");
   await parent.page.waitForTimeout(800);
+  const before = await readWindow(session.app);
+
+  await enterFullScreen(parent.page).catch(() => {});
+  await expect
+    .poll(() => parent.page.evaluate(() => document.fullscreenElement === null))
+    .toBe(true);
+  await expect.poll(() => readWindow(session.app)).toEqual(before);
+  expect((await visibleTab(session, "sub-tab")).id).toBe(child.id);
+});
+
+test("opening a sub-tab leaves full screen", async ({ appSession: session }) => {
+  const parent = await VerificationPage.navigate(session, `${site.url}/parent`);
+  await parent.page.waitForTimeout(500);
   const before = await readWindow(session.app);
 
   await enterFullScreen(parent.page);
   await expectPageCoversWindow(session, "tab");
-  await expect.poll(async () => (await frame()).visible).toBe(false);
-
-  await pressEscape(session, parentTab.webContentsId);
-  await expect.poll(() => readWindow(session.app)).toEqual(before);
-  await expect.poll(async () => (await frame()).visible).toBe(true);
+  await parent.subTab.click();
   await visibleTab(session, "sub-tab");
+  await expect
+    .poll(() => parent.page.evaluate(() => document.fullscreenElement === null))
+    .toBe(true);
+  await expect.poll(() => readWindow(session.app)).toEqual(before);
 });
 
 test("a restart does not return to page full screen", async ({ appSession: session }) => {
