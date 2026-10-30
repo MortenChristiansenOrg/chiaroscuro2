@@ -512,8 +512,12 @@ export class ElectronPlatform implements Platform {
       const win = this.getWin();
       return win && !win.isDestroyed() ? win : undefined;
     },
-    () => this.syncSubTabWinBounds(),
+    () => {
+      this.resumeSubTabWin();
+      this.syncSubTabWinBounds();
+    },
   );
+  private subTabWinSuspended = false;
   private subTabWinReady = false;
   private subTabWinParentListenersSet = false;
   private subTabWinContentBounds: Bounds | null = null;
@@ -653,15 +657,11 @@ export class ElectronPlatform implements Platform {
     this.getWin(windowId)?.setFullScreen(false);
   }
 
-  get inPageFullScreen(): boolean {
-    return this.pageFullScreen.isActive;
-  }
-
   /**
    * Windows remember full screen across restarts, but the page that asked for it won't be back.
    * Resolves once Electron has saved the state the window returned to.
    */
-  async exitPageFullScreen(): Promise<void> {
+  private async exitPageFullScreen(): Promise<void> {
     this.pageFullScreen.exit();
     const win = this.getWin();
     const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -1047,7 +1047,9 @@ export class ElectronPlatform implements Platform {
     return this.quitConfirmation.settled;
   }
 
-  confirmQuit(): Promise<boolean> {
+  async confirmQuit(): Promise<boolean> {
+    // Every way of closing the window or quitting asks first, updates included.
+    if (this.pageFullScreen.isActive) await this.exitPageFullScreen();
     return this.quitConfirmation.confirm();
   }
 
@@ -1300,8 +1302,24 @@ export class ElectronPlatform implements Platform {
       });
       // Making the browser window full screen activates it, and Escape must still reach the page.
       if (overlay && hadFocus) this.contentFocus(overlay).activate(contents);
+      if (!overlay) this.suspendSubTabWin();
     });
     contents.on("leave-html-full-screen", () => this.pageFullScreen.left(view));
+  }
+
+  /** An open sub-tab's window sits above the browser window and would cover its full screen parent. */
+  private suspendSubTabWin(): void {
+    const overlay = this.subTabWin;
+    if (!overlay || overlay.isDestroyed() || !overlay.isVisible()) return;
+    overlay.hide();
+    this.subTabWinSuspended = true;
+  }
+
+  private resumeSubTabWin(): void {
+    if (!this.subTabWinSuspended) return;
+    this.subTabWinSuspended = false;
+    const overlay = this.subTabWin;
+    if (overlay && !overlay.isDestroyed()) overlay.showInactive();
   }
 
   /** Forget a view whose contents were destroyed, unless the tab already has another one. */

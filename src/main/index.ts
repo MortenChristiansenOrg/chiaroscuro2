@@ -307,13 +307,6 @@ function createWindow(windowBounds?: {
   // Closing the browser window asks about pages with unsaved changes first, as quitting does.
   // Staying keeps the window and all its tabs.
   win.on("close", (event) => {
-    if (platform.inPageFullScreen) {
-      event.preventDefault();
-      void platform.exitPageFullScreen().then(() => {
-        if (!win.isDestroyed()) win.close();
-      });
-      return;
-    }
     if (platform.quitConfirmed) return;
     event.preventDefault();
     void platform.confirmQuit().then((leave) => {
@@ -621,11 +614,6 @@ if (gotLock) {
   let quitting = false;
   app.on("before-quit", (event) => {
     if (quitting) return;
-    if (platform.inPageFullScreen) {
-      event.preventDefault();
-      void platform.exitPageFullScreen().then(() => app.quit());
-      return;
-    }
     // Ask about pages with unsaved changes before anything is torn down, so staying keeps the
     // browser fully working. Pages closed while asking keep their tabs, which were saved as
     // they changed, so the full tab list is restored next session either way.

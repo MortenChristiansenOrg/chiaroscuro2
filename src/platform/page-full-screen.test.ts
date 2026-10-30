@@ -149,6 +149,17 @@ describe("PageFullScreen", () => {
     expect(exitPage).not.toHaveBeenCalled();
   });
 
+  it("keeps the window full screen when a main page takes over from a sub-tab", () => {
+    const overlay = { setBounds: vi.fn() };
+    full.enter(view, { overlay, exitPage });
+    win.setFullScreen.mockClear();
+    const other = makeView();
+    full.enter(other, { exitPage });
+    expect(win.setFullScreen).not.toHaveBeenCalledWith(false);
+    expect(full.coversOverlay).toBe(false);
+    expect(other.bounds).toEqual(screenArea);
+  });
+
   it("a second page takes over from the first", () => {
     const other = makeView({ x: 1, y: 2, width: 3, height: 4 });
     full.enter(view, { exitPage });

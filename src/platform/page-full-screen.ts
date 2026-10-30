@@ -58,7 +58,8 @@ export class PageFullScreen<V extends FullScreenView> {
   /** The page entered full screen. Electron has already done so for the window that holds its view. */
   enter(view: V, options: { overlay?: FullScreenOverlay; exitPage: () => void }): void {
     if (this.active?.view === view) return;
-    this.restore();
+    // The window stays full screen for the page taking over.
+    this.restore({ keepWindow: true });
     const win = this.browserWindow();
     if (!win) return;
     const fill = () => this.fill();
@@ -124,14 +125,14 @@ export class PageFullScreen<V extends FullScreenView> {
     active.view.setBounds({ x: 0, y: 0, width: area.width, height: area.height });
   }
 
-  private restore(): void {
+  private restore({ keepWindow = false } = {}): void {
     const active = this.active;
     if (!active) return;
     this.active = undefined;
     active.stopFollowing();
     active.view.setBounds(active.bounds);
     active.view.setBorderRadius(this.radii.get(active.view) ?? DEFAULT_RADIUS);
-    if (active.overlay) this.browserWindow()?.setFullScreen(false);
+    if (active.overlay && !keepWindow) this.browserWindow()?.setFullScreen(false);
     this.onRestored();
   }
 }

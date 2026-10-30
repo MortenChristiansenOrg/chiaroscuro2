@@ -149,6 +149,25 @@ test("a full screen sub-tab covers the window and returns to its frame", async (
     .toEqual({ width: frameBefore.bounds?.width, height: frameBefore.bounds?.height });
 });
 
+test("a full screen parent is not covered by its open sub-tab", async ({ appSession: session }) => {
+  const parent = await VerificationPage.navigate(session, `${site.url}/parent`);
+  const parentTab = await visibleTab(session, "tab");
+  await parent.subTab.click();
+  await visibleTab(session, "sub-tab");
+  const frame = () => session.target((target) => target.kind === "sub-tab-frame");
+  await parent.page.waitForTimeout(800);
+  const before = await readWindow(session.app);
+
+  await enterFullScreen(parent.page);
+  await expectPageCoversWindow(session, "tab");
+  await expect.poll(async () => (await frame()).visible).toBe(false);
+
+  await pressEscape(session, parentTab.webContentsId);
+  await expect.poll(() => readWindow(session.app)).toEqual(before);
+  await expect.poll(async () => (await frame()).visible).toBe(true);
+  await visibleTab(session, "sub-tab");
+});
+
 test("a restart does not return to page full screen", async ({ appSession: session }) => {
   const { page } = await VerificationPage.navigate(session, `${site.url}/parent`);
   await enterFullScreen(page);
