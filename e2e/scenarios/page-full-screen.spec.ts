@@ -110,6 +110,24 @@ test("switching tabs and closing a tab leave full screen", async ({ appSession: 
   await expect.poll(async () => (await visibleTab(session, "tab")).id).toBe(secondTab.id);
 });
 
+test("leaving full screen doesn't run a page's replacement for exitFullscreen", async ({
+  appSession: session,
+}) => {
+  const { page } = await VerificationPage.navigate(session, `${site.url}/parent`);
+  await page.evaluate(() => {
+    document.exitFullscreen = async () => {
+      (window as unknown as { replaced: boolean }).replaced = true;
+    };
+  });
+  await enterFullScreen(page);
+  await expectPageCoversWindow(session, "tab");
+  await session.command("tabs:create", { url: `${site.url}/parent?other` });
+  await expect.poll(() => page.evaluate(() => document.fullscreenElement === null)).toBe(true);
+  expect(await page.evaluate(() => (window as unknown as { replaced?: boolean }).replaced)).toBe(
+    undefined,
+  );
+});
+
 test("a full screen sub-tab covers the window and returns to its frame", async ({
   appSession: session,
 }) => {

@@ -396,6 +396,18 @@ async function within(work: Promise<unknown>, timeoutMs: number): Promise<void> 
   }
 }
 
+/**
+ * Electron reports full screen before the page has entered it, and a page can't leave what it
+ * hasn't entered yet. Give up soon, so that a later request by the page isn't undone.
+ */
+const PAGE_FULL_SCREEN_WORLD_ID = 1_041;
+const EXIT_PAGE_FULL_SCREEN = `(() => {
+  if (document.fullscreenElement) return document.exitFullscreen();
+  const exit = () => document.fullscreenElement && document.exitFullscreen();
+  document.addEventListener("fullscreenchange", exit, { once: true });
+  setTimeout(() => document.removeEventListener("fullscreenchange", exit), 1000);
+})()`;
+
 /** Electron saves window state 200ms after it changes. */
 const WINDOW_STATE_SAVE_MS = 300;
 const WINDOW_LEAVE_FULL_SCREEN_MS = 2_000;
@@ -1300,7 +1312,12 @@ export class ElectronPlatform implements Platform {
         overlay,
         exitPage: () => {
           if (contents.isDestroyed()) return;
-          contents.executeJavaScript("document.exitFullscreen()", true).catch(() => {});
+          // Out of the page's reach: it could replace exitFullscreen with its own code otherwise.
+          contents
+            .executeJavaScriptInIsolatedWorld(PAGE_FULL_SCREEN_WORLD_ID, [
+              { code: EXIT_PAGE_FULL_SCREEN },
+            ])
+            .catch(() => {});
         },
       });
       // Making the browser window full screen activates it, and Escape must still reach the page.
