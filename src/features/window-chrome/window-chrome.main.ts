@@ -102,6 +102,11 @@ export default defineFeature<Deps>({
     commands.handle(WINDOW_MAXIMIZE_RESTORE, async () => {
       const windowId = getActiveWindowId();
       if (!windowId) return;
+      // A window restored in full screen returns to its earlier state with one press.
+      if (platform.isWindowFullScreen(windowId)) {
+        await platform.leaveWindowFullScreen(windowId);
+        return;
+      }
       if (platform.isWindowMaximized(windowId)) {
         await platform.unmaximizeWindow(windowId);
         events.emit(WINDOW_MAXIMIZED_CHANGED, { maximized: false });

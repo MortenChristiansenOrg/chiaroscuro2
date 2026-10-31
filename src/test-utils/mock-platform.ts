@@ -10,6 +10,8 @@ export function createMockPlatform(overrides: Partial<Platform> = {}): Platform 
     maximizeWindow: vi.fn(),
     unmaximizeWindow: vi.fn(),
     isWindowMaximized: vi.fn(() => false),
+    isWindowFullScreen: vi.fn(() => false),
+    leaveWindowFullScreen: vi.fn(),
     focusWindow: vi.fn(),
     getWindowBounds: vi.fn(() => ({ x: 100, y: 100, width: 1200, height: 800 })),
     setWindowBounds: vi.fn(),
