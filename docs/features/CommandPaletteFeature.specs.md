@@ -10,7 +10,8 @@ It supports:
 - entering a search query with optional bang syntax for provider selection (e.g. `!g query`, `!gh query`),
 - searching open tabs, history, and bookmarks,
 - executing quick actions (new tab, close tab, settings, etc.), and
-- opening built-in pages (e.g. `/settings`).
+- opening built-in pages (e.g. `/settings`), and
+- editing the current tab's address.
 
 This is the primary navigation interface — there is no persistent address bar.
 
@@ -28,6 +29,9 @@ This is the primary navigation interface — there is no persistent address bar.
 - Search provider syntax must support bang keys at either the start or end of the command (e.g. `!g cats` or `cats !g`).
 - If the command is a built-in page path (like `/settings`), it must open the corresponding app page.
 - The palette must show suggestions based on navigation history and open tabs as the user types.
+- Clicking the address in the title bar must open the palette on the current tab's address, all of it selected. Completing it changes the current tab's address instead of opening a new tab.
+- Leaving the palette with Escape when editing an address must change nothing. Going to the address the tab already has must also change nothing: the page does not reload.
+- Built-in pages, such as Settings or the PDF reader, have no web page to replace. Going from one to a web address, whether by editing its address or with the "current tab" modifier, opens the address in a new tab. Going to a built-in page always opens it, or switches to it when it is already open.
 - Search providers must be configurable in settings.
 - The default search provider (no bang) must be configurable, defaulting to Google.
 
@@ -52,6 +56,14 @@ This is the primary navigation interface — there is no persistent address bar.
 - While the palette is open, use the "current tab" modifier when executing.
 - Navigation happens in the current tab instead of creating a new one.
 
+### Edit the current address
+
+- Click the address in the title bar.
+- The palette opens with the current tab's address, all of it selected. For a PDF, this is the PDF's own address.
+- Type a new address or search and press Enter, or click a suggestion. The current tab goes there.
+- Press Escape to leave the tab as it was. Pressing Enter on the address the tab already has also leaves it as it was.
+- From a built-in page, the address opens in a new tab instead, and a built-in destination opens in its own tab (see Requirements).
+
 ### Use suggestions
 
 - As you type, the palette updates suggestions from:
@@ -75,9 +87,12 @@ In command palette:
 - **Escape**: Close command palette. It does nothing else, such as closing a sub-tab under the palette.
 - **Arrow Up/Down**: Navigate suggestions.
 
+When editing the current address, Enter and Ctrl-Enter both go to the address in the current tab.
+
 ### Mouse interactions
 
 - Click a suggestion to execute it.
+- Click the address in the title bar to edit it.
 
 ## Commands & Events
 
@@ -85,7 +100,8 @@ In command palette:
 
 - `command-palette:show` — Show the command palette.
 - `command-palette:hide` — Hide the command palette.
-- `command-palette:execute` — Execute a command. Payload: `{ command: string, inCurrentTab?: boolean }`.
+- `command-palette:edit-url` — Show the command palette on the active tab's address, selected, to replace it.
+- `command-palette:execute` — Execute a command. Payload: `{ command: string, inCurrentTab?: boolean, editUrl?: boolean }`. With `editUrl`, it goes to the address in the current tab, and does nothing when that is the tab's current address.
 
 ### Events
 

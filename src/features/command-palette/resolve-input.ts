@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import { BUILT_IN_PAGES } from "../../shared/built-in-pages";
+import { BUILT_IN_PAGES, isBuiltInUrl } from "../../shared/built-in-pages";
 import type { SearchProviderSchema } from "./resolve-input.contracts";
 // ── Types ───────────────────────────────────────────────────────
 
@@ -77,6 +77,16 @@ export function getBuiltInPages(): BuiltInPage[] {
 
 // ── Resolution ──────────────────────────────────────────────────
 
+/** Whether every escape in `url` is valid, as built-in pages decode their parameters. */
+function decodes(url: string): boolean {
+  try {
+    decodeURIComponent(url);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Resolve a raw command-palette input string into a typed resolution.
  * Returns the resolution type + metadata for UI feedback.
@@ -96,8 +106,10 @@ export function resolveInputDetailed(
       config.providers[0] ??
       DEFAULT_PROVIDERS[0]) as SearchProvider;
 
-  // Built-in page route
+  // Built-in page route, or a built-in page's address with its parameters (as when editing one)
   if (builtInRouteSet.has(trimmed)) return { type: "url", url: trimmed };
+  if (/^\/[^\s?]*\?\S*$/.test(trimmed) && isBuiltInUrl(trimmed) && decodes(trimmed))
+    return { type: "url", url: trimmed };
 
   // Bang at start: !g query
   const bangStartMatch = trimmed.match(/^(![\w]+)\s+(.+)/);
@@ -178,4 +190,26 @@ export function resolveInput(input: string, config: ProviderConfig = DEFAULT_CON
   const result = resolveInputDetailed(input, config);
   if (result.type === "empty") return "";
   return result.url;
+}
+
+/**
+ * The address a person edits for a tab: the PDF's own address for the PDF reader, else the
+ * tab's address.
+ */
+export function editableUrl(tabUrl: string): string {
+  if (!tabUrl.startsWith("/pdf-reader?")) return tabUrl;
+  return new URLSearchParams(tabUrl.slice(tabUrl.indexOf("?") + 1)).get("url") || tabUrl;
+}
+
+/** Whether `url` is the tab's current address, ignoring differences URL parsing removes. */
+export function isCurrentUrl(url: string, tabUrl: string): boolean {
+  const normalize = (value: string) => {
+    try {
+      return new URL(value).href;
+    } catch {
+      return value;
+    }
+  };
+  const target = normalize(url);
+  return target === normalize(tabUrl) || target === normalize(editableUrl(tabUrl));
 }

@@ -7,6 +7,7 @@ import { createMockPlatform } from "../../test-utils";
 import { TABS_UPDATED } from "../tabs/tabs.shared";
 import feature from "./command-palette.main";
 import {
+  COMMAND_PALETTE_EDIT_URL,
   COMMAND_PALETTE_EXECUTE,
   COMMAND_PALETTE_HIDDEN,
   COMMAND_PALETTE_HIDE,
@@ -28,7 +29,7 @@ type AllEvents = Parameters<typeof feature.register>[0] extends { events: EventB
 
 let tabCounter = 0;
 
-function setup(overrides: { activeTabId?: TabId | undefined } = {}) {
+function setup(overrides: { activeTabId?: TabId | undefined; tabUrl?: string } = {}) {
   tabCounter = 0;
   const commands = new CommandBus<AllCommands>();
   const events = new EventBus<AllEvents>();
@@ -48,6 +49,7 @@ function setup(overrides: { activeTabId?: TabId | undefined } = {}) {
     dataStore,
     getActiveWindowId: () => WIN_ID as WindowId | undefined,
     getActiveTabId: () => activeTabId as TabId | undefined,
+    getTabUrl: () => overrides.tabUrl,
     isPrivacyWorkspace: () => false,
   };
   feature.register(deps);
@@ -208,6 +210,112 @@ describe("command-palette commands", () => {
 
       // Empty resolves to empty URL, so hide is not called
       expect(hidden).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("EDIT_URL", () => {
+    function setupEdit(tabUrl: string) {
+      const context = setup({ tabUrl });
+      const create = vi.fn(async () => "tab-new" as TabId);
+      const navigate = vi.fn(async () => {});
+      context.commands.unhandle("tabs:create");
+      context.commands.handle("tabs:create", create);
+      context.commands.unhandle("tabs:navigate");
+      context.commands.handle("tabs:navigate", navigate);
+      return { ...context, create, navigate };
+    }
+
+    it("opens the palette on the active tab's address", async () => {
+      const { commands, events, platform } = setupEdit("https://example.com/path");
+      const shown = vi.fn();
+      events.on(COMMAND_PALETTE_SHOWN, shown);
+
+      await commands.send(COMMAND_PALETTE_EDIT_URL, undefined);
+
+      expect(platform.showCommandPalette).toHaveBeenCalledWith({
+        editUrl: "https://example.com/path",
+      });
+      expect(shown).toHaveBeenCalled();
+    });
+
+    it("opens on the PDF's address in the PDF reader", async () => {
+      const { commands, platform } = setupEdit(
+        `/pdf-reader?url=${encodeURIComponent("https://example.com/a.pdf")}`,
+      );
+      await commands.send(COMMAND_PALETTE_EDIT_URL, undefined);
+      expect(platform.showCommandPalette).toHaveBeenCalledWith({
+        editUrl: "https://example.com/a.pdf",
+      });
+    });
+
+    it("opens an empty palette when there is no active address", async () => {
+      const { commands, platform } = setup();
+      await commands.send(COMMAND_PALETTE_EDIT_URL, undefined);
+      expect(platform.showCommandPalette).toHaveBeenCalledWith(undefined);
+    });
+
+    it("navigates the current tab to a new address", async () => {
+      const { commands, create, navigate } = setupEdit("https://example.com/");
+      await commands.send(COMMAND_PALETTE_EXECUTE, { command: "example.org", editUrl: true });
+      expect(navigate).toHaveBeenCalledWith({ url: "https://example.org" });
+      expect(create).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ["https://example.com/", "https://example.com/"],
+      ["https://example.com", "https://example.com/"],
+      [" example.com ", "https://example.com/"],
+      ["/settings", "/settings"],
+      ["/domain-settings?domain=example.com", "/domain-settings?domain=example.com"],
+      [
+        "https://example.com/a.pdf",
+        `/pdf-reader?url=${encodeURIComponent("https://example.com/a.pdf")}`,
+      ],
+    ])("does nothing for the current address %j on %j", async (command, tabUrl) => {
+      const { commands, create, navigate } = setupEdit(tabUrl);
+      await commands.send(COMMAND_PALETTE_EXECUTE, { command, editUrl: true });
+      expect(navigate).not.toHaveBeenCalled();
+      expect(create).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ["/settings"],
+      [`/pdf-reader?url=${encodeURIComponent("https://example.com/a.pdf")}`],
+    ])("opens a web address from the built-in page %j in a new tab", async (tabUrl) => {
+      const { commands, create, navigate } = setupEdit(tabUrl);
+      await commands.send(COMMAND_PALETTE_EXECUTE, { command: "example.org", editUrl: true });
+      await commands.send(COMMAND_PALETTE_EXECUTE, { command: "example.net", inCurrentTab: true });
+      expect(navigate).not.toHaveBeenCalled();
+      expect(create.mock.calls).toEqual([
+        [{ url: "https://example.org" }],
+        [{ url: "https://example.net" }],
+      ]);
+    });
+
+    it("opens an edited built-in address with parameters as that page", async () => {
+      const { commands, create, navigate } = setupEdit("/domain-settings?domain=github.com");
+      await commands.send(COMMAND_PALETTE_EXECUTE, {
+        command: "/domain-settings?domain=example.com",
+        editUrl: true,
+      });
+      expect(navigate).not.toHaveBeenCalled();
+      expect(create).toHaveBeenCalledWith({ url: "/domain-settings?domain=example.com" });
+    });
+
+    it("opens a built-in page in its own tab", async () => {
+      const { commands, create, navigate } = setupEdit("https://example.com/");
+      await commands.send(COMMAND_PALETTE_EXECUTE, { command: "/settings", editUrl: true });
+      expect(navigate).not.toHaveBeenCalled();
+      expect(create).toHaveBeenCalledWith({ url: "/settings" });
+    });
+
+    it("still reloads the current address without editUrl", async () => {
+      const { commands, navigate } = setupEdit("https://example.com/");
+      await commands.send(COMMAND_PALETTE_EXECUTE, {
+        command: "https://example.com/",
+        inCurrentTab: true,
+      });
+      expect(navigate).toHaveBeenCalledWith({ url: "https://example.com/" });
     });
   });
 

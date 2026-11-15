@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "../../renderer/src/components/Icon";
+import { COMMAND_PALETTE_EDIT_URL } from "../command-palette/command-palette.shared";
 import { DOMAIN_SETTINGS_OPEN } from "../domain-css/domain-css.shared";
 import { ExtensionToolbar } from "../extensions/ExtensionToolbar";
 import { FindBar } from "../find-text/find-text.renderer";
@@ -251,12 +252,26 @@ export function UrlPill({ hidden }: { hidden?: boolean }) {
             <Icon name="sliders" style="solid" css={{ fontSize: "var(--icon-size-default)" }} />
           </button>
         )}
-        <span
-          className="truncate"
-          style={{ maxWidth: 300, paddingLeft: isWebUrl ? 0 : "0.625rem" }}
+        <button
+          type="button"
+          className="truncate shrink cursor-pointer bg-transparent hover:bg-glass-hover active:bg-glass-pressed"
+          style={{
+            maxWidth: 300,
+            height: 24,
+            padding: "0 0.375rem",
+            marginLeft: isWebUrl ? 0 : "0.25rem",
+            borderRadius: "var(--radius-md)",
+            border: "none",
+            color: "inherit",
+            font: "inherit",
+            transition: "background-color var(--duration-fast) var(--ease-out)",
+          }}
+          tabIndex={-1}
+          onClick={() => window.chiaroscuro.sendCommand(COMMAND_PALETTE_EDIT_URL, undefined)}
+          aria-label={`Edit URL, ${displayUrl}`}
         >
           {displayUrl}
-        </span>
+        </button>
         <button
           type="button"
           className={`flex items-center justify-center shrink-0 cursor-pointer ${

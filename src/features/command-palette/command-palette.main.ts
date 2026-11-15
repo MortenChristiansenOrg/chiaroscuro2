@@ -2,6 +2,7 @@ import type { CommandBus } from "../../bus/command-bus";
 import type { EventBus } from "../../bus/event-bus";
 import type { DataStore } from "../../data/types";
 import type { Platform } from "../../platform/types";
+import { isBuiltInUrl } from "../../shared/built-in-pages";
 import { defineFeature } from "../../shared/define-feature";
 import { logError, logWarn } from "../../shared/log";
 import type { TabId, WindowId, WorkspaceId } from "../../shared/types";
@@ -16,6 +17,7 @@ import { SETTINGS_CHANGED } from "../settings/settings.shared";
 import type { TabsCommands, TabsEvents } from "../tabs/tabs.shared";
 import { TABS_UPDATED } from "../tabs/tabs.shared";
 import {
+  COMMAND_PALETTE_EDIT_URL,
   COMMAND_PALETTE_EXECUTE,
   COMMAND_PALETTE_HIDDEN,
   COMMAND_PALETTE_HIDE,
@@ -26,7 +28,13 @@ import {
   type CommandPaletteCommands,
   type CommandPaletteEvents,
 } from "./command-palette.shared";
-import { getBuiltInPages, type ProviderConfig, resolveInput } from "./resolve-input";
+import {
+  editableUrl,
+  getBuiltInPages,
+  isCurrentUrl,
+  type ProviderConfig,
+  resolveInput,
+} from "./resolve-input";
 import { initVisitTracking, recordVisit, searchVisits } from "./suggestions";
 
 type AllCommands = CommandPaletteCommands &
@@ -46,6 +54,8 @@ interface Deps {
   dataStore: DataStore;
   getActiveWindowId: () => WindowId | undefined;
   getActiveTabId: () => TabId | undefined;
+  /** The address the browser shows for a tab. */
+  getTabUrl: (tabId: TabId) => string | undefined;
   isPrivacyWorkspace: (workspaceId: WorkspaceId) => boolean;
 }
 
@@ -57,6 +67,7 @@ export default defineFeature<Deps>({
     dataStore,
     getActiveWindowId,
     getActiveTabId,
+    getTabUrl,
     isPrivacyWorkspace,
   }) {
     let isOpen = false;
@@ -88,7 +99,7 @@ export default defineFeature<Deps>({
       }
     });
 
-    commands.handle(COMMAND_PALETTE_SHOW, async () => {
+    const show = (editUrl?: string) => {
       if (isOpen) return;
       isOpen = true;
       // Pass current provider config to the overlay
@@ -97,8 +108,16 @@ export default defineFeature<Deps>({
           .updateCommandPalette(`providerConfig=${JSON.stringify(providerConfig)}`)
           .catch(() => {});
       }
-      platform.showCommandPalette();
+      platform.showCommandPalette(editUrl === undefined ? undefined : { editUrl });
       events.emit(COMMAND_PALETTE_SHOWN, undefined);
+    };
+
+    commands.handle(COMMAND_PALETTE_SHOW, async () => show());
+
+    commands.handle(COMMAND_PALETTE_EDIT_URL, async () => {
+      const tabId = getActiveTabId();
+      const url = tabId && getTabUrl(tabId);
+      show(url ? editableUrl(url) : undefined);
     });
 
     commands.handle(COMMAND_PALETTE_HIDE, async () => {
@@ -121,6 +140,11 @@ export default defineFeature<Deps>({
         await commands.send(DOMAIN_SCRIPTS_RUN, { id: payload.scriptId });
         return;
       }
+      const tabId = getActiveTabId();
+      const tabUrl = tabId && getTabUrl(tabId);
+      // An address the tab already has stays as it is, typed as shown or as it resolves.
+      const isUnchanged = (value: string) => !!tabUrl && isCurrentUrl(value, tabUrl);
+      if (payload.editUrl && isUnchanged(payload.command.trim())) return;
       if (payload.command.trim().startsWith("/") && commands.hasHandler(DOMAIN_SCRIPTS_RUN_ALIAS)) {
         const result = await commands.send(DOMAIN_SCRIPTS_RUN_ALIAS, {
           alias: payload.command.trim(),
@@ -130,16 +154,13 @@ export default defineFeature<Deps>({
       const url = resolveInput(payload.command, providerConfig);
       if (!url) return;
 
-      // Built-in pages always open via tabs:create (handles singleton + builtIn flag)
-      if (url.startsWith("/")) {
-        await commands.send("tabs:create", { url });
-      } else if (payload.inCurrentTab) {
-        const tabId = getActiveTabId();
-        if (tabId) {
-          await commands.send("tabs:navigate", { url });
-        } else {
-          await commands.send("tabs:create", { url });
-        }
+      if (payload.editUrl && isUnchanged(url)) return;
+
+      // Built-in pages always open via tabs:create (handles singleton + builtIn flag).
+      // A built-in page has no web view to navigate, so a web address opens in a new tab.
+      const inCurrentTab = payload.inCurrentTab || payload.editUrl;
+      if (!url.startsWith("/") && inCurrentTab && tabUrl && !isBuiltInUrl(tabUrl)) {
+        await commands.send("tabs:navigate", { url });
       } else {
         await commands.send("tabs:create", { url });
       }

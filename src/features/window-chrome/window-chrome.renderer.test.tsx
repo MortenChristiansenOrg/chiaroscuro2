@@ -68,6 +68,17 @@ describe("UrlPill", () => {
     expect(screen.getByText("example.com/path")).toBeDefined();
   });
 
+  it("opens the address for editing when the address is clicked", () => {
+    const tab = makeTab({ id: "t1" as TabId, url: "https://example.com/path" });
+    useTabsStore.setState({
+      tabs: new Map([["t1" as TabId, tab]]),
+      activeTabId: "t1" as TabId,
+    });
+    render(<UrlPill />);
+    fireEvent.click(screen.getByRole("button", { name: "Edit URL, example.com/path" }));
+    expect(mockSendCommand).toHaveBeenCalledWith("command-palette:edit-url", undefined);
+  });
+
   it("displays hostname without trailing slash for root", () => {
     const tab = makeTab({ id: "t1" as TabId, url: "https://example.com/" });
     useTabsStore.setState({

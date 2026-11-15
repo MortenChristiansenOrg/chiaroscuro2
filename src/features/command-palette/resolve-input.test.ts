@@ -101,6 +101,20 @@ describe("resolveInputDetailed", () => {
     expect(result).toEqual({ type: "url", url: "/settings" });
   });
 
+  it("built-in page address with parameters → built-in page URL", () => {
+    expect(resolveInputDetailed("/domain-settings?domain=example.com")).toEqual({
+      type: "url",
+      url: "/domain-settings?domain=example.com",
+    });
+  });
+
+  it("unknown route with parameters is not a built-in page", () => {
+    expect(resolveInputDetailed("/nope?x=1")).toMatchObject({ type: "search" });
+    expect(resolveInputDetailed("/domain-settings?domain=100%")).toMatchObject({
+      type: "search",
+    });
+  });
+
   it("single word → default search", () => {
     const result = resolveInputDetailed("hello");
     expect(result).toMatchObject({

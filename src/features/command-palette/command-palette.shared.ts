@@ -10,6 +10,7 @@ import type {
 export const COMMAND_PALETTE_SHOW = "command-palette:show" as const;
 export const COMMAND_PALETTE_HIDE = "command-palette:hide" as const;
 export const COMMAND_PALETTE_TOGGLE = "command-palette:toggle" as const;
+export const COMMAND_PALETTE_EDIT_URL = "command-palette:edit-url" as const;
 export const COMMAND_PALETTE_EXECUTE = "command-palette:execute" as const;
 export const COMMAND_PALETTE_SEARCH_VISITS = "command-palette:search-visits" as const;
 

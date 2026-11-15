@@ -87,4 +87,58 @@ test.describe("command palette navigation", () => {
       expect(count).toBeGreaterThanOrEqual(1);
     }).toPass({ timeout: 3_000 });
   });
+
+  test("clicking the address edits it in the current tab", async ({
+    commandPalettePage,
+    sidebarPage,
+    windowChromePage,
+  }) => {
+    const address = windowChromePage.addressButton;
+    await commandPalettePage.open();
+    await commandPalettePage.search("https://example.com");
+    await commandPalettePage.submit();
+    await expect(address).toHaveText("example.com", { timeout: 5_000 });
+    const count = await sidebarPage.getTabCount();
+
+    // The palette opens on the current address, all of it selected.
+    await commandPalettePage.openByClicking(address);
+    const input = commandPalettePage.input;
+    await expect(input).toHaveValue(/^https:\/\/example\.com\/?$/);
+    await expect(input).toBeFocused();
+    await expect
+      .poll(() =>
+        input.evaluate(
+          (el: HTMLInputElement) => el.selectionStart === 0 && el.selectionEnd === el.value.length,
+        ),
+      )
+      .toBe(true);
+    await expect(commandPalettePage.page.locator("#hints")).toHaveText("Enter = go · Esc = cancel");
+
+    // Escape leaves the tab as it was.
+    await commandPalettePage.page.keyboard.press("Escape");
+    await expect(commandPalettePage.overlay).toBeHidden({ timeout: 3_000 });
+    await expect(address).toHaveText("example.com");
+
+    // Going to the current address does nothing.
+    await commandPalettePage.openByClicking(address);
+    await commandPalettePage.search("example.com");
+    await commandPalettePage.submit();
+    await expect(commandPalettePage.overlay).toBeHidden({ timeout: 3_000 });
+    await expect(address).toHaveText("example.com");
+    expect(await sidebarPage.getTabCount()).toBe(count);
+
+    // A new address replaces the current tab's address.
+    await commandPalettePage.openByClicking(address);
+    await commandPalettePage.search("https://example.org/edited");
+    await commandPalettePage.submit();
+    await expect(commandPalettePage.overlay).toBeHidden({ timeout: 3_000 });
+    await expect(address).toHaveText("example.org/edited", { timeout: 5_000 });
+    expect(await sidebarPage.getTabCount()).toBe(count);
+
+    // Opening the palette normally still opens a new tab.
+    await commandPalettePage.open();
+    await expect(commandPalettePage.input).toHaveValue("");
+    await expect(commandPalettePage.page.locator("#hints")).toContainText("Enter = new tab");
+    await commandPalettePage.close();
+  });
 });

@@ -220,22 +220,27 @@ html,body{background:transparent;overflow:hidden;
 <div id="res"></div>
 <div id="error" role="alert"></div>
 <div id="suggestions"></div>
-<div id="hints">Enter = new tab &middot; Ctrl+Enter = current tab &middot; Esc = close</div>
+<div id="hints"></div>
 </div></div>
 <script>
-var providerConfig=null,debounceTimer=null,suggestions=[],selIdx=-1,queryVersion=0,executionVersion=0,executing=false;
+var providerConfig=null,debounceTimer=null,suggestions=[],selIdx=-1,queryVersion=0,executionVersion=0,executing=false,editUrl=null;
 var $=id=>document.getElementById(id);
 
-function resetPalette(){
-  $('input').value='';
+// With an address, the palette edits the current tab's address instead of opening a new tab.
+function resetPalette(url){
+  editUrl=typeof url==='string'?url:null;
+  $('input').value=editUrl||'';
+  $('hints').textContent=editUrl===null
+    ?'Enter = new tab \u00b7 Ctrl+Enter = current tab \u00b7 Esc = close'
+    :'Enter = go \u00b7 Esc = cancel';
   $('res').style.display='none';
   $('suggestions').style.display='none';
   $('suggestions').innerHTML='';
   suggestions=[];selIdx=-1;
   ++executionVersion;
   executing=false;$('input').disabled=false;$('error').style.display='none';
-  clearTimeout(debounceTimer);refreshSuggestions('');
-  setTimeout(()=>{$('backdrop').classList.add('open');$('input').focus()},16);
+  clearTimeout(debounceTimer);refreshSuggestions('');updateResolution();
+  setTimeout(()=>{$('backdrop').classList.add('open');$('input').focus();$('input').select()},16);
 }
 
 function closePalette(){
@@ -294,7 +299,7 @@ async function execute(value,inCurrentTab,scriptId){
   var version=++executionVersion;
   executing=true;$('input').disabled=true;$('error').style.display='none';
   try{
-    await window.chiaroscuro.sendCommand('command-palette:execute',{command:value,inCurrentTab:inCurrentTab,...(scriptId?{scriptId:scriptId}:{})});
+    await window.chiaroscuro.sendCommand('command-palette:execute',{command:value,inCurrentTab:inCurrentTab,...(editUrl!==null?{editUrl:true}:{}),...(scriptId?{scriptId:scriptId}:{})});
     if(version===executionVersion)closePalette();
   }catch(error){
     if(version!==executionVersion)return;
@@ -2288,7 +2293,8 @@ export class ElectronPlatform implements Platform {
     this.paletteWin.setBounds(bounds);
   }
 
-  showCommandPalette(): void {
+  showCommandPalette(options?: { editUrl?: string }): void {
+    const editUrl = options?.editUrl;
     // Lazy-create in test mode (deferred from initCommandPaletteOverlay)
     if (!this.paletteWin || this.paletteWin.isDestroyed()) {
       const parent = this.getWin();
@@ -2296,15 +2302,15 @@ export class ElectronPlatform implements Platform {
       this.createPaletteWindow(parent);
       // Wait for HTML to load before interacting
       this.paletteWin?.webContents.on("did-finish-load", () => {
-        this.revealPalette();
+        this.revealPalette(editUrl);
       });
       return;
     }
 
-    this.revealPalette();
+    this.revealPalette(editUrl);
   }
 
-  private revealPalette(): void {
+  private revealPalette(editUrl?: string): void {
     if (!this.paletteWin || this.paletteWin.isDestroyed()) return;
     const bounds = this.paletteBounds();
     if (!bounds) return;
@@ -2316,7 +2322,9 @@ export class ElectronPlatform implements Platform {
       this.paletteWin.webContents.executeJavaScript(this.pendingPaletteJs).catch(() => {});
       this.pendingPaletteJs = null;
     }
-    this.paletteWin.webContents.executeJavaScript("resetPalette()").catch(() => {});
+    this.paletteWin.webContents
+      .executeJavaScript(`resetPalette(${JSON.stringify(editUrl ?? null)})`)
+      .catch(() => {});
     this.paletteOverSubTab =
       !!this.subTabWin && !this.subTabWin.isDestroyed() && this.subTabWin.isFocused();
     this.paletteWin.focus();
