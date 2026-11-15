@@ -3,7 +3,7 @@
 #
 # Usage: connect-app.sh [--cdp-port PORT]
 #   --cdp-port PORT   CDP port (default: ELECTRON_APP_PORT from .env.local)
-set -e
+set -e -o pipefail
 
 CDP_PORT=""
 
@@ -47,9 +47,6 @@ if ! curl -s "$CDP_URL/json/version" >/dev/null 2>&1; then
 fi
 echo " ok."
 
-# --- Kill existing daemon ---
-playwright-cli close 2>/dev/null || true
-
 # --- Workspace dir (directory containing .playwright/) ---
 # Walk up from script dir to find project root (contains package.json)
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -65,6 +62,8 @@ if [ "$WORKSPACE_DIR" = "/" ]; then
   exit 1
 fi
 echo "Workspace: $WORKSPACE_DIR"
+# Run playwright-cli from this checkout so it uses this checkout's session.
+cd "$WORKSPACE_DIR"
 
 # --- Generate .playwright/cli.config.json ---
 PLAYWRIGHT_DIR="$WORKSPACE_DIR/.playwright"
@@ -79,6 +78,9 @@ cat > "$PLAYWRIGHT_DIR/cli.config.json" <<EOF
 }
 EOF
 echo "Wrote $PLAYWRIGHT_DIR/cli.config.json"
+
+# --- Close this checkout's existing daemon ---
+playwright-cli close >/dev/null 2>&1 || true
 
 # --- Attach the playwright-cli daemon to the CDP endpoint ---
 echo ""

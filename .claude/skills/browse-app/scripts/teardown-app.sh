@@ -21,26 +21,38 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# 0. Close playwright-cli daemon
-playwright-cli close >/dev/null 2>&1 || true
+# playwright-cli finds its session through the nearest .playwright directory.
+# Running it from this checkout, with its own .playwright, keeps it from closing
+# the session of an enclosing checkout (e.g. a worktree under .claude/worktrees).
+cd "$PROJECT_DIR"
+mkdir -p .playwright
 
 if [[ "$WINDOWS" != true ]]; then
   if [[ ! -f "$STATE_FILE" ]]; then
     echo "No invisible session running."
     exit 0
   fi
+  playwright-cli close >/dev/null 2>&1 || true
+  PGID="" CDP_PORT="" PROFILE=""
   # shellcheck disable=SC1090
-  source "$STATE_FILE"
-  if [[ -n "${PGID:-}" ]] && kill -0 -- "-$PGID" 2>/dev/null; then
+  source "$STATE_FILE" || true
+  # Signal the group only if it is still this session (PGIDs can be reused):
+  # one of its processes must be the Electron launch with this CDP port.
+  if [[ "$PGID" =~ ^[0-9]+$ && -n "$CDP_PORT" ]] &&
+    pgrep -g "$PGID" -f -- "--remote-debugging-port=$CDP_PORT( |$)" >/dev/null 2>&1; then
     kill -- "-$PGID" 2>/dev/null || true
     for _ in $(seq 1 50); do kill -0 -- "-$PGID" 2>/dev/null || break; sleep 0.1; done
     kill -KILL -- "-$PGID" 2>/dev/null || true
     echo "Stopped invisible session (process group $PGID)."
+  else
+    echo "Session already stopped."
   fi
-  [[ "${PROFILE:-}" == */chiaroscuro-browse-* ]] && rm -rf "$PROFILE"
+  [[ "$PROFILE" == */chiaroscuro-browse-* && -d "$PROFILE" ]] && rm -rf "$PROFILE"
   rm -f "$STATE_FILE"
   exit 0
 fi
+
+playwright-cli close >/dev/null 2>&1 || true
 
 # Windows session started with launch-app.sh --windows.
 if [ -z "$CDP_PORT" ]; then

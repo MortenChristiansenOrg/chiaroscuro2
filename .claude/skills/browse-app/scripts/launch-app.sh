@@ -6,6 +6,8 @@
 #
 # Usage: launch-app.sh [--rebuild] [--cdp-port PORT]
 #        launch-app.sh --windows [--rebuild] [--cdp-port PORT]
+#        launch-app.sh --isolated [ARGS...]   # bun run agent:app (JSONL controller)
+#        launch-app.sh --verify [ARGS...]     # bun run verify:app (scenarios)
 #   --rebuild         Rebuild even if out/ matches the sources
 #   --cdp-port PORT   CDP port (default: a free port)
 #   --windows         Run Electron natively on Windows instead. This opens a
@@ -19,6 +21,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
 
+case "${1:-}" in
+  --isolated) shift; cd "$PROJECT_DIR"; exec bun run agent:app "$@" ;;
+  --verify) shift; cd "$PROJECT_DIR"; exec bun run verify:app "$@" ;;
+esac
 for arg in "$@"; do
   if [[ "$arg" == "--windows" ]]; then
     args=()
@@ -43,6 +49,7 @@ STATE_FILE="$STATE_DIR/session.env"
 LOG_FILE="$STATE_DIR/app.log"
 
 command -v xvfb-run >/dev/null || { echo "Error: xvfb-run not found. Install xvfb and xauth."; exit 1; }
+command -v playwright-cli >/dev/null || { echo "Error: playwright-cli not found on PATH."; exit 1; }
 
 # Stop a previous headless session from this checkout.
 "$SCRIPT_DIR/teardown-app.sh" >/dev/null 2>&1 || true
@@ -60,6 +67,39 @@ if [[ -z "$CDP_PORT" ]]; then
 fi
 PROFILE=$(mktemp -d "${TMPDIR:-/tmp}/chiaroscuro-browse-XXXXXX")
 TOKEN=$(cat /proc/sys/kernel/random/uuid)
+PGID=""
+LAUNCHED=false
+
+# Until the session is connected, any exit (error, failed check, signal) stops
+# what this script started.
+cleanup() {
+  [[ "$LAUNCHED" == true ]] && return
+  if [[ -n "$PGID" ]]; then
+    kill -- "-$PGID" 2>/dev/null || true
+    for _ in $(seq 1 50); do kill -0 -- "-$PGID" 2>/dev/null || break; sleep 0.1; done
+    kill -KILL -- "-$PGID" 2>/dev/null || true
+  fi
+  rm -rf "$PROFILE"
+  rm -f "$STATE_FILE"
+}
+trap cleanup EXIT
+trap 'exit 130' INT TERM
+
+fail() {
+  echo "Error: $1"
+  echo "--- $LOG_FILE (tail) ---"
+  tail -30 "$LOG_FILE" || true
+  exit 1
+}
+
+# Pipe-separated PIDs of the launched process group (empty when it is gone).
+group_pids() { pgrep -g "$PGID" 2>/dev/null | paste -sd'|' || true; }
+# True when a process of the launched group listens on the given port.
+group_listens_on() {
+  local pids
+  pids=$(group_pids)
+  [[ -n "$pids" ]] && ss -ltnpH "sport = :$1" 2>/dev/null | grep -qE "pid=($pids),"
+}
 
 # A window manager and compositor give focus, maximize and popup behavior closer
 # to a real desktop. Without them the app still runs, but window management is basic.
@@ -73,42 +113,39 @@ fi
 echo "Launching Electron invisibly (Xvfb 1920x1080, CDP port $CDP_PORT)..."
 # WAYLAND_DISPLAY is removed so Electron cannot reach WSLg and show a window.
 # setsid makes the launch its own process group, so teardown can stop all of it.
-setsid env -u WAYLAND_DISPLAY -u ELECTRON_RENDERER_URL -u ELECTRON_RUN_AS_NODE \
+# xvfb-run cannot handle a TMPDIR containing spaces, so it gets /tmp.
+setsid env -u WAYLAND_DISPLAY -u ELECTRON_RENDERER_URL -u ELECTRON_RUN_AS_NODE TMPDIR=/tmp \
   NODE_ENV=test DATA_DIR="$PROFILE" CHIAROSCURO_AUTOMATION=1 CHIAROSCURO_DEBUG_TOKEN="$TOKEN" \
   xvfb-run -a -s "-screen 0 1920x1080x24" "${DESKTOP[@]}" \
   "$ELECTRON" --ozone-platform=x11 --no-sandbox --remote-debugging-port="$CDP_PORT" \
   "$PROJECT_DIR/out/main/index.js" >"$LOG_FILE" 2>&1 </dev/null &
 PGID=$!
 
-cat >"$STATE_FILE" <<EOF
-PGID=$PGID
-CDP_PORT=$CDP_PORT
-PROFILE=$PROFILE
-DEBUG_TOKEN=$TOKEN
-EOF
-
-fail() {
-  echo "Error: $1"
-  echo "--- $LOG_FILE (tail) ---"
-  tail -30 "$LOG_FILE" || true
-  "$SCRIPT_DIR/teardown-app.sh" >/dev/null 2>&1 || true
-  exit 1
-}
+# Values are shell-quoted because teardown-app.sh sources this file.
+{
+  printf 'PGID=%q\n' "$PGID"
+  printf 'CDP_PORT=%q\n' "$CDP_PORT"
+  printf 'PROFILE=%q\n' "$PROFILE"
+  printf 'DEBUG_TOKEN=%q\n' "$TOKEN"
+} >"$STATE_FILE"
 
 echo "Waiting for CDP endpoint..."
 for _ in $(seq 1 150); do
-  kill -0 "$PGID" 2>/dev/null || fail "Electron exited during startup."
-  curl -s --max-time 1 "http://127.0.0.1:$CDP_PORT/json/version" >/dev/null 2>&1 && break
+  kill -0 -- "-$PGID" 2>/dev/null || fail "Electron exited during startup."
+  group_listens_on "$CDP_PORT" && break
   sleep 0.2
 done
-curl -s --max-time 1 "http://127.0.0.1:$CDP_PORT/json/version" >/dev/null 2>&1 || fail "CDP not ready after 30s."
+# The port must belong to this launch, not to another app already using it.
+group_listens_on "$CDP_PORT" || fail "CDP not ready on port $CDP_PORT after 30s (is the port in use?)."
+curl -s --max-time 2 "http://127.0.0.1:$CDP_PORT/json/version" >/dev/null 2>&1 || fail "CDP endpoint does not answer."
 echo "CDP ready."
 
 # The automation debug server listens on a random port; find it among the
 # process group's listening sockets and confirm it answers with the token.
 DEBUG_URL=""
 for _ in $(seq 1 50); do
-  pids=$(pgrep -g "$PGID" | paste -sd'|')
+  pids=$(group_pids)
+  [[ -n "$pids" ]] || fail "Electron exited during startup."
   for port in $(ss -ltnpH 2>/dev/null | grep -E "pid=($pids)," | awk '{print $4}' | sed 's/.*://' | sort -u); do
     [[ "$port" == "$CDP_PORT" ]] && continue
     if curl -sf --max-time 1 -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:$port/" >/dev/null 2>&1; then
@@ -119,7 +156,7 @@ for _ in $(seq 1 50); do
   sleep 0.2
 done
 if [[ -n "$DEBUG_URL" ]]; then
-  echo "DEBUG_URL=$DEBUG_URL" >>"$STATE_FILE"
+  printf 'DEBUG_URL=%q\n' "$DEBUG_URL" >>"$STATE_FILE"
   echo "Debug server: $DEBUG_URL (token in $STATE_FILE)"
 else
   echo "Warning: debug server not found; the debug-app skill will not work for this session."
@@ -128,3 +165,4 @@ fi
 echo ""
 echo "Connecting playwright-cli via CDP..."
 "$SCRIPT_DIR/connect-app.sh" --cdp-port "$CDP_PORT"
+LAUNCHED=true

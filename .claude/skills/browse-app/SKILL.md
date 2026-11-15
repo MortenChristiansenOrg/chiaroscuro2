@@ -110,6 +110,9 @@ Session details are in `test-results/browse-app/session.env` (`CDP_PORT`,
 `test-results/browse-app/app.log`. The debug-app skill works against this session:
 `source` the file and send `Authorization: Bearer $DEBUG_TOKEN` to `$DEBUG_URL`.
 
+`launch-app.sh --isolated` and `launch-app.sh --verify` delegate to `bun run agent:app`
+(JSONL controller) and `bun run verify:app` (scenarios); both are invisible on Linux too.
+
 To reconnect `playwright-cli` (e.g., after the daemon dies):
 
 ```bash
