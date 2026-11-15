@@ -140,6 +140,11 @@ export default defineFeature<Deps>({
         await commands.send(DOMAIN_SCRIPTS_RUN, { id: payload.scriptId });
         return;
       }
+      const tabId = getActiveTabId();
+      const tabUrl = tabId && getTabUrl(tabId);
+      // An address the tab already has stays as it is, typed as shown or as it resolves.
+      const isUnchanged = (value: string) => !!tabUrl && isCurrentUrl(value, tabUrl);
+      if (payload.editUrl && isUnchanged(payload.command.trim())) return;
       if (payload.command.trim().startsWith("/") && commands.hasHandler(DOMAIN_SCRIPTS_RUN_ALIAS)) {
         const result = await commands.send(DOMAIN_SCRIPTS_RUN_ALIAS, {
           alias: payload.command.trim(),
@@ -149,9 +154,7 @@ export default defineFeature<Deps>({
       const url = resolveInput(payload.command, providerConfig);
       if (!url) return;
 
-      const tabId = getActiveTabId();
-      const tabUrl = tabId && getTabUrl(tabId);
-      if (payload.editUrl && tabUrl && isCurrentUrl(url, tabUrl)) return;
+      if (payload.editUrl && isUnchanged(url)) return;
 
       // Built-in pages always open via tabs:create (handles singleton + builtIn flag).
       // A built-in page has no web view to navigate, so a web address opens in a new tab.

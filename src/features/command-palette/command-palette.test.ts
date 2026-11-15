@@ -266,6 +266,7 @@ describe("command-palette commands", () => {
       ["https://example.com", "https://example.com/"],
       [" example.com ", "https://example.com/"],
       ["/settings", "/settings"],
+      ["/domain-settings?domain=example.com", "/domain-settings?domain=example.com"],
       [
         "https://example.com/a.pdf",
         `/pdf-reader?url=${encodeURIComponent("https://example.com/a.pdf")}`,
