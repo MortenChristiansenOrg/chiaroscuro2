@@ -110,6 +110,9 @@ describe("resolveInputDetailed", () => {
 
   it("unknown route with parameters is not a built-in page", () => {
     expect(resolveInputDetailed("/nope?x=1")).toMatchObject({ type: "search" });
+    expect(resolveInputDetailed("/domain-settings?domain=100%")).toMatchObject({
+      type: "search",
+    });
   });
 
   it("single word → default search", () => {

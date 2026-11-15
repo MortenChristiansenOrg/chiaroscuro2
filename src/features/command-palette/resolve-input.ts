@@ -77,6 +77,16 @@ export function getBuiltInPages(): BuiltInPage[] {
 
 // ── Resolution ──────────────────────────────────────────────────
 
+/** Whether every escape in `url` is valid, as built-in pages decode their parameters. */
+function decodes(url: string): boolean {
+  try {
+    decodeURIComponent(url);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Resolve a raw command-palette input string into a typed resolution.
  * Returns the resolution type + metadata for UI feedback.
@@ -98,7 +108,7 @@ export function resolveInputDetailed(
 
   // Built-in page route, or a built-in page's address with its parameters (as when editing one)
   if (builtInRouteSet.has(trimmed)) return { type: "url", url: trimmed };
-  if (/^\/[^\s?]*\?\S*$/.test(trimmed) && isBuiltInUrl(trimmed))
+  if (/^\/[^\s?]*\?\S*$/.test(trimmed) && isBuiltInUrl(trimmed) && decodes(trimmed))
     return { type: "url", url: trimmed };
 
   // Bang at start: !g query
