@@ -179,3 +179,25 @@ export function resolveInput(input: string, config: ProviderConfig = DEFAULT_CON
   if (result.type === "empty") return "";
   return result.url;
 }
+
+/**
+ * The address a person edits for a tab: the PDF's own address for the PDF reader, else the
+ * tab's address.
+ */
+export function editableUrl(tabUrl: string): string {
+  if (!tabUrl.startsWith("/pdf-reader?")) return tabUrl;
+  return new URLSearchParams(tabUrl.slice(tabUrl.indexOf("?") + 1)).get("url") || tabUrl;
+}
+
+/** Whether `url` is the tab's current address, ignoring differences URL parsing removes. */
+export function isCurrentUrl(url: string, tabUrl: string): boolean {
+  const normalize = (value: string) => {
+    try {
+      return new URL(value).href;
+    } catch {
+      return value;
+    }
+  };
+  const target = normalize(url);
+  return target === normalize(tabUrl) || target === normalize(editableUrl(tabUrl));
+}

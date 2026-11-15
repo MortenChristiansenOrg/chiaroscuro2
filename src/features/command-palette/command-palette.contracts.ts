@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { defineCommand } from "../../bus/contract";
 import {
+  COMMAND_PALETTE_EDIT_URL,
   COMMAND_PALETTE_EXECUTE,
   COMMAND_PALETTE_HIDE,
   COMMAND_PALETTE_SEARCH_VISITS,
@@ -11,6 +12,8 @@ import {
 export const CommandPaletteExecutePayloadSchema = z.strictObject({
   command: z.string(),
   inCurrentTab: z.boolean().optional(),
+  /** Replace the active tab's address. Nothing happens when the address is unchanged. */
+  editUrl: z.boolean().optional(),
   scriptId: z.string().optional(),
 });
 
@@ -38,6 +41,11 @@ export const commandContracts = {
     description: "Toggle command palette visibility.",
     examples: [undefined],
     sideEffects: ["Changes focus and overlay visibility"],
+  }),
+  [COMMAND_PALETTE_EDIT_URL]: defineCommand(z.undefined(), z.undefined(), {
+    description: "Show the command palette to edit the active tab's address, preselected.",
+    examples: [undefined],
+    sideEffects: ["Opens a native overlay"],
   }),
   [COMMAND_PALETTE_EXECUTE]: defineCommand(CommandPaletteExecutePayloadSchema, z.undefined(), {
     description: "Resolve typed input as a URL, search, or named palette command.",

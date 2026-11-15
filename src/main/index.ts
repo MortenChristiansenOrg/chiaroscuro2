@@ -423,7 +423,11 @@ if (gotLock) {
     workspaces.register({ ...deps, getTabsForWorkspace });
     pinnedTabs.register({ ...deps, getCustomization });
     sidebar.register(deps);
-    commandPalette.register({ ...deps, isPrivacyWorkspace });
+    commandPalette.register({
+      ...deps,
+      getTabUrl: (tabId) => getTab(tabId)?.url,
+      isPrivacyWorkspace,
+    });
     settings.register(deps);
     tooltip.register(deps);
     contextMenu.register(deps);

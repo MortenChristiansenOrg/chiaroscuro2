@@ -56,6 +56,13 @@ export class CommandPalettePage {
     await expect(this.overlay).toBeVisible();
   }
 
+  /** Open by clicking the address in the title bar, to edit it. */
+  async openByClicking(address: Locator) {
+    await address.click();
+    await this.findPalettePage();
+    await expect(this.overlay).toBeVisible();
+  }
+
   /** Open via native Ctrl+T shortcut. */
   async openViaKeyboard(electronApp: ElectronApplication) {
     const sendCtrlT = () =>

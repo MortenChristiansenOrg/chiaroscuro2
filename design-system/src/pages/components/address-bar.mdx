@@ -8,14 +8,14 @@ import { DEMO_TABS, makeDemoTabMap, tabId } from "../../lib/demo-data"
 
 # Address Bar
 
-The URL "pill" sits centered in the titlebar with an animated loading border, domain customization and copy buttons.
+The URL "pill" sits centered in the titlebar with an animated loading border, domain customization and copy buttons. Clicking the address opens it for editing in the command palette.
 
 The inactive Find bar is removed from layout. Opacity and `pointer-events: none` alone do not remove Electron native drag regions and can block these buttons on Windows. Icon centers and padding must remain hovered and clickable before and after using Find. Web pages in tabs cannot add drag regions of their own, so a site's `app-region: drag` never covers these buttons either.
 
 ## Anatomy
 
 1. **Pill container** — rounded background housing URL and button
-2. **URL text** — monospace text with select-all behavior
+2. **Address button** — the monospace address; clicking it opens the command palette on the full address to edit it
 3. **Copy button** — icon-only button to copy URL to clipboard
 4. **Domain customization button** — sliders icon opening settings for the active web domain
 5. **Zoom indicator** — adjacent percentage reset button, visible when web zoom differs from 100%; see [Zoom Indicator](/components/zoom-indicator)
@@ -51,6 +51,18 @@ The inactive Find bar is removed from layout. Opacity and `pointer-events: none`
 | Font size | `--text-sm` |
 | Color | `var(--glass-text-default)` |
 
+### Address Button
+
+| Property | Token/Value |
+|----------|-------------|
+| Height | `24px` |
+| Max width | `300px`, truncated with ellipsis |
+| Padding | `0 0.375rem` (plus `0.25rem` left margin when no domain customization button) |
+| Border radius | `--radius-md` |
+| Color | inherits `var(--glass-text-default)` |
+| Hover bg | `var(--glass-hover)` |
+| Pressed bg | `var(--glass-pressed)` |
+
 ### Copy and Domain Customization Buttons
 
 | Property | Token/Value |
@@ -76,7 +88,8 @@ The inactive Find bar is removed from layout. Opacity and `pointer-events: none`
 | State | Pill | Copy Button | Additional |
 |-------|------|-------------|------------|
 | Default | `var(--glass-subtle)` bg | `var(--glass-text-muted)` icon | idle, no border animation |
-| Hover (pill) | `var(--glass-hover)` bg | unchanged | cursor: pointer |
+| Hover (address) | unchanged | unchanged | address button gets `var(--glass-hover)` bg, cursor: pointer |
+| Pressed (address) | unchanged | unchanged | address button gets `var(--glass-pressed)` bg |
 | Loading | `var(--glass-subtle)` bg | unchanged | spinning conic-gradient border ring |
 | Copied | unchanged | icon swaps to `fa-check`, accent color, accent bg at 12% opacity, scale-pop animation | check icon shown for 1.5s, then reverts to copy icon |
 | Hover (copy btn) | unchanged | `var(--glass-hover)` bg, `var(--glass-text-hover)` icon | cursor: pointer |
@@ -87,7 +100,7 @@ The inactive Find bar is removed from layout. Opacity and `pointer-events: none`
 
 - **Domain customization.** The sliders button is visible for HTTP(S) pages and opens the active domain’s settings. Its default, hover, and pressed colors follow the glass icon-button states; it has no copied-confirmation state.
 
-- **Select-all on focus.** When the URL bar gains focus, all text is selected so the user can immediately type a replacement.
+- **Edit address.** Clicking the address opens the command palette on the active tab's full address (for a PDF, the PDF's address), all of it selected, so typing replaces it. Enter goes there in the current tab; Escape, or Enter on an unchanged address, leaves the tab as it was. The address has no tooltip: its text names it, and a tooltip would cover the page below.
 - **Monospace for URL display.** Uses `--font-mono` (JetBrains Mono) for the URL text.
 - **Copy to clipboard.** Copy button writes current URL to clipboard and shows check icon confirmation.
 - **No drag.** Pill is not draggable.
@@ -109,15 +122,15 @@ Uses `@property --url-angle` with a `conic-gradient` masked to the border edge. 
 
 ## Keyboard & Focus
 
-- **Pill controls are not keyboard-navigable.** The URL pill elements use `tabIndex={-1}`. Interaction is mouse/trackpad only; URL copying is available via command palette or keyboard shortcut. The adjacent zoom indicator is keyboard-navigable and supports Enter/Space to reset.
+- **Pill controls are not keyboard-navigable.** The URL pill elements use `tabIndex={-1}`. Interaction is mouse/trackpad only; URL copying is available via command palette or keyboard shortcut, and the command palette (Ctrl+T) navigates by keyboard. The adjacent zoom indicator is keyboard-navigable and supports Enter/Space to reset.
 
 ---
 
 ## Accessibility
 
-- **`aria-label`:** `Copy URL` on the copy button and `Domain customization` on the sliders button. Both are semantic buttons.
+- **`aria-label`:** `Edit URL, <address>` on the address button, `Copy URL` on the copy button and `Domain customization` on the sliders button. All are semantic buttons.
 - **Copy confirmation:** tooltip/`aria-live="polite"` announces "Copied" after clipboard write.
-- **Semantic HTML:** copy uses `<button type="button">`, URL text in a `<span>`.
+- **Semantic HTML:** the address, copy and domain customization controls are `<button type="button">`.
 - **Touch target:** copy button meets `var(--click-target-min)` (1.375rem padded to 1.5rem).
 - **Contrast:** glass text default meets 4.5:1 for body text; muted icon meets 3:1 for interactive elements.
 

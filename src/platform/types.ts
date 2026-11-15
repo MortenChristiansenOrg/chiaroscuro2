@@ -185,7 +185,8 @@ export interface Platform {
 
   // Command palette overlay
   initCommandPaletteOverlay(windowId: WindowId): void;
-  showCommandPalette(): void;
+  /** Show the palette. With `editUrl`, it opens on that address, selected, to replace it. */
+  showCommandPalette(options?: { editUrl?: string }): void;
   hideCommandPalette(): void;
   updateCommandPalette(js: string): Promise<unknown>;
 

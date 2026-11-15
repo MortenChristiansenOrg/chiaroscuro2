@@ -20,6 +20,7 @@ It also keeps the chrome UI in sync with the active tab's loading state, and all
 - Every title-bar control must be clickable across its whole area, icon or text included, on Windows; empty title-bar space stays draggable.
 - The chrome must display a visible loading indicator when the active tab is loading (e.g., a spinner icon in the active tab or a progress bar in the title bar) and hide it when loading finishes.
 - Copying the current address must copy the active tab's address to the clipboard.
+- Clicking the current address must open it for editing in the command palette (see [Command Palette](CommandPaletteFeature.specs.md#edit-the-current-address)).
 - When copying an address, the copied value should omit common ad-tracking query parameters when present.
 - When a page enters full screen, for example a video, the page must fill the whole screen with no window chrome, sidebar or sub-tab frame in view. This also applies to pages in sub-tabs.
 - When a page leaves full screen, the window must return to the state it had before, maximized or normal, in one step. Switching away from the page, closing it or opening a sub-tab from it also leaves full screen.
@@ -61,6 +62,7 @@ None.
 - **Minimize window**: Click the minimize control in the window chrome.
 - **Maximize/restore window**: Click the maximize/restore control in the window chrome.
 - **Copy address**: Click the copy-address control in the window chrome.
+- **Edit address**: Click the address in the window chrome.
 - **Drag window**: Drag the title bar area to move the window.
 - **Double-click title bar**: Toggle maximize/restore (platform convention).
 

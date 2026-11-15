@@ -11,6 +11,8 @@ export class WindowChromePage {
   readonly reloadButton: Locator;
   readonly copyUrlButton: Locator;
   readonly domainCssButton: Locator;
+  /** The address in the URL pill, which opens it for editing. */
+  readonly addressButton: Locator;
 
   constructor(page: Page) {
     this.page = page;
@@ -23,6 +25,7 @@ export class WindowChromePage {
     this.reloadButton = page.locator("button[aria-label='Reload']");
     this.copyUrlButton = page.locator("button[aria-label='Copy URL']");
     this.domainCssButton = page.locator("button[aria-label='Domain customization']");
+    this.addressButton = page.locator("button[aria-label^='Edit URL']");
   }
 
   get findInput() {

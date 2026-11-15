@@ -16,6 +16,7 @@ import { SETTINGS_CHANGED } from "../settings/settings.shared";
 import type { TabsCommands, TabsEvents } from "../tabs/tabs.shared";
 import { TABS_UPDATED } from "../tabs/tabs.shared";
 import {
+  COMMAND_PALETTE_EDIT_URL,
   COMMAND_PALETTE_EXECUTE,
   COMMAND_PALETTE_HIDDEN,
   COMMAND_PALETTE_HIDE,
@@ -26,7 +27,13 @@ import {
   type CommandPaletteCommands,
   type CommandPaletteEvents,
 } from "./command-palette.shared";
-import { getBuiltInPages, type ProviderConfig, resolveInput } from "./resolve-input";
+import {
+  editableUrl,
+  getBuiltInPages,
+  isCurrentUrl,
+  type ProviderConfig,
+  resolveInput,
+} from "./resolve-input";
 import { initVisitTracking, recordVisit, searchVisits } from "./suggestions";
 
 type AllCommands = CommandPaletteCommands &
@@ -46,6 +53,8 @@ interface Deps {
   dataStore: DataStore;
   getActiveWindowId: () => WindowId | undefined;
   getActiveTabId: () => TabId | undefined;
+  /** The address the browser shows for a tab. */
+  getTabUrl: (tabId: TabId) => string | undefined;
   isPrivacyWorkspace: (workspaceId: WorkspaceId) => boolean;
 }
 
@@ -57,6 +66,7 @@ export default defineFeature<Deps>({
     dataStore,
     getActiveWindowId,
     getActiveTabId,
+    getTabUrl,
     isPrivacyWorkspace,
   }) {
     let isOpen = false;
@@ -88,7 +98,7 @@ export default defineFeature<Deps>({
       }
     });
 
-    commands.handle(COMMAND_PALETTE_SHOW, async () => {
+    const show = (editUrl?: string) => {
       if (isOpen) return;
       isOpen = true;
       // Pass current provider config to the overlay
@@ -97,8 +107,16 @@ export default defineFeature<Deps>({
           .updateCommandPalette(`providerConfig=${JSON.stringify(providerConfig)}`)
           .catch(() => {});
       }
-      platform.showCommandPalette();
+      platform.showCommandPalette(editUrl === undefined ? undefined : { editUrl });
       events.emit(COMMAND_PALETTE_SHOWN, undefined);
+    };
+
+    commands.handle(COMMAND_PALETTE_SHOW, async () => show());
+
+    commands.handle(COMMAND_PALETTE_EDIT_URL, async () => {
+      const tabId = getActiveTabId();
+      const url = tabId && getTabUrl(tabId);
+      show(url ? editableUrl(url) : undefined);
     });
 
     commands.handle(COMMAND_PALETTE_HIDE, async () => {
@@ -130,10 +148,16 @@ export default defineFeature<Deps>({
       const url = resolveInput(payload.command, providerConfig);
       if (!url) return;
 
+      if (payload.editUrl) {
+        const tabId = getActiveTabId();
+        const tabUrl = tabId && getTabUrl(tabId);
+        if (tabUrl && isCurrentUrl(url, tabUrl)) return;
+      }
+
       // Built-in pages always open via tabs:create (handles singleton + builtIn flag)
       if (url.startsWith("/")) {
         await commands.send("tabs:create", { url });
-      } else if (payload.inCurrentTab) {
+      } else if (payload.inCurrentTab || payload.editUrl) {
         const tabId = getActiveTabId();
         if (tabId) {
           await commands.send("tabs:navigate", { url });
