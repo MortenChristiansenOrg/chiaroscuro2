@@ -1,5 +1,5 @@
 import type { z } from "zod";
-import { BUILT_IN_PAGES } from "../../shared/built-in-pages";
+import { BUILT_IN_PAGES, isBuiltInUrl } from "../../shared/built-in-pages";
 import type { SearchProviderSchema } from "./resolve-input.contracts";
 // ── Types ───────────────────────────────────────────────────────
 
@@ -96,8 +96,10 @@ export function resolveInputDetailed(
       config.providers[0] ??
       DEFAULT_PROVIDERS[0]) as SearchProvider;
 
-  // Built-in page route
+  // Built-in page route, or a built-in page's address with its parameters (as when editing one)
   if (builtInRouteSet.has(trimmed)) return { type: "url", url: trimmed };
+  if (/^\/[^\s?]*\?\S*$/.test(trimmed) && isBuiltInUrl(trimmed))
+    return { type: "url", url: trimmed };
 
   // Bang at start: !g query
   const bangStartMatch = trimmed.match(/^(![\w]+)\s+(.+)/);

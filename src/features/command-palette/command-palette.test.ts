@@ -292,6 +292,16 @@ describe("command-palette commands", () => {
       ]);
     });
 
+    it("opens an edited built-in address with parameters as that page", async () => {
+      const { commands, create, navigate } = setupEdit("/domain-settings?domain=github.com");
+      await commands.send(COMMAND_PALETTE_EXECUTE, {
+        command: "/domain-settings?domain=example.com",
+        editUrl: true,
+      });
+      expect(navigate).not.toHaveBeenCalled();
+      expect(create).toHaveBeenCalledWith({ url: "/domain-settings?domain=example.com" });
+    });
+
     it("opens a built-in page in its own tab", async () => {
       const { commands, create, navigate } = setupEdit("https://example.com/");
       await commands.send(COMMAND_PALETTE_EXECUTE, { command: "/settings", editUrl: true });
