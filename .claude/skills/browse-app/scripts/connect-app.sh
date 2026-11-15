@@ -101,9 +101,9 @@ echo "$TAB_OUTPUT"
 # --- Find and select renderer page ---
 # Tab list format: "- N: [Title](url)"
 # Try file://...index.html first (packaged), then [Chiaroscuro] title (dev server)
-TAB_INDEX=$(echo "$TAB_OUTPUT" | grep 'file://' | grep -i 'index\.html' | head -1 | sed -n 's/.*- \([0-9]*\):.*/\1/p')
+TAB_INDEX=$(echo "$TAB_OUTPUT" | grep 'file://' | grep -i 'index\.html' | head -1 | sed -n 's/.*- \([0-9]*\):.*/\1/p' || true)
 if [ -z "$TAB_INDEX" ]; then
-  TAB_INDEX=$(echo "$TAB_OUTPUT" | grep '\[Chiaroscuro\]' | head -1 | sed -n 's/.*- \([0-9]*\):.*/\1/p')
+  TAB_INDEX=$(echo "$TAB_OUTPUT" | grep '\[Chiaroscuro\]' | head -1 | sed -n 's/.*- \([0-9]*\):.*/\1/p' || true)
 fi
 
 if [ -n "$TAB_INDEX" ]; then

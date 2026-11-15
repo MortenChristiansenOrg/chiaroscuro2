@@ -75,9 +75,12 @@ LAUNCHED=false
 cleanup() {
   [[ "$LAUNCHED" == true ]] && return
   if [[ -n "$PGID" ]]; then
+    # The child itself, in case its process group has not formed yet.
+    kill "$PGID" 2>/dev/null || true
     kill -- "-$PGID" 2>/dev/null || true
     for _ in $(seq 1 50); do kill -0 -- "-$PGID" 2>/dev/null || break; sleep 0.1; done
     kill -KILL -- "-$PGID" 2>/dev/null || true
+    wait "$PGID" 2>/dev/null || true
   fi
   rm -rf "$PROFILE"
   rm -f "$STATE_FILE"
@@ -120,6 +123,12 @@ setsid env -u WAYLAND_DISPLAY -u ELECTRON_RENDERER_URL -u ELECTRON_RUN_AS_NODE T
   "$ELECTRON" --ozone-platform=x11 --no-sandbox --remote-debugging-port="$CDP_PORT" \
   "$PROJECT_DIR/out/main/index.js" >"$LOG_FILE" 2>&1 </dev/null &
 PGID=$!
+# setsid makes the child its own group leader shortly after the fork; wait for it.
+for _ in $(seq 1 100); do
+  [[ "$(ps -o pgid= -p "$PGID" 2>/dev/null | tr -d ' ')" == "$PGID" ]] && break
+  kill -0 "$PGID" 2>/dev/null || break
+  sleep 0.02
+done
 
 # Values are shell-quoted because teardown-app.sh sources this file.
 {
