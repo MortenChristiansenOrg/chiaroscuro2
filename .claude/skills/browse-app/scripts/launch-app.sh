@@ -1,17 +1,34 @@
 #!/usr/bin/env bash
-# Dev workflow: Vite HMR server on WSL + Electron on Windows with CDP.
-# Renderer changes hot-reload instantly. Main/preload changes need relaunch.
+# Launch Chiaroscuro for agent browsing and connect playwright-cli to it via CDP.
 #
-# Usage: ./launch-app.sh [--rebuild] [--cdp-port PORT]
-#   --rebuild         Force rebuild even if out/ exists
-#   --cdp-port PORT   CDP port (default from .env.local)
-set -e
+# By default the built app runs in WSL inside a virtual X server (Xvfb), so no
+# window appears on the user's desktop. It uses an isolated, temporary profile.
+#
+# Usage: launch-app.sh [--rebuild] [--cdp-port PORT]
+#        launch-app.sh --windows [--rebuild] [--cdp-port PORT]
+#   --rebuild         Rebuild even if out/ matches the sources
+#   --cdp-port PORT   CDP port (default: a free port)
+#   --windows         Run Electron natively on Windows instead. This opens a
+#                     visible window; use it only for Windows-specific behavior
+#                     or when the user asks for it.
+#
+# Session details (CDP port, debug server URL and token, process group) are
+# written to test-results/browse-app/session.env. Stop with teardown-app.sh.
+set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(cd "$SCRIPT_DIR/../../../.." && pwd)"
+
+for arg in "$@"; do
+  if [[ "$arg" == "--windows" ]]; then
+    args=()
+    for a in "$@"; do [[ "$a" == "--windows" ]] || args+=("$a"); done
+    exec "$SCRIPT_DIR/launch-app-windows.sh" "${args[@]}"
+  fi
+done
+
 REBUILD=false
 CDP_PORT=""
-
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --rebuild) REBUILD=true; shift ;;
@@ -20,107 +37,94 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-# Read from .env.local if --cdp-port not provided
-if [ -z "$CDP_PORT" ]; then
-  if [ -f "$PROJECT_DIR/.env.local" ]; then
-    CDP_PORT=$(grep -oP '^ELECTRON_APP_PORT=\K.*' "$PROJECT_DIR/.env.local" | tr -d '[:space:]')
-  fi
-  if [ -z "$CDP_PORT" ]; then
-    echo "Error: ELECTRON_APP_PORT not set in .env.local and no --cdp-port flag provided."
-    echo "Add ELECTRON_APP_PORT=<port> to $PROJECT_DIR/.env.local"
-    exit 1
-  fi
-fi
-
-WIN_USER=$(powershell.exe -NoProfile -Command '[System.Environment]::UserName' | tr -d '\r')
-WIN_DIR="/mnt/c/Users/${WIN_USER}/.chiaroscuro-dev"
-WIN_PATH="C:\\Users\\${WIN_USER}\\.chiaroscuro-dev"
-
-mkdir -p "$WIN_DIR"
-
-# Build main + preload (renderer served live by Vite)
-if [ "$REBUILD" = true ] || [ ! -d "out" ]; then
-  echo "Building..."
-  bunx electron-vite build
-fi
-
-echo "Syncing main + preload to Windows..."
-rsync -a --delete out/main out/preload "$WIN_DIR/out/"
-rsync -a --delete resources/ "$WIN_DIR/resources/" 2>/dev/null || true
-cp package.json "$WIN_DIR/"
-
-# One-time: install electron on Windows side
-if [ ! -d "$WIN_DIR/node_modules/electron" ]; then
-  echo "First run: installing Electron on Windows (one-time)..."
-  powershell.exe -NoProfile -Command "cd '$WIN_PATH'; npm install --save-dev electron"
-fi
-
-# Resolve electron.exe path (direct path avoids npx failures)
-ELECTRON_EXE="$WIN_DIR/node_modules/electron/dist/electron.exe"
-if [ ! -f "$ELECTRON_EXE" ]; then
-  echo "Error: electron.exe not found at $ELECTRON_EXE"
-  exit 1
-fi
-WIN_ELECTRON="$WIN_PATH\\node_modules\\electron\\dist\\electron.exe"
-
-# Kill all chiaroscuro-dev Electron processes (not just the one on the CDP port —
-# stale processes from failed launches may not have bound to the port)
-powershell.exe -NoProfile -Command "
-  Get-Process -Name electron -ErrorAction SilentlyContinue |
-    Where-Object { \$_.Path -like '*chiaroscuro-dev*' } |
-    ForEach-Object { Stop-Process -Id \$_.Id -Force -ErrorAction SilentlyContinue; Write-Host \"Killed Electron PID \$(\$_.Id)\" }
-" 2>/dev/null || true
-
-# Pick a free port for the Vite renderer dev server
-RENDERER_PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("",0)); print(s.getsockname()[1]); s.close()')
-
-# Kill any leftover dev server from a previous launch
-if [ -f "$PROJECT_DIR/.dev-server-pid" ]; then
-  kill "$(cat "$PROJECT_DIR/.dev-server-pid")" 2>/dev/null || true
-  rm -f "$PROJECT_DIR/.dev-server-pid"
-fi
-
-echo "Starting renderer dev server on port $RENDERER_PORT..."
 cd "$PROJECT_DIR"
-ELECTRON_VITE_DEV_SERVER_PORT=$RENDERER_PORT bun run scripts/dev-renderer-server.ts &
-DEV_PID=$!
-echo "$DEV_PID" > "$PROJECT_DIR/.dev-server-pid"
+STATE_DIR="$PROJECT_DIR/test-results/browse-app"
+STATE_FILE="$STATE_DIR/session.env"
+LOG_FILE="$STATE_DIR/app.log"
 
-# Wait for Vite to be ready (should start in ~2s, fail fast if not)
-echo "Waiting for dev server..."
-sleep 2
-if ! kill -0 "$DEV_PID" 2>/dev/null; then
-  echo "Error: dev server exited."
-  rm -f "$PROJECT_DIR/.dev-server-pid"
-  exit 1
-fi
-if ! curl -s --max-time 3 "http://localhost:$RENDERER_PORT/" >/dev/null 2>&1; then
-  echo "Error: dev server not responding on port $RENDERER_PORT after 5s."
-  kill "$DEV_PID" 2>/dev/null || true
-  rm -f "$PROJECT_DIR/.dev-server-pid"
-  exit 1
-fi
-echo "Dev server ready."
+command -v xvfb-run >/dev/null || { echo "Error: xvfb-run not found. Install xvfb and xauth."; exit 1; }
 
-echo "Launching Electron (renderer at port $RENDERER_PORT, CDP on port $CDP_PORT)..."
-powershell.exe -NoProfile -Command "
-  \$env:ELECTRON_RENDERER_URL = 'http://localhost:$RENDERER_PORT'
-  \$env:NODE_ENV_ELECTRON_VITE = 'development'
-  Start-Process -FilePath '$WIN_ELECTRON' -ArgumentList '.','--remote-debugging-port=$CDP_PORT' -WorkingDirectory '$WIN_PATH'
-"
+# Stop a previous headless session from this checkout.
+"$SCRIPT_DIR/teardown-app.sh" >/dev/null 2>&1 || true
+mkdir -p "$STATE_DIR"
 
-# Wait for CDP endpoint (mirrored networking — direct access, no proxy needed)
-echo "Waiting for CDP endpoint on port $CDP_PORT..."
-sleep 5
-if ! curl -s --max-time 3 "http://127.0.0.1:$CDP_PORT/json/version" >/dev/null 2>&1; then
-  echo "Error: CDP endpoint not responding on port $CDP_PORT after 8s."
-  echo "Check that Electron launched correctly on Windows."
-  kill "$DEV_PID" 2>/dev/null || true
-  rm -f "$PROJECT_DIR/.dev-server-pid"
-  exit 1
+if [[ "$REBUILD" == true ]] || ! bun scripts/stamp-build.ts check >/dev/null 2>&1; then
+  echo "Building..."
+  bun run build >"$STATE_DIR/build.log" 2>&1 || { tail -40 "$STATE_DIR/build.log"; echo "Error: build failed."; exit 1; }
 fi
+ELECTRON="$PROJECT_DIR/node_modules/electron/dist/electron"
+[[ -x "$ELECTRON" ]] || bun run setup:electron
+
+if [[ -z "$CDP_PORT" ]]; then
+  CDP_PORT=$(python3 -c 'import socket; s=socket.socket(); s.bind(("127.0.0.1",0)); print(s.getsockname()[1]); s.close()')
+fi
+PROFILE=$(mktemp -d "${TMPDIR:-/tmp}/chiaroscuro-browse-XXXXXX")
+TOKEN=$(cat /proc/sys/kernel/random/uuid)
+
+# A window manager and compositor give focus, maximize and popup behavior closer
+# to a real desktop. Without them the app still runs, but window management is basic.
+DESKTOP=()
+if command -v openbox >/dev/null && command -v obxprop >/dev/null && command -v xcompmgr >/dev/null; then
+  DESKTOP=(bash scripts/verification-desktop.sh)
+else
+  echo "Note: openbox/xcompmgr not installed; running Xvfb without a window manager."
+fi
+
+echo "Launching Electron invisibly (Xvfb 1920x1080, CDP port $CDP_PORT)..."
+# WAYLAND_DISPLAY is removed so Electron cannot reach WSLg and show a window.
+# setsid makes the launch its own process group, so teardown can stop all of it.
+setsid env -u WAYLAND_DISPLAY -u ELECTRON_RENDERER_URL -u ELECTRON_RUN_AS_NODE \
+  NODE_ENV=test DATA_DIR="$PROFILE" CHIAROSCURO_AUTOMATION=1 CHIAROSCURO_DEBUG_TOKEN="$TOKEN" \
+  xvfb-run -a -s "-screen 0 1920x1080x24" "${DESKTOP[@]}" \
+  "$ELECTRON" --ozone-platform=x11 --no-sandbox --remote-debugging-port="$CDP_PORT" \
+  "$PROJECT_DIR/out/main/index.js" >"$LOG_FILE" 2>&1 </dev/null &
+PGID=$!
+
+cat >"$STATE_FILE" <<EOF
+PGID=$PGID
+CDP_PORT=$CDP_PORT
+PROFILE=$PROFILE
+DEBUG_TOKEN=$TOKEN
+EOF
+
+fail() {
+  echo "Error: $1"
+  echo "--- $LOG_FILE (tail) ---"
+  tail -30 "$LOG_FILE" || true
+  "$SCRIPT_DIR/teardown-app.sh" >/dev/null 2>&1 || true
+  exit 1
+}
+
+echo "Waiting for CDP endpoint..."
+for _ in $(seq 1 150); do
+  kill -0 "$PGID" 2>/dev/null || fail "Electron exited during startup."
+  curl -s --max-time 1 "http://127.0.0.1:$CDP_PORT/json/version" >/dev/null 2>&1 && break
+  sleep 0.2
+done
+curl -s --max-time 1 "http://127.0.0.1:$CDP_PORT/json/version" >/dev/null 2>&1 || fail "CDP not ready after 30s."
 echo "CDP ready."
-curl -s "http://127.0.0.1:$CDP_PORT/json/version" | python3 -m json.tool 2>/dev/null || true
+
+# The automation debug server listens on a random port; find it among the
+# process group's listening sockets and confirm it answers with the token.
+DEBUG_URL=""
+for _ in $(seq 1 50); do
+  pids=$(pgrep -g "$PGID" | paste -sd'|')
+  for port in $(ss -ltnpH 2>/dev/null | grep -E "pid=($pids)," | awk '{print $4}' | sed 's/.*://' | sort -u); do
+    [[ "$port" == "$CDP_PORT" ]] && continue
+    if curl -sf --max-time 1 -H "Authorization: Bearer $TOKEN" "http://127.0.0.1:$port/" >/dev/null 2>&1; then
+      DEBUG_URL="http://127.0.0.1:$port"
+      break 2
+    fi
+  done
+  sleep 0.2
+done
+if [[ -n "$DEBUG_URL" ]]; then
+  echo "DEBUG_URL=$DEBUG_URL" >>"$STATE_FILE"
+  echo "Debug server: $DEBUG_URL (token in $STATE_FILE)"
+else
+  echo "Warning: debug server not found; the debug-app skill will not work for this session."
+fi
+
 echo ""
 echo "Connecting playwright-cli via CDP..."
 "$SCRIPT_DIR/connect-app.sh" --cdp-port "$CDP_PORT"

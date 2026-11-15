@@ -29,7 +29,9 @@ sources and says to run `bun run build`; see
 Linux's full suite uses Xvfb at 1920×1080 and Openbox. Install `xvfb`, `xauth` and
 `openbox` and `xcompmgr`; the launcher checks window-manager readiness and saves its log in
 `test-results/desktop.log`. An existing desktop can be used with
-`CHIAROSCURO_HEADED=1 bun run verify:app`. Node and Bun versions follow
+`CHIAROSCURO_HEADED=1 bun run verify:app`; under WSLg that desktop is the user's Windows
+desktop, so agents use it only when asked. `verify:app:win` also runs on the user's
+Windows desktop and moves the real pointer. Node and Bun versions follow
 `package.json` and `.node-version`. Electron is downloaded by `setup:electron`.
 
 The WSL launcher requires Windows interop, rsync, Python 3, native Windows Bun

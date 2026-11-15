@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
 # Connect playwright-cli to a running Electron app via CDP without navigating any page.
-# Bypasses `playwright-cli open` by writing the daemon session file directly,
-# then uses tab-list to start the daemon and discover pages.
 #
 # Usage: connect-app.sh [--cdp-port PORT]
-#   --cdp-port PORT   CDP port (default: 9333)
+#   --cdp-port PORT   CDP port (default: ELECTRON_APP_PORT from .env.local)
 set -e
 
 CDP_PORT=""
@@ -82,53 +80,18 @@ cat > "$PLAYWRIGHT_DIR/cli.config.json" <<EOF
 EOF
 echo "Wrote $PLAYWRIGHT_DIR/cli.config.json"
 
-# --- Compute daemon hash: SHA1(workspaceDir)[0:16] ---
-HASH=$(echo -n "$WORKSPACE_DIR" | sha1sum | cut -c1-16)
-echo "Session hash: $HASH"
-
-# --- Write session file ---
-DAEMON_DIR="$HOME/.cache/ms-playwright/daemon/$HASH"
-SOCKET_PATH="/tmp/playwright-cli/$HASH/default.sock"
-SESSION_FILE="$DAEMON_DIR/default.session"
-
-mkdir -p "$DAEMON_DIR"
-
-cat > "$SESSION_FILE" <<EOF
-{
-  "version": "$INSTALLED_VERSION",
-  "socketPath": "$SOCKET_PATH",
-  "cli": { "config": "$PLAYWRIGHT_DIR/cli.config.json" },
-  "userDataDirPrefix": "$DAEMON_DIR/ud-default",
-  "workspaceDir": "$WORKSPACE_DIR"
-}
-EOF
-echo "Wrote session file: $SESSION_FILE"
-
-# --- Start daemon via tab-list ---
+# --- Attach the playwright-cli daemon to the CDP endpoint ---
 echo ""
-echo "Starting daemon and discovering pages..."
+echo "Attaching playwright-cli and discovering pages..."
+playwright-cli attach --cdp="$CDP_URL" >/dev/null 2>&1 || {
+  echo "playwright-cli attach failed:"
+  playwright-cli attach --cdp="$CDP_URL" 2>&1 | tail -20
+  exit 1
+}
 TAB_OUTPUT=$(playwright-cli tab-list 2>&1) || {
   echo "tab-list failed:"
   echo "$TAB_OUTPUT"
-  echo ""
-  echo "Retrying after cleanup..."
-  # Clean stale socket/session and retry
-  rm -f "$SOCKET_PATH" "$SESSION_FILE"
-  mkdir -p "$DAEMON_DIR"
-  cat > "$SESSION_FILE" <<EOF2
-{
-  "version": "$INSTALLED_VERSION",
-  "socketPath": "$SOCKET_PATH",
-  "cli": { "config": "$PLAYWRIGHT_DIR/cli.config.json" },
-  "userDataDirPrefix": "$DAEMON_DIR/ud-default",
-  "workspaceDir": "$WORKSPACE_DIR"
-}
-EOF2
-  TAB_OUTPUT=$(playwright-cli tab-list 2>&1) || {
-    echo "tab-list still failed:"
-    echo "$TAB_OUTPUT"
-    exit 1
-  }
+  exit 1
 }
 
 echo "$TAB_OUTPUT"

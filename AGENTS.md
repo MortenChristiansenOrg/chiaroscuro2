@@ -46,5 +46,7 @@ For each logically distinct part of the UI, separate it into a React component. 
 
 Always verify your work compiles and passes checks. Run `bun run verify` for a full check (typecheck, lint, tests). The pre-commit hook runs this automatically, so don't run it redundantly right before committing.
 
-Always browse the application to verify changes affecting the UI. Exceptions are things that cannot be verified with the tooling you have access to, notably animations, drag-n-drop and all user interactions that you cannot simulate.
+Always browse the application to verify changes affecting the UI, using the browse-app skill. Exceptions are things that cannot be verified with the tooling you have access to, notably animations, drag-n-drop and all user interactions that you cannot simulate.
 Do not assume that CSS changes are correct without verifying.
+
+Never open windows on the user's desktop while verifying. Use the invisible paths: `bun run e2e` (Ozone headless), `bun run verify:app` and `bun run agent:app` (Xvfb/headless on Linux), and the browse-app skill's default launch (Xvfb). Do not use `bun dev`, `CHIAROSCURO_HEADED=1` outside Xvfb, `bun run verify:app:win`, the Windows diagnostics or `launch-app.sh --windows` unless the user asks for it or the behavior can only be checked on native Windows (title-bar drag regions and hit testing, snap keys, maximize/full screen, desktop pointer input). In that case, say so before running it.
