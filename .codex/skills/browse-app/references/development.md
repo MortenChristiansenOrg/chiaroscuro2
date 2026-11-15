@@ -120,14 +120,14 @@ Vite/HMR or an isolated automation session for this request. Do not create
    `file://.../out/renderer/index.html`. Otherwise inspect the native window.
    A debugger connection failure must not terminate a usable manual-test app.
 
-The current `launch-app.sh` default and `bun run dev:win` are **HMR launchers**:
+`launch-app.sh --windows` and `bun run dev:win` are **HMR launchers**:
 they copy only main/preload and serve the renderer from WSL. Do not use them for
 the default Windows manual-testing request. Follow the deployment procedure above.
 
 ### Explicitly requested hot reload
 
 Only when the user explicitly asks for HMR/hot reload, use `bun run dev:win` or
-`.codex/skills/browse-app/scripts/launch-app.sh --rebuild`. These require Vite in
+`.codex/skills/browse-app/scripts/launch-app.sh --windows --rebuild`. These require Vite in
 WSL to remain running and are unsuitable for an independent manual-test session.
 
 ### Optional CDP inspection
@@ -158,7 +158,7 @@ playwright-cli close
 
 # For the manually deployed app: close its Windows window.
 # For an explicitly requested HMR/CDP session:
-.codex/skills/browse-app/scripts/teardown-app.sh --cdp-port PORT
+.codex/skills/browse-app/scripts/teardown-app.sh --windows --cdp-port PORT
 
 # For design system:
 .codex/skills/browse-app/scripts/teardown-docs.sh

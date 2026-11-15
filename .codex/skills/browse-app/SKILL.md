@@ -27,8 +27,17 @@ for target relationships, evidence scope, Windows prerequisites and genuine gaps
   `bun run agent:app --help`.
 - `bun run verify:app:win` runs the same fixture natively on Windows from WSL;
   add `--interactive` for the controller.
-- `launch-app.sh --isolated` and `launch-app.sh --verify` delegate to these paths.
-  They do not use a personal browsing profile or fixed debug port.
+- `launch-app.sh` (no flags) builds if `out/` is stale, runs the built app inside
+  Xvfb in WSL with a temporary profile and attaches `playwright-cli` via CDP. No
+  window appears on the user's desktop. Session details are in
+  `test-results/browse-app/session.env`; stop it with `teardown-app.sh`.
+- `launch-app.sh --isolated` and `launch-app.sh --verify` delegate to `agent:app`
+  and `verify:app`. They do not use a personal browsing profile or fixed debug port.
+
+Never open windows on the user's desktop while verifying. `verify:app:win`, the
+Windows diagnostics, `launch-app.sh --windows`, `bun dev` and `CHIAROSCURO_HEADED=1`
+outside Xvfb all show windows; use them only when the user asks or the behavior
+can only be checked on native Windows, and say so first.
 
 Start with `targets`, then `inspect` the correct ID. Built-in pages share the
 shell renderer; sub-tabs and palettes are distinct targets. Use visible UI

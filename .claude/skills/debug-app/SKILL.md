@@ -9,7 +9,16 @@ Inspect and control the running Chiaroscuro app via the debug HTTP server (`127.
 
 ## Prerequisites
 
-The app must be running in dev mode (`bun dev`). The debug server is enabled by default in dev. Port defaults to `19400`; if busy, tries up to 10 consecutive ports. Configurable in Settings > Developer.
+The app must be running. Start it invisibly with the browse-app skill's `launch-app.sh` (do not start `bun dev` yourself; it opens a window on the user's desktop). That session runs the debug server on a random port with a token:
+
+```bash
+source test-results/browse-app/session.env
+curl -s -H "Authorization: Bearer $DEBUG_TOKEN" "$DEBUG_URL/?pretty"
+```
+
+Use `$DEBUG_URL` in place of `http://127.0.0.1:19400` below and add the `Authorization` header to every request.
+
+When the user runs the app with `bun dev`, the debug server is enabled by default without a token. Port defaults to `19400`; if busy, tries up to 10 consecutive ports. Configurable in Settings > Developer.
 
 ## Base URL
 
