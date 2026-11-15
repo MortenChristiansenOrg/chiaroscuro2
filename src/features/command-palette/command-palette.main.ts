@@ -2,6 +2,7 @@ import type { CommandBus } from "../../bus/command-bus";
 import type { EventBus } from "../../bus/event-bus";
 import type { DataStore } from "../../data/types";
 import type { Platform } from "../../platform/types";
+import { isBuiltInUrl } from "../../shared/built-in-pages";
 import { defineFeature } from "../../shared/define-feature";
 import { logError, logWarn } from "../../shared/log";
 import type { TabId, WindowId, WorkspaceId } from "../../shared/types";
@@ -148,22 +149,15 @@ export default defineFeature<Deps>({
       const url = resolveInput(payload.command, providerConfig);
       if (!url) return;
 
-      if (payload.editUrl) {
-        const tabId = getActiveTabId();
-        const tabUrl = tabId && getTabUrl(tabId);
-        if (tabUrl && isCurrentUrl(url, tabUrl)) return;
-      }
+      const tabId = getActiveTabId();
+      const tabUrl = tabId && getTabUrl(tabId);
+      if (payload.editUrl && tabUrl && isCurrentUrl(url, tabUrl)) return;
 
-      // Built-in pages always open via tabs:create (handles singleton + builtIn flag)
-      if (url.startsWith("/")) {
-        await commands.send("tabs:create", { url });
-      } else if (payload.inCurrentTab || payload.editUrl) {
-        const tabId = getActiveTabId();
-        if (tabId) {
-          await commands.send("tabs:navigate", { url });
-        } else {
-          await commands.send("tabs:create", { url });
-        }
+      // Built-in pages always open via tabs:create (handles singleton + builtIn flag).
+      // A built-in page has no web view to navigate, so a web address opens in a new tab.
+      const inCurrentTab = payload.inCurrentTab || payload.editUrl;
+      if (!url.startsWith("/") && inCurrentTab && tabUrl && !isBuiltInUrl(tabUrl)) {
+        await commands.send("tabs:navigate", { url });
       } else {
         await commands.send("tabs:create", { url });
       }

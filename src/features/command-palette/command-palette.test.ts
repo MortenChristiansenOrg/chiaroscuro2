@@ -277,6 +277,27 @@ describe("command-palette commands", () => {
       expect(create).not.toHaveBeenCalled();
     });
 
+    it.each([
+      ["/settings"],
+      [`/pdf-reader?url=${encodeURIComponent("https://example.com/a.pdf")}`],
+    ])("opens a web address from the built-in page %j in a new tab", async (tabUrl) => {
+      const { commands, create, navigate } = setupEdit(tabUrl);
+      await commands.send(COMMAND_PALETTE_EXECUTE, { command: "example.org", editUrl: true });
+      await commands.send(COMMAND_PALETTE_EXECUTE, { command: "example.net", inCurrentTab: true });
+      expect(navigate).not.toHaveBeenCalled();
+      expect(create.mock.calls).toEqual([
+        [{ url: "https://example.org" }],
+        [{ url: "https://example.net" }],
+      ]);
+    });
+
+    it("opens a built-in page in its own tab", async () => {
+      const { commands, create, navigate } = setupEdit("https://example.com/");
+      await commands.send(COMMAND_PALETTE_EXECUTE, { command: "/settings", editUrl: true });
+      expect(navigate).not.toHaveBeenCalled();
+      expect(create).toHaveBeenCalledWith({ url: "/settings" });
+    });
+
     it("still reloads the current address without editUrl", async () => {
       const { commands, navigate } = setupEdit("https://example.com/");
       await commands.send(COMMAND_PALETTE_EXECUTE, {

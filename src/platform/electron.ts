@@ -296,7 +296,6 @@ function esc(s){var d=document.createElement('span');d.textContent=s;return d.in
 
 async function execute(value,inCurrentTab,scriptId){
   if(!value.trim()||executing)return;
-  if(editUrl!==null&&!scriptId&&value.trim()===editUrl){closePalette();return}
   var version=++executionVersion;
   executing=true;$('input').disabled=true;$('error').style.display='none';
   try{

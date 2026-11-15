@@ -31,6 +31,7 @@ This is the primary navigation interface — there is no persistent address bar.
 - The palette must show suggestions based on navigation history and open tabs as the user types.
 - Clicking the address in the title bar must open the palette on the current tab's address, all of it selected. Completing it changes the current tab's address instead of opening a new tab.
 - Leaving the palette with Escape when editing an address must change nothing. Going to the address the tab already has must also change nothing: the page does not reload.
+- Built-in pages, such as Settings or the PDF reader, have no web page to replace. Going from one to a web address, whether by editing its address or with the "current tab" modifier, opens the address in a new tab. Going to a built-in page always opens it, or switches to it when it is already open.
 - Search providers must be configurable in settings.
 - The default search provider (no bang) must be configurable, defaulting to Google.
 
@@ -61,6 +62,7 @@ This is the primary navigation interface — there is no persistent address bar.
 - The palette opens with the current tab's address, all of it selected. For a PDF, this is the PDF's own address.
 - Type a new address or search and press Enter, or click a suggestion. The current tab goes there.
 - Press Escape to leave the tab as it was. Pressing Enter on the address the tab already has also leaves it as it was.
+- From a built-in page, the address opens in a new tab instead, and a built-in destination opens in its own tab (see Requirements).
 
 ### Use suggestions
 
