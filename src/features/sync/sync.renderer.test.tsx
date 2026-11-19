@@ -112,6 +112,21 @@ it("asks before disconnecting, and moves focus to the form afterwards", async ()
   await waitFor(() => expect(screen.getByLabelText("Service URL")).toHaveFocus());
 });
 
+it("leaves the confirmation once disconnected, even when cleaning up afterwards failed", async () => {
+  vi.mocked(window.chiaroscuro.sendCommand).mockImplementation(async () => {
+    useSyncStore.setState({ state: DISCONNECTED_SYNC_STATE });
+    throw new Error("EISDIR: illegal operation on a directory");
+  });
+  useSyncStore.setState({ state: connected });
+  render(<SyncSettingsSection />);
+  fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
+  fireEvent.click(screen.getByRole("button", { name: "Stop syncing" }));
+  await waitFor(() => expect(screen.getByLabelText("Service URL")).toHaveFocus());
+  // Connecting again shows the usual buttons, not the old confirmation.
+  useSyncStore.setState({ state: connected });
+  expect(await screen.findByRole("button", { name: "Disconnect" })).toBeVisible();
+});
+
 it("shows Loading until the real state arrives", () => {
   useSyncStore.setState({ state: DISCONNECTED_SYNC_STATE, loaded: false });
   render(<SyncSettingsSection />);

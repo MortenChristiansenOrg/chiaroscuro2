@@ -60,7 +60,10 @@ export function SyncSettingsSection({ state: shown }: { state?: SyncState } = {}
   }
 
   async function disconnect() {
-    if (await send("sync:disconnect")) {
+    await send("sync:disconnect");
+    // Stopped, even if cleaning up afterwards failed: the form replaces the confirmation.
+    // Otherwise the confirmation stays, with the alert, to try again.
+    if (!useSyncStore.getState().state.connected) {
       setConfirming(false);
       requestAnimationFrame(() => urlRef.current?.focus());
     }
