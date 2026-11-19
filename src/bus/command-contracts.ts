@@ -20,6 +20,7 @@ import { commandContracts as pipContracts } from "../features/pip/pip.contracts"
 import { commandContracts as settingsContracts } from "../features/settings/settings.contracts";
 import { commandContracts as sidebarContracts } from "../features/sidebar/sidebar.contracts";
 import { commandContracts as subTabsContracts } from "../features/sub-tabs/sub-tabs.contracts";
+import { commandContracts as syncContracts } from "../features/sync/sync.contracts";
 import { commandContracts as tabContextMenuContracts } from "../features/tab-context-menu/tab-context-menu.contracts";
 import { commandContracts as tabCustomizationContracts } from "../features/tab-customization/tab-customization.contracts";
 import { commandContracts as tabsContracts } from "../features/tabs/tabs.contracts";
@@ -52,6 +53,7 @@ export const commandContracts = {
   ...settingsContracts,
   ...sidebarContracts,
   ...subTabsContracts,
+  ...syncContracts,
   ...tabContextMenuContracts,
   ...tabCustomizationContracts,
   ...tabsContracts,

@@ -86,6 +86,8 @@ const watchers = new Map<string, fs.FSWatcher>();
 
 let cssDir: string;
 let deps: DomainCssDeps;
+// Sync must not read before saved state loads, or every domain would look removed.
+let loaded = false;
 let stopNavigationBlock: (() => void) | undefined;
 
 function shouldBlock(rule: NavigationBlockRule, targetUrl: string, currentUrl: string): boolean {
@@ -241,6 +243,7 @@ function startWatching(domain: string): void {
         }
         // File was changed — re-inject
         await injectOrRemoveForAllTabs(domain);
+        emitChanged(domain);
       };
       handleChange().catch(logError("domain-css", `watch ${domain}`));
     });
@@ -274,6 +277,7 @@ async function persistStates(): Promise<void> {
 export default defineFeature<DomainCssDeps>({
   register(d_) {
     deps = d_;
+    loaded = false;
     cssDir = path.join(d_.dataDir, "domain-css");
     domainStates = new Map();
     navigationStates = new Map();
@@ -451,6 +455,7 @@ export default defineFeature<DomainCssDeps>({
   },
 
   teardown() {
+    loaded = false;
     if (stopNavigationBlock) {
       stopNavigationBlock();
       stopNavigationBlock = undefined;
@@ -498,8 +503,78 @@ export default defineFeature<DomainCssDeps>({
         });
       }
     }
+    loaded = true;
   },
 });
+
+/** A domain's styles and navigation rules, as sync stores them. */
+export interface DomainCustomization {
+  css: string | null;
+  enabled: boolean;
+  navigation: Omit<DomainNavigationState, "domain">;
+}
+
+function readCustomization(domain: string): DomainCustomization | null {
+  const css = readCssFile(domain);
+  const enabled = domainStates.get(domain)?.enabled ?? false;
+  const navigation = navigationStates.get(domain) ?? DEFAULT_DOMAIN_NAVIGATION_STATE;
+  if (css === null && !enabled && isNavigationDefault(navigation)) return null;
+  return { css, enabled, navigation: structuredClone(navigation) };
+}
+
+/** Every domain with a stylesheet, enabled CSS or navigation rules. */
+export function listDomainCustomizations(): Map<string, DomainCustomization> {
+  if (!loaded) throw new Error("Domain settings haven't loaded yet.");
+  const domains = new Set([...domainStates.keys(), ...navigationStates.keys()]);
+  for (const file of fs.readdirSync(cssDir)) {
+    const domain = file.endsWith(".css") ? file.slice(0, -4) : "";
+    if (isValidDomain(domain)) domains.add(domain);
+  }
+  const result = new Map<string, DomainCustomization>();
+  for (const domain of domains) {
+    const customization = readCustomization(domain);
+    if (customization) result.set(domain, customization);
+  }
+  return result;
+}
+
+export function getDomainCustomization(domain: string): DomainCustomization | null {
+  if (!loaded) throw new Error("Domain settings haven't loaded yet.");
+  return readCustomization(domain);
+}
+
+/**
+ * Replace a domain's customization with another machine's version (`null` removes it). The
+ * local state changes before the first await, so a caller that checked the current version
+ * with `getDomainCustomization` just before calling can't overwrite a change made meanwhile.
+ */
+export async function applyDomainCustomization(
+  domain: string,
+  value: DomainCustomization | null,
+): Promise<void> {
+  if (!loaded) throw new Error("Domain settings haven't loaded yet.");
+  const file = getCssFilePath(domain);
+  stopWatching(domain);
+  if (value?.css == null) fs.rmSync(file, { force: true });
+  else if (readCssFile(domain) !== value.css) {
+    fs.mkdirSync(cssDir, { recursive: true });
+    fs.writeFileSync(file, value.css);
+  }
+  if (value) domainStates.set(domain, { enabled: value.enabled });
+  else domainStates.delete(domain);
+  if (value && !isNavigationDefault(value.navigation))
+    navigationStates.set(domain, structuredClone(value.navigation));
+  else navigationStates.delete(domain);
+  await persistStates();
+  await persistNavigationStates();
+  await injectOrRemoveForAllTabs(domain);
+  if (value?.enabled && value.css !== null) startWatching(domain);
+  emitChanged(domain);
+  deps.events.emit(DOMAIN_NAVIGATION_CHANGED, {
+    domain,
+    ...structuredClone(navigationStates.get(domain) ?? DEFAULT_DOMAIN_NAVIGATION_STATE),
+  });
+}
 
 export interface CssSnapshot {
   source: string | null;

@@ -362,7 +362,7 @@ JSON files:       settings.json (including sidebar width), shortcuts.json, exten
 Electron profile: named persistent shell bounds and display mode
 ```
 
-**Cloud sync (Convex — optional)**: All data is local-only by default. Convex can be added as a separate optional data store for selective cross-device sync (bookmarks, workspace definitions, user preferences). Convex is not a sync layer for RxDB — it's an independent store for data the user opts to sync. Local RxDB remains the source of truth; synced data is mirrored to/from Convex when connected.
+**Sync (optional)**: All data is local-only until the user connects a machine in Settings → Sync. Domain CSS, navigation rules and website scripts then sync through the user's own `app-data-service` deployment, one document per item. Local data stays the source of truth: sync uploads local changes, applies other machines' changes, merges edits to different properties and asks the user about real conflicts. See [Sync](../features/SyncFeature.specs.md).
 
 ## Session identity and GitHub diagnostics
 

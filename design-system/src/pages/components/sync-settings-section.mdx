@@ -1,0 +1,81 @@
+---
+title: Sync Settings Section
+---
+
+import { ComponentPreview } from "../../components/ComponentPreview"
+import { SyncSettingsSection } from "@features/sync/SyncSettingsSection"
+
+# Sync Settings Section
+
+## Overview
+
+`src/features/sync/SyncSettingsSection.tsx` connects this machine to the app data service in application Settings → Sync, and shows how syncing domain styles, navigation rules and website scripts is going.
+
+## Anatomy
+
+1. Description of what syncs, including that scripts from other machines run here.
+2. Disconnected: Service URL and Key for this machine fields, guidance on creating a key, and Connect.
+3. Connected: last sync status, the service address, a read-only key notice when it applies, Sync now and Disconnect.
+4. The most recent failure, with its time.
+5. [Sync Issue List](/components/sync-issue-list) for items that need attention.
+
+## Visual Preview
+
+<ComponentPreview label="Disconnected">
+  <SyncSettingsSection state={{ connected: false, syncing: false, readOnly: false, issues: [] }} />
+</ComponentPreview>
+
+<ComponentPreview label="Connected">
+  <SyncSettingsSection state={{ connected: true, serviceUrl: "https://your-deployment.convex.site", syncing: false, readOnly: false, lastSyncedAt: Date.UTC(2026, 10, 19, 9, 30), issues: [] }} />
+</ComponentPreview>
+
+<ComponentPreview label="Connected with a failure and items that need attention">
+  <SyncSettingsSection state={{ connected: true, serviceUrl: "https://your-deployment.convex.site", syncing: false, readOnly: true, lastSyncedAt: Date.UTC(2026, 10, 19, 9, 30), lastFailedAt: Date.UTC(2026, 10, 19, 9, 45), error: "Couldn't reach the sync service. Changes stay on this machine and sync once it can be reached.", issues: [{ id: "domains/example.com", label: "example.com styles and navigation rules", kind: "conflict", message: "Changed on this machine and on another." }] }} />
+</ComponentPreview>
+
+## Visual Specs
+
+| Property | Token / value |
+|---|---|
+| Layout | Shared SettingsLayout / SettingItem |
+| Surface / foreground | `--background`, `--foreground` |
+| Secondary text | `--muted-foreground` |
+| Errors | `--destructive` |
+| Fields / radius | `--input`, `--radius-sm` |
+| Text | `--text-sm` |
+| Control height | `--click-target-min` |
+| Gaps | 0.5rem within a group, 0.75rem between groups |
+
+## States
+
+Disconnected shows the connection form; Connect reads Connecting… while the key is checked, and a failure keeps both fields filled in with an alert explaining what to do. Connected shows Syncing… during a sync, then Last synced with the date and time, or Not synced yet. Sync now is disabled while a sync runs. A read-only key adds a note that changes made here aren't uploaded. A failed sync shows an alert with the time it failed until a later sync succeeds.
+
+Buttons use `--accent` on hover, `--muted` when pressed, and `--ring` for focus. Disabled controls have 0.5 opacity and no interactive hover.
+
+## Variants
+
+One component covers disconnected and connected. Previews pass `state`; the app reads the sync store.
+
+## Behavior
+
+Connecting checks the key with the service before saving it, encrypted, in the main process; the key field clears afterwards and is never shown again. Disconnect forgets the key and sync history on this machine and keeps all local customizations.
+
+## Animation & Motion
+
+Control colors transition using `--duration-fast` / `--ease-out`; reduced motion removes transitions.
+
+## Keyboard & Focus
+
+Tab follows field and button order. Enter in either field submits the form. The key field is a password field without autocomplete or spell checking.
+
+## Accessibility
+
+Labelled fields, semantic buttons, a live status for the sync state, and alert errors. Controls meet `--click-target-min` and have visible focus outlines.
+
+## Layout & Composition
+
+The section follows the AI section in Settings. Fields stack vertically; buttons wrap on narrow widths. Long service addresses wrap.
+
+## Related
+
+[Sync Issue List](/components/sync-issue-list), [Settings Page](/components/settings-page), [AI Settings Section](/components/ai-settings-section).

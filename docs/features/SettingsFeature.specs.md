@@ -66,3 +66,7 @@ None.
 - Authentication, plan permission, usage limits, temporary service errors, and incomplete streams have recovery guidance; generated drafts and current customizations survive failure.
 
 Official protocol: https://developers.openai.com/siwc/token-sharing-open-source/sign-in and https://developers.openai.com/siwc/token-sharing-open-source/preview-limitations.
+
+## Sync
+
+The Sync category embeds [SyncSettingsSection](../../src/features/sync/SyncSettingsSection.tsx): connect this machine to the user's app-data-service deployment, see the last sync and any failure, sync now, disconnect, and settle conflicts. Behavior is specified in [Sync](SyncFeature.specs.md).

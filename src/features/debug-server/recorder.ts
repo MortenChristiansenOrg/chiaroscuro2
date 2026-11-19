@@ -17,10 +17,17 @@ const MAX_ENTRIES = 1000;
 let nextId = 1;
 const buffer: RecordedEntry[] = [];
 
+/** Credentials in command payloads, such as a sync key, are never recorded. */
+const SECRET_FIELD = /^(apiKey|password|secret|token|accessToken|refreshToken|idToken)$/i;
+
 function safeCopy(value: unknown): unknown {
   if (value === undefined) return undefined;
   try {
-    return JSON.parse(JSON.stringify(value));
+    return JSON.parse(
+      JSON.stringify(value, (key, item) =>
+        SECRET_FIELD.test(key) && item !== undefined ? "[redacted]" : item,
+      ),
+    );
   } catch {
     return "[unserializable]";
   }

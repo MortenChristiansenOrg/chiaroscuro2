@@ -94,6 +94,9 @@ import sidebar from "../features/sidebar/sidebar.main";
 import type { SidebarCommands, SidebarEvents } from "../features/sidebar/sidebar.shared";
 import subTabs, { getSubTabSnapshot } from "../features/sub-tabs/sub-tabs.main";
 import type { SubTabsCommands, SubTabsEvents } from "../features/sub-tabs/sub-tabs.shared";
+import { domainCustomizationSource, domainScriptSource } from "../features/sync/sources.main";
+import sync from "../features/sync/sync.main";
+import type { SyncCommands, SyncEvents } from "../features/sync/sync.shared";
 import tabContextMenu from "../features/tab-context-menu/tab-context-menu.main";
 import type {
   TabContextMenuCommands,
@@ -220,6 +223,7 @@ type AllCommands = MergeRegistries<
     PdfReaderCommands,
     ExtensionsCommands,
     PipCommands,
+    SyncCommands,
   ]
 >;
 
@@ -255,6 +259,7 @@ type AllEvents = MergeRegistries<
     PdfReaderEvents,
     ExtensionsEvents,
     PipEvents,
+    SyncEvents,
   ]
 >;
 
@@ -445,26 +450,35 @@ if (gotLock) {
     });
     devTools.register(deps);
     domainCss.register({ ...deps, dataDir, getTabsSnapshot: websiteScriptDeps.getPageSnapshots });
+    // Credentials stay in main, encrypted with the OS keyring. Linux's plain-text fallback
+    // isn't encryption, so it's refused.
+    const keyringProtection = (requirement: string) => ({
+      encrypt(value: string) {
+        if (
+          !safeStorage.isEncryptionAvailable() ||
+          (process.platform === "linux" && safeStorage.getSelectedStorageBackend() === "basic_text")
+        )
+          throw new Error(requirement);
+        return safeStorage.encryptString(value);
+      },
+      decrypt(value: Uint8Array) {
+        return safeStorage.decryptString(Buffer.from(value));
+      },
+    });
     const aiProvider = createChatGptClient(
       path.join(dataDir, "ai"),
-      {
-        encrypt(value) {
-          if (
-            !safeStorage.isEncryptionAvailable() ||
-            (process.platform === "linux" &&
-              safeStorage.getSelectedStorageBackend() === "basic_text")
-          )
-            throw new Error("ChatGPT sign-in requires a secure system keyring.");
-          return safeStorage.encryptString(value);
-        },
-        decrypt(value) {
-          return safeStorage.decryptString(Buffer.from(value));
-        },
-      },
+      keyringProtection("ChatGPT sign-in requires a secure system keyring."),
       (url) => platform.openExternal(url),
     );
     ai.register({ ...websiteScriptDeps, provider: aiProvider });
     domainScripts.register(websiteScriptDeps);
+    const syncProtection = keyringProtection("Sync requires a secure system keyring.");
+    sync.register({
+      ...deps,
+      directory: path.join(dataDir, "sync"),
+      protection: syncProtection,
+      sources: [domainCustomizationSource, domainScriptSource],
+    });
     downloads.register(deps);
     findText.register(deps);
     tabCustomization.register({ ...deps, getTab, isPinned });
@@ -544,6 +558,7 @@ if (gotLock) {
           getDebugPort: getActualPort,
           ready: false,
           aiProvider,
+          syncProtection,
         },
       });
     }
@@ -587,6 +602,8 @@ if (gotLock) {
         dataDir,
         getTabsSnapshot: websiteScriptDeps.getPageSnapshots,
       });
+      // After the data it syncs has loaded.
+      await sync.start?.();
       downloads.start?.(deps);
       await startTabCustomization({ ...deps, getTab, isPinned });
       terminal.start?.(deps);
@@ -632,6 +649,7 @@ if (gotLock) {
     extensions.teardown?.();
     ai.teardown?.();
     domainScripts.teardown?.();
+    sync.teardown?.();
     debugServer.teardown?.();
     localWebApp.teardown?.();
     installer.teardown?.();

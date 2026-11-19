@@ -14,6 +14,7 @@
   },
   "include": [
     "src/features/ai/**/*.tsx",
+    "src/features/sync/*.tsx",
     "src/renderer/**/*",
     "src/bus/**/*",
     "src/shared/**/*",

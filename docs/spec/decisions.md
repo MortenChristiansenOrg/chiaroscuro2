@@ -5,7 +5,7 @@
 - **Sessions**: Shared by default, per-tab isolation toggle available
 - **DevTools**: Standard Chromium DevTools (no custom enhancements initially)
 - **Navigation**: Arc-style command palette with bang syntax (`!g`, `!gh`, etc.), no persistent address bar
-- **Sync**: Local-first (RxDB). Optional Convex as separate sync store for selected data (bookmarks, workspace defs, preferences). Convex is independent, not an RxDB sync layer — local RxDB remains source of truth
+- **Sync**: Local-first. Optional sync of domain CSS, navigation rules and website scripts through the user's own `app-data-service` deployment (Convex-backed JSON documents with revisions); local data stays the source of truth. See [Sync](../features/SyncFeature.specs.md)
 - **Search**: Configurable providers via bang syntax, DuckDuckGo as default
 - **Tab persistence**: Three-tier model (pinned=global/forever, bookmark=workspace/forever, ephemeral=workspace/8hr TTL)
 - **Extension storage**: Let Electron handle via built-in partition (simplest approach)
@@ -16,7 +16,7 @@
 - **Chrome extensions**: Keep Electron and use an in-house adapter around its native extension runtime. Prioritize the unmodified Bitwarden extension; retain native vault storage and messaging. Validate concrete workflows instead of estimating API coverage. No third-party GPL/proprietary compatibility dependency.
 - **Build tooling**: `electron-builder` ^26 + `electron-vite`. Forge doesn't support Bun, has experimental Vite plugin. electron-builder has built-in `electron-updater`, better cross-compilation, more CI examples.
 - **Tailwind 4 + shadcn**: Fully compatible since Feb 2025. Use `@tailwindcss/vite` plugin with `"moduleResolution": "bundler"`. Requires Electron 24+ (Chrome 112+).
-- **Storage**: RxDB (free Filesystem RxStorage) for structured data, JSON for settings. No SQL. All local-only by default; optional Convex sync for selected data (future). No native modules required — pure JS, no `@electron/rebuild` needed for storage.
+- **Storage**: RxDB (free Filesystem RxStorage) for structured data, JSON for settings. No SQL. All local-only by default; optional sync of selected data through app-data-service. No native modules required — pure JS, no `@electron/rebuild` needed for storage.
 - **State management**: Zustand v5, one store per feature. Inline selectors (`useStore(s => s.field)`) work with React Compiler. Avoid auto-generated selectors (`.use.bears()`). Use `useShallow` for multi-field.
 - **Tab lifecycle**: Three-tier (active → suspended → evicted). Configurable thresholds in Settings. Screenshot + nav history preserved on eviction, `navigationHistory.restore()` on focus.
 - **Multi-window**: Main-process authoritative, single bus, renderer projections via IPC. Pinned tabs global + reparented between windows. `electron-window-state` for persistence.

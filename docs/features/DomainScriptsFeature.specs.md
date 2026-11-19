@@ -4,7 +4,8 @@
 
 Personal JavaScript scripts customize the websites used in this browser. Scripts
 belong to an exact domain and can run after page loads or manually through the
-command palette and optional aliases and shortcuts. All scripts remain local.
+command palette and optional aliases and shortcuts. Scripts stay on this machine unless
+the user turns on [Sync](SyncFeature.specs.md), which shares them with their other machines.
 
 ## Terminology
 

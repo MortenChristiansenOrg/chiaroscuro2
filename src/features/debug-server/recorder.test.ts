@@ -49,3 +49,15 @@ it("does not retain a pending command after recording is disabled and re-enabled
   expect(toJSON).not.toHaveBeenCalled();
   expect(recorder.getHistory()).toEqual([]);
 });
+
+it("records credentials in payloads as redacted", async () => {
+  const recorder = await import("./recorder");
+  const commands = new CommandBus<{ connect: { payload: object; response: undefined } }>();
+  recorder.register(commands, new EventBus(), true);
+  commands.handle("connect", () => undefined);
+  await commands.send("connect", { url: "https://sync.example", apiKey: "ads_secret" });
+  expect(recorder.getHistory()[1]?.payload).toEqual({
+    url: "https://sync.example",
+    apiKey: "[redacted]",
+  });
+});

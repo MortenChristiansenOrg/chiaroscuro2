@@ -1,0 +1,71 @@
+---
+title: Sync Issue List
+---
+
+import { ComponentPreview } from "../../components/ComponentPreview"
+import { SyncIssueList } from "@features/sync/SyncIssueList"
+
+# Sync Issue List
+
+## Overview
+
+`src/features/sync/SyncIssueList.tsx` lists the items sync couldn't settle on its own, inside the [Sync Settings Section](/components/sync-settings-section).
+
+## Anatomy
+
+1. Needs attention heading.
+2. One bordered row per item: the item's name and what happened.
+3. For a conflict, Keep this machine's version and Use the other machine's version.
+
+## Visual Preview
+
+<ComponentPreview label="Conflict, too large, and not applied">
+  <SyncIssueList onResolve={() => {}} issues={[
+    { id: "domains/example.com", label: "example.com styles and navigation rules", kind: "conflict", message: "Changed on this machine and on another." },
+    { id: "scripts/1", label: "Script “Export table” on example.com", kind: "too-large", message: "Too large to sync. The service says: “JSON values are limited to 128 KiB.” It stays on this machine." },
+    { id: "scripts/2", label: "Script “Copy title” on github.com", kind: "not-applied", message: "Alias /copy-title is already used on this domain." },
+  ]} />
+</ComponentPreview>
+
+## Visual Specs
+
+| Property | Token / value |
+|---|---|
+| Row border / radius | `--border`, `--radius-sm` |
+| Row padding | 0.75rem |
+| Name | `--foreground`, medium weight |
+| Explanation | `--muted-foreground` |
+| Text | `--text-sm` |
+| Control height | `--click-target-min` |
+
+## States
+
+Renders nothing when no item needs attention. Conflict rows offer both choices; other rows only explain what happened, because they settle once the item changes (too large, refused) or the cause is fixed (not applied). Buttons are disabled while a choice is being applied.
+
+## Variants
+
+Kinds: `conflict`, `too-large`, `not-uploaded` and `not-applied`. Size limits come from the service's own message, never from the browser.
+
+## Behavior
+
+Choosing a version keeps it on every machine. If either version changed since the list was shown, the choice is refused with an explanation and the list refreshes.
+
+## Animation & Motion
+
+Control colors transition using `--duration-fast` / `--ease-out`; reduced motion removes transitions.
+
+## Keyboard & Focus
+
+Tab moves through each row's buttons in order.
+
+## Accessibility
+
+A named list ("Items that didn't sync") of rows with plain-text explanations; choices are semantic buttons with visible focus outlines.
+
+## Layout & Composition
+
+Rows stack with 0.5rem gaps; conflict buttons wrap on narrow widths.
+
+## Related
+
+[Sync Settings Section](/components/sync-settings-section), [Settings Page](/components/settings-page).
