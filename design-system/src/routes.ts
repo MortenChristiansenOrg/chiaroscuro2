@@ -20,6 +20,18 @@ export const routes: Route[] = [
     group: "Components",
     component: lazy(() => import("./pages/components/ai-request-panel.mdx")),
   },
+  {
+    path: "/components/sync-settings-section",
+    title: "Sync Settings Section",
+    group: "Components",
+    component: lazy(() => import("./pages/components/sync-settings-section.mdx")),
+  },
+  {
+    path: "/components/sync-issue-list",
+    title: "Sync Issue List",
+    group: "Components",
+    component: lazy(() => import("./pages/components/sync-issue-list.mdx")),
+  },
   // Overview
   { path: "/", title: "Overview", component: lazy(() => import("./pages/index.mdx")) },
 

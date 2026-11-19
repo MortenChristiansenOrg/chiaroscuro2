@@ -1,4 +1,5 @@
 import "../../features/ai/ai.feature";
+import "../../features/sync/sync.feature";
 // Feature registrations — each import subscribes to events synchronously (phase 1)
 import "../../features/app-state/app-state.feature";
 import "../../features/window-chrome/window-chrome.feature";

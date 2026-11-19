@@ -328,6 +328,9 @@ describe("domain website scripts", () => {
     );
     expect(context.shortcuts.has("ctrl+shift+y")).toBe(true);
     expect(changed).not.toHaveBeenCalled();
+    // Saves must reach the disk, so a failure is reported instead of lost on restart.
+    for (const call of vi.mocked(context.dataStore.setSetting).mock.calls)
+      expect(call[2]).toEqual({ durable: true });
   });
 
   it("rejects browser/other script shortcut collisions and releases disabled or removed shortcuts", async () => {

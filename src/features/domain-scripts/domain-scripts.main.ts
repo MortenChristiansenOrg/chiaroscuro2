@@ -49,6 +49,35 @@ interface PageState {
 }
 let cleanup: (() => void) | undefined;
 let begin: (() => Promise<void>) | undefined;
+let syncAccess:
+  | {
+      list(): DomainScript[];
+      apply(
+        id: string,
+        script: DomainScript | null,
+        isCurrent: (current: DomainScript | null) => boolean,
+      ): Promise<boolean>;
+    }
+  | undefined;
+
+/** Every saved script, for sync. Throws until saved scripts have loaded. */
+export function listScriptsForSync(): DomainScript[] {
+  if (!syncAccess) throw new Error("Website scripts haven't loaded yet.");
+  return syncAccess.list();
+}
+
+/**
+ * Replace a script with another machine's version (`null` removes it). Resolves `false`
+ * without changing anything when `isCurrent` rejects the script as it is now.
+ */
+export function applySyncedScript(
+  id: string,
+  script: DomainScript | null,
+  isCurrent: (current: DomainScript | null) => boolean,
+): Promise<boolean> {
+  if (!syncAccess) throw new Error("Website scripts haven't loaded yet.");
+  return syncAccess.apply(id, script, isCurrent);
+}
 
 export default defineFeature<DomainScriptsDeps>({
   register(deps) {
@@ -267,7 +296,7 @@ export default defineFeature<DomainScriptsDeps>({
           unbind = bind(script);
           const next = scripts.filter((current) => current.id !== script.id);
           next.push(script);
-          await dataStore.setSetting(DOMAIN_SCRIPTS_SETTING, next);
+          await dataStore.setSetting(DOMAIN_SCRIPTS_SETTING, next, { durable: true });
           scripts = next;
           if (unbind) shortcuts.set(script.id, unbind);
           publish(script.domain);
@@ -287,7 +316,7 @@ export default defineFeature<DomainScriptsDeps>({
         const previous = scripts.find((script) => script.id === id);
         if (!previous) return;
         const next = scripts.filter((script) => script.id !== id);
-        await dataStore.setSetting(DOMAIN_SCRIPTS_SETTING, next);
+        await dataStore.setSetting(DOMAIN_SCRIPTS_SETTING, next, { durable: true });
         scripts = next;
         shortcuts.get(id)?.();
         shortcuts.delete(id);
@@ -332,6 +361,44 @@ export default defineFeature<DomainScriptsDeps>({
       return { handled: true };
     });
 
+    const access: NonNullable<typeof syncAccess> = {
+      list: () => scripts.map((script) => ({ ...script })),
+      apply: (id, input, isCurrent) =>
+        mutate(async () => {
+          const previous = scripts.find((script) => script.id === id);
+          if (!isCurrent(previous ? { ...previous } : null)) return false;
+          let script: DomainScript | undefined;
+          if (input) {
+            script = normalizeScript(DomainScriptSchema.parse(input));
+            if (script.id !== id) throw new Error("The script's id doesn't match.");
+            // As when saving here: a script never moves to another site, so code written
+            // for one site can't start running on another.
+            if (previous && previous.domain !== script.domain)
+              throw new Error(
+                `The other machine's version runs on ${script.domain} instead of ${previous.domain}. A script's domain can't change.`,
+              );
+            validateUnique(script);
+          }
+          const next = scripts.filter((current) => current.id !== id);
+          if (script) next.push(script);
+          await dataStore.setSetting(DOMAIN_SCRIPTS_SETTING, next, { durable: true });
+          scripts = next;
+          shortcuts.get(id)?.();
+          shortcuts.delete(id);
+          if (script)
+            try {
+              const off = bind(script);
+              if (off) shortcuts.set(id, off);
+            } catch (error) {
+              // Like a restored script, it stays usable through the palette.
+              logError("domain-scripts", `shortcut for synced script ${script.name}`)(error);
+            }
+          const domain = script?.domain ?? previous?.domain;
+          if (domain) publish(domain);
+          return true;
+        }),
+    };
+
     begin = async () => {
       const persisted = await dataStore.getSetting<unknown>(DOMAIN_SCRIPTS_SETTING);
       const entries = Array.isArray(persisted) ? persisted : [];
@@ -354,6 +421,7 @@ export default defineFeature<DomainScriptsDeps>({
         }
       }
       started = true;
+      syncAccess = access;
       for (const domain of new Set(scripts.map((script) => script.domain))) publish(domain);
       for (const [tabId, snapshot] of deps.getPageSnapshots()) {
         attach(tabId, snapshot);
@@ -362,6 +430,7 @@ export default defineFeature<DomainScriptsDeps>({
     };
     cleanup = () => {
       disposed = true;
+      if (syncAccess === access) syncAccess = undefined;
       for (const unsubscribe of subscriptions) unsubscribe();
       for (const tabId of pages.keys()) detach(tabId);
       for (const off of shortcuts.values()) off();

@@ -13,6 +13,7 @@ import {
 import { AiSettingsSection } from "../ai/AiSettingsSection";
 import type { SearchProvider } from "../command-palette/resolve-input";
 import { GlobalPermissionsSection } from "../permissions/global-permissions.renderer";
+import { SyncSettingsSection } from "../sync/SyncSettingsSection";
 import type { Settings } from "./settings.shared";
 import { saveSettings, useSettingsStore } from "./settings.store";
 
@@ -285,10 +286,14 @@ function DeveloperSettings({
 
 // ── SettingsPage (root) ─────────────────────────────────────────
 
+const AI_SEARCH_TEXT = "ai chatgpt model reasoning";
+const SYNC_SEARCH_TEXT = "sync machines service key styles navigation scripts";
+
 const categories = [
   { id: "search", label: "Search" },
   { id: "permissions", label: "Permissions" },
   { id: "ai", label: "AI" },
+  { id: "sync", label: "Sync" },
   { id: "developer", label: "Developer" },
 ];
 
@@ -334,13 +339,19 @@ export default function SettingsPage(_props: { params: Record<string, string> })
         searchQuery={searchQuery}
         showEmptyState={
           !!searchQuery &&
-          !["search providers default search bang", "developer debug server port"].some((text) =>
-            text.includes(searchQuery.toLowerCase()),
-          )
+          ![
+            "search providers default search bang",
+            "developer debug server port",
+            AI_SEARCH_TEXT,
+            SYNC_SEARCH_TEXT,
+          ].some((text) => text.includes(searchQuery.toLowerCase()))
         }
       />
-      {(!searchQuery || "ai chatgpt model reasoning".includes(searchQuery.toLowerCase())) && (
+      {(!searchQuery || AI_SEARCH_TEXT.includes(searchQuery.toLowerCase())) && (
         <AiSettingsSection />
+      )}
+      {(!searchQuery || SYNC_SEARCH_TEXT.includes(searchQuery.toLowerCase())) && (
+        <SyncSettingsSection />
       )}
       <DeveloperSettings settings={settings} onSettingsChange={handleSettingsChange} />
     </SettingsLayout>

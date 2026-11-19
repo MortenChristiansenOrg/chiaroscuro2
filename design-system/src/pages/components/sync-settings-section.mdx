@@ -1,0 +1,82 @@
+---
+title: Sync Settings Section
+---
+
+import { ComponentPreview } from "../../components/ComponentPreview"
+import { SyncSettingsSection } from "@features/sync/SyncSettingsSection"
+
+# Sync Settings Section
+
+## Overview
+
+`src/features/sync/SyncSettingsSection.tsx` connects this machine to the app data service in application Settings → Sync, and shows how syncing domain styles, navigation rules and website scripts is going.
+
+## Anatomy
+
+1. Description of what syncs, including that scripts from other machines run here.
+2. Status line, always present: Loading…, Not connected, Connecting…, Connected, Syncing… or Sync isn't working right now.
+3. Connected: the service address, Last synced and Last failed times, a read-only key notice when it applies, Sync now and Disconnect. Disconnect asks inline before it stops syncing.
+4. Disconnected: Service URL and Key for this machine fields, guidance on what the service is and creating a key, and Connect.
+5. One alert with the current problem and what to do.
+6. [Sync Issue List](/components/sync-issue-list) for items that need attention.
+
+## Visual Preview
+
+<ComponentPreview label="Disconnected">
+  <SyncSettingsSection state={{ connected: false, syncing: false, readOnly: false, issues: [] }} />
+</ComponentPreview>
+
+<ComponentPreview label="Connected">
+  <SyncSettingsSection state={{ connected: true, serviceUrl: "https://your-deployment.convex.site", syncing: false, readOnly: false, lastSyncedAt: Date.UTC(2026, 10, 19, 9, 30), issues: [] }} />
+</ComponentPreview>
+
+<ComponentPreview label="Connected with a failure and items that need attention">
+  <SyncSettingsSection state={{ connected: true, serviceUrl: "https://your-deployment.convex.site", syncing: false, readOnly: true, lastSyncedAt: Date.UTC(2026, 10, 19, 9, 30), lastFailedAt: Date.UTC(2026, 10, 19, 9, 45), error: "Couldn't reach the sync service. Changes stay on this machine and sync once it can be reached.", issues: [{ id: "domains/example.com", label: "example.com styles and navigation rules", kind: "conflict", message: "Changed on this machine and on another.", version: "2:preview" }] }} />
+</ComponentPreview>
+
+## Visual Specs
+
+| Property | Token / value |
+|---|---|
+| Layout | Shared SettingsLayout / SettingItem |
+| Surface / foreground | `--background`, `--foreground` |
+| Secondary text | `--content-text-secondary` |
+| Errors | `--destructive` |
+| Fields / radius | `--input`, `--radius-sm` |
+| Text | `--text-sm` |
+| Control height | `--click-target-min` |
+| Gaps | 0.25rem between a label and its field and within the status block, 0.5rem within a group, 0.75rem between groups |
+
+## States
+
+Loading… shows until the main process reports the real state, so a connected machine never flashes the form. Disconnected shows the connection form; the status reads Connecting… while the key is checked, and a failure keeps both fields filled in, marks them invalid and shows an alert. Connected shows Syncing… only for syncs the user started (Connect, Sync now); background syncs leave the status alone and only update the Last synced line. A failed sync changes the status and shows the alert until a later sync succeeds; Last failed stays visible afterwards. A read-only key adds a note that changes made here aren't uploaded.
+
+Buttons use `--accent` on hover, `--muted` when pressed, and `--ring` for focus. While a command runs, buttons are `aria-disabled` (0.5 opacity, no hover) rather than disabled, so they keep focus; clicks are ignored.
+
+## Variants
+
+One component covers disconnected and connected. Previews pass `state`; the app reads the sync store.
+
+## Behavior
+
+Connecting checks the key with the service before saving it, encrypted, in the main process; the key field clears afterwards and is never shown again. Disconnect forgets the key and sync history on this machine and keeps all local customizations.
+
+## Animation & Motion
+
+Control colors transition using `--duration-fast` / `--ease-out`; reduced motion removes transitions.
+
+## Keyboard & Focus
+
+Tab follows field and button order. Enter in either field submits the form. The key field is a password field without autocomplete or spell checking. After connecting, focus moves to the status line; after a failed attempt, to Service URL; after disconnecting, to Service URL. Opening the Disconnect confirmation moves focus to Cancel, and Cancel moves it back to Disconnect.
+
+## Accessibility
+
+Labelled fields described by the guidance text, semantic buttons, one live status that changes only on user-visible transitions, and one alert. The Disconnect confirmation is a labelled group. Controls meet `--click-target-min` and have visible focus outlines.
+
+## Layout & Composition
+
+The section follows the AI section in Settings. Fields stack vertically; buttons wrap on narrow widths. Long service addresses wrap.
+
+## Related
+
+[Sync Issue List](/components/sync-issue-list), [Settings Page](/components/settings-page), [AI Settings Section](/components/ai-settings-section).

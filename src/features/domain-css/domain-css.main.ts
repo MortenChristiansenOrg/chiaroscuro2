@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import type { CommandBus } from "../../bus/command-bus";
@@ -75,17 +76,36 @@ function queueCss<T>(tabId: TabId, operation: () => Promise<T>): Promise<T> {
   return result;
 }
 
+/** Counts every change per domain, removals included, so a change made meanwhile shows. */
+class EditedMap<V> extends Map<string, V> {
+  private edits = new Map<string, number>();
+  editCount(key: string): number {
+    return this.edits.get(key) ?? 0;
+  }
+  override set(key: string, value: V): this {
+    // Map's constructor calls set before fields exist.
+    this.edits?.set(key, this.editCount(key) + 1);
+    return super.set(key, value);
+  }
+  override delete(key: string): boolean {
+    this.edits.set(key, this.editCount(key) + 1);
+    return super.delete(key);
+  }
+}
+
 // Per-domain state (enabled/disabled)
-let domainStates = new Map<string, DomainState>();
+let domainStates = new EditedMap<DomainState>();
 
 // Per-domain navigation blocking rules
-let navigationStates = new Map<string, Omit<DomainNavigationState, "domain">>();
+let navigationStates = new EditedMap<Omit<DomainNavigationState, "domain">>();
 
 // File watchers
 const watchers = new Map<string, fs.FSWatcher>();
 
 let cssDir: string;
 let deps: DomainCssDeps;
+// Sync must not read before saved state loads, or every domain would look removed.
+let loaded = false;
 let stopNavigationBlock: (() => void) | undefined;
 
 function shouldBlock(rule: NavigationBlockRule, targetUrl: string, currentUrl: string): boolean {
@@ -241,6 +261,7 @@ function startWatching(domain: string): void {
         }
         // File was changed — re-inject
         await injectOrRemoveForAllTabs(domain);
+        emitChanged(domain);
       };
       handleChange().catch(logError("domain-css", `watch ${domain}`));
     });
@@ -274,9 +295,10 @@ async function persistStates(): Promise<void> {
 export default defineFeature<DomainCssDeps>({
   register(d_) {
     deps = d_;
+    loaded = false;
     cssDir = path.join(d_.dataDir, "domain-css");
-    domainStates = new Map();
-    navigationStates = new Map();
+    domainStates = new EditedMap();
+    navigationStates = new EditedMap();
     injectedCssKeys.clear();
     previewTabs.clear();
     for (const w of watchers.values()) w.close();
@@ -451,6 +473,7 @@ export default defineFeature<DomainCssDeps>({
   },
 
   teardown() {
+    loaded = false;
     if (stopNavigationBlock) {
       stopNavigationBlock();
       stopNavigationBlock = undefined;
@@ -498,8 +521,186 @@ export default defineFeature<DomainCssDeps>({
         });
       }
     }
+    loaded = true;
   },
 });
+
+/** A domain's styles and navigation rules, as sync stores them. */
+export interface DomainCustomization {
+  css: string | null;
+  enabled: boolean;
+  navigation: Omit<DomainNavigationState, "domain">;
+}
+
+function lstatOrNull(file: string): fs.Stats | null {
+  try {
+    return fs.lstatSync(file);
+  } catch {
+    return null;
+  }
+}
+
+/** Settings for both maps, saved together so they can't disagree. */
+function serializedStates(): Record<string, unknown> {
+  return {
+    "domain-css-states": Object.fromEntries(domainStates),
+    "domain-navigation-states": Object.fromEntries(navigationStates),
+  };
+}
+
+/** Like `readCssFile`, but only a missing file reads as no stylesheet. */
+function readCssFileStrict(domain: string): string | null {
+  try {
+    return fs.readFileSync(getCssFilePath(domain), "utf-8");
+  } catch (error) {
+    // A dangling link also reads as ENOENT, but the stylesheet isn't gone.
+    if ((error as NodeJS.ErrnoException).code === "ENOENT" && !lstatOrNull(getCssFilePath(domain)))
+      return null;
+    throw new Error(`The stylesheet for ${domain} couldn't be read.`);
+  }
+}
+
+function readCustomization(domain: string): DomainCustomization | null {
+  const css = readCssFileStrict(domain);
+  const enabled = domainStates.get(domain)?.enabled ?? false;
+  const navigation = navigationStates.get(domain) ?? DEFAULT_DOMAIN_NAVIGATION_STATE;
+  if (css === null && !enabled && isNavigationDefault(navigation)) return null;
+  return { css, enabled, navigation: structuredClone(navigation) };
+}
+
+/** Every domain with a stylesheet, enabled CSS or navigation rules. */
+export function listDomainCustomizations(): Map<string, DomainCustomization> {
+  if (!loaded) throw new Error("Domain settings haven't loaded yet.");
+  const domains = new Set([...domainStates.keys(), ...navigationStates.keys()]);
+  for (const file of fs.readdirSync(cssDir)) {
+    const domain = file.endsWith(".css") ? file.slice(0, -4) : "";
+    if (isValidDomain(domain)) domains.add(domain);
+  }
+  const result = new Map<string, DomainCustomization>();
+  for (const domain of domains) {
+    const customization = readCustomization(domain);
+    if (customization) result.set(domain, customization);
+  }
+  return result;
+}
+
+export function getDomainCustomization(domain: string): DomainCustomization | null {
+  if (!loaded) throw new Error("Domain settings haven't loaded yet.");
+  return readCustomization(domain);
+}
+
+/**
+ * Replace a domain's customization with another machine's version (`null` removes it) and
+ * save it durably, or throw with nothing changed. Local state changes before the first
+ * await, so a caller that checked the current version with `getDomainCustomization` just
+ * before calling can't overwrite a change made meanwhile.
+ */
+function removeStaged(domain: string, file: string) {
+  try {
+    fs.rmSync(file, { force: true });
+  } catch (error) {
+    logError("domain-css", `remove staged stylesheet for ${domain}`)(error);
+  }
+}
+
+/** The stylesheet was edited on this machine while a synced version was being applied. */
+export class DomainCssChangedError extends Error {
+  constructor(domain: string) {
+    super(`The stylesheet for ${domain} changed on this machine.`);
+    this.name = "DomainCssChangedError";
+  }
+}
+
+/**
+ * Apply another machine's version. The settings are saved before the stylesheet is swapped
+ * in; if the browser stops between the two, the next sync sees the half-applied state as a
+ * local edit and merges it with the same version per property, so nothing is lost.
+ */
+export async function applyDomainCustomization(
+  domain: string,
+  value: DomainCustomization | null,
+): Promise<void> {
+  if (!loaded) throw new Error("Domain settings haven't loaded yet.");
+  const file = getCssFilePath(domain);
+  const previous = {
+    css: readCssFileStrict(domain),
+    state: domainStates.get(domain),
+    navigation: navigationStates.get(domain),
+  };
+  const css = value?.css ?? null;
+  const cssChanged = css !== previous.css;
+  // Stage the new stylesheet first: if that fails, nothing has changed yet.
+  let staged: string | undefined;
+  if (cssChanged && css !== null) {
+    fs.mkdirSync(cssDir, { recursive: true });
+    const temp = path.join(cssDir, `.sync-${randomUUID().slice(0, 8)}.tmp`);
+    try {
+      fs.writeFileSync(temp, css);
+    } catch (error) {
+      removeStaged(domain, temp);
+      throw error;
+    }
+    staged = temp;
+  }
+  if (value) domainStates.set(domain, { enabled: value.enabled });
+  else domainStates.delete(domain);
+  if (value && !isNavigationDefault(value.navigation))
+    navigationStates.set(domain, structuredClone(value.navigation));
+  else navigationStates.delete(domain);
+  // So an edit made while saving, including a reset to defaults, is recognizable below.
+  const applied = {
+    state: domainStates.editCount(domain),
+    navigation: navigationStates.editCount(domain),
+  };
+  try {
+    await deps.dataStore.setSettings(serializedStates(), { durable: true });
+    // An edit made while the settings were saving wins over the synced version.
+    if (readCssFileStrict(domain) !== previous.css) throw new DomainCssChangedError(domain);
+    stopWatching(domain);
+    if (staged) fs.renameSync(staged, file);
+    else if (cssChanged) fs.rmSync(file, { force: true });
+  } catch (error) {
+    // Put the settings back, so this machine doesn't remember a version it didn't save, but
+    // keep what was edited here meanwhile.
+    if (staged) removeStaged(domain, staged);
+    if (domainStates.editCount(domain) === applied.state) {
+      if (previous.state) domainStates.set(domain, previous.state);
+      else domainStates.delete(domain);
+    }
+    if (navigationStates.editCount(domain) === applied.navigation) {
+      if (previous.navigation) navigationStates.set(domain, previous.navigation);
+      else navigationStates.delete(domain);
+    }
+    try {
+      await deps.dataStore.setSettings(serializedStates(), { durable: true });
+    } catch (rollbackError) {
+      // Reported with the failed change below. The next save writes these settings; if the
+      // browser stops first, the next sync merges what's on disk per property.
+      logError("domain-css", `restore settings for ${domain}`)(rollbackError);
+    }
+    if (domainStates.get(domain)?.enabled && readCssFile(domain) !== null) startWatching(domain);
+    if (error instanceof DomainCssChangedError) throw error;
+    throw new Error(`The change for ${domain} couldn't be saved on this machine.`, {
+      cause: error,
+    });
+  }
+  // The AI undo snapshot restores the stylesheet and enabled state from before generation;
+  // once another machine changes either, restoring would bring back an outdated version.
+  // The update is already saved, so a failure here mustn't skip refreshing the tabs.
+  if (cssChanged || (previous.state?.enabled ?? false) !== (value?.enabled ?? false))
+    try {
+      fs.rmSync(`${file}.previous.json`, { force: true });
+    } catch (error) {
+      logError("domain-css", `drop restore snapshot for ${domain}`)(error);
+    }
+  await injectOrRemoveForAllTabs(domain);
+  if (value?.enabled && css !== null) startWatching(domain);
+  emitChanged(domain);
+  deps.events.emit(DOMAIN_NAVIGATION_CHANGED, {
+    domain,
+    ...structuredClone(navigationStates.get(domain) ?? DEFAULT_DOMAIN_NAVIGATION_STATE),
+  });
+}
 
 export interface CssSnapshot {
   source: string | null;
