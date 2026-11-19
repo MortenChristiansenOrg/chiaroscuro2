@@ -159,6 +159,69 @@ describe("JsonDataStore", () => {
     ).toHaveLength(2);
   });
 
+  it("reports settings missing at startup as possibly lost", async () => {
+    const fresh = new JsonDataStore(dataDir);
+    await fresh.initialize();
+    expect(fresh.settingsUnreadable()).toBe(true);
+    fresh.acknowledgeSettingsUnreadable();
+    expect(fresh.settingsUnreadable()).toBe(false);
+    await fresh.setSetting("kept", 1);
+    const restarted = new JsonDataStore(dataDir);
+    await restarted.initialize();
+    expect(restarted.settingsUnreadable()).toBe(false);
+  });
+
+  it("still starts and reports the loss when the marker can't be written", async () => {
+    fs.writeFileSync(path.join(dataDir, "settings.json"), "{ not json");
+    const write = vi.spyOn(fs, "writeFileSync").mockImplementationOnce(() => {
+      throw new Error("ENOSPC");
+    });
+    const reopened = new JsonDataStore(dataDir);
+    await reopened.initialize();
+    write.mockRestore();
+    expect(reopened.settingsUnreadable()).toBe(true);
+  });
+
+  it("retries keeping the unreadable file before the next save", async () => {
+    fs.writeFileSync(path.join(dataDir, "settings.json"), "{ not json");
+    const rename = vi.spyOn(fs, "renameSync").mockImplementation(() => {
+      throw Object.assign(new Error("EXDEV"), { code: "EXDEV" });
+    });
+    const reopened = new JsonDataStore(dataDir);
+    await reopened.initialize();
+    await expect(reopened.setSetting("a", 1, { durable: true })).rejects.toThrow("aren't saved");
+    expect(fs.readFileSync(path.join(dataDir, "settings.json"), "utf-8")).toBe("{ not json");
+    rename.mockRestore();
+    await reopened.setSetting("a", 1, { durable: true });
+    expect(
+      fs.readdirSync(dataDir).filter((f) => f.startsWith("settings.json.unreadable-")),
+    ).toHaveLength(1);
+    expect(JSON.parse(fs.readFileSync(path.join(dataDir, "settings.json"), "utf-8"))).toEqual({
+      a: 1,
+    });
+  });
+
+  it("retries a rename refused while the file is held, and ordinary saves fall back", async () => {
+    const busy = () => {
+      throw Object.assign(new Error("EBUSY"), { code: "EBUSY" });
+    };
+    const once = vi.spyOn(fs, "renameSync").mockImplementationOnce(busy);
+    await store.setSetting("a", 1, { durable: true });
+    once.mockRestore();
+    expect(await store.getSetting("a")).toBe(1);
+
+    const always = vi.spyOn(fs, "renameSync").mockImplementation(busy);
+    await expect(store.setSetting("a", 2, { durable: true })).rejects.toThrow("EBUSY");
+    expect(await store.getSetting("a")).toBe(1);
+    await store.setSetting("b", 3);
+    always.mockRestore();
+    expect(JSON.parse(fs.readFileSync(path.join(dataDir, "settings.json"), "utf-8"))).toEqual({
+      a: 1,
+      b: 3,
+    });
+    expect(fs.readdirSync(dataDir).filter((f) => f.endsWith(".tmp"))).toHaveLength(0);
+  });
+
   it("throws on a failed durable write and leaves the setting unchanged", async () => {
     await store.setSetting("kept", 1);
     const write = vi.spyOn(fs, "writeFileSync").mockImplementationOnce(() => {

@@ -89,6 +89,14 @@ function remoteFingerprint(entry: RemoteEntry | null): string {
   return fingerprint(entry ? [entry.deleted, entry.deleted ? null : entry.value] : null);
 }
 
+function readMarker(entry: RemoteEntry | null): string | undefined {
+  const id =
+    entry && !entry.deleted && typeof entry.value === "object" && entry.value !== null
+      ? (entry.value as { id?: unknown }).id
+      : undefined;
+  return typeof id === "string" ? id : undefined;
+}
+
 /**
  * A document only this browser writes, holding a random id. A service that lost its data
  * (reset, restored, or another account behind the address) no longer has the id this
@@ -192,25 +200,31 @@ export class SyncEngine {
       if (!(error instanceof StoppedError)) throw error;
     } finally {
       // An idle run only moves the last-synced time, which isn't worth a disk write.
-      if (!this.stopped && this.dirty) {
-        this.dirty = false;
-        await this.persist(this.state);
-      }
+      await this.save();
     }
   }
 
-  /** Forget all history when the service's marker isn't the one this machine remembers. */
-  private async checkHistory(): Promise<void> {
+  /** Save history if it changed; a failed save is retried after the next run. */
+  private async save() {
+    if (this.stopped || !this.dirty) return;
+    await this.persist(this.state);
+    this.dirty = false;
+  }
+
+  /**
+   * Forget all history when the service's marker isn't the one this machine remembers, or
+   * can't be confirmed. Returns the current marker, if any.
+   */
+  private async checkHistory(): Promise<string | undefined> {
     this.guard();
-    const read = (entry: RemoteEntry | null) =>
-      entry && !entry.deleted && typeof entry.value === "object" && entry.value !== null
-        ? (entry.value as { id?: unknown }).id
-        : undefined;
     const entry = await this.client.get(MARKER.namespace, MARKER.key);
     this.guard();
-    let marker = read(entry);
-    if (typeof marker !== "string") {
-      if (this.readOnly) return;
+    let marker = readMarker(entry);
+    if (marker === undefined) {
+      // A missing marker means the service lost its data. Whatever happens next, history
+      // from before can't be trusted, even if this machine can't create a new marker.
+      this.forgetAll();
+      if (this.readOnly) return undefined;
       const fresh = randomUUID();
       try {
         await this.client.put(MARKER.namespace, MARKER.key, { id: fresh }, entry?.revision ?? 0);
@@ -219,22 +233,33 @@ export class SyncEngine {
         if (error instanceof AppDataError && error.code === "READ_ONLY") {
           this.state.readOnly = true;
           this.dirty = true;
-          return;
+          return undefined;
         }
+        // A service that refuses the marker still syncs, without history to trust.
+        if (isItemError(error)) return undefined;
         if (!isConflict(error)) throw error;
         // Another machine created it first.
-        marker = read(await this.client.get(MARKER.namespace, MARKER.key));
-        if (typeof marker !== "string") throw error;
+        marker = readMarker(await this.client.get(MARKER.namespace, MARKER.key));
+        if (marker === undefined) throw error;
       }
       this.guard();
     }
-    if (typeof marker !== "string" || marker === this.state.marker) return;
-    if (this.state.marker !== undefined || Object.keys(this.state.records).length) {
-      // First-sync rules apply to every item from here: nothing is removed anywhere.
-      this.state.records = {};
-      this.conflicts.clear();
+    if (marker !== this.state.marker) {
+      this.forgetAll();
+      this.state.marker = marker;
+      this.dirty = true;
     }
-    this.state.marker = marker;
+    return marker;
+  }
+
+  /** First-sync rules apply to every item from here: nothing is removed anywhere. */
+  private forgetAll() {
+    if (this.state.marker === undefined && !Object.keys(this.state.records).length) return;
+    this.state.records = {};
+    this.state.marker = undefined;
+    this.issues.clear();
+    this.refused.clear();
+    this.conflicts.clear();
     this.dirty = true;
   }
 
@@ -252,6 +277,10 @@ export class SyncEngine {
     const changed = () => new Error("It changed again while you were choosing. Review it again.");
     if (seen.version !== version) throw changed();
     const { source, key } = this.locate(id);
+    // A service reset since the conflict was shown makes both versions meaningless.
+    const marker = readMarker(await this.client.get(MARKER.namespace, MARKER.key));
+    this.guard();
+    if (marker !== this.state.marker) throw changed();
     const remote = await this.client.get(source.namespace, key);
     this.guard();
     if (
@@ -276,10 +305,7 @@ export class SyncEngine {
       if (error instanceof LocalChangedError || isConflict(error)) throw changed();
       throw error;
     } finally {
-      if (!this.stopped && this.dirty) {
-        this.dirty = false;
-        await this.persist(this.state);
-      }
+      await this.save();
     }
     this.clear(id);
   }

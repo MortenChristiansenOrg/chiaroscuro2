@@ -12,8 +12,8 @@ export interface DataStore {
   /** Save several settings in one write; `durable` as for `setSetting`. */
   setSettings(values: Record<string, unknown>, options?: { durable?: boolean }): Promise<void>;
   /**
-   * True from a startup where saved settings existed but couldn't be read, across restarts,
-   * until `acknowledgeSettingsUnreadable` is called.
+   * True when saved settings may have been lost: they were missing at startup, or existed but
+   * couldn't be read (remembered across restarts), until `acknowledgeSettingsUnreadable`.
    */
   settingsUnreadable?(): boolean;
   acknowledgeSettingsUnreadable?(): void;

@@ -361,6 +361,23 @@ describe("sync feature", () => {
     expect(service.value("domains", "example.com")).toEqual({ css: "a" });
   });
 
+  it("doesn't reconnect at startup after a disconnect made while starting", async () => {
+    const service = createFakeAppDataService();
+    const first = setup(service);
+    await first.commands.send("sync:connect", { url: URL, apiKey: FAKE_APP_DATA_KEY });
+    await first.commands.send("sync:now", {});
+    feature.teardown?.();
+
+    const second = setup(service, first.directory);
+    const requests = service.requests.length;
+    const starting = feature.start?.(second.deps);
+    await second.commands.send("sync:disconnect", {});
+    await starting;
+    expect(await second.commands.send("sync:get-state", {})).toMatchObject({ connected: false });
+    expect(service.requests.length).toBe(requests);
+    expect(fs.readdirSync(second.directory)).toEqual([]);
+  });
+
   it("lets a disconnect win over a connect that was still checking the key", async () => {
     const service = createFakeAppDataService();
     let release: () => void = () => {};

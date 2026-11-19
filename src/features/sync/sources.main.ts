@@ -2,6 +2,7 @@ import { z } from "zod";
 import { NavigationBlockRuleSchema } from "../domain-css/domain-css.contracts";
 import {
   applyDomainCustomization,
+  DomainCssChangedError,
   type DomainCustomization,
   getDomainCustomization,
   listDomainCustomizations,
@@ -96,10 +97,15 @@ export const domainCustomizationSource: SyncSource = {
     if (!jsonEqual(domainRecord(domain, getDomainCustomization(domain)), expected))
       throw new LocalChangedError();
     const record = value as DomainRecord | null;
-    await applyDomainCustomization(
-      domain,
-      record && { css: record.css, enabled: record.enabled, navigation: record.navigation },
-    );
+    try {
+      await applyDomainCustomization(
+        domain,
+        record && { css: record.css, enabled: record.enabled, navigation: record.navigation },
+      );
+    } catch (error) {
+      if (error instanceof DomainCssChangedError) throw new LocalChangedError();
+      throw error;
+    }
   },
 };
 

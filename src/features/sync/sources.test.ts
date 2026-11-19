@@ -62,8 +62,11 @@ function script(overrides: Partial<DomainScript> = {}): DomainScript {
 /** Fails durable writes on request, like a full disk. */
 class FlakyStore extends MemoryDataStore {
   failDurable = false;
+  /** Runs while a durable save is in progress, as an edit made meanwhile would. */
+  duringDurable: (() => void) | undefined;
   override async setSettings(values: Record<string, unknown>, options?: { durable?: boolean }) {
     if (options?.durable && this.failDurable) throw new Error("ENOSPC: no space left on device");
+    if (options?.durable) this.duringDurable?.();
     return super.setSettings(values, options);
   }
 }
@@ -223,6 +226,34 @@ describe("domain customization sync safety", () => {
     await engine.run();
     expect(fs.readFileSync(cssFile, "utf8")).toBe("h1 { color: blue; }");
     expect(engine.getIssues()).toEqual([]);
+  });
+
+  it("keeps a stylesheet edited while another machine's version was being applied", async () => {
+    const { engine, service, send, dataStore, cssFile } = await setup();
+    fs.writeFileSync(cssFile, "h1 { color: red; }");
+    await send(DOMAIN_CSS_TOGGLE, { domain: "example.com" });
+    await engine.run();
+    service.write("domains", "example.com", {
+      schemaVersion: 1,
+      domain: "example.com",
+      css: "h1 { color: blue; }",
+      enabled: false,
+      navigation,
+    });
+    dataStore.duringDurable = () => {
+      dataStore.duringDurable = undefined;
+      fs.writeFileSync(cssFile, "h1 { color: green; }");
+    };
+    await engine.run().catch(() => {});
+    expect(fs.readFileSync(cssFile, "utf8")).toBe("h1 { color: green; }");
+    expect(await send("domain-css:get-state", { domain: "example.com" })).toMatchObject({
+      enabled: true,
+    });
+    expect(fs.readdirSync(path.dirname(cssFile)).filter((f) => f.endsWith(".tmp"))).toEqual([]);
+    // Both machines changed the stylesheet, so the next run asks which to keep.
+    await engine.run();
+    expect(fs.readFileSync(cssFile, "utf8")).toBe("h1 { color: green; }");
+    expect(engine.getIssues()).toMatchObject([{ kind: "conflict" }]);
   });
 
   it("stops instead of treating an unreadable stylesheet as removed", async () => {

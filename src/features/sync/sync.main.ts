@@ -316,12 +316,17 @@ export default defineFeature<SyncDeps, void>({
 
     begin = async () => {
       try {
+        const current = attempt;
         // Before anything that could fail, such as a locked keyring.
         await forgetHistoryIfLocalDataLost();
         const credentials = await files.loadCredentials();
-        if (!credentials || disposed) return;
-        await enqueue(() => connectWith(credentials.url, credentials.apiKey));
-        void sync();
+        if (!credentials) return;
+        await enqueue(async () => {
+          // A disconnect or connect made meanwhile wins over the saved connection.
+          if (current !== attempt || disposed) return;
+          await connectWith(credentials.url, credentials.apiKey);
+          void sync();
+        });
       } catch (error) {
         // Sync problems never stop the browser from starting.
         logError("sync", "start")(error);

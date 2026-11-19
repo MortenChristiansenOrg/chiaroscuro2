@@ -296,7 +296,7 @@ export default defineFeature<DomainScriptsDeps>({
           unbind = bind(script);
           const next = scripts.filter((current) => current.id !== script.id);
           next.push(script);
-          await dataStore.setSetting(DOMAIN_SCRIPTS_SETTING, next);
+          await dataStore.setSetting(DOMAIN_SCRIPTS_SETTING, next, { durable: true });
           scripts = next;
           if (unbind) shortcuts.set(script.id, unbind);
           publish(script.domain);
@@ -316,7 +316,7 @@ export default defineFeature<DomainScriptsDeps>({
         const previous = scripts.find((script) => script.id === id);
         if (!previous) return;
         const next = scripts.filter((script) => script.id !== id);
-        await dataStore.setSetting(DOMAIN_SCRIPTS_SETTING, next);
+        await dataStore.setSetting(DOMAIN_SCRIPTS_SETTING, next, { durable: true });
         scripts = next;
         shortcuts.get(id)?.();
         shortcuts.delete(id);

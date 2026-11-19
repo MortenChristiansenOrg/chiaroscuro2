@@ -55,6 +55,27 @@ class JsonCollection<T> extends MemoryCollection<T> {
 /** Present while settings that couldn't be read at startup haven't been dealt with. */
 const UNREADABLE_MARKER = "settings.unreadable";
 
+/** Windows reports these while another process, such as a virus scanner, holds the file. */
+const TRANSIENT_RENAME_ERRORS = new Set(["EPERM", "EBUSY", "EACCES"]);
+
+function pause(ms: number) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+/** Rename, retrying briefly while the file is held by someone else. */
+function renameWithRetry(from: string, to: string) {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      fs.renameSync(from, to);
+      return;
+    } catch (error) {
+      const code = (error as NodeJS.ErrnoException).code ?? "";
+      if (attempt >= 5 || !TRANSIENT_RENAME_ERRORS.has(code)) throw error;
+      pause(20 * attempt);
+    }
+  }
+}
+
 export class JsonDataStore implements DataStore {
   private collections = new Map<string, JsonCollection<unknown>>();
   private settings: Record<string, unknown> = {};
@@ -62,6 +83,11 @@ export class JsonDataStore implements DataStore {
   private dirty = false;
   /** Set when an unreadable settings file couldn't be moved aside; saving would destroy it. */
   private frozen = false;
+  /**
+   * Settings were unreadable or missing at startup, so they may have been lost. Kept in
+   * memory too, in case the marker file couldn't be written.
+   */
+  private lost = false;
 
   constructor(private dataDir: string) {
     this.settingsPath = path.join(dataDir, "settings.json");
@@ -69,7 +95,12 @@ export class JsonDataStore implements DataStore {
 
   async initialize(): Promise<void> {
     fs.mkdirSync(this.dataDir, { recursive: true });
-    if (!fs.existsSync(this.settingsPath)) return;
+    // Missing (or a link to nothing) is normal on first start, but may also mean the file was
+    // deleted; those who depend on it treat both alike.
+    if (!fs.existsSync(this.settingsPath)) {
+      this.lost = true;
+      return;
+    }
     try {
       const parsed: unknown = JSON.parse(fs.readFileSync(this.settingsPath, "utf-8"));
       if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed))
@@ -78,22 +109,32 @@ export class JsonDataStore implements DataStore {
     } catch (error) {
       console.error("Failed to read settings; starting with defaults:", error);
       this.settings = {};
+      this.lost = true;
       // Record the loss before anything else, so it's still known after a crash or restart
       // until whoever depends on it (sync) has dealt with it.
-      fs.writeFileSync(path.join(this.dataDir, UNREADABLE_MARKER), new Date().toISOString());
-      // Keep the unreadable file for recovery instead of overwriting it with the next save.
       try {
-        fs.renameSync(
-          this.settingsPath,
-          `${this.settingsPath}.unreadable-${Date.now()}-${randomUUID().slice(0, 8)}`,
-        );
-      } catch (renameError) {
-        console.error(
-          "Failed to keep the unreadable settings file; not saving settings:",
-          renameError,
-        );
-        this.frozen = true;
+        fs.writeFileSync(path.join(this.dataDir, UNREADABLE_MARKER), new Date().toISOString());
+      } catch (markerError) {
+        console.error("Failed to record that settings were unreadable:", markerError);
       }
+      this.quarantine();
+    }
+  }
+
+  /** Keep the unreadable file for recovery instead of overwriting it with the next save. */
+  private quarantine() {
+    try {
+      renameWithRetry(
+        this.settingsPath,
+        `${this.settingsPath}.unreadable-${Date.now()}-${randomUUID().slice(0, 8)}`,
+      );
+      this.frozen = false;
+    } catch (renameError) {
+      console.error(
+        "Failed to keep the unreadable settings file; not saving settings:",
+        renameError,
+      );
+      this.frozen = true;
     }
   }
 
@@ -129,32 +170,39 @@ export class JsonDataStore implements DataStore {
   }
 
   settingsUnreadable(): boolean {
-    return fs.existsSync(path.join(this.dataDir, UNREADABLE_MARKER));
+    return this.lost || fs.existsSync(path.join(this.dataDir, UNREADABLE_MARKER));
   }
 
   acknowledgeSettingsUnreadable(): void {
     fs.rmSync(path.join(this.dataDir, UNREADABLE_MARKER), { force: true });
+    this.lost = false;
   }
 
   /**
    * Write a complete copy, flush it to disk and swap it in, so neither a failure nor a crash
    * leaves a partly written file.
    */
-  private write(settings: Record<string, unknown>) {
+  private write(settings: Record<string, unknown>, options?: { durable?: boolean }) {
+    if (this.frozen) this.quarantine();
     if (this.frozen) throw new Error("Settings aren't saved while an unreadable copy is kept.");
+    const text = JSON.stringify(settings, null, 2);
     const temp = `${this.settingsPath}.${process.pid}.${Date.now()}.tmp`;
     try {
       const fd = fs.openSync(temp, "w");
       try {
-        fs.writeFileSync(fd, JSON.stringify(settings, null, 2));
+        fs.writeFileSync(fd, text);
         fs.fsyncSync(fd);
       } finally {
         fs.closeSync(fd);
       }
-      fs.renameSync(temp, this.settingsPath);
+      renameWithRetry(temp, this.settingsPath);
     } catch (error) {
       fs.rmSync(temp, { force: true });
-      throw error;
+      const code = (error as NodeJS.ErrnoException).code ?? "";
+      // Ordinary saves still land when the file stays held, as they did before; only writes
+      // that must not be half done refuse.
+      if (options?.durable || !TRANSIENT_RENAME_ERRORS.has(code)) throw error;
+      fs.writeFileSync(this.settingsPath, text);
     }
   }
 
@@ -168,7 +216,7 @@ export class JsonDataStore implements DataStore {
   ): Promise<void> {
     if (options?.durable) {
       const next = { ...this.settings, ...values };
-      this.write(next);
+      this.write(next, { durable: true });
       this.settings = next;
       this.dirty = false;
       return;

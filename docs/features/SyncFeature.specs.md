@@ -46,13 +46,17 @@ JSON documents with revisions. Sync is optional and off until a machine is conne
 - Another machine's version is applied only if the local item is still the version the
   run read, so an edit made during a run is never overwritten; it syncs on the next run.
   It is saved to disk before sync counts it as synced; when saving fails, the local item is
-  put back and the change is retried on the next run.
+  put back and the change is retried on the next run. A stylesheet edited while the settings
+  were saving is kept and the synced version waits for the next run. If the browser stops
+  between saving a domain's settings and swapping in its stylesheet, the next run sees the
+  half-applied item as a local edit and merges it per property with the same version.
 - Local data that can't be read stops the run instead of reading as removed: an unreadable
   stylesheet (including a dangling link), or a settings file that couldn't be read at
   startup. In the latter case the store keeps the file as
   `settings.json.unreadable-<time>-<id>` and records the loss in `settings.unreadable`
   until sync has forgotten its history, at the next start, even if the key can't be read
-  then. The next run brings everything back from the service and removes nothing anywhere.
+  then. A settings file missing at startup counts as lost too. The next run brings
+  everything back from the service and removes nothing anywhere.
 - Each service holds a `meta/history` document with a random id, created by the first
   machine that syncs. A machine that finds a different id, or none, forgets its history:
   the service was reset or restored, or another account answers at that address. Items
@@ -64,8 +68,8 @@ JSON documents with revisions. Sync is optional and off until a machine is conne
   is reported instead of applied.
 - Domains that aren't plain hostnames don't sync.
 - Runs, conflict choices and disconnecting take turns. Disconnecting aborts requests in
-  flight, including a connection attempt still checking its key, and nothing changes or
-  saves after it. A conflict choice names both versions as shown (and the service's history
+  flight, including a connection attempt still checking its key or reconnecting at
+  startup, and nothing changes or saves after it. A conflict choice names both versions as shown (and the service's history
   id) and is refused if the service's document differs in any way.
 - A write rejected because another machine wrote first (`409 REVISION_CONFLICT`) is
   reconciled again with the newer version. An item that keeps changing waits for the next
