@@ -4,7 +4,13 @@ export interface DataStore {
 
   // Settings (JSON file-backed)
   getSetting<T>(key: string): Promise<T | undefined>;
-  setSetting<T>(key: string, value: T): Promise<void>;
+  /**
+   * Save a setting. A failed write is normally retried at shutdown; with `durable` it throws
+   * instead and leaves the setting unchanged.
+   */
+  setSetting<T>(key: string, value: T, options?: { durable?: boolean }): Promise<void>;
+  /** True when saved settings existed but couldn't be read at startup. */
+  settingsUnreadable?(): boolean;
 
   // Lifecycle
   initialize(): Promise<void>;

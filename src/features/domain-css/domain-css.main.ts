@@ -110,14 +110,15 @@ function isNavigationDefault(state: Omit<DomainNavigationState, "domain">): bool
   );
 }
 
-async function persistNavigationStates(): Promise<void> {
+async function persistNavigationStates(durable = false): Promise<void> {
   const serializable: Record<string, PersistedNavigationState> = {};
   for (const [domain, state] of navigationStates) {
     serializable[domain] = state;
   }
   try {
-    await deps.dataStore.setSetting("domain-navigation-states", serializable);
+    await deps.dataStore.setSetting("domain-navigation-states", serializable, { durable });
   } catch (error) {
+    if (durable) throw error;
     console.error("Failed to persist domain navigation states", error);
   }
 }
@@ -262,14 +263,15 @@ function stopWatching(domain: string): void {
   }
 }
 
-async function persistStates(): Promise<void> {
+async function persistStates(durable = false): Promise<void> {
   const serializable: Record<string, DomainState> = {};
   for (const [domain, state] of domainStates) {
     serializable[domain] = state;
   }
   try {
-    await deps.dataStore.setSetting("domain-css-states", serializable);
+    await deps.dataStore.setSetting("domain-css-states", serializable, { durable });
   } catch (error) {
+    if (durable) throw error;
     console.error("Failed to persist domain CSS states", error);
   }
 }
@@ -514,8 +516,18 @@ export interface DomainCustomization {
   navigation: Omit<DomainNavigationState, "domain">;
 }
 
+/** Like `readCssFile`, but only a missing file reads as no stylesheet. */
+function readCssFileStrict(domain: string): string | null {
+  try {
+    return fs.readFileSync(getCssFilePath(domain), "utf-8");
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw new Error(`The stylesheet for ${domain} couldn't be read.`);
+  }
+}
+
 function readCustomization(domain: string): DomainCustomization | null {
-  const css = readCssFile(domain);
+  const css = readCssFileStrict(domain);
   const enabled = domainStates.get(domain)?.enabled ?? false;
   const navigation = navigationStates.get(domain) ?? DEFAULT_DOMAIN_NAVIGATION_STATE;
   if (css === null && !enabled && isNavigationDefault(navigation)) return null;
@@ -543,32 +555,61 @@ export function getDomainCustomization(domain: string): DomainCustomization | nu
   return readCustomization(domain);
 }
 
+function writeCss(domain: string, css: string | null) {
+  const file = getCssFilePath(domain);
+  if (css === null) fs.rmSync(file, { force: true });
+  else {
+    fs.mkdirSync(cssDir, { recursive: true });
+    fs.writeFileSync(file, css);
+  }
+}
+
 /**
- * Replace a domain's customization with another machine's version (`null` removes it). The
- * local state changes before the first await, so a caller that checked the current version
- * with `getDomainCustomization` just before calling can't overwrite a change made meanwhile.
+ * Replace a domain's customization with another machine's version (`null` removes it) and
+ * save it durably, or throw with nothing changed. Local state changes before the first
+ * await, so a caller that checked the current version with `getDomainCustomization` just
+ * before calling can't overwrite a change made meanwhile.
  */
 export async function applyDomainCustomization(
   domain: string,
   value: DomainCustomization | null,
 ): Promise<void> {
   if (!loaded) throw new Error("Domain settings haven't loaded yet.");
-  const file = getCssFilePath(domain);
+  const previous = {
+    css: readCssFileStrict(domain),
+    state: domainStates.get(domain),
+    navigation: navigationStates.get(domain),
+  };
+  const css = value?.css ?? null;
   stopWatching(domain);
-  if (value?.css == null) fs.rmSync(file, { force: true });
-  else if (readCssFile(domain) !== value.css) {
-    fs.mkdirSync(cssDir, { recursive: true });
-    fs.writeFileSync(file, value.css);
-  }
+  if (css !== previous.css) writeCss(domain, css);
   if (value) domainStates.set(domain, { enabled: value.enabled });
   else domainStates.delete(domain);
   if (value && !isNavigationDefault(value.navigation))
     navigationStates.set(domain, structuredClone(value.navigation));
   else navigationStates.delete(domain);
-  await persistStates();
-  await persistNavigationStates();
+  try {
+    await persistStates(true);
+    await persistNavigationStates(true);
+  } catch (error) {
+    // Put everything back, so this machine doesn't remember a version it didn't save.
+    if (css !== previous.css) writeCss(domain, previous.css);
+    if (previous.state) domainStates.set(domain, previous.state);
+    else domainStates.delete(domain);
+    if (previous.navigation) navigationStates.set(domain, previous.navigation);
+    else navigationStates.delete(domain);
+    await persistStates();
+    await persistNavigationStates();
+    if (previous.state?.enabled && previous.css !== null) startWatching(domain);
+    throw new Error(`The change for ${domain} couldn't be saved on this machine.`, {
+      cause: error,
+    });
+  }
+  // The AI undo snapshot restores the stylesheet from before generation; once another
+  // machine's stylesheet replaces it, restoring would bring back an outdated version.
+  if (css !== previous.css) fs.rmSync(`${getCssFilePath(domain)}.previous.json`, { force: true });
   await injectOrRemoveForAllTabs(domain);
-  if (value?.enabled && value.css !== null) startWatching(domain);
+  if (value?.enabled && css !== null) startWatching(domain);
   emitChanged(domain);
   deps.events.emit(DOMAIN_NAVIGATION_CHANGED, {
     domain,

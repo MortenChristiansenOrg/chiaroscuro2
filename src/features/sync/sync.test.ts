@@ -173,9 +173,22 @@ describe("sync feature", () => {
         label: "example.com styles",
         kind: "conflict",
         message: "Changed on this machine and on another.",
+        version: expect.any(String),
       },
     ]);
-    await commands.send("sync:resolve", { id: "domains/example.com", keep: "other-machine" });
+    const version = latest(states)?.issues[0]?.version ?? "";
+    await expect(
+      commands.send("sync:resolve", {
+        id: "domains/example.com",
+        keep: "other-machine",
+        version: "0:stale",
+      }),
+    ).rejects.toThrow("changed again");
+    await commands.send("sync:resolve", {
+      id: "domains/example.com",
+      keep: "other-machine",
+      version,
+    });
     expect(items.get("example.com")).toEqual({ css: "remote" });
     expect(latest(states)?.issues).toEqual([]);
   });
@@ -200,8 +213,64 @@ describe("sync feature", () => {
     await feature.start?.(deps);
     expect(latest(states)).toMatchObject({
       connected: false,
-      error: "This machine's saved sync key couldn't be read. Connect again.",
+      error: "This machine's saved sync settings couldn't be read. Connect again.",
     });
+  });
+
+  it("starts afresh instead of spreading removals when local settings were unreadable", async () => {
+    const service = createFakeAppDataService();
+    const first = setup(service);
+    first.items.set("example.com", { css: "a" });
+    await first.commands.send("sync:connect", { url: URL, apiKey: FAKE_APP_DATA_KEY });
+    feature.teardown?.();
+
+    // Settings were lost at startup, so local data looks empty.
+    const second = setup(service, first.directory, { localDataUnreadable: () => true });
+    await feature.start?.(second.deps);
+    await vi.waitFor(() => expect(second.items.get("example.com")).toEqual({ css: "a" }));
+    expect(service.value("domains", "example.com")).toEqual({ css: "a" });
+  });
+
+  it("lets the browser start when sync history can't be read", async () => {
+    const { commands, directory } = setup();
+    await commands.send("sync:connect", { url: URL, apiKey: FAKE_APP_DATA_KEY });
+    fs.rmSync(path.join(directory, "state.json"));
+    fs.mkdirSync(path.join(directory, "state.json"));
+    feature.teardown?.();
+    const again = setup(undefined, directory);
+    await expect(feature.start?.(again.deps)).resolves.toBeUndefined();
+    expect(latest(again.states)?.error).toMatch(/couldn't be read/);
+  });
+
+  it("lets only the first of two choices for the same conflict through", async () => {
+    const service = createFakeAppDataService();
+    const { commands, items, states } = setup(service);
+    items.set("example.com", { css: "a" });
+    await commands.send("sync:connect", { url: URL, apiKey: FAKE_APP_DATA_KEY });
+    service.write("domains", "example.com", { css: "remote" });
+    items.set("example.com", { css: "local" });
+    await commands.send("sync:now", {});
+    const version = latest(states)?.issues[0]?.version ?? "";
+    const results = await Promise.allSettled([
+      commands.send("sync:resolve", { id: "domains/example.com", keep: "this-machine", version }),
+      commands.send("sync:resolve", { id: "domains/example.com", keep: "other-machine", version }),
+    ]);
+    expect(results.map((r) => r.status)).toEqual(["fulfilled", "rejected"]);
+    await commands.send("sync:now", {});
+    expect(items.get("example.com")).toEqual({ css: "local" });
+    expect(service.value("domains", "example.com")).toEqual({ css: "local" });
+  });
+
+  it("keeps history saved by a run from outliving a disconnect", async () => {
+    const service = createFakeAppDataService();
+    const { commands, items, directory } = setup(service);
+    items.set("example.com", { css: "a" });
+    await commands.send("sync:connect", { url: URL, apiKey: FAKE_APP_DATA_KEY });
+    items.set("example.com", { css: "b" });
+    const run = commands.send("sync:now", {});
+    await commands.send("sync:disconnect", {});
+    await run;
+    expect(fs.readdirSync(directory)).toEqual([]);
   });
 });
 

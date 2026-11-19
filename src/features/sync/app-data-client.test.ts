@@ -77,4 +77,19 @@ describe("app data client", () => {
     });
     expect(await client.get("domains", "a")).toBeNull();
   });
+
+  it("never repeats the key in an error message", async () => {
+    const client = createAppDataClient({
+      url: "https://sync.example",
+      apiKey: FAKE_APP_DATA_KEY,
+      fetch: (async () =>
+        new Response(
+          JSON.stringify({
+            error: { code: "BAD", message: `Rejected Bearer ${FAKE_APP_DATA_KEY}` },
+          }),
+          { status: 400 },
+        )) as typeof fetch,
+    });
+    await expect(client.list("domains")).rejects.toThrow("Rejected Bearer [redacted]");
+  });
 });

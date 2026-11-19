@@ -93,6 +93,8 @@ export function createAppDataClient(options: {
   apiKey: string;
   fetch?: typeof fetch;
   timeoutMs?: number;
+  /** Aborts every request, such as when the user disconnects. */
+  signal?: AbortSignal;
 }): AppDataClient {
   const origin = normalizeServiceUrl(options.url);
   const apiKey = validateApiKey(options.apiKey);
@@ -111,7 +113,10 @@ export function createAppDataClient(options: {
       response = await send(url, {
         method,
         redirect: "error",
-        signal: AbortSignal.timeout(options.timeoutMs ?? 30_000),
+        signal: AbortSignal.any([
+          AbortSignal.timeout(options.timeoutMs ?? 30_000),
+          ...(options.signal ? [options.signal] : []),
+        ]),
         headers: {
           Authorization: `Bearer ${apiKey}`,
           ...(body === undefined ? {} : { "Content-Type": "application/json" }),
@@ -135,7 +140,10 @@ export function createAppDataClient(options: {
       throw new AppDataError(
         response.status,
         result.error?.code ?? "HTTP_ERROR",
-        result.error?.message ?? `The sync service answered with status ${response.status}.`,
+        // Messages reach Settings and logs; a proxy echoing the request must not leak the key.
+        (result.error?.message ?? `The sync service answered with status ${response.status}.`)
+          .split(apiKey)
+          .join("[redacted]"),
       );
     return result as T;
   }

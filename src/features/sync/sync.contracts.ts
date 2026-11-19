@@ -6,6 +6,8 @@ export const SyncIssueSchema = z.strictObject({
   label: z.string(),
   kind: z.enum(["conflict", "too-large", "not-uploaded", "not-applied"]),
   message: z.string(),
+  /** Identifies a conflict as shown, so a choice only applies to the versions the user saw. */
+  version: z.string().optional(),
 });
 export const SyncStateSchema = z.strictObject({
   connected: z.boolean(),
@@ -52,11 +54,17 @@ export const commandContracts = {
     sideEffects: ["Uploads and downloads changed customizations"],
   }),
   "sync:resolve": defineCommand(
-    z.strictObject({ id: z.string(), keep: z.enum(["this-machine", "other-machine"]) }),
+    z.strictObject({
+      id: z.string(),
+      keep: z.enum(["this-machine", "other-machine"]),
+      version: z.string(),
+    }),
     z.undefined(),
     {
       description: "Settle a sync conflict by keeping one machine's version everywhere.",
-      examples: [{ id: "domains/example.com", keep: "this-machine" }],
+      examples: [
+        { id: "domains/example.com", keep: "this-machine", version: "3:0123456789abcdef" },
+      ],
       sideEffects: ["Replaces the other version on this machine or on the service"],
     },
   ),

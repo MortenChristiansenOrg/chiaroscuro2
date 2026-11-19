@@ -23,7 +23,7 @@ function machine(service: FakeAppDataService, apiKey = FAKE_APP_DATA_KEY) {
     describe: (key) => `Item ${key}`,
     read: () => new Map([...items].map(([key, value]) => [key, structuredClone(value)])),
     parse(_key, value) {
-      if (typeof value === "object" && value !== null && "invalid" in value)
+      if (value === null || (typeof value === "object" && "invalid" in value))
         throw new Error("This version can't be used.");
       return value;
     },
@@ -44,6 +44,11 @@ function machine(service: FakeAppDataService, apiKey = FAKE_APP_DATA_KEY) {
     },
   );
   return { items, engine, state, saved };
+}
+
+/** The conflict version the user is shown, which a choice must name. */
+function version(m: { engine: SyncEngine }): string {
+  return m.engine.getIssues()[0]?.version ?? "";
 }
 
 function puts(service: FakeAppDataService) {
@@ -110,10 +115,11 @@ describe("SyncEngine", () => {
         label: "Item one",
         kind: "conflict",
         message: "Changed on this machine and removed on another.",
+        version: expect.any(String),
       },
     ]);
     expect(b.items.get("one")).toEqual({ css: "edited offline" });
-    await b.engine.resolve(`${NS}/one`, "this-machine");
+    await b.engine.resolve(`${NS}/one`, "this-machine", version(b));
     expect(b.engine.getIssues()).toEqual([]);
     await a.engine.run();
     expect(a.items.get("one")).toEqual({ css: "edited offline" });
@@ -155,7 +161,7 @@ describe("SyncEngine", () => {
     await b.engine.run();
     expect(b.engine.getIssues()).toHaveLength(1);
 
-    await b.engine.resolve(`${NS}/one`, "other-machine");
+    await b.engine.resolve(`${NS}/one`, "other-machine", version(b));
     expect(b.items.get("one")).toEqual({ css: "from a" });
     expect(b.engine.getIssues()).toEqual([]);
     await b.engine.run();
@@ -173,7 +179,7 @@ describe("SyncEngine", () => {
     b.items.set("one", { css: "from b" });
     await a.engine.run();
     await b.engine.run();
-    await b.engine.resolve(`${NS}/one`, "this-machine");
+    await b.engine.resolve(`${NS}/one`, "this-machine", version(b));
     await a.engine.run();
     expect(a.items.get("one")).toEqual({ css: "from b" });
   });
@@ -190,7 +196,7 @@ describe("SyncEngine", () => {
     await a.engine.run();
     await b.engine.run();
     b.items.set("one", { css: "from b again" });
-    const resolve = b.engine.resolve(`${NS}/one`, "other-machine");
+    const resolve = b.engine.resolve(`${NS}/one`, "other-machine", version(b));
     await expect(resolve).rejects.toThrow("changed again");
     expect(b.items.get("one")).toEqual({ css: "from b again" });
   });
@@ -332,5 +338,88 @@ describe("SyncEngine", () => {
     await a.engine.run();
     expect(a.saved).toEqual([]);
     expect(service.value(NS, "one")).toBeUndefined();
+  });
+
+  it("treats a live JSON null as an invalid version, not a removal", async () => {
+    const service = createFakeAppDataService();
+    const a = machine(service);
+    a.items.set("one", { css: "a" });
+    await a.engine.run();
+    service.write(NS, "one", null, { live: true });
+    await a.engine.run();
+    expect(a.items.get("one")).toEqual({ css: "a" });
+    expect(a.engine.getIssues()).toMatchObject([{ kind: "not-applied" }]);
+  });
+
+  it("stops making requests and changes once stopped mid-request", async () => {
+    const service = createFakeAppDataService();
+    let stop: () => void = () => {};
+    const seen: string[] = [];
+    const a = machine({
+      ...service,
+      fetch: (async (input: RequestInfo | URL, init?: RequestInit) => {
+        seen.push(init?.method ?? "GET");
+        if (init?.method === "PUT") {
+          stop();
+          service.write(NS, "one", { css: "other" });
+        }
+        return service.fetch(input, init);
+      }) as typeof fetch,
+    });
+    stop = () => a.engine.stop();
+    a.items.set("one", { css: "a" });
+    await a.engine.run();
+    expect(seen).toEqual(["GET", "PUT"]);
+    expect(a.items.get("one")).toEqual({ css: "a" });
+    expect(a.saved).toEqual([]);
+  });
+
+  it("removes nothing when the service lost its documents, and uploads them again", async () => {
+    const service = createFakeAppDataService();
+    const a = machine(service);
+    a.items.set("one", { css: "a" });
+    a.items.set("two", { css: "b" });
+    await a.engine.run();
+    service.reset();
+    service.write(NS, "two", { css: "restored older" });
+    await a.engine.run();
+    expect(a.items.get("one")).toEqual({ css: "a" });
+    expect(service.value(NS, "one")).toEqual({ css: "a" });
+    // An older version at a lower revision is a conflict, not an update to apply.
+    expect(a.items.get("two")).toEqual({ css: "b" });
+    expect(a.engine.getIssues().map((issue) => issue.id)).toEqual([`${NS}/two`]);
+  });
+
+  it("moves on to other items when one keeps changing during upload", async () => {
+    const service = createFakeAppDataService();
+    const a = machine({
+      ...service,
+      fetch: (async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "PUT" && String(input).includes("key=busy"))
+          service.write(NS, "busy", { n: Math.random() });
+        return service.fetch(input, init);
+      }) as typeof fetch,
+    });
+    a.items.set("busy", { n: 0 });
+    a.items.set("calm", { css: "a" });
+    await a.engine.run();
+    expect(service.value(NS, "calm")).toEqual({ css: "a" });
+  });
+
+  it("refuses a conflict choice for versions the user wasn't shown", async () => {
+    const service = createFakeAppDataService();
+    const a = machine(service);
+    const b = machine(service);
+    a.items.set("one", { css: "a" });
+    await a.engine.run();
+    await b.engine.run();
+    a.items.set("one", { css: "from a" });
+    b.items.set("one", { css: "from b" });
+    await a.engine.run();
+    await b.engine.run();
+    await expect(b.engine.resolve(`${NS}/one`, "other-machine", "1:old")).rejects.toThrow(
+      "changed again",
+    );
+    expect(b.items.get("one")).toEqual({ css: "from b" });
   });
 });

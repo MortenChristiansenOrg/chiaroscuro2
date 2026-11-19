@@ -138,4 +138,26 @@ describe("JsonDataStore", () => {
     expect(callback).toHaveBeenCalledTimes(3);
     expect(callback).toHaveBeenLastCalledWith([{ id: "1", name: "A", value: 10 }]);
   });
+
+  it("keeps an unreadable settings file and reports it", async () => {
+    fs.writeFileSync(path.join(dataDir, "settings.json"), "{ not json");
+    const reopened = new JsonDataStore(dataDir);
+    await reopened.initialize();
+    expect(reopened.settingsUnreadable()).toBe(true);
+    expect(await reopened.getSetting("anything")).toBeUndefined();
+    expect(fs.readdirSync(dataDir).some((f) => f.startsWith("settings.json.unreadable-"))).toBe(
+      true,
+    );
+    expect(store.settingsUnreadable()).toBe(false);
+  });
+
+  it("throws on a failed durable write and leaves the setting unchanged", async () => {
+    await store.setSetting("kept", 1);
+    const write = vi.spyOn(fs, "writeFileSync").mockImplementationOnce(() => {
+      throw new Error("ENOSPC");
+    });
+    await expect(store.setSetting("kept", 2, { durable: true })).rejects.toThrow("ENOSPC");
+    write.mockRestore();
+    expect(await store.getSetting("kept")).toBe(1);
+  });
 });

@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { CommandBus } from "../../bus/command-bus";
 import type { EventBus } from "../../bus/event-bus";
 import { defineFeature } from "../../shared/define-feature";
@@ -45,6 +46,8 @@ export interface SyncDeps {
   pollIntervalMs?: number;
   /** How long to wait after a local change, so a burst of edits syncs once. */
   changeDelayMs?: number;
+  /** True when this machine's saved settings couldn't be read at startup. */
+  localDataUnreadable?: () => boolean;
   now?: () => number;
 }
 
@@ -66,6 +69,11 @@ export function describeSyncError(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/** Sync history is kept per service address and key, never the key itself. */
+function historyId(url: string, apiKey: string): string {
+  return `${url}#${createHash("sha256").update(apiKey).digest("hex").slice(0, 16)}`;
+}
+
 let cleanup: (() => void) | undefined;
 let begin: (() => Promise<void>) | undefined;
 
@@ -77,8 +85,12 @@ export default defineFeature<SyncDeps, void>({
     const now = deps.now ?? Date.now;
     let state: SyncState = structuredClone(DISCONNECTED_SYNC_STATE);
     let engine: SyncEngine | undefined;
-    let running: Promise<void> | undefined;
-    let again = false;
+    let abort: AbortController | undefined;
+    // Runs, conflict choices and disconnects take turns, so none acts on another's
+    // half-finished work.
+    let queue: Promise<unknown> = Promise.resolve();
+    let pendingRun: Promise<void> | undefined;
+    let historyChecked = false;
     let disposed = false;
     let pollTimer: ReturnType<typeof setInterval> | undefined;
     let changeTimer: ReturnType<typeof setTimeout> | undefined;
@@ -94,37 +106,36 @@ export default defineFeature<SyncDeps, void>({
       events.emit(SYNC_CHANGED, structuredClone(state));
     }
 
-    /** Run once now, or once more after the run in progress. */
+    function enqueue<T>(operation: () => Promise<T>): Promise<T> {
+      const result = queue.then(operation);
+      queue = result.catch(() => {});
+      return result;
+    }
+
+    /** Run soon; requests made before the run starts share it. */
     function sync(): Promise<void> {
       if (!engine) return Promise.resolve();
-      if (running) {
-        again = true;
-        return running;
-      }
-      const current = engine;
-      running = (async () => {
-        do {
-          again = false;
-          state.syncing = true;
-          publish();
-          try {
-            await current.run();
-            if (engine !== current) return;
-            state.lastSyncedAt = current.state.lastSyncedAt;
-            state.error = undefined;
-          } catch (error) {
-            if (engine !== current) return;
-            logError("sync", "sync run")(error);
-            state.error = describeSyncError(error);
-            state.lastFailedAt = now();
-          }
-        } while (again && engine === current);
+      pendingRun ??= enqueue(async () => {
+        pendingRun = undefined;
+        const current = engine;
+        if (!current) return;
+        state.syncing = true;
+        publish();
+        try {
+          await current.run();
+          if (engine !== current) return;
+          state.lastSyncedAt = current.state.lastSyncedAt;
+          state.error = undefined;
+        } catch (error) {
+          if (engine !== current) return;
+          logError("sync", "sync run")(error);
+          state.error = describeSyncError(error);
+          state.lastFailedAt = now();
+        }
         state.syncing = false;
         publish();
-      })().finally(() => {
-        running = undefined;
       });
-      return running;
+      return pendingRun;
     }
 
     function syncSoon() {
@@ -133,9 +144,12 @@ export default defineFeature<SyncDeps, void>({
       changeTimer = setTimeout(() => void sync(), deps.changeDelayMs ?? 2_000);
     }
 
+    /** Stop syncing at once: in-flight requests abort and nothing saves afterwards. */
     function stop() {
       engine?.stop();
+      abort?.abort();
       engine = undefined;
+      abort = undefined;
       clearInterval(pollTimer);
       clearTimeout(changeTimer);
       pollTimer = undefined;
@@ -143,8 +157,24 @@ export default defineFeature<SyncDeps, void>({
     }
 
     async function connectWith(url: string, apiKey: string) {
-      const client = createAppDataClient({ url, apiKey, fetch: deps.fetch });
-      const persisted = await files.loadState(url);
+      const controller = new AbortController();
+      const client = createAppDataClient({
+        url,
+        apiKey,
+        fetch: deps.fetch,
+        signal: controller.signal,
+      });
+      // History belongs to one service and key; another key may reach another account.
+      const persisted = await files.loadState(historyId(url, apiKey));
+      if (!historyChecked && deps.localDataUnreadable?.()) {
+        // Local data was lost, so what this machine remembers would read as removals and
+        // spread them everywhere. Starting afresh brings everything back from the service.
+        logError("sync", "local data unreadable")("Sync history reset");
+        persisted.records = {};
+        await files.saveState(persisted);
+      }
+      historyChecked = true;
+      abort = controller;
       engine = new SyncEngine(client, sources, persisted, files.saveState, now);
       state = {
         ...structuredClone(DISCONNECTED_SYNC_STATE),
@@ -175,18 +205,23 @@ export default defineFeature<SyncDeps, void>({
       } catch (error) {
         throw new Error(describeSyncError(error));
       }
-      await files.saveCredentials({ url, apiKey });
-      if (running) await running.catch(() => {});
-      stop();
-      await connectWith(url, apiKey);
+      await enqueue(async () => {
+        stop();
+        await files.saveCredentials({ url, apiKey });
+        await connectWith(url, apiKey);
+      });
       await sync();
     });
 
     commands.handle("sync:disconnect", async () => {
       stop();
-      await files.clear();
-      state = structuredClone(DISCONNECTED_SYNC_STATE);
-      publish();
+      // Let aborted work finish before deleting history it might still be saving.
+      await enqueue(async () => {
+        stop();
+        await files.clear();
+        state = structuredClone(DISCONNECTED_SYNC_STATE);
+        publish();
+      });
     });
 
     commands.handle("sync:now", async () => {
@@ -194,35 +229,34 @@ export default defineFeature<SyncDeps, void>({
       await sync();
     });
 
-    commands.handle("sync:resolve", async ({ id, keep }) => {
-      const current = engine;
-      if (!current) throw new Error("Connect to the sync service first.");
-      // Settle against the latest versions rather than racing a run.
-      if (running) await running;
-      try {
-        await current.resolve(id, keep);
-      } catch (error) {
-        // Show the conflict as it is now.
-        void sync();
-        throw new Error(describeSyncError(error));
-      } finally {
-        publish();
-      }
-    });
+    commands.handle("sync:resolve", ({ id, keep, version }) =>
+      enqueue(async () => {
+        const current = engine;
+        if (!current) throw new Error("Connect to the sync service first.");
+        try {
+          await current.resolve(id, keep, version);
+        } catch (error) {
+          // Show the conflict as it is now.
+          void sync();
+          throw new Error(describeSyncError(error));
+        } finally {
+          publish();
+        }
+      }),
+    );
 
     begin = async () => {
-      let credentials: Awaited<ReturnType<typeof files.loadCredentials>>;
       try {
-        credentials = await files.loadCredentials();
+        const credentials = await files.loadCredentials();
+        if (!credentials || disposed) return;
+        await enqueue(() => connectWith(credentials.url, credentials.apiKey));
+        void sync();
       } catch (error) {
-        logError("sync", "load credentials")(error);
-        state.error = "This machine's saved sync key couldn't be read. Connect again.";
+        // Sync problems never stop the browser from starting.
+        logError("sync", "start")(error);
+        state.error = "This machine's saved sync settings couldn't be read. Connect again.";
         publish();
-        return;
       }
-      if (!credentials || disposed) return;
-      await connectWith(credentials.url, credentials.apiKey);
-      void sync();
     };
 
     cleanup = () => {

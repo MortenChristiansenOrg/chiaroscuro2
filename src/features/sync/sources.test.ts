@@ -59,11 +59,20 @@ function script(overrides: Partial<DomainScript> = {}): DomainScript {
 }
 
 /** The real domain CSS and script features on one machine, syncing with a fake service. */
+/** Fails durable writes on request, like a full disk. */
+class FlakyStore extends MemoryDataStore {
+  failDurable = false;
+  override async setSetting<T>(key: string, value: T, options?: { durable?: boolean }) {
+    if (options?.durable && this.failDurable) throw new Error("ENOSPC: no space left on device");
+    return super.setSetting(key, value, options);
+  }
+}
+
 async function setup() {
   dataDir = fs.mkdtempSync(path.join(os.tmpdir(), "sync-sources-"));
   const commands = new CommandBus();
   const events = new EventBus();
-  const dataStore = new MemoryDataStore();
+  const dataStore = new FlakyStore();
   const shortcuts = new Set<string>();
   const platform = createMockPlatform({
     registerWebsiteShortcut: vi.fn((accelerator: string) => {
@@ -185,6 +194,63 @@ describe("domain customization sync", () => {
   });
 });
 
+describe("domain customization sync safety", () => {
+  it("changes nothing locally when the change can't be saved, and tries again later", async () => {
+    const { engine, service, send, dataStore, cssFile } = await setup();
+    fs.writeFileSync(cssFile, "h1 { color: red; }");
+    await send(DOMAIN_CSS_TOGGLE, { domain: "example.com" });
+    await engine.run();
+    service.write("domains", "example.com", {
+      schemaVersion: 1,
+      domain: "example.com",
+      css: "h1 { color: blue; }",
+      enabled: false,
+      navigation,
+    });
+    dataStore.failDurable = true;
+    await engine.run();
+    expect(fs.readFileSync(cssFile, "utf8")).toBe("h1 { color: red; }");
+    expect(await send("domain-css:get-state", { domain: "example.com" })).toMatchObject({
+      enabled: true,
+    });
+    expect(engine.getIssues()).toMatchObject([
+      {
+        kind: "not-applied",
+        message: "The change for example.com couldn't be saved on this machine.",
+      },
+    ]);
+    dataStore.failDurable = false;
+    await engine.run();
+    expect(fs.readFileSync(cssFile, "utf8")).toBe("h1 { color: blue; }");
+    expect(engine.getIssues()).toEqual([]);
+  });
+
+  it("stops instead of treating an unreadable stylesheet as removed", async () => {
+    const { engine, service, send, cssFile } = await setup();
+    fs.writeFileSync(cssFile, "h1 { color: red; }");
+    await send(DOMAIN_CSS_TOGGLE, { domain: "example.com" });
+    await engine.run();
+    fs.rmSync(cssFile);
+    fs.mkdirSync(cssFile);
+    await expect(engine.run()).rejects.toThrow("The stylesheet for example.com couldn't be read.");
+    expect(service.value("domains", "example.com")).toMatchObject({ css: "h1 { color: red; }" });
+  });
+
+  it("drops the AI undo snapshot once another machine's stylesheet replaces it", async () => {
+    const { engine, service, cssFile } = await setup();
+    fs.writeFileSync(`${cssFile}.previous.json`, JSON.stringify({ source: null, enabled: false }));
+    service.write("domains", "example.com", {
+      schemaVersion: 1,
+      domain: "example.com",
+      css: "h1 { color: blue; }",
+      enabled: true,
+      navigation,
+    });
+    await engine.run();
+    expect(fs.existsSync(`${cssFile}.previous.json`)).toBe(false);
+  });
+});
+
 describe("website script sync", () => {
   it("uploads scripts and applies another machine's scripts with their shortcuts", async () => {
     const { engine, service, send, shortcuts } = await setup();
@@ -235,6 +301,21 @@ describe("website script sync", () => {
     await engine.run();
     expect(engine.getIssues()[0]?.message).toMatch(
       /^The version from another machine isn't valid: alias/,
+    );
+  });
+
+  it("never moves a script to another domain", async () => {
+    const { engine, service, send } = await setup();
+    await send(DOMAIN_SCRIPTS_SAVE, { script: script() });
+    await engine.run();
+    service.write("scripts", "script-one", {
+      schemaVersion: 1,
+      ...script({ domain: "other.org" }),
+    });
+    await engine.run();
+    expect(await send(DOMAIN_SCRIPTS_LIST, {})).toEqual([script()]);
+    expect(engine.getIssues()[0]?.message).toBe(
+      "The other machine's version runs on other.org instead of example.com. A script's domain can't change.",
     );
   });
 });

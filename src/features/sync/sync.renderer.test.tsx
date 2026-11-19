@@ -100,6 +100,7 @@ it("offers both versions for a conflict and only explains other problems", async
           label: "example.com styles and navigation rules",
           kind: "conflict",
           message: "Changed on this machine and on another.",
+          version: "2:abc",
         },
         {
           id: "scripts/big",
@@ -119,6 +120,7 @@ it("offers both versions for a conflict and only explains other problems", async
     expect(window.chiaroscuro.sendCommand).toHaveBeenCalledWith("sync:resolve", {
       id: "domains/example.com",
       keep: "other-machine",
+      version: "2:abc",
     }),
   );
 });

@@ -478,6 +478,7 @@ if (gotLock) {
       directory: path.join(dataDir, "sync"),
       protection: syncProtection,
       sources: [domainCustomizationSource, domainScriptSource],
+      localDataUnreadable: () => dataStore.settingsUnreadable?.() ?? false,
     });
     downloads.register(deps);
     findText.register(deps);

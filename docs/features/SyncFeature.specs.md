@@ -33,15 +33,30 @@ JSON documents with revisions. Sync is optional and off until a machine is conne
     differently on both sides, or an edit on one side and removal on the other, is a
     conflict. The local version stays in use and nothing is uploaded or applied for it
     until the user chooses "Keep this machine's version" or "Use the other machine's
-    version". Choosing is refused if either version changed since it was shown.
+    version". Choosing is refused if either version changed since it was shown, including
+    when the same conflict was already settled.
 - Removing an item removes it everywhere. The service keeps removals as tombstones, so a
   machine that was offline and didn't change the item removes it too instead of restoring
   it. An item created on a machine that never synced it is uploaded even if an earlier
   item with the same key was removed elsewhere.
 - Another machine's version is applied only if the local item is still the version the
   run read, so an edit made during a run is never overwritten; it syncs on the next run.
+  It is saved to disk before sync counts it as synced; when saving fails, the local item is
+  put back and the change is retried on the next run.
+- Local data that can't be read stops the run instead of reading as removed: an unreadable
+  stylesheet, or a settings file that couldn't be read at startup. In the latter case the
+  store keeps the file as `settings.json.unreadable-<time>`, and sync forgets its history,
+  so the next run brings everything back from the service and removes nothing anywhere.
+- If the service seems to have forgotten a document or gone back to an older revision (a
+  restored backup, another account behind the same address), the item syncs as if for the
+  first time, which never removes anything.
+- A synced script never moves to another domain, as when editing it locally; a version
+  that does is reported instead of applied.
+- Runs, conflict choices and disconnecting take turns. Disconnecting aborts requests in
+  flight, and nothing changes or saves after it.
 - A write rejected because another machine wrote first (`409 REVISION_CONFLICT`) is
-  reconciled again with the newer version.
+  reconciled again with the newer version. An item that keeps changing waits for the next
+  run after three attempts, without holding up the others.
 - The browser has no size limit of its own. When the service refuses an item as too large
   (`413`), the item stays on this machine and Settings shows the service's own message.
   The same version isn't uploaded again; a changed version is.
@@ -75,8 +90,10 @@ and revoke a lost machine's key in the service.
 ## Storage
 
 `<data>/sync/credentials.enc` holds the encrypted service URL and key. `<data>/sync/state.json`
-holds each item's base and revision, and the last successful sync, for one service URL;
-connecting to another service starts afresh, which never loses local data.
+holds each item's base and revision, and the last successful sync, for one service URL and
+key (identified by a hash, never the key itself). Connecting with another service or key
+starts afresh, which never loses local data. Service error messages have the key removed,
+and the debug server's command history redacts it.
 
 ## Commands and events
 

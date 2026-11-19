@@ -11,7 +11,7 @@ export function SyncIssueList({
 }: {
   issues: SyncIssue[];
   disabled?: boolean;
-  onResolve: (id: string, keep: ConflictChoice) => void;
+  onResolve: (issue: SyncIssue, keep: ConflictChoice) => void;
 }) {
   if (!issues.length) return null;
   return (
@@ -35,7 +35,7 @@ export function SyncIssueList({
                   type="button"
                   className={scriptButtonClass}
                   disabled={disabled}
-                  onClick={() => onResolve(issue.id, "this-machine")}
+                  onClick={() => onResolve(issue, "this-machine")}
                 >
                   Keep this machine's version
                 </button>
@@ -43,7 +43,7 @@ export function SyncIssueList({
                   type="button"
                   className={scriptButtonClass}
                   disabled={disabled}
-                  onClick={() => onResolve(issue.id, "other-machine")}
+                  onClick={() => onResolve(issue, "other-machine")}
                 >
                   Use the other machine's version
                 </button>

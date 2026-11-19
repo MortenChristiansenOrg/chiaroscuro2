@@ -56,6 +56,7 @@ export class JsonDataStore implements DataStore {
   private settings: Record<string, unknown> = {};
   private settingsPath: string;
   private dirty = false;
+  private unreadable = false;
 
   constructor(private dataDir: string) {
     this.settingsPath = path.join(dataDir, "settings.json");
@@ -66,8 +67,16 @@ export class JsonDataStore implements DataStore {
     if (fs.existsSync(this.settingsPath)) {
       try {
         this.settings = JSON.parse(fs.readFileSync(this.settingsPath, "utf-8"));
-      } catch {
+      } catch (error) {
+        // Keep the unreadable file for recovery instead of overwriting it with the next save.
+        console.error("Failed to read settings; starting with defaults:", error);
+        this.unreadable = true;
         this.settings = {};
+        try {
+          fs.renameSync(this.settingsPath, `${this.settingsPath}.unreadable-${Date.now()}`);
+        } catch (renameError) {
+          console.error("Failed to keep the unreadable settings file:", renameError);
+        }
       }
     }
   }
@@ -104,7 +113,18 @@ export class JsonDataStore implements DataStore {
     return this.settings[key] as T | undefined;
   }
 
-  async setSetting<T>(key: string, value: T): Promise<void> {
+  settingsUnreadable(): boolean {
+    return this.unreadable;
+  }
+
+  async setSetting<T>(key: string, value: T, options?: { durable?: boolean }): Promise<void> {
+    if (options?.durable) {
+      const next = { ...this.settings, [key]: value };
+      fs.writeFileSync(this.settingsPath, JSON.stringify(next, null, 2));
+      this.settings = next;
+      this.dirty = false;
+      return;
+    }
     this.settings[key] = value;
     this.dirty = true;
     try {

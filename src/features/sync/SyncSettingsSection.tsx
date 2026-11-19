@@ -9,7 +9,7 @@ import {
   scriptInputClass,
 } from "../domain-scripts/domain-scripts.ui";
 import { type ConflictChoice, SyncIssueList } from "./SyncIssueList";
-import type { SyncState } from "./sync.shared";
+import type { SyncIssue, SyncState } from "./sync.shared";
 import { useSyncStore } from "./sync.store";
 
 const timeFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
@@ -43,7 +43,8 @@ export function SyncSettingsSection({ state: shown }: { state?: SyncState } = {}
     if (await send("sync:connect", { url, apiKey })) setApiKey("");
   }
 
-  const resolve = (id: string, keep: ConflictChoice) => void send("sync:resolve", { id, keep });
+  const resolve = (issue: SyncIssue, keep: ConflictChoice) =>
+    void send("sync:resolve", { id: issue.id, keep, version: issue.version ?? "" });
 
   return (
     <section id="settings-sync">

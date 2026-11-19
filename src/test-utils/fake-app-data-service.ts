@@ -117,16 +117,20 @@ export function createFakeAppDataService(options: FakeAppDataOptions = {}) {
     revision(namespace: string, key: string): number {
       return space(namespace).get(key)?.revision ?? 0;
     },
-    /** Write as another machine would. */
-    write(namespace: string, key: string, value: unknown | null) {
+    /** Write as another machine would; `null` removes, unless `live` stores JSON null. */
+    write(namespace: string, key: string, value: unknown | null, options: { live?: boolean } = {}) {
       const existing = space(namespace).get(key);
       space(namespace).set(key, {
         key,
         json: JSON.stringify(value),
         revision: (existing?.revision ?? 0) + 1,
-        deleted: value === null,
+        deleted: value === null && !options.live,
         updatedAt: Date.now(),
       });
+    },
+    /** Lose every document, as a restored backup or another account would. */
+    reset() {
+      documents.clear();
     },
   };
 }

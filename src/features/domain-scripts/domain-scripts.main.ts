@@ -371,11 +371,17 @@ export default defineFeature<DomainScriptsDeps>({
           if (input) {
             script = normalizeScript(DomainScriptSchema.parse(input));
             if (script.id !== id) throw new Error("The script's id doesn't match.");
+            // As when saving here: a script never moves to another site, so code written
+            // for one site can't start running on another.
+            if (previous && previous.domain !== script.domain)
+              throw new Error(
+                `The other machine's version runs on ${script.domain} instead of ${previous.domain}. A script's domain can't change.`,
+              );
             validateUnique(script);
           }
           const next = scripts.filter((current) => current.id !== id);
           if (script) next.push(script);
-          await dataStore.setSetting(DOMAIN_SCRIPTS_SETTING, next);
+          await dataStore.setSetting(DOMAIN_SCRIPTS_SETTING, next, { durable: true });
           scripts = next;
           shortcuts.get(id)?.();
           shortcuts.delete(id);
@@ -387,8 +393,8 @@ export default defineFeature<DomainScriptsDeps>({
               // Like a restored script, it stays usable through the palette.
               logError("domain-scripts", `shortcut for synced script ${script.name}`)(error);
             }
-          if (previous) publish(previous.domain);
-          if (script && script.domain !== previous?.domain) publish(script.domain);
+          const domain = script?.domain ?? previous?.domain;
+          if (domain) publish(domain);
           return true;
         }),
     };
