@@ -62,9 +62,9 @@ function script(overrides: Partial<DomainScript> = {}): DomainScript {
 /** Fails durable writes on request, like a full disk. */
 class FlakyStore extends MemoryDataStore {
   failDurable = false;
-  override async setSetting<T>(key: string, value: T, options?: { durable?: boolean }) {
+  override async setSettings(values: Record<string, unknown>, options?: { durable?: boolean }) {
     if (options?.durable && this.failDurable) throw new Error("ENOSPC: no space left on device");
-    return super.setSetting(key, value, options);
+    return super.setSettings(values, options);
   }
 }
 
@@ -331,5 +331,20 @@ describe("website script sync", () => {
     dataStore.failDurable = false;
     await engine.run();
     expect(await send(DOMAIN_SCRIPTS_LIST, {})).toEqual([script({ name: "Renamed" })]);
+  });
+
+  it("keeps a removed script's domain when another machine brings it back elsewhere", async () => {
+    const { engine, service, send } = await setup();
+    await send(DOMAIN_SCRIPTS_SAVE, { script: script() });
+    await engine.run();
+    await send("domain-scripts:remove", { id: "script-one" });
+    await engine.run();
+    service.write("scripts", "script-one", {
+      schemaVersion: 1,
+      ...script({ domain: "other.org", runAt: "page-load" }),
+    });
+    await engine.run();
+    expect(await send(DOMAIN_SCRIPTS_LIST, {})).toEqual([]);
+    expect(engine.getIssues()[0]?.message).toMatch(/A script's domain can't change/);
   });
 });

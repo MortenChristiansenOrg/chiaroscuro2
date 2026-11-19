@@ -48,18 +48,25 @@ JSON documents with revisions. Sync is optional and off until a machine is conne
   It is saved to disk before sync counts it as synced; when saving fails, the local item is
   put back and the change is retried on the next run.
 - Local data that can't be read stops the run instead of reading as removed: an unreadable
-  stylesheet, or a settings file that couldn't be read at startup. In the latter case the
-  store keeps the file as `settings.json.unreadable-<time>`, and sync forgets its history,
-  so the next run brings everything back from the service and removes nothing anywhere.
-- If the service seems to have forgotten a document or gone back to an older revision (a
-  restored backup, another account behind the same address), the item syncs as if for the
-  first time, which never removes anything.
-- A synced script that exists here never moves to another domain, as when editing it
-  locally; a version that does is reported instead of applied. (A script removed here and
-  later recreated elsewhere with the same id arrives like a new script.)
+  stylesheet (including a dangling link), or a settings file that couldn't be read at
+  startup. In the latter case the store keeps the file as
+  `settings.json.unreadable-<time>-<id>` and records the loss in `settings.unreadable`
+  until sync has forgotten its history, at the next start, even if the key can't be read
+  then. The next run brings everything back from the service and removes nothing anywhere.
+- Each service holds a `meta/history` document with a random id, created by the first
+  machine that syncs. A machine that finds a different id, or none, forgets its history:
+  the service was reset or restored, or another account answers at that address. Items
+  then sync as if for the first time, which never removes anything. A document that went
+  missing, back to an older revision, or changed without a new revision does the same for
+  that item.
+- A synced script never moves to another domain, as when editing it locally, even after it
+  was removed here: sync remembers the last version before a removal. A version that does
+  is reported instead of applied.
 - Domains that aren't plain hostnames don't sync.
 - Runs, conflict choices and disconnecting take turns. Disconnecting aborts requests in
-  flight, and nothing changes or saves after it.
+  flight, including a connection attempt still checking its key, and nothing changes or
+  saves after it. A conflict choice names both versions as shown (and the service's history
+  id) and is refused if the service's document differs in any way.
 - A write rejected because another machine wrote first (`409 REVISION_CONFLICT`) is
   reconciled again with the newer version. An item that keeps changing waits for the next
   run after three attempts, without holding up the others.

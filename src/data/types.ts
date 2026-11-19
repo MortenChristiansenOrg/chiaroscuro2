@@ -9,8 +9,14 @@ export interface DataStore {
    * instead and leaves the setting unchanged.
    */
   setSetting<T>(key: string, value: T, options?: { durable?: boolean }): Promise<void>;
-  /** True when saved settings existed but couldn't be read at startup. */
+  /** Save several settings in one write; `durable` as for `setSetting`. */
+  setSettings(values: Record<string, unknown>, options?: { durable?: boolean }): Promise<void>;
+  /**
+   * True from a startup where saved settings existed but couldn't be read, across restarts,
+   * until `acknowledgeSettingsUnreadable` is called.
+   */
   settingsUnreadable?(): boolean;
+  acknowledgeSettingsUnreadable?(): void;
 
   // Lifecycle
   initialize(): Promise<void>;

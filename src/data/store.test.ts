@@ -139,16 +139,24 @@ describe("JsonDataStore", () => {
     expect(callback).toHaveBeenLastCalledWith([{ id: "1", name: "A", value: 10 }]);
   });
 
-  it("keeps an unreadable settings file and reports it", async () => {
-    fs.writeFileSync(path.join(dataDir, "settings.json"), "{ not json");
-    const reopened = new JsonDataStore(dataDir);
-    await reopened.initialize();
-    expect(reopened.settingsUnreadable()).toBe(true);
-    expect(await reopened.getSetting("anything")).toBeUndefined();
-    expect(fs.readdirSync(dataDir).some((f) => f.startsWith("settings.json.unreadable-"))).toBe(
-      true,
-    );
-    expect(store.settingsUnreadable()).toBe(false);
+  it("keeps an unreadable settings file and reports it until acknowledged, across restarts", async () => {
+    for (const unreadable of ["{ not json", "[]"]) {
+      fs.writeFileSync(path.join(dataDir, "settings.json"), unreadable);
+      const reopened = new JsonDataStore(dataDir);
+      await reopened.initialize();
+      expect(reopened.settingsUnreadable()).toBe(true);
+      expect(await reopened.getSetting("anything")).toBeUndefined();
+      expect(fs.existsSync(path.join(dataDir, "settings.json"))).toBe(false);
+      // A later start, with no settings file at all, still knows.
+      const restarted = new JsonDataStore(dataDir);
+      await restarted.initialize();
+      expect(restarted.settingsUnreadable()).toBe(true);
+      restarted.acknowledgeSettingsUnreadable();
+      expect(restarted.settingsUnreadable()).toBe(false);
+    }
+    expect(
+      fs.readdirSync(dataDir).filter((f) => f.startsWith("settings.json.unreadable-")),
+    ).toHaveLength(2);
   });
 
   it("throws on a failed durable write and leaves the setting unchanged", async () => {

@@ -66,6 +66,9 @@ export function createSyncFiles(directory: string, protection: CredentialProtect
     async saveState(state: PersistedSyncState) {
       await writeAtomically(path.join(directory, STATE), JSON.stringify(state));
     },
+    async clearHistory() {
+      await fs.rm(path.join(directory, STATE), { force: true });
+    },
     async clear() {
       await fs.rm(path.join(directory, CREDENTIALS), { force: true });
       await fs.rm(path.join(directory, STATE), { force: true });

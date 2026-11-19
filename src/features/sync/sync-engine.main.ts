@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   type AppDataClient,
   AppDataError,
@@ -15,8 +15,11 @@ export interface SyncSource {
   describe(key: string, value: JsonValue | null): string;
   /** Every local item, keyed like its service document. Throws when local data can't be read. */
   read(): Map<string, JsonValue>;
-  /** Check a version from another machine; throw a readable error when it can't be used. */
-  parse(key: string, value: JsonValue): JsonValue;
+  /**
+   * Check a version from another machine; throw a readable error when it can't be used.
+   * `previous` is the last version this machine synced, even if it was since removed.
+   */
+  parse(key: string, value: JsonValue, previous: JsonValue | null): JsonValue;
   /**
    * Replace the local item (`null` removes it) and save it durably, or throw and leave it
    * unchanged. Throws `LocalChangedError` when the item no longer equals `expected`, so a
@@ -43,6 +46,10 @@ class StoppedError extends Error {
 export interface SyncRecord {
   revision: number;
   base: JsonValue | null;
+  /** Fingerprint of the service's document at `revision`, exactly as the service sent it. */
+  remote: string;
+  /** The last version before a removal, so a recreated item keeps its identity. */
+  known?: JsonValue;
 }
 
 export interface PersistedSyncState {
@@ -52,6 +59,8 @@ export interface PersistedSyncState {
   lastSyncedAt?: number;
   /** Learned from the service refusing a write; keys can't gain write access later. */
   readOnly?: boolean;
+  /** The service's history marker this history belongs to (see `checkHistory`). */
+  marker?: string;
 }
 
 /** Errors about one item. Anything else, such as a rejected key, stops the whole run. */
@@ -71,9 +80,21 @@ function message(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function fingerprint(value: JsonValue | null): string {
+function fingerprint(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex").slice(0, 16);
 }
+
+/** Identifies a service document version as sent, before any parsing. */
+function remoteFingerprint(entry: RemoteEntry | null): string {
+  return fingerprint(entry ? [entry.deleted, entry.deleted ? null : entry.value] : null);
+}
+
+/**
+ * A document only this browser writes, holding a random id. A service that lost its data
+ * (reset, restored, or another account behind the address) no longer has the id this
+ * machine remembers, so its history no longer applies.
+ */
+const MARKER = { namespace: "meta", key: "history" } as const;
 
 const MAX_ATTEMPTS = 3;
 
@@ -81,6 +102,7 @@ interface Conflict {
   local: JsonValue | null;
   remoteRevision: number;
   remoteValue: JsonValue | null;
+  remote: string;
   version: string;
 }
 
@@ -146,6 +168,7 @@ export class SyncEngine {
 
   async run(): Promise<void> {
     try {
+      await this.checkHistory();
       for (const source of this.sources) {
         this.guard();
         const remote = new Map((await this.client.list(source.namespace)).map((e) => [e.key, e]));
@@ -176,6 +199,45 @@ export class SyncEngine {
     }
   }
 
+  /** Forget all history when the service's marker isn't the one this machine remembers. */
+  private async checkHistory(): Promise<void> {
+    this.guard();
+    const read = (entry: RemoteEntry | null) =>
+      entry && !entry.deleted && typeof entry.value === "object" && entry.value !== null
+        ? (entry.value as { id?: unknown }).id
+        : undefined;
+    const entry = await this.client.get(MARKER.namespace, MARKER.key);
+    this.guard();
+    let marker = read(entry);
+    if (typeof marker !== "string") {
+      if (this.readOnly) return;
+      const fresh = randomUUID();
+      try {
+        await this.client.put(MARKER.namespace, MARKER.key, { id: fresh }, entry?.revision ?? 0);
+        marker = fresh;
+      } catch (error) {
+        if (error instanceof AppDataError && error.code === "READ_ONLY") {
+          this.state.readOnly = true;
+          this.dirty = true;
+          return;
+        }
+        if (!isConflict(error)) throw error;
+        // Another machine created it first.
+        marker = read(await this.client.get(MARKER.namespace, MARKER.key));
+        if (typeof marker !== "string") throw error;
+      }
+      this.guard();
+    }
+    if (typeof marker !== "string" || marker === this.state.marker) return;
+    if (this.state.marker !== undefined || Object.keys(this.state.records).length) {
+      // First-sync rules apply to every item from here: nothing is removed anywhere.
+      this.state.records = {};
+      this.conflicts.clear();
+    }
+    this.state.marker = marker;
+    this.dirty = true;
+  }
+
   /**
    * Settle a conflict by keeping one machine's version everywhere. `version` identifies the
    * conflict the user saw; the choice is refused if either version changed since then.
@@ -192,20 +254,24 @@ export class SyncEngine {
     const { source, key } = this.locate(id);
     const remote = await this.client.get(source.namespace, key);
     this.guard();
-    if ((remote?.revision ?? 0) !== seen.remoteRevision) throw changed();
+    if (
+      (remote?.revision ?? 0) !== seen.remoteRevision ||
+      remoteFingerprint(remote) !== seen.remote
+    )
+      throw changed();
     const local = source.read().get(key) ?? null;
     if (!jsonEqual(local, seen.local)) throw changed();
     try {
       if (keep === "other-machine") {
         await source.apply(key, seen.remoteValue, local);
-        this.record(id, seen.remoteRevision, seen.remoteValue);
+        this.record(id, seen.remoteRevision, seen.remoteValue, seen.remote);
       } else if (local !== null) {
         const entry = await this.client.put(source.namespace, key, local, seen.remoteRevision);
-        this.record(id, entry.revision, local);
+        this.record(id, entry.revision, local, remoteFingerprint(entry));
       } else if (seen.remoteValue !== null) {
         const entry = await this.client.remove(source.namespace, key, seen.remoteRevision);
-        this.record(id, entry.revision, null);
-      } else this.record(id, seen.remoteRevision, null);
+        this.record(id, entry.revision, null, remoteFingerprint(entry));
+      } else this.record(id, seen.remoteRevision, null, seen.remote);
     } catch (error) {
       if (error instanceof LocalChangedError || isConflict(error)) throw changed();
       throw error;
@@ -234,18 +300,19 @@ export class SyncEngine {
   ): Promise<void> {
     this.guard();
     const id = `${source.namespace}/${key}`;
+    let record: SyncRecord | undefined = this.state.records[id];
+    const previous = record?.base ?? record?.known ?? null;
     let remoteValue: JsonValue | null = null;
     if (remote && !remote.deleted) {
       try {
         // A live document holding JSON null is invalid, not a removal.
-        remoteValue = source.parse(key, remote.value as JsonValue);
+        remoteValue = source.parse(key, remote.value as JsonValue, previous);
       } catch (error) {
-        const known = this.state.records[id]?.base ?? null;
-        this.issue(id, source.describe(key, local ?? known), "not-applied", message(error));
+        this.issue(id, source.describe(key, local ?? previous), "not-applied", message(error));
         return;
       }
     }
-    let record: SyncRecord | undefined = this.state.records[id];
+    const remoteRaw = remoteFingerprint(remote);
     // The service never forgets a document, lowers its revision or changes it without a new
     // revision. If that seems to happen (a restored backup, another account behind the same
     // address), what this machine remembers no longer applies: treat the item like a first
@@ -255,7 +322,7 @@ export class SyncEngine {
       record.revision > 0 &&
       (remote === null ||
         remote.revision < record.revision ||
-        (remote.revision === record.revision && !jsonEqual(remoteValue, record.base)))
+        (remote.revision === record.revision && remoteRaw !== record.remote))
     ) {
       this.forget(id);
       record = undefined;
@@ -271,12 +338,13 @@ export class SyncEngine {
       if (remoteRevision === 0 && base === null) this.forget(id);
       return;
     }
-    if (!localChanged) return this.download(source, key, remoteRevision, remoteValue, local);
+    if (!localChanged)
+      return this.download(source, key, remoteRevision, remoteValue, remoteRaw, local);
     // Changed only here, or new here and never on the service.
     if (!remoteChanged || remote === null)
       return this.upload(source, key, local, remote, label, attempt);
     if (jsonEqual(local, remoteValue)) {
-      this.record(id, remoteRevision, remoteValue);
+      this.record(id, remoteRevision, remoteValue, remoteRaw);
       this.clear(id);
       return;
     }
@@ -295,14 +363,16 @@ export class SyncEngine {
             return;
           }
         }
-        this.record(id, remoteRevision, remoteValue);
+        this.record(id, remoteRevision, remoteValue, remoteRaw);
         if (jsonEqual(merged, remoteValue)) this.clear(id);
         else await this.upload(source, key, merged, remote, label, attempt);
         return;
       }
     }
-    const version = `${remoteRevision}:${fingerprint(local)}`;
-    this.conflicts.set(id, { local, remoteRevision, remoteValue, version });
+    // Names both versions as shown, and this connection's history, so a choice can't apply
+    // to anything else.
+    const version = fingerprint([this.state.marker, remoteRevision, remoteRaw, local]);
+    this.conflicts.set(id, { local, remoteRevision, remoteValue, remote: remoteRaw, version });
     this.issue(
       id,
       label,
@@ -324,6 +394,7 @@ export class SyncEngine {
     key: string,
     revision: number,
     value: JsonValue | null,
+    raw: string,
     expected: JsonValue | null,
   ): Promise<void> {
     const id = `${source.namespace}/${key}`;
@@ -337,7 +408,7 @@ export class SyncEngine {
         this.issue(id, source.describe(key, value ?? expected), "not-applied", message(error));
       return;
     }
-    this.record(id, revision, value);
+    this.record(id, revision, value, raw);
     this.clear(id);
   }
 
@@ -352,7 +423,7 @@ export class SyncEngine {
     const id = `${source.namespace}/${key}`;
     const revision = remote?.revision ?? 0;
     if (value === null && (remote === null || remote.deleted)) {
-      this.record(id, revision, null);
+      this.record(id, revision, null, remoteFingerprint(remote));
       if (revision === 0) this.forget(id);
       this.clear(id);
       return;
@@ -366,7 +437,7 @@ export class SyncEngine {
         value === null
           ? await this.client.remove(source.namespace, key, revision)
           : await this.client.put(source.namespace, key, value, revision);
-      this.record(id, entry.revision, value);
+      this.record(id, entry.revision, value, remoteFingerprint(entry));
       this.clear(id);
     } catch (error) {
       if (error instanceof StoppedError) throw error;
@@ -398,11 +469,17 @@ export class SyncEngine {
     }
   }
 
-  private record(id: string, revision: number, base: JsonValue | null) {
+  private record(id: string, revision: number, base: JsonValue | null, remote: string) {
     this.guard();
     const current = this.state.records[id];
-    if (current?.revision === revision && jsonEqual(current.base, base)) return;
-    this.state.records[id] = { revision, base };
+    if (
+      current?.revision === revision &&
+      current.remote === remote &&
+      jsonEqual(current.base, base)
+    )
+      return;
+    const known = base === null ? (current?.base ?? current?.known) : undefined;
+    this.state.records[id] = { revision, base, remote, ...(known != null ? { known } : {}) };
     this.dirty = true;
   }
 

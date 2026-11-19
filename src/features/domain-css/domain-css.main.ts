@@ -111,15 +111,14 @@ function isNavigationDefault(state: Omit<DomainNavigationState, "domain">): bool
   );
 }
 
-async function persistNavigationStates(durable = false): Promise<void> {
+async function persistNavigationStates(): Promise<void> {
   const serializable: Record<string, PersistedNavigationState> = {};
   for (const [domain, state] of navigationStates) {
     serializable[domain] = state;
   }
   try {
-    await deps.dataStore.setSetting("domain-navigation-states", serializable, { durable });
+    await deps.dataStore.setSetting("domain-navigation-states", serializable);
   } catch (error) {
-    if (durable) throw error;
     console.error("Failed to persist domain navigation states", error);
   }
 }
@@ -264,15 +263,14 @@ function stopWatching(domain: string): void {
   }
 }
 
-async function persistStates(durable = false): Promise<void> {
+async function persistStates(): Promise<void> {
   const serializable: Record<string, DomainState> = {};
   for (const [domain, state] of domainStates) {
     serializable[domain] = state;
   }
   try {
-    await deps.dataStore.setSetting("domain-css-states", serializable, { durable });
+    await deps.dataStore.setSetting("domain-css-states", serializable);
   } catch (error) {
-    if (durable) throw error;
     console.error("Failed to persist domain CSS states", error);
   }
 }
@@ -517,12 +515,30 @@ export interface DomainCustomization {
   navigation: Omit<DomainNavigationState, "domain">;
 }
 
+function lstatOrNull(file: string): fs.Stats | null {
+  try {
+    return fs.lstatSync(file);
+  } catch {
+    return null;
+  }
+}
+
+/** Settings for both maps, saved together so they can't disagree. */
+function serializedStates(): Record<string, unknown> {
+  return {
+    "domain-css-states": Object.fromEntries(domainStates),
+    "domain-navigation-states": Object.fromEntries(navigationStates),
+  };
+}
+
 /** Like `readCssFile`, but only a missing file reads as no stylesheet. */
 function readCssFileStrict(domain: string): string | null {
   try {
     return fs.readFileSync(getCssFilePath(domain), "utf-8");
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    // A dangling link also reads as ENOENT, but the stylesheet isn't gone.
+    if ((error as NodeJS.ErrnoException).code === "ENOENT" && !lstatOrNull(getCssFilePath(domain)))
+      return null;
     throw new Error(`The stylesheet for ${domain} couldn't be read.`);
   }
 }
@@ -588,8 +604,7 @@ export async function applyDomainCustomization(
     navigationStates.set(domain, structuredClone(value.navigation));
   else navigationStates.delete(domain);
   try {
-    await persistStates(true);
-    await persistNavigationStates(true);
+    await deps.dataStore.setSettings(serializedStates(), { durable: true });
     stopWatching(domain);
     if (staged) fs.renameSync(staged, file);
     else if (cssChanged) fs.rmSync(file, { force: true });
@@ -600,16 +615,21 @@ export async function applyDomainCustomization(
     else domainStates.delete(domain);
     if (previous.navigation) navigationStates.set(domain, previous.navigation);
     else navigationStates.delete(domain);
-    await persistStates();
-    await persistNavigationStates();
+    await deps.dataStore.setSettings(serializedStates());
     if (previous.state?.enabled && previous.css !== null) startWatching(domain);
     throw new Error(`The change for ${domain} couldn't be saved on this machine.`, {
       cause: error,
     });
   }
-  // The AI undo snapshot restores the stylesheet from before generation; once another
-  // machine's stylesheet replaces it, restoring would bring back an outdated version.
-  if (cssChanged) fs.rmSync(`${file}.previous.json`, { force: true });
+  // The AI undo snapshot restores the stylesheet and enabled state from before generation;
+  // once another machine changes either, restoring would bring back an outdated version.
+  // The update is already saved, so a failure here mustn't skip refreshing the tabs.
+  if (cssChanged || (previous.state?.enabled ?? false) !== (value?.enabled ?? false))
+    try {
+      fs.rmSync(`${file}.previous.json`, { force: true });
+    } catch (error) {
+      logError("domain-css", `drop restore snapshot for ${domain}`)(error);
+    }
   await injectOrRemoveForAllTabs(domain);
   if (value?.enabled && css !== null) startWatching(domain);
   emitChanged(domain);

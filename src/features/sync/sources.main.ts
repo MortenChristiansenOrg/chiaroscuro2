@@ -128,12 +128,19 @@ export const domainScriptSource: SyncSource = {
       listScriptsForSync().map((script) => [script.id, scriptRecord(script) as JsonValue]),
     );
   },
-  parse(id, value) {
+  parse(id, value, previous) {
     checkVersion(value);
     const parsed = ScriptRecordSchema.safeParse(value);
     if (!parsed.success) throw invalid(parsed.error);
     if (parsed.data.id !== id)
       throw new Error(`The version from another machine belongs to script ${parsed.data.id}.`);
+    // A script stays on its site, even after it was removed here: code written for one site
+    // must not start running on another.
+    const known = (previous as Partial<DomainScript> | null)?.domain;
+    if (known && known !== parsed.data.domain)
+      throw new Error(
+        `The other machine's version runs on ${parsed.data.domain} instead of ${known}. A script's domain can't change.`,
+      );
     return parsed.data as JsonValue;
   },
   async apply(id, value, expected) {

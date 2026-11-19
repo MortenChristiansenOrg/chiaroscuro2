@@ -324,6 +324,66 @@ describe("sync feature", () => {
     await new Promise((resolve) => setTimeout(resolve, 100));
     expect(lists()).toBe(afterDownload);
   });
+
+  it("forgets sync history after lost settings even when the key can't be read", async () => {
+    const service = createFakeAppDataService();
+    const first = setup(service);
+    first.items.set("example.com", { css: "a" });
+    await first.commands.send("sync:connect", { url: URL, apiKey: FAKE_APP_DATA_KEY });
+    await first.commands.send("sync:now", {});
+    feature.teardown?.();
+    expect(fs.existsSync(path.join(first.directory, "state.json"))).toBe(true);
+
+    let unreadable = true;
+    const acknowledge = vi.fn(() => {
+      unreadable = false;
+    });
+    // The keyring is locked at this start, so the key can't be read.
+    const second = setup(service, first.directory, {
+      localDataUnreadable: () => unreadable,
+      acknowledgeLocalDataUnreadable: acknowledge,
+      protection: {
+        encrypt: protection.encrypt,
+        decrypt: () => {
+          throw new Error("Keyring locked");
+        },
+      },
+    });
+    await feature.start?.(second.deps);
+    expect(fs.existsSync(path.join(first.directory, "state.json"))).toBe(false);
+    expect(acknowledge).toHaveBeenCalledOnce();
+    feature.teardown?.();
+
+    // Next start: keyring unlocked, local data still empty. Nothing is removed remotely.
+    const third = setup(service, first.directory);
+    await feature.start?.(third.deps);
+    await vi.waitFor(() => expect(third.items.get("example.com")).toEqual({ css: "a" }));
+    expect(service.value("domains", "example.com")).toEqual({ css: "a" });
+  });
+
+  it("lets a disconnect win over a connect that was still checking the key", async () => {
+    const service = createFakeAppDataService();
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    let hold = true;
+    const { commands, directory, states } = setup(undefined, undefined, {
+      fetch: (async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (hold) {
+          hold = false;
+          await held;
+        }
+        return service.fetch(input, init);
+      }) as typeof fetch,
+    });
+    const connecting = commands.send("sync:connect", { url: URL, apiKey: FAKE_APP_DATA_KEY });
+    await commands.send("sync:disconnect", {});
+    release();
+    await expect(connecting).rejects.toThrow("Connecting was cancelled.");
+    expect(fs.readdirSync(directory)).toEqual([]);
+    expect(latest(states)?.connected ?? false).toBe(false);
+  });
 });
 
 describe("describeSyncError", () => {

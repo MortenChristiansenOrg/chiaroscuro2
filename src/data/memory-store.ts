@@ -137,8 +137,15 @@ export class MemoryDataStore implements DataStore {
     return this.settings.get(key) as T | undefined;
   }
 
-  async setSetting<T>(key: string, value: T, _options?: { durable?: boolean }): Promise<void> {
-    this.settings.set(key, value);
+  async setSetting<T>(key: string, value: T, options?: { durable?: boolean }): Promise<void> {
+    await this.setSettings({ [key]: value }, options);
+  }
+
+  async setSettings(
+    values: Record<string, unknown>,
+    _options?: { durable?: boolean },
+  ): Promise<void> {
+    for (const [key, value] of Object.entries(values)) this.settings.set(key, value);
   }
 
   async initialize(): Promise<void> {

@@ -479,6 +479,7 @@ if (gotLock) {
       protection: syncProtection,
       sources: [domainCustomizationSource, domainScriptSource],
       localDataUnreadable: () => dataStore.settingsUnreadable?.() ?? false,
+      acknowledgeLocalDataUnreadable: () => dataStore.acknowledgeSettingsUnreadable?.(),
     });
     downloads.register(deps);
     findText.register(deps);

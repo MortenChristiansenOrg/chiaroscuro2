@@ -65,7 +65,7 @@ describe("SyncEngine", () => {
     expect(service.value(NS, "one")).toEqual({ css: "a" });
     await b.engine.run();
     expect(b.items.get("one")).toEqual({ css: "a" });
-    expect(a.saved.at(-1)?.records[`${NS}/one`]).toEqual({ revision: 1, base: { css: "a" } });
+    expect(a.saved.at(-1)?.records[`${NS}/one`]).toMatchObject({ revision: 1, base: { css: "a" } });
   });
 
   it("sends later edits both ways", async () => {
@@ -212,7 +212,7 @@ describe("SyncEngine", () => {
     const racing = machine({
       ...service,
       fetch: (async (input: RequestInfo | URL, init?: RequestInit) => {
-        if (init?.method === "PUT" && !raced) {
+        if (init?.method === "PUT" && String(input).includes("key=one") && !raced) {
           raced = true;
           service.write(NS, "one", { css: "from c", enabled: false });
         }
@@ -221,7 +221,7 @@ describe("SyncEngine", () => {
     });
     // Machine "racing" shares the service but loses the first upload to another write.
     racing.items.set("one", { css: "a", enabled: false });
-    racing.state.records[`${NS}/one`] = { revision: 1, base: { css: "a", enabled: false } };
+    Object.assign(racing.state, structuredClone(a.state));
     racing.items.set("one", { css: "a", enabled: true });
     await racing.engine.run();
     expect(raced).toBe(true);
@@ -230,7 +230,7 @@ describe("SyncEngine", () => {
   });
 
   it("keeps an item the service finds too large, says why, and doesn't upload it again", async () => {
-    const service = createFakeAppDataService({ maxValueBytes: 40 });
+    const service = createFakeAppDataService({ maxValueBytes: 80 });
     const a = machine(service);
     a.items.set("big", { css: "x".repeat(100) });
     a.items.set("small", { css: "y" });
@@ -243,7 +243,7 @@ describe("SyncEngine", () => {
         label: "Item big",
         kind: "too-large",
         message:
-          "Too large to sync. The service says: “JSON values are limited to 40 bytes.” It stays on this machine.",
+          "Too large to sync. The service says: “JSON values are limited to 80 bytes.” It stays on this machine.",
       },
     ]);
     const before = puts(service);
@@ -366,13 +366,13 @@ describe("SyncEngine", () => {
   it("stops making requests and changes once stopped mid-request", async () => {
     const service = createFakeAppDataService();
     let stop: () => void = () => {};
-    const seen: string[] = [];
+    let atStop = -1;
     const a = machine({
       ...service,
       fetch: (async (input: RequestInfo | URL, init?: RequestInit) => {
-        seen.push(init?.method ?? "GET");
-        if (init?.method === "PUT") {
+        if (init?.method === "PUT" && String(input).includes("key=one")) {
           stop();
+          atStop = service.requests.length;
           service.write(NS, "one", { css: "other" });
         }
         return service.fetch(input, init);
@@ -381,7 +381,8 @@ describe("SyncEngine", () => {
     stop = () => a.engine.stop();
     a.items.set("one", { css: "a" });
     await a.engine.run();
-    expect(seen).toEqual(["GET", "PUT"]);
+    // The PUT that was already on its way is the last request; its 409 isn't followed up.
+    expect(service.requests.length).toBe(atStop + 1);
     expect(a.items.get("one")).toEqual({ css: "a" });
     expect(a.saved).toEqual([]);
   });
@@ -455,7 +456,7 @@ describe("SyncEngine", () => {
     });
     hooked.items.set("a", { css: "2" });
     hooked.items.set("b", { css: "1" });
-    Object.assign(hooked.state.records, structuredClone(a.state.records));
+    Object.assign(hooked.state, structuredClone(a.state));
     await hooked.engine.run();
     expect(hooked.items.get("b")).toEqual({ css: "edited during run" });
     await hooked.engine.run();
@@ -532,9 +533,9 @@ describe("SyncEngine", () => {
   });
 
   it("clears the issue of a refused item that only existed here once it is removed", async () => {
-    const service = createFakeAppDataService({ maxValueBytes: 20 });
+    const service = createFakeAppDataService({ maxValueBytes: 80 });
     const a = machine(service);
-    a.items.set("big", { css: "x".repeat(50) });
+    a.items.set("big", { css: "x".repeat(100) });
     await a.engine.run();
     expect(a.engine.getIssues()).toHaveLength(1);
     a.items.delete("big");
@@ -551,5 +552,21 @@ describe("SyncEngine", () => {
     expect(a.engine.hasLocalChanges()).toBe(false);
     a.items.delete("one");
     expect(a.engine.hasLocalChanges()).toBe(true);
+  });
+
+  it("removes nothing after a service reset, even once revisions catch up", async () => {
+    const service = createFakeAppDataService();
+    const a = machine(service);
+    a.items.set("one", { css: "a" });
+    await a.engine.run();
+    service.reset();
+    // Another machine recreates and removes the item: revision 2 now looks like a removal.
+    service.write(NS, "one", { css: "x" });
+    service.write(NS, "one", null);
+    await a.engine.run();
+    expect(a.items.get("one")).toEqual({ css: "a" });
+    expect(a.engine.getIssues()).toMatchObject([
+      { kind: "conflict", message: "Still on this machine, but removed on another." },
+    ]);
   });
 });

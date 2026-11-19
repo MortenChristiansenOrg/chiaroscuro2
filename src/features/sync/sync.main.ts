@@ -46,8 +46,10 @@ export interface SyncDeps {
   pollIntervalMs?: number;
   /** How long to wait after a local change, so a burst of edits syncs once. */
   changeDelayMs?: number;
-  /** True when this machine's saved settings couldn't be read at startup. */
+  /** True when this machine's saved settings couldn't be read, until acknowledged. */
   localDataUnreadable?: () => boolean;
+  /** Called once sync history was reset because local data was lost. */
+  acknowledgeLocalDataUnreadable?: () => void;
   now?: () => number;
 }
 
@@ -92,7 +94,9 @@ export default defineFeature<SyncDeps, void>({
     // half-finished work.
     let queue: Promise<unknown> = Promise.resolve();
     let pendingRun: Promise<void> | undefined;
-    let historyChecked = false;
+    /** Bumped by every connect and disconnect, so a slower earlier attempt gives up. */
+    let attempt = 0;
+    let checking: AbortController | undefined;
     let disposed = false;
     let pollTimer: ReturnType<typeof setInterval> | undefined;
     let changeTimer: ReturnType<typeof setTimeout> | undefined;
@@ -211,16 +215,9 @@ export default defineFeature<SyncDeps, void>({
         fetch: deps.fetch,
         signal: controller.signal,
       });
+      await forgetHistoryIfLocalDataLost();
       // History belongs to one service and key; another key may reach another account.
       const persisted = await files.loadState(historyId(url, apiKey));
-      if (!historyChecked && deps.localDataUnreadable?.()) {
-        // Local data was lost, so what this machine remembers would read as removals and
-        // spread them everywhere. Starting afresh brings everything back from the service.
-        logError("sync", "local data unreadable")("Sync history reset");
-        persisted.records = {};
-        await files.saveState(persisted);
-      }
-      historyChecked = true;
       abort = controller;
       engine = new SyncEngine(client, sources, persisted, files.saveState, now);
       state = {
@@ -233,6 +230,18 @@ export default defineFeature<SyncDeps, void>({
       publish();
     }
 
+    /**
+     * Local data was lost, so what this machine remembers would read as removals and spread
+     * them everywhere. Forgetting it makes the next sync bring everything back instead. The
+     * store keeps reporting the loss until this has happened, even across restarts.
+     */
+    async function forgetHistoryIfLocalDataLost() {
+      if (!deps.localDataUnreadable?.()) return;
+      logError("sync", "local data unreadable")("Forgetting sync history");
+      await files.clearHistory();
+      deps.acknowledgeLocalDataUnreadable?.();
+    }
+
     // Local edits sync shortly after they happen; other machines' edits arrive with polling.
     for (const name of [DOMAIN_CSS_CHANGED, DOMAIN_NAVIGATION_CHANGED, DOMAIN_SCRIPTS_CHANGED])
       subscriptions.push(events.on(name, syncSoon));
@@ -242,14 +251,27 @@ export default defineFeature<SyncDeps, void>({
     commands.handle("sync:connect", async (payload) => {
       const url = normalizeServiceUrl(payload.url);
       const apiKey = validateApiKey(payload.apiKey);
-      const client = createAppDataClient({ url, apiKey, fetch: deps.fetch });
+      const current = ++attempt;
+      checking?.abort();
+      const controller = new AbortController();
+      checking = controller;
+      const cancelled = () => new Error("Connecting was cancelled.");
+      const client = createAppDataClient({
+        url,
+        apiKey,
+        fetch: deps.fetch,
+        signal: controller.signal,
+      });
       try {
         // Check the key before saving it, so a typo isn't remembered.
         await client.check(sources[0]?.namespace ?? "default");
       } catch (error) {
+        if (current !== attempt) throw cancelled();
         throw new Error(describeSyncError(error));
       }
       await enqueue(async () => {
+        // A disconnect or another connect since then wins.
+        if (current !== attempt || disposed) throw cancelled();
         stop();
         await files.saveCredentials({ url, apiKey });
         await connectWith(url, apiKey);
@@ -259,6 +281,8 @@ export default defineFeature<SyncDeps, void>({
     });
 
     commands.handle("sync:disconnect", async () => {
+      attempt++;
+      checking?.abort();
       stop();
       // Let aborted work finish before deleting history it might still be saving.
       await enqueue(async () => {
@@ -292,6 +316,8 @@ export default defineFeature<SyncDeps, void>({
 
     begin = async () => {
       try {
+        // Before anything that could fail, such as a locked keyring.
+        await forgetHistoryIfLocalDataLost();
         const credentials = await files.loadCredentials();
         if (!credentials || disposed) return;
         await enqueue(() => connectWith(credentials.url, credentials.apiKey));
@@ -306,6 +332,8 @@ export default defineFeature<SyncDeps, void>({
 
     cleanup = () => {
       disposed = true;
+      attempt++;
+      checking?.abort();
       stop();
       for (const unsubscribe of subscriptions) unsubscribe();
     };
