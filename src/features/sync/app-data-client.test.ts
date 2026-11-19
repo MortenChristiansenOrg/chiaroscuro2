@@ -99,18 +99,21 @@ describe("app data client", () => {
   });
 
   it("treats any 409 as a revision conflict", async () => {
-    const client = createAppDataClient({
-      url: "https://sync.example",
-      apiKey: FAKE_APP_DATA_KEY,
-      fetch: (async () =>
-        new Response(JSON.stringify({ error: { code: 7, message: 42 } }), {
-          status: 409,
-        })) as typeof fetch,
-    });
-    await expect(client.put("domains", "a", { css: "" }, 1)).rejects.toMatchObject({
-      status: 409,
-      code: "REVISION_CONFLICT",
-    });
+    for (const body of [
+      JSON.stringify({ error: { code: 7, message: 42 } }),
+      JSON.stringify({ error: { code: "CONFLICT", message: "Changed." } }),
+      "<html>Conflict</html>",
+    ]) {
+      const client = createAppDataClient({
+        url: "https://sync.example",
+        apiKey: FAKE_APP_DATA_KEY,
+        fetch: (async () => new Response(body, { status: 409 })) as typeof fetch,
+      });
+      await expect(client.put("domains", "a", { css: "" }, 1)).rejects.toMatchObject({
+        status: 409,
+        code: "REVISION_CONFLICT",
+      });
+    }
   });
 
   it("never repeats the key in an error message", async () => {

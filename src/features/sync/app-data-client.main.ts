@@ -152,22 +152,26 @@ export function createAppDataClient(options: {
       throw new AppDataError(0, "NETWORK", "The sync service could not be reached.");
     }
     let result: unknown;
+    let readable = true;
     try {
       result = await response.json();
     } catch {
+      readable = false;
+    }
+    // 409 always means another write came first, whatever the body says, so the item is
+    // reconciled again instead of reported.
+    if (!readable && response.status !== 409)
       throw new AppDataError(
         response.ok ? 0 : response.status,
         "INVALID_RESPONSE",
         "The sync service sent a response this browser could not read.",
       );
-    }
     if (!response.ok) {
       // Whatever the body holds, the status still decides what the failure means.
       const error = ErrorBodySchema.safeParse(result).data?.error;
       throw new AppDataError(
         response.status,
-        // 409 always means another write came first, whatever the body says.
-        error?.code ?? (response.status === 409 ? "REVISION_CONFLICT" : "HTTP_ERROR"),
+        response.status === 409 ? "REVISION_CONFLICT" : (error?.code ?? "HTTP_ERROR"),
         // Messages reach Settings and logs; a proxy echoing the request must not leak the key.
         (error?.message ?? `The sync service answered with status ${response.status}.`)
           .split(apiKey)

@@ -430,6 +430,17 @@ describe("sync feature", () => {
     expect(await commands.send("sync:get-state", {})).toMatchObject({ connected: true });
   });
 
+  it("replaces a saved key that can't be read", async () => {
+    const { commands, directory } = setup();
+    fs.mkdirSync(directory, { recursive: true });
+    const file = path.join(directory, "credentials.enc");
+    fs.writeFileSync(file, "unreadable");
+    fs.chmodSync(file, 0);
+    await commands.send("sync:connect", { url: URL, apiKey: FAKE_APP_DATA_KEY });
+    expect(await commands.send("sync:get-state", {})).toMatchObject({ connected: true });
+    expect(protection.decrypt(fs.readFileSync(file))).toContain(FAKE_APP_DATA_KEY);
+  });
+
   it("shows itself stopped, and why, when the key can't be deleted", async () => {
     const { commands, directory, states } = setup();
     await commands.send("sync:connect", { url: URL, apiKey: FAKE_APP_DATA_KEY });
