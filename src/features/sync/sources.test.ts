@@ -286,6 +286,31 @@ describe("domain customization sync safety", () => {
     expect(fs.readFileSync(cssFile, "utf8")).toBe("h1 { color: red; }");
   });
 
+  it("keeps navigation rules reset here while a failed synced save was in progress", async () => {
+    const { engine, service, send, dataStore, cssFile } = await setup();
+    fs.writeFileSync(cssFile, "h1 { color: red; }");
+    await send(DOMAIN_CSS_TOGGLE, { domain: "example.com" });
+    await send(DOMAIN_NAVIGATION_SET, { domain: "example.com", ...navigation, blockNewTabs: true });
+    await engine.run();
+    service.write("domains", "example.com", {
+      schemaVersion: 1,
+      domain: "example.com",
+      css: "h1 { color: red; }",
+      enabled: true,
+      navigation,
+    });
+    dataStore.failDurable = true;
+    dataStore.duringDurable = () => {
+      dataStore.duringDurable = undefined;
+      void send(DOMAIN_NAVIGATION_SET, { domain: "example.com", ...navigation });
+    };
+    await engine.run();
+    dataStore.failDurable = false;
+    expect(await send(DOMAIN_NAVIGATION_GET_STATE, { domain: "example.com" })).toMatchObject({
+      blockNewTabs: false,
+    });
+  });
+
   it("stops instead of treating an unreadable stylesheet as removed", async () => {
     const { engine, service, send, cssFile } = await setup();
     fs.writeFileSync(cssFile, "h1 { color: red; }");

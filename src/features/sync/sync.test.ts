@@ -416,6 +416,33 @@ describe("sync feature", () => {
     expect(fs.existsSync(path.join(directory, "credentials.enc"))).toBe(false);
   });
 
+  it("keeps the current key saved when the replacement's history can't be read", async () => {
+    const other = `ads_${"b".repeat(64)}`;
+    const service = createFakeAppDataService({ keys: { [FAKE_APP_DATA_KEY]: {}, [other]: {} } });
+    const { commands, directory } = setup(service);
+    await commands.send("sync:connect", { url: URL, apiKey: FAKE_APP_DATA_KEY });
+    await commands.send("sync:now", {});
+    const saved = fs.readFileSync(path.join(directory, "credentials.enc"));
+    fs.rmSync(path.join(directory, "state.json"));
+    fs.mkdirSync(path.join(directory, "state.json"));
+    await expect(commands.send("sync:connect", { url: URL, apiKey: other })).rejects.toThrow();
+    expect(fs.readFileSync(path.join(directory, "credentials.enc"))).toEqual(saved);
+    expect(await commands.send("sync:get-state", {})).toMatchObject({ connected: true });
+  });
+
+  it("shows itself stopped, and why, when the key can't be deleted", async () => {
+    const { commands, directory, states } = setup();
+    await commands.send("sync:connect", { url: URL, apiKey: FAKE_APP_DATA_KEY });
+    await commands.send("sync:now", {});
+    fs.rmSync(path.join(directory, "credentials.enc"));
+    fs.mkdirSync(path.join(directory, "credentials.enc", "stuck"), { recursive: true });
+    await expect(commands.send("sync:disconnect", {})).rejects.toThrow();
+    expect(latest(states)).toMatchObject({
+      connected: false,
+      error: expect.stringContaining("may start again after a restart"),
+    });
+  });
+
   it("doesn't promise to retry a connection that failed", async () => {
     const { commands } = setup(undefined, undefined, {
       fetch: (async () =>

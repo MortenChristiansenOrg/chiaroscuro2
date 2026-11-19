@@ -217,15 +217,23 @@ export default defineFeature<SyncDeps, void>({
     }
 
     /**
-     * Load what this machine last agreed with the service, then replace any current
-     * connection with this one, unless `owner` was cancelled meanwhile. Until then, a current
-     * connection keeps working. Returns whether it connected.
+     * Load what this machine last agreed with the service, run `commit` (saving the key),
+     * then replace any current connection with this one, unless `owner` was cancelled
+     * meanwhile. Until then, a current connection keeps working. Returns whether it connected.
      */
-    async function connectWith(url: string, apiKey: string, owner: number): Promise<boolean> {
+    async function connectWith(
+      url: string,
+      apiKey: string,
+      owner: number,
+      commit?: () => Promise<void>,
+    ): Promise<boolean> {
+      const live = () => owner === attempt && !disposed;
       await forgetHistoryIfLocalDataLost();
       // History belongs to one service and key; another key may reach another account.
       const persisted = await files.loadState(historyId(url, apiKey));
-      if (owner !== attempt || disposed) return false;
+      if (!live()) return false;
+      await commit?.();
+      if (!live()) return false;
       stop();
       const controller = new AbortController();
       const client = createAppDataClient({
@@ -289,10 +297,19 @@ export default defineFeature<SyncDeps, void>({
       await enqueue(async () => {
         // A disconnect or another connect since then wins.
         if (current !== attempt || disposed) throw cancelled();
-        // Saved first: if the keyring refuses, the current connection stays as it is. A
-        // disconnect queued meanwhile deletes it again.
-        await files.saveCredentials({ url, apiKey });
-        if (!(await connectWith(url, apiKey, current))) throw cancelled();
+        // The key is saved only once its history loaded, and before the current connection
+        // stops: if either fails, the current connection stays as it is. A replacement
+        // cancelled after saving puts the previous key back, so a restart doesn't use it.
+        const previous = await files.credentialsSnapshot();
+        let saved = false;
+        const connected = await connectWith(url, apiKey, current, async () => {
+          await files.saveCredentials({ url, apiKey });
+          saved = true;
+        });
+        if (!connected) {
+          if (saved) await files.restoreCredentials(previous);
+          throw cancelled();
+        }
       });
       // The first sync shows in Settings; Disconnect stays available meanwhile.
       void sync(true);
@@ -305,7 +322,18 @@ export default defineFeature<SyncDeps, void>({
       // Let aborted work finish before deleting history it might still be saving.
       await enqueue(async () => {
         stop();
-        await files.removeCredentials();
+        try {
+          await files.removeCredentials();
+        } catch (error) {
+          // Stopped all the same; say so, and that a restart may connect again.
+          state = {
+            ...structuredClone(DISCONNECTED_SYNC_STATE),
+            error:
+              "Sync stopped, but this machine's saved key couldn't be deleted, so sync may start again after a restart.",
+          };
+          publish();
+          throw error;
+        }
         // Without the key nothing syncs, even if history can't be deleted below. That history
         // still matches only this service and key, and is checked against the service.
         state = structuredClone(DISCONNECTED_SYNC_STATE);

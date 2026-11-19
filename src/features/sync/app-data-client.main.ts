@@ -166,7 +166,8 @@ export function createAppDataClient(options: {
       const error = ErrorBodySchema.safeParse(result).data?.error;
       throw new AppDataError(
         response.status,
-        error?.code ?? "HTTP_ERROR",
+        // 409 always means another write came first, whatever the body says.
+        error?.code ?? (response.status === 409 ? "REVISION_CONFLICT" : "HTTP_ERROR"),
         // Messages reach Settings and logs; a proxy echoing the request must not leak the key.
         (error?.message ?? `The sync service answered with status ${response.status}.`)
           .split(apiKey)

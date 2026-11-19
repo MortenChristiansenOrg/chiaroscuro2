@@ -76,11 +76,28 @@ function queueCss<T>(tabId: TabId, operation: () => Promise<T>): Promise<T> {
   return result;
 }
 
+/** Counts every change per domain, removals included, so a change made meanwhile shows. */
+class EditedMap<V> extends Map<string, V> {
+  private edits = new Map<string, number>();
+  editCount(key: string): number {
+    return this.edits.get(key) ?? 0;
+  }
+  override set(key: string, value: V): this {
+    // Map's constructor calls set before fields exist.
+    this.edits?.set(key, this.editCount(key) + 1);
+    return super.set(key, value);
+  }
+  override delete(key: string): boolean {
+    this.edits.set(key, this.editCount(key) + 1);
+    return super.delete(key);
+  }
+}
+
 // Per-domain state (enabled/disabled)
-let domainStates = new Map<string, DomainState>();
+let domainStates = new EditedMap<DomainState>();
 
 // Per-domain navigation blocking rules
-let navigationStates = new Map<string, Omit<DomainNavigationState, "domain">>();
+let navigationStates = new EditedMap<Omit<DomainNavigationState, "domain">>();
 
 // File watchers
 const watchers = new Map<string, fs.FSWatcher>();
@@ -280,8 +297,8 @@ export default defineFeature<DomainCssDeps>({
     deps = d_;
     loaded = false;
     cssDir = path.join(d_.dataDir, "domain-css");
-    domainStates = new Map();
-    navigationStates = new Map();
+    domainStates = new EditedMap();
+    navigationStates = new EditedMap();
     injectedCssKeys.clear();
     previewTabs.clear();
     for (const w of watchers.values()) w.close();
@@ -630,8 +647,11 @@ export async function applyDomainCustomization(
   if (value && !isNavigationDefault(value.navigation))
     navigationStates.set(domain, structuredClone(value.navigation));
   else navigationStates.delete(domain);
-  // Edits replace these objects, so an edit made while saving is recognizable below.
-  const applied = { state: domainStates.get(domain), navigation: navigationStates.get(domain) };
+  // So an edit made while saving, including a reset to defaults, is recognizable below.
+  const applied = {
+    state: domainStates.editCount(domain),
+    navigation: navigationStates.editCount(domain),
+  };
   try {
     await deps.dataStore.setSettings(serializedStates(), { durable: true });
     // An edit made while the settings were saving wins over the synced version.
@@ -643,11 +663,11 @@ export async function applyDomainCustomization(
     // Put the settings back, so this machine doesn't remember a version it didn't save, but
     // keep what was edited here meanwhile.
     if (staged) removeStaged(domain, staged);
-    if (domainStates.get(domain) === applied.state) {
+    if (domainStates.editCount(domain) === applied.state) {
       if (previous.state) domainStates.set(domain, previous.state);
       else domainStates.delete(domain);
     }
-    if (navigationStates.get(domain) === applied.navigation) {
+    if (navigationStates.editCount(domain) === applied.navigation) {
       if (previous.navigation) navigationStates.set(domain, previous.navigation);
       else navigationStates.delete(domain);
     }

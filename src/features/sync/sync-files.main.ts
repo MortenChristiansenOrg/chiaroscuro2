@@ -74,6 +74,14 @@ export function createSyncFiles(directory: string, protection: CredentialProtect
     async clearHistory() {
       await fs.rm(path.join(directory, STATE), { force: true });
     },
+    /** The saved credentials as stored, to put back if a replacement is abandoned. */
+    async credentialsSnapshot(): Promise<Uint8Array | undefined> {
+      return readOptional(path.join(directory, CREDENTIALS));
+    },
+    async restoreCredentials(snapshot: Uint8Array | undefined) {
+      if (snapshot) await writeAtomically(path.join(directory, CREDENTIALS), snapshot);
+      else await fs.rm(path.join(directory, CREDENTIALS), { force: true });
+    },
     async removeCredentials() {
       await fs.rm(path.join(directory, CREDENTIALS), { force: true });
     },

@@ -72,9 +72,11 @@ JSON documents with revisions. Sync is optional and off until a machine is conne
 - Domains that aren't plain hostnames don't sync.
 - An item removed here is only removed on the service if it's still absent when the
   removal is sent; one recreated meanwhile syncs on the next run.
-- Connecting with another key keeps the current connection until the new key is saved and
-  its history loaded. Disconnecting shows Not connected once the key is deleted, even if
-  sync history can't be deleted.
+- Connecting with another key keeps the current connection, and its saved key, until the
+  new key's history has loaded and the new key is saved; a replacement cancelled after
+  saving puts the previous key back. Disconnecting shows Not connected once the key is
+  deleted, even if sync history can't be deleted. If the key itself can't be deleted, sync
+  still stops and Settings says it may start again after a restart.
 - Runs, conflict choices and disconnecting take turns. Disconnecting aborts requests in
   flight, including a connection attempt still checking its key or reconnecting at
   startup, and nothing changes or saves after it. A conflict choice names both versions as shown (and the service's history
