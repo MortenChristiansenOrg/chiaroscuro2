@@ -430,15 +430,44 @@ describe("sync feature", () => {
     expect(await commands.send("sync:get-state", {})).toMatchObject({ connected: true });
   });
 
-  it("replaces a saved key that can't be read", async () => {
+  /** Make reading the saved key fail, as missing permissions would. */
+  function unreadableKey(directory: string) {
+    const read = fs.promises.readFile;
+    return vi.spyOn(fs.promises, "readFile").mockImplementation((async (
+      file: fs.PathLike,
+      ...rest: unknown[]
+    ) => {
+      if (String(file) === path.join(directory, "credentials.enc"))
+        throw Object.assign(new Error("EACCES: permission denied"), { code: "EACCES" });
+      return (read as (...args: unknown[]) => Promise<unknown>)(file, ...rest);
+    }) as typeof fs.promises.readFile);
+  }
+
+  it("replaces a saved key that can't be read while disconnected", async () => {
     const { commands, directory } = setup();
     fs.mkdirSync(directory, { recursive: true });
     const file = path.join(directory, "credentials.enc");
     fs.writeFileSync(file, "unreadable");
-    fs.chmodSync(file, 0);
+    const spy = unreadableKey(directory);
     await commands.send("sync:connect", { url: URL, apiKey: FAKE_APP_DATA_KEY });
+    expect(spy).toHaveBeenCalledWith(file);
+    spy.mockRestore();
     expect(await commands.send("sync:get-state", {})).toMatchObject({ connected: true });
     expect(protection.decrypt(fs.readFileSync(file))).toContain(FAKE_APP_DATA_KEY);
+  });
+
+  it("keeps the key in use when it can't be read to replace it", async () => {
+    const { commands, directory } = setup();
+    await commands.send("sync:connect", { url: URL, apiKey: FAKE_APP_DATA_KEY });
+    const file = path.join(directory, "credentials.enc");
+    const saved = fs.readFileSync(file);
+    const spy = unreadableKey(directory);
+    await expect(
+      commands.send("sync:connect", { url: URL, apiKey: FAKE_APP_DATA_KEY }),
+    ).rejects.toThrow("EACCES");
+    spy.mockRestore();
+    expect(fs.readFileSync(file)).toEqual(saved);
+    expect(await commands.send("sync:get-state", {})).toMatchObject({ connected: true });
   });
 
   it("shows itself stopped, and why, when the key can't be deleted", async () => {

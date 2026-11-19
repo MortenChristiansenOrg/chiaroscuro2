@@ -300,9 +300,12 @@ export default defineFeature<SyncDeps, void>({
         // The key is saved only once its history loaded, and before the current connection
         // stops: if either fails, the current connection stays as it is. A replacement
         // cancelled after saving puts the previous key back, so a restart doesn't use it.
-        // An unreadable saved key is replaced all the same; if this one is abandoned, none is
-        // put back, as the old one couldn't have been used.
-        const previous = await files.credentialsSnapshot().catch(() => undefined);
+        // While disconnected, an unreadable saved key is replaced all the same; if this one is
+        // abandoned, none is put back, as the old one couldn't have been used. A connected
+        // machine refuses instead, so a cancelled replacement can't delete the key in use.
+        const previous = engine
+          ? await files.credentialsSnapshot()
+          : await files.credentialsSnapshot().catch(() => undefined);
         let saved = false;
         const connected = await connectWith(url, apiKey, current, async () => {
           await files.saveCredentials({ url, apiKey });
