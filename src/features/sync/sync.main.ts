@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
 import type { CommandBus } from "../../bus/command-bus";
 import type { EventBus } from "../../bus/event-bus";
+import type { CredentialProtection } from "../../shared/credential-protection";
 import { defineFeature } from "../../shared/define-feature";
 import { logError } from "../../shared/log";
-import type { CredentialProtection } from "../ai/chatgpt-client.main";
 import {
   DOMAIN_CSS_CHANGED,
   DOMAIN_NAVIGATION_CHANGED,
@@ -53,11 +53,16 @@ export interface SyncDeps {
   now?: () => number;
 }
 
-/** Turn a failed run or connection check into guidance for the user. */
-export function describeSyncError(error: unknown): string {
+/**
+ * Turn a failed run or connection check into guidance for the user. A failed connect isn't
+ * retried, so it doesn't promise that.
+ */
+export function describeSyncError(error: unknown, connecting = false): string {
   if (error instanceof AppDataError) {
     if (error.code === "NETWORK")
-      return "Couldn't reach the sync service. Changes stay on this machine and sync once it can be reached.";
+      return connecting
+        ? "Couldn't reach the sync service. Check the address and try again."
+        : "Couldn't reach the sync service. Changes stay on this machine and sync once it can be reached.";
     if (error.status === 401)
       return "The sync service didn't accept this machine's key. It may have expired or been revoked. Disconnect, then connect again with a new key.";
     if (error.code === "APPLICATION_MISMATCH")
@@ -67,7 +72,9 @@ export function describeSyncError(error: unknown): string {
     if (error.status === 403)
       return "The sync service refused this machine's key. Disconnect, then connect again with a new key.";
     if (error.status >= 500 || error.status === 0)
-      return "The sync service had a problem. Sync tries again automatically.";
+      return connecting
+        ? "The sync service had a problem. Try connecting again later."
+        : "The sync service had a problem. Sync tries again automatically.";
     return `The sync service refused the request: ${error.message}`;
   }
   return error instanceof Error ? error.message : String(error);
@@ -144,11 +151,13 @@ export default defineFeature<SyncDeps, void>({
         pendingRun = undefined;
         const current = engine;
         if (!current) return;
+        const asked = showSyncing;
         state.syncing = showSyncing;
         showSyncing = false;
         publish();
         try {
-          await current.run();
+          // Asking again retries items the service refused, in case its limits changed.
+          await current.run({ retryRefused: asked });
           if (engine !== current) return;
           state.lastSyncedAt = current.state.lastSyncedAt;
           state.error = undefined;
@@ -207,7 +216,17 @@ export default defineFeature<SyncDeps, void>({
       nextPollAt = 0;
     }
 
-    async function connectWith(url: string, apiKey: string) {
+    /**
+     * Load what this machine last agreed with the service, then replace any current
+     * connection with this one, unless `owner` was cancelled meanwhile. Until then, a current
+     * connection keeps working. Returns whether it connected.
+     */
+    async function connectWith(url: string, apiKey: string, owner: number): Promise<boolean> {
+      await forgetHistoryIfLocalDataLost();
+      // History belongs to one service and key; another key may reach another account.
+      const persisted = await files.loadState(historyId(url, apiKey));
+      if (owner !== attempt || disposed) return false;
+      stop();
       const controller = new AbortController();
       const client = createAppDataClient({
         url,
@@ -215,9 +234,6 @@ export default defineFeature<SyncDeps, void>({
         fetch: deps.fetch,
         signal: controller.signal,
       });
-      await forgetHistoryIfLocalDataLost();
-      // History belongs to one service and key; another key may reach another account.
-      const persisted = await files.loadState(historyId(url, apiKey));
       abort = controller;
       engine = new SyncEngine(client, sources, persisted, files.saveState, now);
       state = {
@@ -228,6 +244,7 @@ export default defineFeature<SyncDeps, void>({
       };
       pollTimer = setInterval(poll, pollInterval);
       publish();
+      return true;
     }
 
     /**
@@ -267,14 +284,15 @@ export default defineFeature<SyncDeps, void>({
         await client.check(sources[0]?.namespace ?? "default");
       } catch (error) {
         if (current !== attempt) throw cancelled();
-        throw new Error(describeSyncError(error));
+        throw new Error(describeSyncError(error, true));
       }
       await enqueue(async () => {
         // A disconnect or another connect since then wins.
         if (current !== attempt || disposed) throw cancelled();
-        stop();
+        // Saved first: if the keyring refuses, the current connection stays as it is. A
+        // disconnect queued meanwhile deletes it again.
         await files.saveCredentials({ url, apiKey });
-        await connectWith(url, apiKey);
+        if (!(await connectWith(url, apiKey, current))) throw cancelled();
       });
       // The first sync shows in Settings; Disconnect stays available meanwhile.
       void sync(true);
@@ -287,9 +305,12 @@ export default defineFeature<SyncDeps, void>({
       // Let aborted work finish before deleting history it might still be saving.
       await enqueue(async () => {
         stop();
-        await files.clear();
+        await files.removeCredentials();
+        // Without the key nothing syncs, even if history can't be deleted below. That history
+        // still matches only this service and key, and is checked against the service.
         state = structuredClone(DISCONNECTED_SYNC_STATE);
         publish();
+        await files.clearHistory();
       });
     });
 
@@ -323,9 +344,7 @@ export default defineFeature<SyncDeps, void>({
         if (!credentials) return;
         await enqueue(async () => {
           // A disconnect or connect made meanwhile wins over the saved connection.
-          if (current !== attempt || disposed) return;
-          await connectWith(credentials.url, credentials.apiKey);
-          void sync();
+          if (await connectWith(credentials.url, credentials.apiKey, current)) void sync();
         });
       } catch (error) {
         // Sync problems never stop the browser from starting.

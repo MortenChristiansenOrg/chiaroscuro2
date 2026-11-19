@@ -81,6 +81,23 @@ describe("app data client", () => {
     expect(await client.get("domains", "a")).toBeNull();
   });
 
+  it("relies on the status when an error body has an unexpected shape", async () => {
+    for (const body of ["null", JSON.stringify({ error: { code: 7, message: 42 } })]) {
+      const client = createAppDataClient({
+        url: "https://sync.example",
+        apiKey: FAKE_APP_DATA_KEY,
+        fetch: (async (_input: RequestInfo | URL, init?: RequestInit) =>
+          new Response(body, { status: init?.method === "PUT" ? 503 : 404 })) as typeof fetch,
+      });
+      expect(await client.get("domains", "a")).toBeNull();
+      await expect(client.put("domains", "a", { css: "" }, 0)).rejects.toMatchObject({
+        status: 503,
+        code: "HTTP_ERROR",
+        message: "The sync service answered with status 503.",
+      });
+    }
+  });
+
   it("never repeats the key in an error message", async () => {
     const client = createAppDataClient({
       url: "https://sync.example",

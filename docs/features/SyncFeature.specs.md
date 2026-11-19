@@ -46,8 +46,9 @@ JSON documents with revisions. Sync is optional and off until a machine is conne
 - Another machine's version is applied only if the local item is still the version the
   run read, so an edit made during a run is never overwritten; it syncs on the next run.
   It is saved to disk before sync counts it as synced; when saving fails, the local item is
-  put back and the change is retried on the next run. A stylesheet edited while the settings
-  were saving is kept and the synced version waits for the next run. If the browser stops
+  put back, except for anything edited here meanwhile, and the change is retried on the next
+  run. A stylesheet edited while the settings were saving is kept and the synced version
+  waits for the next run. If the browser stops
   between saving a domain's settings and swapping in its stylesheet, the next run sees the
   half-applied item as a local edit and merges it per property with the same version.
 - Local data that can't be read stops the run instead of reading as removed: an unreadable
@@ -55,18 +56,25 @@ JSON documents with revisions. Sync is optional and off until a machine is conne
   startup. In the latter case the store keeps the file as
   `settings.json.unreadable-<time>-<id>` and records the loss in `settings.unreadable`
   until sync has forgotten its history, at the next start, even if the key can't be read
-  then. A settings file missing at startup counts as lost too. The next run brings
-  everything back from the service and removes nothing anywhere.
+  then. A settings file missing at startup counts as lost too, and is recorded the same way.
+  The next run brings everything back from the service and removes nothing anywhere.
 - Each service holds a `meta/history` document with a random id, created by the first
   machine that syncs. A machine that finds a different id, or none, forgets its history:
   the service was reset or restored, or another account answers at that address. Items
-  then sync as if for the first time, which never removes anything. A document that went
+  then sync as if for the first time, which never removes anything. The id is read again
+  after listing documents; if it changed meanwhile, the run starts over under the new
+  history, so no document from another history counts as a removal. A document that went
   missing, back to an older revision, or changed without a new revision does the same for
   that item.
 - A synced script never moves to another domain, as when editing it locally, even after it
   was removed here: sync remembers the last version before a removal. A version that does
   is reported instead of applied.
 - Domains that aren't plain hostnames don't sync.
+- An item removed here is only removed on the service if it's still absent when the
+  removal is sent; one recreated meanwhile syncs on the next run.
+- Connecting with another key keeps the current connection until the new key is saved and
+  its history loaded. Disconnecting shows Not connected once the key is deleted, even if
+  sync history can't be deleted.
 - Runs, conflict choices and disconnecting take turns. Disconnecting aborts requests in
   flight, including a connection attempt still checking its key or reconnecting at
   startup, and nothing changes or saves after it. A conflict choice names both versions as shown (and the service's history
@@ -76,7 +84,8 @@ JSON documents with revisions. Sync is optional and off until a machine is conne
   run after three attempts, without holding up the others.
 - The browser has no size limit of its own. When the service refuses an item as too large
   (`413`), the item stays on this machine and Settings shows the service's own message.
-  The same version isn't uploaded again; a changed version is.
+  Automatic syncs don't upload the same version again; a changed version, or Sync now (in
+  case the service's limit was raised), tries again.
 - A read-only key downloads changes; once the service refuses a write, this is remembered
   and Settings explains that local changes aren't uploaded.
 - Settings shows a status line (Loading…, Not connected, Connecting…, Connected, Syncing…
@@ -118,10 +127,73 @@ key (identified by a hash, never the key itself). Connecting with another servic
 starts afresh, which never loses local data. Service error messages have the key removed,
 and the debug server's command history redacts it.
 
-## Commands and events
+## Workflows
 
-`sync:get-state`, `sync:connect`, `sync:disconnect`, `sync:now`, `sync:resolve` (contracts in
-`src/features/sync/sync.contracts.ts`); `sync:changed` carries the state shown in Settings.
+### Connect a machine
+
+1. Create a key for the application `chiaroscuro2` in the app data service.
+2. Open Settings → Sync, enter the service address and the key, and select Connect.
+3. The key is checked with the service, saved encrypted, and the first sync starts. Focus
+   moves to the status line, which says Syncing… and then Connected with Last synced.
+
+### Settle a conflict
+
+1. Settings → Sync lists the item under Needs attention with both machines' versions
+   described ("Changed on this machine and on another.").
+2. Select Keep this machine's version or Use the other machine's version. That version
+   replaces the other everywhere. If either changed since it was shown, the choice is
+   refused and the list shows the item as it is now.
+
+### Disconnect
+
+1. Select Disconnect, then Stop syncing in the confirmation (or Cancel).
+2. The key and sync history are deleted; customizations stay on this machine. Focus moves
+   to the Service URL field.
+
+## Interactions
+
+### Keyboard shortcuts
+
+- No shortcuts of its own. Every control is a native button or field, reached with Tab and
+  activated with Enter or Space; the connect form submits with Enter.
+- Opening the Disconnect confirmation moves focus to Cancel; Cancel moves it back to
+  Disconnect. After a conflict choice, focus moves to the Needs attention heading.
+
+### Mouse interactions
+
+- Sync now, Disconnect, Stop syncing, Cancel and the conflict choices are buttons. A button
+  whose command is running stays focusable and ignores clicks (`aria-disabled`).
+
+### Cross-feature interactions
+
+- Domain customization and domain scripts provide the items, apply other machines'
+  versions, and announce local changes (`domain-css:changed`, `domain-navigation:changed`,
+  `domain-scripts:changed`), which trigger a sync shortly after.
+- The settings store reports settings that were missing or unreadable at startup.
+- Settings shows the Sync section and finds it when searching for sync.
+
+## Commands & Events
+
+Contracts are in `src/features/sync/sync.contracts.ts`.
+
+### Commands
+
+- `sync:get-state` — Read the state shown in Settings. Payload: `{}`. Returns `SyncState`
+  (below).
+- `sync:connect` — Check, save and use a key, then sync. Payload:
+  `{ url: string, apiKey: string }`.
+- `sync:disconnect` — Stop syncing and delete the key and history. Payload: `{}`.
+- `sync:now` — Sync now, retrying refused items. Payload: `{}`.
+- `sync:resolve` — Settle a conflict. Payload:
+  `{ id: string, keep: "this-machine" | "other-machine", version: string }`.
+
+### Events
+
+- `sync:changed` — What Settings shows changed. Payload `SyncState`: `{ connected: boolean,
+  serviceUrl?: string, syncing: boolean, readOnly: boolean, lastSyncedAt?: number,
+  lastFailedAt?: number, error?: string, issues: { id: string, label: string, kind:
+  "conflict" | "too-large" | "not-uploaded" | "not-applied", message: string, version?:
+  string }[] }`.
 
 ## Components
 

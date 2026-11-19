@@ -277,9 +277,14 @@ describe("sync feature", () => {
     const blocked = new Promise<void>((resolve) => {
       release = resolve;
     });
+    let reached: (signal: AbortSignal | undefined) => void = () => {};
+    const inFlight = new Promise<AbortSignal | undefined>((resolve) => {
+      reached = resolve;
+    });
     const { commands, items, directory } = setup(undefined, undefined, {
       fetch: (async (input: RequestInfo | URL, init?: RequestInit) => {
         if (block && String(input).includes("/v1/entries")) {
+          reached(init?.signal ?? undefined);
           await blocked;
           throw new TypeError("aborted");
         }
@@ -291,9 +296,10 @@ describe("sync feature", () => {
     service.write("domains", "example.com", { css: "remote" });
     block = true;
     const run = commands.send("sync:now", {});
-    await vi.waitFor(() => expect(service.requests.length).toBeGreaterThan(0));
+    const signal = await inFlight;
     const before = service.requests.length;
     const disconnected = commands.send("sync:disconnect", {});
+    expect(signal?.aborted).toBe(true);
     release();
     await Promise.all([run, disconnected]);
     expect(service.requests.length).toBe(before);
@@ -376,6 +382,50 @@ describe("sync feature", () => {
     expect(await second.commands.send("sync:get-state", {})).toMatchObject({ connected: false });
     expect(service.requests.length).toBe(requests);
     expect(fs.readdirSync(second.directory)).toEqual([]);
+  });
+
+  it("keeps the current connection when the replacement key can't be saved", async () => {
+    let refuse = false;
+    const { commands } = setup(undefined, undefined, {
+      protection: {
+        encrypt: (value: string) => {
+          if (refuse) throw new Error("Sync requires a secure system keyring.");
+          return protection.encrypt(value);
+        },
+        decrypt: protection.decrypt,
+      },
+    });
+    await commands.send("sync:connect", { url: URL, apiKey: FAKE_APP_DATA_KEY });
+    refuse = true;
+    await expect(
+      commands.send("sync:connect", { url: URL, apiKey: FAKE_APP_DATA_KEY }),
+    ).rejects.toThrow("secure system keyring");
+    await commands.send("sync:now", {});
+    expect(await commands.send("sync:get-state", {})).toMatchObject({ connected: true });
+  });
+
+  it("shows itself disconnected once the key is gone, even if history can't be deleted", async () => {
+    const { commands, directory, states } = setup();
+    await commands.send("sync:connect", { url: URL, apiKey: FAKE_APP_DATA_KEY });
+    await commands.send("sync:now", {});
+    // A directory where the history file was can't be removed without recursion.
+    fs.rmSync(path.join(directory, "state.json"));
+    fs.mkdirSync(path.join(directory, "state.json", "stuck"), { recursive: true });
+    await expect(commands.send("sync:disconnect", {})).rejects.toThrow();
+    expect(latest(states)).toMatchObject({ connected: false });
+    expect(fs.existsSync(path.join(directory, "credentials.enc"))).toBe(false);
+  });
+
+  it("doesn't promise to retry a connection that failed", async () => {
+    const { commands } = setup(undefined, undefined, {
+      fetch: (async () =>
+        new Response(JSON.stringify({ error: { code: "DOWN", message: "Down." } }), {
+          status: 503,
+        })) as typeof fetch,
+    });
+    await expect(
+      commands.send("sync:connect", { url: URL, apiKey: FAKE_APP_DATA_KEY }),
+    ).rejects.toThrow("Try connecting again later.");
   });
 
   it("lets a disconnect win over a connect that was still checking the key", async () => {

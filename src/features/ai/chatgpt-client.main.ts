@@ -3,6 +3,7 @@ import { promises as fs } from "node:fs";
 import { createServer } from "node:http";
 import path from "node:path";
 import { createRemoteJWKSet, jwtVerify } from "jose";
+import type { CredentialProtection } from "../../shared/credential-protection";
 import { MODEL_DEFAULT_EFFORT } from "./ai.shared";
 import { parseModelCatalog } from "./model-catalog.main";
 
@@ -22,10 +23,8 @@ interface Credentials {
   scopes?: string[];
   pendingValidation?: boolean;
 }
-export interface CredentialProtection {
-  encrypt(value: string): Uint8Array;
-  decrypt(value: Uint8Array): string;
-}
+
+export type { CredentialProtection };
 export interface AiInput {
   role: "user" | "assistant";
   content:

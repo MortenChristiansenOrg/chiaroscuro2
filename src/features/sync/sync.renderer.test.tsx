@@ -99,7 +99,10 @@ it("asks before disconnecting, and moves focus to the form afterwards", async ()
   render(<SyncSettingsSection />);
   fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
   expect(screen.getByRole("group", { name: /Stop syncing on this machine\?/ })).toBeVisible();
+  // Focus moves into what replaced the button pressed, never to the page.
+  await waitFor(() => expect(screen.getByRole("button", { name: "Cancel" })).toHaveFocus());
   fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Disconnect" })).toHaveFocus());
   expect(window.chiaroscuro.sendCommand).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
   fireEvent.click(screen.getByRole("button", { name: "Stop syncing" }));

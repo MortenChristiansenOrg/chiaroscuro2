@@ -578,6 +578,14 @@ export function getDomainCustomization(domain: string): DomainCustomization | nu
  * await, so a caller that checked the current version with `getDomainCustomization` just
  * before calling can't overwrite a change made meanwhile.
  */
+function removeStaged(domain: string, file: string) {
+  try {
+    fs.rmSync(file, { force: true });
+  } catch (error) {
+    logError("domain-css", `remove staged stylesheet for ${domain}`)(error);
+  }
+}
+
 /** The stylesheet was edited on this machine while a synced version was being applied. */
 export class DomainCssChangedError extends Error {
   constructor(domain: string) {
@@ -608,14 +616,22 @@ export async function applyDomainCustomization(
   let staged: string | undefined;
   if (cssChanged && css !== null) {
     fs.mkdirSync(cssDir, { recursive: true });
-    staged = path.join(cssDir, `.sync-${randomUUID().slice(0, 8)}.tmp`);
-    fs.writeFileSync(staged, css);
+    const temp = path.join(cssDir, `.sync-${randomUUID().slice(0, 8)}.tmp`);
+    try {
+      fs.writeFileSync(temp, css);
+    } catch (error) {
+      removeStaged(domain, temp);
+      throw error;
+    }
+    staged = temp;
   }
   if (value) domainStates.set(domain, { enabled: value.enabled });
   else domainStates.delete(domain);
   if (value && !isNavigationDefault(value.navigation))
     navigationStates.set(domain, structuredClone(value.navigation));
   else navigationStates.delete(domain);
+  // Edits replace these objects, so an edit made while saving is recognizable below.
+  const applied = { state: domainStates.get(domain), navigation: navigationStates.get(domain) };
   try {
     await deps.dataStore.setSettings(serializedStates(), { durable: true });
     // An edit made while the settings were saving wins over the synced version.
@@ -624,19 +640,25 @@ export async function applyDomainCustomization(
     if (staged) fs.renameSync(staged, file);
     else if (cssChanged) fs.rmSync(file, { force: true });
   } catch (error) {
-    // Put the settings back, so this machine doesn't remember a version it didn't save.
-    if (staged)
-      try {
-        fs.rmSync(staged, { force: true });
-      } catch (cleanupError) {
-        logError("domain-css", `remove staged stylesheet for ${domain}`)(cleanupError);
-      }
-    if (previous.state) domainStates.set(domain, previous.state);
-    else domainStates.delete(domain);
-    if (previous.navigation) navigationStates.set(domain, previous.navigation);
-    else navigationStates.delete(domain);
-    await deps.dataStore.setSettings(serializedStates());
-    if (previous.state?.enabled && previous.css !== null) startWatching(domain);
+    // Put the settings back, so this machine doesn't remember a version it didn't save, but
+    // keep what was edited here meanwhile.
+    if (staged) removeStaged(domain, staged);
+    if (domainStates.get(domain) === applied.state) {
+      if (previous.state) domainStates.set(domain, previous.state);
+      else domainStates.delete(domain);
+    }
+    if (navigationStates.get(domain) === applied.navigation) {
+      if (previous.navigation) navigationStates.set(domain, previous.navigation);
+      else navigationStates.delete(domain);
+    }
+    try {
+      await deps.dataStore.setSettings(serializedStates(), { durable: true });
+    } catch (rollbackError) {
+      // Reported with the failed change below. The next save writes these settings; if the
+      // browser stops first, the next sync merges what's on disk per property.
+      logError("domain-css", `restore settings for ${domain}`)(rollbackError);
+    }
+    if (domainStates.get(domain)?.enabled && readCssFile(domain) !== null) startWatching(domain);
     if (error instanceof DomainCssChangedError) throw error;
     throw new Error(`The change for ${domain} couldn't be saved on this machine.`, {
       cause: error,

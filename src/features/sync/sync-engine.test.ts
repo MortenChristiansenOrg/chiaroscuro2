@@ -35,15 +35,17 @@ function machine(service: FakeAppDataService, apiKey = FAKE_APP_DATA_KEY) {
   };
   const state: PersistedSyncState = { service: "https://sync.example", records: {} };
   const saved: PersistedSyncState[] = [];
+  const disk = { full: false };
   const engine = new SyncEngine(
     createAppDataClient({ url: "https://sync.example", apiKey, fetch: service.fetch }),
     [source],
     state,
     async (current) => {
+      if (disk.full) throw new Error("ENOSPC");
       saved.push(structuredClone(current));
     },
   );
-  return { items, engine, state, saved };
+  return { items, engine, state, saved, disk };
 }
 
 /** The conflict version the user is shown, which a choice must name. */
@@ -408,14 +410,20 @@ describe("SyncEngine", () => {
     const a = machine({
       ...service,
       fetch: (async (input: RequestInfo | URL, init?: RequestInit) => {
-        if (init?.method === "PUT" && String(input).includes("key=busy"))
-          service.write(NS, "busy", { n: Math.random() });
+        // Another machine changes a different property each time, so every attempt merges
+        // and tries again.
+        if (init?.method === "PUT" && String(input).includes("key=busy")) {
+          const current = (service.value(NS, "busy") ?? {}) as Record<string, number>;
+          const count = Object.keys(current).length + 1;
+          service.write(NS, "busy", { ...current, [`r${count}`]: count });
+        }
         return service.fetch(input, init);
       }) as typeof fetch,
     });
     a.items.set("busy", { n: 0 });
     a.items.set("calm", { css: "a" });
     await a.engine.run();
+    expect(service.requests.filter((r) => r.method === "PUT" && r.key === "busy")).toHaveLength(3);
     expect(service.value(NS, "calm")).toEqual({ css: "a" });
   });
 
@@ -512,8 +520,8 @@ describe("SyncEngine", () => {
     a.items.set("one", { css: "b" });
     await a.engine.run();
     expect(service.revision(NS, "one")).toBe(2);
-    service.reset();
-    service.write(NS, "one", { css: "a" });
+    // Only the item goes back; the service's history marker stays.
+    service.restore(NS, "one", { css: "a" }, 1);
     await a.engine.run();
     expect(a.items.get("one")).toEqual({ css: "b" });
     expect(a.engine.getIssues()).toMatchObject([{ kind: "conflict" }]);
@@ -541,6 +549,95 @@ describe("SyncEngine", () => {
     a.items.delete("big");
     await a.engine.run();
     expect(a.engine.getIssues()).toEqual([]);
+  });
+
+  it("tries a refused item again when asked, as the service's limit may have changed", async () => {
+    const small = createFakeAppDataService({ maxValueBytes: 80 });
+    const a = machine(small);
+    a.items.set("big", { css: "x".repeat(100) });
+    await a.engine.run();
+    expect(a.engine.getIssues()).toMatchObject([{ kind: "too-large" }]);
+    const before = puts(small);
+    await a.engine.run();
+    expect(puts(small)).toBe(before);
+    await a.engine.run({ retryRefused: true });
+    expect(puts(small)).toBe(before + 1);
+    expect(a.engine.getIssues()).toMatchObject([{ kind: "too-large" }]);
+  });
+
+  it("doesn't remove an item everywhere that was recreated here during the run", async () => {
+    const service = createFakeAppDataService();
+    const holder: { a?: ReturnType<typeof machine> } = {};
+    const a = machine({
+      ...service,
+      fetch: (async (input: RequestInfo | URL, init?: RequestInit) => {
+        // Recreated while the run uploads an earlier item.
+        if (init?.method === "PUT" && String(input).includes("key=first"))
+          holder.a?.items.set("two", { css: "again" });
+        return service.fetch(input, init);
+      }) as typeof fetch,
+    });
+    holder.a = a;
+    a.items.set("two", { css: "b" });
+    await a.engine.run();
+    a.items.delete("two");
+    a.items.set("first", { css: "a" });
+    await a.engine.run();
+    expect(service.value(NS, "two")).toEqual({ css: "b" });
+    await a.engine.run();
+    expect(service.value(NS, "two")).toEqual({ css: "again" });
+  });
+
+  it("settles a conflict even when saving history afterwards fails", async () => {
+    const service = createFakeAppDataService();
+    const a = machine(service);
+    const b = machine(service);
+    a.items.set("one", { css: "a" });
+    await a.engine.run();
+    await b.engine.run();
+    a.items.set("one", { css: "mine" });
+    b.items.set("one", { css: "theirs" });
+    await b.engine.run();
+    await a.engine.run();
+    a.disk.full = true;
+    const id = a.engine.getIssues()[0]?.id ?? "";
+    await expect(a.engine.resolve(id, "other-machine", version(a))).rejects.toThrow("ENOSPC");
+    expect(a.items.get("one")).toEqual({ css: "theirs" });
+    expect(a.engine.getIssues()).toEqual([]);
+    // History is saved with the next run.
+    a.disk.full = false;
+    await a.engine.run();
+    expect(a.saved.at(-1)?.records[`${NS}/one`]).toMatchObject({ base: { css: "theirs" } });
+  });
+
+  it("trusts nothing listed while the service was reset", async () => {
+    const service = createFakeAppDataService();
+    const a = machine(service);
+    const b = machine(service);
+    a.items.set("one", { css: "a" });
+    await a.engine.run();
+    await b.engine.run();
+    let resetOnce = true;
+    const c = machine({
+      ...service,
+      fetch: (async (input: RequestInfo | URL, init?: RequestInit) => {
+        // Reset after the marker was checked, then another machine adds and removes the
+        // item, so it reads like a removal of the version this machine knows.
+        if (resetOnce && String(input).includes("/v1/entries")) {
+          resetOnce = false;
+          service.reset();
+          service.write(NS, "one", { css: "a" });
+          service.write(NS, "one", null);
+        }
+        return service.fetch(input, init);
+      }) as typeof fetch,
+    });
+    Object.assign(c.state, structuredClone(b.state));
+    c.items.set("one", { css: "a" });
+    await c.engine.run();
+    // The removal comes from another history, so it isn't trusted to remove anything here.
+    expect(c.items.get("one")).toEqual({ css: "a" });
+    expect(c.engine.getIssues()).toMatchObject([{ kind: "conflict" }]);
   });
 
   it("reports whether anything changed here since the last sync", async () => {

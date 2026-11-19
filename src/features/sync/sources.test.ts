@@ -12,7 +12,11 @@ import {
   FAKE_APP_DATA_KEY,
 } from "../../test-utils/fake-app-data-service";
 import domainCss, { type DomainCssDeps } from "../domain-css/domain-css.main";
-import { DOMAIN_CSS_TOGGLE, DOMAIN_NAVIGATION_SET } from "../domain-css/domain-css.shared";
+import {
+  DOMAIN_CSS_TOGGLE,
+  DOMAIN_NAVIGATION_GET_STATE,
+  DOMAIN_NAVIGATION_SET,
+} from "../domain-css/domain-css.shared";
 import domainScripts, {
   type DomainScriptsDeps,
   type PageSnapshot,
@@ -65,8 +69,8 @@ class FlakyStore extends MemoryDataStore {
   /** Runs while a durable save is in progress, as an edit made meanwhile would. */
   duringDurable: (() => void) | undefined;
   override async setSettings(values: Record<string, unknown>, options?: { durable?: boolean }) {
-    if (options?.durable && this.failDurable) throw new Error("ENOSPC: no space left on device");
     if (options?.durable) this.duringDurable?.();
+    if (options?.durable && this.failDurable) throw new Error("ENOSPC: no space left on device");
     return super.setSettings(values, options);
   }
 }
@@ -254,6 +258,32 @@ describe("domain customization sync safety", () => {
     await engine.run();
     expect(fs.readFileSync(cssFile, "utf8")).toBe("h1 { color: green; }");
     expect(engine.getIssues()).toMatchObject([{ kind: "conflict" }]);
+  });
+
+  it("keeps navigation rules edited while a failed synced save was in progress", async () => {
+    const { engine, service, send, dataStore, cssFile } = await setup();
+    fs.writeFileSync(cssFile, "h1 { color: red; }");
+    await send(DOMAIN_CSS_TOGGLE, { domain: "example.com" });
+    await engine.run();
+    service.write("domains", "example.com", {
+      schemaVersion: 1,
+      domain: "example.com",
+      css: "h1 { color: blue; }",
+      enabled: true,
+      navigation,
+    });
+    const edited = { ...navigation, blockNewTabs: true };
+    dataStore.failDurable = true;
+    dataStore.duringDurable = () => {
+      dataStore.duringDurable = undefined;
+      void send(DOMAIN_NAVIGATION_SET, { domain: "example.com", ...edited });
+    };
+    await engine.run();
+    dataStore.failDurable = false;
+    expect(await send(DOMAIN_NAVIGATION_GET_STATE, { domain: "example.com" })).toMatchObject(
+      edited,
+    );
+    expect(fs.readFileSync(cssFile, "utf8")).toBe("h1 { color: red; }");
   });
 
   it("stops instead of treating an unreadable stylesheet as removed", async () => {

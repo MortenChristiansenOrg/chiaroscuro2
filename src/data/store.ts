@@ -98,7 +98,7 @@ export class JsonDataStore implements DataStore {
     // Missing (or a link to nothing) is normal on first start, but may also mean the file was
     // deleted; those who depend on it treat both alike.
     if (!fs.existsSync(this.settingsPath)) {
-      this.lost = true;
+      this.recordLoss();
       return;
     }
     try {
@@ -109,15 +109,22 @@ export class JsonDataStore implements DataStore {
     } catch (error) {
       console.error("Failed to read settings; starting with defaults:", error);
       this.settings = {};
-      this.lost = true;
-      // Record the loss before anything else, so it's still known after a crash or restart
-      // until whoever depends on it (sync) has dealt with it.
-      try {
-        fs.writeFileSync(path.join(this.dataDir, UNREADABLE_MARKER), new Date().toISOString());
-      } catch (markerError) {
-        console.error("Failed to record that settings were unreadable:", markerError);
-      }
+      this.recordLoss();
       this.quarantine();
+    }
+  }
+
+  /**
+   * Record the possible loss before anything else, so it's still known after a crash or
+   * restart (when the next save has recreated the file) until whoever depends on it (sync)
+   * has dealt with it.
+   */
+  private recordLoss() {
+    this.lost = true;
+    try {
+      fs.writeFileSync(path.join(this.dataDir, UNREADABLE_MARKER), new Date().toISOString());
+    } catch (markerError) {
+      console.error("Failed to record that settings may have been lost:", markerError);
     }
   }
 
@@ -130,6 +137,11 @@ export class JsonDataStore implements DataStore {
       );
       this.frozen = false;
     } catch (renameError) {
+      // Gone already, so nothing is left to protect.
+      if ((renameError as NodeJS.ErrnoException).code === "ENOENT") {
+        this.frozen = false;
+        return;
+      }
       console.error(
         "Failed to keep the unreadable settings file; not saving settings:",
         renameError,

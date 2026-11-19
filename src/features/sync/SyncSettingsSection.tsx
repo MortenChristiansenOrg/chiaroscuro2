@@ -26,6 +26,13 @@ export function SyncSettingsSection({ state: shown }: { state?: SyncState } = {}
   const statusRef = useRef<HTMLParagraphElement>(null);
   const urlRef = useRef<HTMLInputElement>(null);
   const issuesRef = useRef<HTMLHeadingElement>(null);
+  const disconnectRef = useRef<HTMLButtonElement>(null);
+  const cancelRef = useRef<HTMLButtonElement>(null);
+  /** Swap the Disconnect row and its confirmation, moving focus into what replaced it. */
+  const confirm = (open: boolean) => {
+    setConfirming(open);
+    requestAnimationFrame(() => (open ? cancelRef : disconnectRef).current?.focus());
+  };
 
   /** Run a command unless one is running; focus stays put, as no control is disabled. */
   async function send(name: string, payload: unknown = {}) {
@@ -125,7 +132,12 @@ export function SyncSettingsSection({ state: shown }: { state?: SyncState } = {}
               >
                 Sync now
               </button>
-              <button type="button" className={syncButtonClass} onClick={() => setConfirming(true)}>
+              <button
+                ref={disconnectRef}
+                type="button"
+                className={syncButtonClass}
+                onClick={() => confirm(true)}
+              >
                 Disconnect
               </button>
             </div>
@@ -147,9 +159,10 @@ export function SyncSettingsSection({ state: shown }: { state?: SyncState } = {}
                   Stop syncing
                 </button>
                 <button
+                  ref={cancelRef}
                   type="button"
                   className={syncButtonClass}
-                  onClick={() => setConfirming(false)}
+                  onClick={() => confirm(false)}
                 >
                   Cancel
                 </button>

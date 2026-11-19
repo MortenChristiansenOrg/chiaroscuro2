@@ -84,6 +84,14 @@ function decodeKey(key: string): string | undefined {
 
 // Responses are checked like any other outside input: a wrong shape must not reach the
 // revision comparisons that decide what to change.
+/** Only fields of the expected type are used; anything else falls back to the status. */
+const ErrorBodySchema = z.object({
+  error: z.object({
+    code: z.string().optional().catch(undefined),
+    message: z.string().optional().catch(undefined),
+  }),
+});
+
 const WireEntrySchema = z.object({
   key: z.string(),
   value: z.json().nullable(),
@@ -143,7 +151,7 @@ export function createAppDataClient(options: {
     } catch {
       throw new AppDataError(0, "NETWORK", "The sync service could not be reached.");
     }
-    let result: { error?: { code?: string; message?: string } };
+    let result: unknown;
     try {
       result = await response.json();
     } catch {
@@ -153,15 +161,18 @@ export function createAppDataClient(options: {
         "The sync service sent a response this browser could not read.",
       );
     }
-    if (!response.ok)
+    if (!response.ok) {
+      // Whatever the body holds, the status still decides what the failure means.
+      const error = ErrorBodySchema.safeParse(result).data?.error;
       throw new AppDataError(
         response.status,
-        result.error?.code ?? "HTTP_ERROR",
+        error?.code ?? "HTTP_ERROR",
         // Messages reach Settings and logs; a proxy echoing the request must not leak the key.
-        (result.error?.message ?? `The sync service answered with status ${response.status}.`)
+        (error?.message ?? `The sync service answered with status ${response.status}.`)
           .split(apiKey)
           .join("[redacted]"),
       );
+    }
     return result;
   }
 

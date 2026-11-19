@@ -49,6 +49,17 @@ describe("merge3", () => {
     expect(merge3(undefined, { a: 1 }, { a: 2 })).toEqual({ merged: false });
   });
 
+  it("treats property names like constructor and __proto__ as plain data", () => {
+    const local = JSON.parse('{"a":1,"constructor":2}');
+    const remote = JSON.parse('{"a":1,"__proto__":{"x":1}}');
+    const result = merge3(undefined, local, remote);
+    expect(result.merged).toBe(true);
+    expect(JSON.parse(JSON.stringify(result.merged && result.value))).toEqual(
+      JSON.parse('{"a":1,"constructor":2,"__proto__":{"x":1}}'),
+    );
+    expect(jsonEqual({ a: 1 }, JSON.parse('{"a":1,"constructor":2}'))).toBe(false);
+  });
+
   it("drops a property one side removed and the other left alone", () => {
     expect(merge3({ a: 1, b: 2 }, { a: 1 }, { a: 1, b: 2, c: 3 })).toEqual({
       merged: true,

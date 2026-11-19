@@ -25,6 +25,7 @@
     "src/bus/types.ts",
     "src/shared/types.ts",
     "src/shared/app-channel.ts",
+    "src/shared/credential-protection.ts",
     "src/renderer/src/env.d.ts",
     "src/shared/*.contracts.ts",
     "src/bus/contract.ts",

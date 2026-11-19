@@ -171,6 +171,30 @@ describe("JsonDataStore", () => {
     expect(restarted.settingsUnreadable()).toBe(false);
   });
 
+  it("remembers missing settings across a restart that finds them saved again", async () => {
+    fs.rmSync(path.join(dataDir, "settings.json"), { force: true });
+    const first = new JsonDataStore(dataDir);
+    await first.initialize();
+    await first.setSetting("recreated", true);
+    const restarted = new JsonDataStore(dataDir);
+    await restarted.initialize();
+    expect(restarted.settingsUnreadable()).toBe(true);
+  });
+
+  it("saves again once an unreadable file it couldn't move has gone", async () => {
+    const file = path.join(dataDir, "settings.json");
+    fs.writeFileSync(file, "{ not json");
+    const rename = vi.spyOn(fs, "renameSync").mockImplementationOnce(() => {
+      throw Object.assign(new Error("EXDEV"), { code: "EXDEV" });
+    });
+    const reopened = new JsonDataStore(dataDir);
+    await reopened.initialize();
+    rename.mockRestore();
+    fs.rmSync(file);
+    await reopened.setSetting("a", 1, { durable: true });
+    expect(JSON.parse(fs.readFileSync(file, "utf-8"))).toEqual({ a: 1 });
+  });
+
   it("still starts and reports the loss when the marker can't be written", async () => {
     fs.writeFileSync(path.join(dataDir, "settings.json"), "{ not json");
     const write = vi.spyOn(fs, "writeFileSync").mockImplementationOnce(() => {

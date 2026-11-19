@@ -174,13 +174,26 @@ export class SyncEngine {
     if (this.stopped) throw new StoppedError();
   }
 
-  async run(): Promise<void> {
+  /**
+   * Sync every source once. `retryRefused` uploads items the service refused before even if
+   * they haven't changed, as when the user asks, in case the service's limits changed.
+   */
+  async run(options: { retryRefused?: boolean } = {}): Promise<void> {
     try {
+      if (options.retryRefused) this.refused.clear();
       await this.checkHistory();
+      let snapshot = await this.listAll();
+      // A service reset while listing would mix two histories. Its documents are only
+      // trusted once the marker is the same after reading them.
+      if ((await this.currentMarker()) !== this.state.marker) {
+        await this.checkHistory();
+        snapshot = await this.listAll();
+        if ((await this.currentMarker()) !== this.state.marker)
+          throw new Error("The sync service changed while syncing. Sync tries again later.");
+      }
       for (const source of this.sources) {
         this.guard();
-        const remote = new Map((await this.client.list(source.namespace)).map((e) => [e.key, e]));
-        this.guard();
+        const remote = snapshot.get(source.namespace) ?? new Map<string, RemoteEntry>();
         const local = source.read();
         const prefix = `${source.namespace}/`;
         const keys = new Set([
@@ -202,6 +215,24 @@ export class SyncEngine {
       // An idle run only moves the last-synced time, which isn't worth a disk write.
       await this.save();
     }
+  }
+
+  private async listAll(): Promise<Map<string, Map<string, RemoteEntry>>> {
+    const snapshot = new Map<string, Map<string, RemoteEntry>>();
+    for (const source of this.sources) {
+      this.guard();
+      const entries = await this.client.list(source.namespace);
+      snapshot.set(source.namespace, new Map(entries.map((e) => [e.key, e])));
+    }
+    this.guard();
+    return snapshot;
+  }
+
+  private async currentMarker(): Promise<string | undefined> {
+    this.guard();
+    const marker = readMarker(await this.client.get(MARKER.namespace, MARKER.key));
+    this.guard();
+    return marker;
   }
 
   /** Save history if it changed; a failed save is retried after the next run. */
@@ -278,9 +309,7 @@ export class SyncEngine {
     if (seen.version !== version) throw changed();
     const { source, key } = this.locate(id);
     // A service reset since the conflict was shown makes both versions meaningless.
-    const marker = readMarker(await this.client.get(MARKER.namespace, MARKER.key));
-    this.guard();
-    if (marker !== this.state.marker) throw changed();
+    if ((await this.currentMarker()) !== this.state.marker) throw changed();
     const remote = await this.client.get(source.namespace, key);
     this.guard();
     if (
@@ -302,12 +331,13 @@ export class SyncEngine {
         this.record(id, entry.revision, null, remoteFingerprint(entry));
       } else this.record(id, seen.remoteRevision, null, seen.remote);
     } catch (error) {
+      await this.save();
       if (error instanceof LocalChangedError || isConflict(error)) throw changed();
       throw error;
-    } finally {
-      await this.save();
     }
+    // Settled, even if saving history fails below: that save is retried after the next run.
     this.clear(id);
+    await this.save();
   }
 
   private locate(id: string): { source: SyncSource; key: string } {
@@ -457,6 +487,9 @@ export class SyncEngine {
     if (this.readOnly) return;
     const sent = JSON.stringify(value);
     if (this.refused.get(id) === sent) return;
+    // Recreated here since the run read it: removing it everywhere would be wrong. The next
+    // run uploads it.
+    if (value === null && source.read().has(key)) return;
     try {
       this.guard();
       const entry =

@@ -76,9 +76,10 @@ export function createFakeAppDataService(options: FakeAppDataOptions = {}) {
     }
     if (url.pathname !== "/v1/data" || key === undefined)
       return fail(404, "NOT_FOUND", "Not found.");
-    const existing = docs.get(key);
-    if (request.method === "GET")
+    if (request.method === "GET") {
+      const existing = docs.get(key);
       return existing ? json(entry(existing)) : fail(404, "NOT_FOUND", "Document not found.");
+    }
     // Checked in the real service's order: body, size, permission, revision.
     if (request.headers.get("Content-Type")?.split(";")[0]?.trim() !== "application/json")
       return fail(415, "CONTENT_TYPE", "Use Content-Type: application/json.");
@@ -87,6 +88,8 @@ export function createFakeAppDataService(options: FakeAppDataOptions = {}) {
     if (new TextEncoder().encode(text).byteLength > maxValueBytes)
       return fail(413, "VALUE_TOO_LARGE", `JSON values are limited to ${maxValueBytes} bytes.`);
     if (grant.readOnly) return fail(403, "READ_ONLY", "This key only grants read access.");
+    // Read after the body, so checking and writing happen without a pause, as in a transaction.
+    const existing = docs.get(key);
     if (request.method === "DELETE" && !existing)
       return fail(404, "NOT_FOUND", "Document not found.");
     if (body.expectedRevision !== (existing?.revision ?? 0))
@@ -128,6 +131,16 @@ export function createFakeAppDataService(options: FakeAppDataOptions = {}) {
         json: JSON.stringify(value),
         revision: (existing?.revision ?? 0) + 1,
         deleted: value === null && !options.live,
+        updatedAt: Date.now(),
+      });
+    },
+    /** Put one document back as it was at an older revision, as a partial restore would. */
+    restore(namespace: string, key: string, value: unknown, revision: number) {
+      space(namespace).set(key, {
+        key,
+        json: JSON.stringify(value),
+        revision,
+        deleted: false,
         updatedAt: Date.now(),
       });
     },

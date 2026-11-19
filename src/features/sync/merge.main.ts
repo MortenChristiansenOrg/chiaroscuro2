@@ -7,6 +7,11 @@ function isRecord(value: Value): value is { [key: string]: JsonValue } {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/** A property of parsed JSON; inherited ones, such as `constructor`, are absent. */
+function own(value: { [key: string]: JsonValue } | undefined, key: string): Value {
+  return value && Object.hasOwn(value, key) ? value[key] : undefined;
+}
+
 /** Deep equality for JSON values; property order does not matter. */
 export function jsonEqual(a: Value, b: Value): boolean {
   if (a === b) return true;
@@ -16,7 +21,7 @@ export function jsonEqual(a: Value, b: Value): boolean {
   }
   if (!isRecord(a) || !isRecord(b)) return false;
   const keys = new Set([...Object.keys(a), ...Object.keys(b)]);
-  for (const key of keys) if (!jsonEqual(a[key], b[key])) return false;
+  for (const key of keys) if (!jsonEqual(own(a, key), own(b, key))) return false;
   return true;
 }
 
@@ -34,10 +39,11 @@ export function merge3(base: Value, local: Value, remote: Value): MergeResult {
   if (jsonEqual(remote, base)) return { merged: true, value: local };
   if (!isRecord(local) || !isRecord(remote) || !(base === undefined || isRecord(base)))
     return { merged: false };
-  const result: { [key: string]: JsonValue } = {};
+  // Built without a prototype, so any JSON property name is just data.
+  const result: { [key: string]: JsonValue } = Object.create(null);
   const keys = new Set([...Object.keys(local), ...Object.keys(remote), ...Object.keys(base ?? {})]);
   for (const key of keys) {
-    const merged = merge3(base?.[key], local[key], remote[key]);
+    const merged = merge3(own(base, key), own(local, key), own(remote, key));
     if (!merged.merged) return merged;
     if (merged.value !== undefined) result[key] = merged.value;
   }

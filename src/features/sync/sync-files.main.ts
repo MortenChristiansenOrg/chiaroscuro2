@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import type { CredentialProtection } from "../ai/chatgpt-client.main";
+import type { CredentialProtection } from "../../shared/credential-protection";
 import type { PersistedSyncState } from "./sync-engine.main";
 
 export interface SyncCredentials {
@@ -55,8 +55,13 @@ export function createSyncFiles(directory: string, protection: CredentialProtect
       if (data) {
         try {
           const state = JSON.parse(data.toString("utf8")) as PersistedSyncState;
-          if (state.service === service && state.records && typeof state.records === "object")
+          if (state.service === service && state.records && typeof state.records === "object") {
+            // A time no Date can hold would break showing it; the history itself is fine.
+            const at = state.lastSyncedAt;
+            if (at !== undefined && !(Number.isFinite(at) && Math.abs(at) <= 8.64e15))
+              delete state.lastSyncedAt;
             return state;
+          }
         } catch {
           // An unreadable file is treated like a first sync, which never loses local data.
         }
@@ -69,9 +74,8 @@ export function createSyncFiles(directory: string, protection: CredentialProtect
     async clearHistory() {
       await fs.rm(path.join(directory, STATE), { force: true });
     },
-    async clear() {
+    async removeCredentials() {
       await fs.rm(path.join(directory, CREDENTIALS), { force: true });
-      await fs.rm(path.join(directory, STATE), { force: true });
     },
   };
 }
