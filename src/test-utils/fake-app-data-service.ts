@@ -79,15 +79,18 @@ export function createFakeAppDataService(options: FakeAppDataOptions = {}) {
     const existing = docs.get(key);
     if (request.method === "GET")
       return existing ? json(entry(existing)) : fail(404, "NOT_FOUND", "Document not found.");
-    if (grant.readOnly) return fail(403, "READ_ONLY", "This key only grants read access.");
+    // Checked in the real service's order: body, size, permission, revision.
+    if (request.headers.get("Content-Type")?.split(";")[0]?.trim() !== "application/json")
+      return fail(415, "CONTENT_TYPE", "Use Content-Type: application/json.");
     const body = (await request.json()) as { value?: unknown; expectedRevision: number };
-    if (body.expectedRevision !== (existing?.revision ?? 0))
-      return fail(409, "REVISION_CONFLICT", "The document changed. Read it again.");
-    if (request.method === "DELETE" && !existing)
-      return fail(404, "NOT_FOUND", "Document not found.");
     const text = request.method === "DELETE" ? "null" : JSON.stringify(body.value);
     if (new TextEncoder().encode(text).byteLength > maxValueBytes)
       return fail(413, "VALUE_TOO_LARGE", `JSON values are limited to ${maxValueBytes} bytes.`);
+    if (grant.readOnly) return fail(403, "READ_ONLY", "This key only grants read access.");
+    if (request.method === "DELETE" && !existing)
+      return fail(404, "NOT_FOUND", "Document not found.");
+    if (body.expectedRevision !== (existing?.revision ?? 0))
+      return fail(409, "REVISION_CONFLICT", "The document changed. Read it again.");
     const doc: Document = {
       key,
       json: text,

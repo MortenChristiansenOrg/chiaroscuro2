@@ -291,14 +291,26 @@ describe("SyncEngine", () => {
     ]);
   });
 
-  it("uploads an item created here even if another machine removed one with that key earlier", async () => {
+  it("asks before restoring an item another machine removed that this one never synced", async () => {
     const service = createFakeAppDataService();
     service.write(NS, "one", { css: "old" });
     service.write(NS, "one", null);
     const a = machine(service);
-    a.items.set("one", { css: "new" });
+    a.items.set("one", { css: "old copy" });
+    a.items.set("two", { css: "new" });
     await a.engine.run();
-    expect(service.value(NS, "one")).toEqual({ css: "new" });
+    expect(service.value(NS, "one")).toBeNull();
+    expect(service.value(NS, "two")).toEqual({ css: "new" });
+    expect(a.items.get("one")).toEqual({ css: "old copy" });
+    expect(a.engine.getIssues()).toMatchObject([
+      {
+        id: `${NS}/one`,
+        kind: "conflict",
+        message: "Still on this machine, but removed on another.",
+      },
+    ]);
+    await a.engine.resolve(`${NS}/one`, "this-machine", version(a));
+    expect(service.value(NS, "one")).toEqual({ css: "old copy" });
   });
 
   it("stops with the service's error while offline and keeps local items", async () => {
@@ -421,5 +433,123 @@ describe("SyncEngine", () => {
       "changed again",
     );
     expect(b.items.get("one")).toEqual({ css: "from b" });
+  });
+
+  it("never overwrites an edit made during a run, and settles it on the next run", async () => {
+    const service = createFakeAppDataService();
+    const a = machine(service);
+    const b = machine(service);
+    a.items.set("a", { css: "1" });
+    a.items.set("b", { css: "1" });
+    await a.engine.run();
+    await b.engine.run();
+    service.write(NS, "b", { css: "remote" });
+    // A machine that knows what a knows; the user edits b while its run uploads a.
+    const hooked = machine({
+      ...service,
+      fetch: (async (input: RequestInfo | URL, init?: RequestInit) => {
+        const response = await service.fetch(input, init);
+        if (init?.method === "PUT") hooked.items.set("b", { css: "edited during run" });
+        return response;
+      }) as typeof fetch,
+    });
+    hooked.items.set("a", { css: "2" });
+    hooked.items.set("b", { css: "1" });
+    Object.assign(hooked.state.records, structuredClone(a.state.records));
+    await hooked.engine.run();
+    expect(hooked.items.get("b")).toEqual({ css: "edited during run" });
+    await hooked.engine.run();
+    expect(hooked.items.get("b")).toEqual({ css: "edited during run" });
+    expect(hooked.engine.getIssues()).toMatchObject([{ id: `${NS}/b`, kind: "conflict" }]);
+  });
+
+  it("refuses a choice when the other machine's version changed after it was shown", async () => {
+    const service = createFakeAppDataService();
+    const a = machine(service);
+    const b = machine(service);
+    a.items.set("one", { css: "a" });
+    await a.engine.run();
+    await b.engine.run();
+    a.items.set("one", { css: "from a" });
+    b.items.set("one", { css: "from b" });
+    await a.engine.run();
+    await b.engine.run();
+    const shown = version(b);
+    service.write(NS, "one", { css: "from a again" });
+    await expect(b.engine.resolve(`${NS}/one`, "other-machine", shown)).rejects.toThrow(
+      "changed again",
+    );
+    expect(b.items.get("one")).toEqual({ css: "from b" });
+  });
+
+  it("settles a removal here against an edit elsewhere either way", async () => {
+    for (const keep of ["this-machine", "other-machine"] as const) {
+      const service = createFakeAppDataService();
+      const a = machine(service);
+      const b = machine(service);
+      a.items.set("one", { css: "a" });
+      await a.engine.run();
+      await b.engine.run();
+      a.items.set("one", { css: "edited" });
+      await a.engine.run();
+      b.items.delete("one");
+      await b.engine.run();
+      expect(b.engine.getIssues()).toMatchObject([
+        { kind: "conflict", message: "Removed on this machine and changed on another." },
+      ]);
+      await b.engine.resolve(`${NS}/one`, keep, version(b));
+      if (keep === "this-machine") expect(service.value(NS, "one")).toBeNull();
+      else expect(b.items.get("one")).toEqual({ css: "edited" });
+    }
+  });
+
+  it("treats a document back at a lower revision as unknown history", async () => {
+    const service = createFakeAppDataService();
+    const a = machine(service);
+    a.items.set("one", { css: "a" });
+    await a.engine.run();
+    a.items.set("one", { css: "b" });
+    await a.engine.run();
+    expect(service.revision(NS, "one")).toBe(2);
+    service.reset();
+    service.write(NS, "one", { css: "a" });
+    await a.engine.run();
+    expect(a.items.get("one")).toEqual({ css: "b" });
+    expect(a.engine.getIssues()).toMatchObject([{ kind: "conflict" }]);
+  });
+
+  it("remembers a read-only key and skips uploads after learning it", async () => {
+    const readOnlyKey = `ads_${"b".repeat(64)}`;
+    const service = createFakeAppDataService({ keys: { [readOnlyKey]: { readOnly: true } } });
+    const a = machine(service, readOnlyKey);
+    a.items.set("one", { css: "a" });
+    await a.engine.run();
+    expect(a.saved.at(-1)?.readOnly).toBe(true);
+    const before = puts(service);
+    a.items.set("one", { css: "b" });
+    await a.engine.run();
+    expect(puts(service)).toBe(before);
+  });
+
+  it("clears the issue of a refused item that only existed here once it is removed", async () => {
+    const service = createFakeAppDataService({ maxValueBytes: 20 });
+    const a = machine(service);
+    a.items.set("big", { css: "x".repeat(50) });
+    await a.engine.run();
+    expect(a.engine.getIssues()).toHaveLength(1);
+    a.items.delete("big");
+    await a.engine.run();
+    expect(a.engine.getIssues()).toEqual([]);
+  });
+
+  it("reports whether anything changed here since the last sync", async () => {
+    const service = createFakeAppDataService();
+    const a = machine(service);
+    a.items.set("one", { css: "a" });
+    expect(a.engine.hasLocalChanges()).toBe(true);
+    await a.engine.run();
+    expect(a.engine.hasLocalChanges()).toBe(false);
+    a.items.delete("one");
+    expect(a.engine.hasLocalChanges()).toBe(true);
   });
 });

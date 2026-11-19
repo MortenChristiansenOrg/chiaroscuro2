@@ -57,11 +57,13 @@ export function describeSyncError(error: unknown): string {
     if (error.code === "NETWORK")
       return "Couldn't reach the sync service. Changes stay on this machine and sync once it can be reached.";
     if (error.status === 401)
-      return "The sync service didn't accept this machine's key. It may have expired or been revoked. Connect again with a new key.";
+      return "The sync service didn't accept this machine's key. It may have expired or been revoked. Disconnect, then connect again with a new key.";
     if (error.code === "APPLICATION_MISMATCH")
       return `This key is for a different application. Create a key for the application “${SYNC_APPLICATION}”.`;
+    if (error.code === "READ_ONLY")
+      return "This machine's key can only read, so changes made here can't be uploaded.";
     if (error.status === 403)
-      return "The sync service refused this machine's key. Connect again with a new key.";
+      return "The sync service refused this machine's key. Disconnect, then connect again with a new key.";
     if (error.status >= 500 || error.status === 0)
       return "The sync service had a problem. Sync tries again automatically.";
     return `The sync service refused the request: ${error.message}`;
@@ -94,15 +96,30 @@ export default defineFeature<SyncDeps, void>({
     let disposed = false;
     let pollTimer: ReturnType<typeof setInterval> | undefined;
     let changeTimer: ReturnType<typeof setTimeout> | undefined;
+    let firstChangeAt: number | undefined;
+    let showSyncing = false;
+    let failures = 0;
+    let nextPollAt = 0;
+    let published = "";
     const subscriptions: (() => void)[] = [];
+    const pollInterval = deps.pollIntervalMs ?? 60_000;
+    const changeDelay = deps.changeDelayMs ?? 2_000;
 
-    function publish() {
-      if (disposed) return;
-      state = {
+    function snapshot(): SyncState {
+      return structuredClone({
         ...state,
         readOnly: engine?.readOnly ?? false,
         issues: engine?.getIssues() ?? [],
-      };
+      });
+    }
+
+    /** Tell every window, but only when what Settings shows changed. */
+    function publish() {
+      if (disposed) return;
+      state = snapshot();
+      const json = JSON.stringify(state);
+      if (json === published) return;
+      published = json;
       events.emit(SYNC_CHANGED, structuredClone(state));
     }
 
@@ -112,25 +129,35 @@ export default defineFeature<SyncDeps, void>({
       return result;
     }
 
-    /** Run soon; requests made before the run starts share it. */
-    function sync(): Promise<void> {
+    /**
+     * Run soon; requests made before the run starts share it. Only runs the user asked for
+     * show Syncing…, so background runs don't keep announcing themselves.
+     */
+    function sync(userInitiated = false): Promise<void> {
       if (!engine) return Promise.resolve();
+      if (userInitiated) showSyncing = true;
       pendingRun ??= enqueue(async () => {
         pendingRun = undefined;
         const current = engine;
         if (!current) return;
-        state.syncing = true;
+        state.syncing = showSyncing;
+        showSyncing = false;
         publish();
         try {
           await current.run();
           if (engine !== current) return;
           state.lastSyncedAt = current.state.lastSyncedAt;
           state.error = undefined;
+          failures = 0;
+          nextPollAt = 0;
         } catch (error) {
           if (engine !== current) return;
           logError("sync", "sync run")(error);
           state.error = describeSyncError(error);
           state.lastFailedAt = now();
+          // Try less often while the service stays unreachable, up to every 15 minutes.
+          failures++;
+          nextPollAt = now() + Math.min(15 * 60_000, pollInterval * 2 ** failures);
         }
         state.syncing = false;
         publish();
@@ -138,10 +165,27 @@ export default defineFeature<SyncDeps, void>({
       return pendingRun;
     }
 
+    function poll() {
+      if (now() >= nextPollAt) void sync();
+    }
+
+    /** Sync a local change after a short pause, and at the latest 10 seconds after the first. */
     function syncSoon() {
       if (!engine) return;
       clearTimeout(changeTimer);
-      changeTimer = setTimeout(() => void sync(), deps.changeDelayMs ?? 2_000);
+      firstChangeAt ??= now();
+      const wait = Math.max(0, Math.min(changeDelay, firstChangeAt + 10_000 - now()));
+      changeTimer = setTimeout(() => {
+        firstChangeAt = undefined;
+        let changed = true;
+        try {
+          // Changes this machine just applied from the service need no run of their own.
+          changed = engine?.hasLocalChanges() ?? false;
+        } catch {
+          // Let the run report why local data couldn't be read.
+        }
+        if (changed) void sync();
+      }, wait);
     }
 
     /** Stop syncing at once: in-flight requests abort and nothing saves afterwards. */
@@ -154,6 +198,9 @@ export default defineFeature<SyncDeps, void>({
       clearTimeout(changeTimer);
       pollTimer = undefined;
       changeTimer = undefined;
+      firstChangeAt = undefined;
+      failures = 0;
+      nextPollAt = 0;
     }
 
     async function connectWith(url: string, apiKey: string) {
@@ -182,7 +229,7 @@ export default defineFeature<SyncDeps, void>({
         serviceUrl: url,
         lastSyncedAt: persisted.lastSyncedAt,
       };
-      pollTimer = setInterval(() => void sync(), deps.pollIntervalMs ?? 60_000);
+      pollTimer = setInterval(poll, pollInterval);
       publish();
     }
 
@@ -190,10 +237,7 @@ export default defineFeature<SyncDeps, void>({
     for (const name of [DOMAIN_CSS_CHANGED, DOMAIN_NAVIGATION_CHANGED, DOMAIN_SCRIPTS_CHANGED])
       subscriptions.push(events.on(name, syncSoon));
 
-    commands.handle("sync:get-state", async () => {
-      publish();
-      return structuredClone(state);
-    });
+    commands.handle("sync:get-state", async () => snapshot());
 
     commands.handle("sync:connect", async (payload) => {
       const url = normalizeServiceUrl(payload.url);
@@ -210,7 +254,8 @@ export default defineFeature<SyncDeps, void>({
         await files.saveCredentials({ url, apiKey });
         await connectWith(url, apiKey);
       });
-      await sync();
+      // The first sync shows in Settings; Disconnect stays available meanwhile.
+      void sync(true);
     });
 
     commands.handle("sync:disconnect", async () => {
@@ -226,7 +271,7 @@ export default defineFeature<SyncDeps, void>({
 
     commands.handle("sync:now", async () => {
       if (!engine) throw new Error("Connect to the sync service first.");
-      await sync();
+      await sync(true);
     });
 
     commands.handle("sync:resolve", ({ id, keep, version }) =>

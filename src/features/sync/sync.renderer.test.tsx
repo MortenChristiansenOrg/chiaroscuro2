@@ -16,7 +16,7 @@ const connected: SyncState = {
 };
 
 beforeEach(() => {
-  useSyncStore.setState({ state: DISCONNECTED_SYNC_STATE });
+  useSyncStore.setState({ state: DISCONNECTED_SYNC_STATE, loaded: true });
   vi.mocked(window.chiaroscuro.sendCommand).mockReset();
 });
 afterEach(cleanup);
@@ -54,6 +54,7 @@ it("keeps the form filled in and shows why connecting failed", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Connect" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("didn't accept this machine's key");
   expect(screen.getByLabelText("Key for this machine")).toHaveValue("ads_wrong");
+  await waitFor(() => expect(screen.getByLabelText("Service URL")).toHaveFocus());
 });
 
 it("shows the connection, the last sync, read-only keys and errors", () => {
@@ -66,27 +67,53 @@ it("shows the connection, the last sync, read-only keys and errors", () => {
     },
   });
   render(<SyncSettingsSection />);
-  expect(screen.getByRole("status")).toHaveTextContent(/^Last synced /);
-  expect(screen.getByText("Connected to https://sync.example")).toBeVisible();
+  expect(screen.getByRole("status")).toHaveTextContent("Sync isn't working right now");
+  expect(screen.getByText(/^Last synced .* · Last failed /)).toBeVisible();
+  expect(screen.getByText("Service: https://sync.example")).toBeVisible();
   expect(screen.getByText(/can only read/)).toBeVisible();
   expect(screen.getByRole("alert")).toHaveTextContent("Couldn't reach the sync service.");
   expect(screen.queryByLabelText("Service URL")).not.toBeInTheDocument();
 });
 
-it("syncs now and disconnects on request, but not twice at once", async () => {
+it("syncs now on request, but not while a sync runs", async () => {
   vi.mocked(window.chiaroscuro.sendCommand).mockResolvedValue(undefined);
   useSyncStore.setState({ state: { ...connected, syncing: true } });
   const { rerender } = render(<SyncSettingsSection />);
   expect(screen.getByRole("status")).toHaveTextContent("Syncing…");
-  expect(screen.getByRole("button", { name: "Sync now" })).toBeDisabled();
+  const syncNow = screen.getByRole("button", { name: "Sync now" });
+  expect(syncNow).toHaveAttribute("aria-disabled", "true");
+  fireEvent.click(syncNow);
+  expect(window.chiaroscuro.sendCommand).not.toHaveBeenCalled();
   useSyncStore.setState({ state: connected });
   rerender(<SyncSettingsSection />);
+  expect(screen.getByRole("status")).toHaveTextContent("Connected");
   fireEvent.click(screen.getByRole("button", { name: "Sync now" }));
   await waitFor(() => expect(window.chiaroscuro.sendCommand).toHaveBeenCalledWith("sync:now", {}));
+});
+
+it("asks before disconnecting, and moves focus to the form afterwards", async () => {
+  vi.mocked(window.chiaroscuro.sendCommand).mockImplementation(async () => {
+    useSyncStore.setState({ state: DISCONNECTED_SYNC_STATE });
+  });
+  useSyncStore.setState({ state: connected });
+  render(<SyncSettingsSection />);
   fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
+  expect(screen.getByRole("group", { name: /Stop syncing on this machine\?/ })).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(window.chiaroscuro.sendCommand).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole("button", { name: "Disconnect" }));
+  fireEvent.click(screen.getByRole("button", { name: "Stop syncing" }));
   await waitFor(() =>
     expect(window.chiaroscuro.sendCommand).toHaveBeenCalledWith("sync:disconnect", {}),
   );
+  await waitFor(() => expect(screen.getByLabelText("Service URL")).toHaveFocus());
+});
+
+it("shows Loading until the real state arrives", () => {
+  useSyncStore.setState({ state: DISCONNECTED_SYNC_STATE, loaded: false });
+  render(<SyncSettingsSection />);
+  expect(screen.getByRole("status")).toHaveTextContent("Loading…");
+  expect(screen.queryByLabelText("Service URL")).not.toBeInTheDocument();
 });
 
 it("offers both versions for a conflict and only explains other problems", async () => {
@@ -112,9 +139,12 @@ it("offers both versions for a conflict and only explains other problems", async
     },
   });
   render(<SyncSettingsSection />);
-  const list = screen.getByRole("list", { name: "Items that didn't sync" });
+  const list = screen.getByRole("list", { name: "Needs attention" });
   expect(list.querySelectorAll("li")).toHaveLength(2);
   expect(screen.getAllByRole("button", { name: "Keep this machine's version" })).toHaveLength(1);
+  expect(
+    screen.getByRole("group", { name: "example.com styles and navigation rules" }),
+  ).toBeVisible();
   fireEvent.click(screen.getByRole("button", { name: "Use the other machine's version" }));
   await waitFor(() =>
     expect(window.chiaroscuro.sendCommand).toHaveBeenCalledWith("sync:resolve", {

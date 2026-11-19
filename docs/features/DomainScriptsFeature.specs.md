@@ -61,7 +61,10 @@ the user turns on [Sync](SyncFeature.specs.md), which shares them with their oth
 ### Keyboard shortcuts
 
 - Existing Ctrl+T opens the command palette. Arrow keys and Enter select actions.
-- Each manual script may have an optional local shortcut with modifiers.
+- Each manual script may have an optional shortcut with modifiers. With Sync, shortcuts
+  and aliases travel with the script; a synced script whose alias is already used on its
+  domain here is reported in Settings → Sync instead of being applied, and a shortcut that
+  can't be registered here is skipped, as for restored scripts.
 - Holding a shortcut runs its action once per press; unmatched pages receive the keys normally.
 - Form controls use normal Tab navigation; Save and Cancel are explicit buttons.
 

@@ -94,6 +94,7 @@ describe("sync feature", () => {
     const { commands, items, service, directory } = setup();
     items.set("example.com", { css: "a" });
     await commands.send("sync:connect", { url: `${URL}/`, apiKey: FAKE_APP_DATA_KEY });
+    await commands.send("sync:now", {});
     expect(service.value("domains", "example.com")).toEqual({ css: "a" });
     const saved = fs.readFileSync(path.join(directory, "credentials.enc"), "utf8");
     expect(saved).not.toContain(FAKE_APP_DATA_KEY);
@@ -121,6 +122,7 @@ describe("sync feature", () => {
     const service = createFakeAppDataService();
     const first = setup(service);
     await first.commands.send("sync:connect", { url: URL, apiKey: FAKE_APP_DATA_KEY });
+    await first.commands.send("sync:now", {});
     feature.teardown?.();
 
     const second = setup(service, first.directory);
@@ -137,6 +139,7 @@ describe("sync feature", () => {
     const service = createFakeAppDataService();
     const { commands, items } = setup(service, undefined, { pollIntervalMs: 20 });
     await commands.send("sync:connect", { url: URL, apiKey: FAKE_APP_DATA_KEY });
+    await commands.send("sync:now", {});
     service.write("domains", "example.com", { css: "remote" });
     await vi.waitFor(() => expect(items.get("example.com")).toEqual({ css: "remote" }));
   });
@@ -145,6 +148,7 @@ describe("sync feature", () => {
     const service = createFakeAppDataService();
     const { commands, items, states } = setup(service);
     await commands.send("sync:connect", { url: URL, apiKey: FAKE_APP_DATA_KEY });
+    await commands.send("sync:now", {});
     service.setOffline(true);
     items.set("example.com", { css: "offline" });
     await commands.send("sync:now", {});
@@ -164,6 +168,7 @@ describe("sync feature", () => {
     const { commands, items, states } = setup(service);
     items.set("example.com", { css: "a" });
     await commands.send("sync:connect", { url: URL, apiKey: FAKE_APP_DATA_KEY });
+    await commands.send("sync:now", {});
     service.write("domains", "example.com", { css: "remote" });
     items.set("example.com", { css: "local" });
     await commands.send("sync:now", {});
@@ -197,6 +202,7 @@ describe("sync feature", () => {
     const { commands, items, directory, states } = setup();
     items.set("example.com", { css: "a" });
     await commands.send("sync:connect", { url: URL, apiKey: FAKE_APP_DATA_KEY });
+    await commands.send("sync:now", {});
     expect(fs.existsSync(path.join(directory, "state.json"))).toBe(true);
     await commands.send("sync:disconnect", {});
     expect(fs.readdirSync(directory)).toEqual([]);
@@ -222,6 +228,7 @@ describe("sync feature", () => {
     const first = setup(service);
     first.items.set("example.com", { css: "a" });
     await first.commands.send("sync:connect", { url: URL, apiKey: FAKE_APP_DATA_KEY });
+    await first.commands.send("sync:now", {});
     feature.teardown?.();
 
     // Settings were lost at startup, so local data looks empty.
@@ -234,7 +241,8 @@ describe("sync feature", () => {
   it("lets the browser start when sync history can't be read", async () => {
     const { commands, directory } = setup();
     await commands.send("sync:connect", { url: URL, apiKey: FAKE_APP_DATA_KEY });
-    fs.rmSync(path.join(directory, "state.json"));
+    await commands.send("sync:now", {});
+    fs.rmSync(path.join(directory, "state.json"), { force: true });
     fs.mkdirSync(path.join(directory, "state.json"));
     feature.teardown?.();
     const again = setup(undefined, directory);
@@ -247,6 +255,7 @@ describe("sync feature", () => {
     const { commands, items, states } = setup(service);
     items.set("example.com", { css: "a" });
     await commands.send("sync:connect", { url: URL, apiKey: FAKE_APP_DATA_KEY });
+    await commands.send("sync:now", {});
     service.write("domains", "example.com", { css: "remote" });
     items.set("example.com", { css: "local" });
     await commands.send("sync:now", {});
@@ -261,16 +270,59 @@ describe("sync feature", () => {
     expect(service.value("domains", "example.com")).toEqual({ css: "local" });
   });
 
-  it("keeps history saved by a run from outliving a disconnect", async () => {
+  it("stops a run in flight on disconnect: no more requests, changes or history", async () => {
     const service = createFakeAppDataService();
-    const { commands, items, directory } = setup(service);
-    items.set("example.com", { css: "a" });
+    let release: () => void = () => {};
+    let block = false;
+    const blocked = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const { commands, items, directory } = setup(undefined, undefined, {
+      fetch: (async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (block && String(input).includes("/v1/entries")) {
+          await blocked;
+          throw new TypeError("aborted");
+        }
+        return service.fetch(input, init);
+      }) as typeof fetch,
+    });
     await commands.send("sync:connect", { url: URL, apiKey: FAKE_APP_DATA_KEY });
-    items.set("example.com", { css: "b" });
+    await commands.send("sync:now", {});
+    service.write("domains", "example.com", { css: "remote" });
+    block = true;
     const run = commands.send("sync:now", {});
-    await commands.send("sync:disconnect", {});
-    await run;
+    await vi.waitFor(() => expect(service.requests.length).toBeGreaterThan(0));
+    const before = service.requests.length;
+    const disconnected = commands.send("sync:disconnect", {});
+    release();
+    await Promise.all([run, disconnected]);
+    expect(service.requests.length).toBe(before);
+    expect(items.has("example.com")).toBe(false);
     expect(fs.readdirSync(directory)).toEqual([]);
+  });
+
+  it("syncs a burst of local edits once, and doesn't run again for changes it applied", async () => {
+    const service = createFakeAppDataService();
+    const { commands, items, events } = setup(service, undefined, { changeDelayMs: 30 });
+    await commands.send("sync:connect", { url: URL, apiKey: FAKE_APP_DATA_KEY });
+    await commands.send("sync:now", {});
+    const lists = () => service.requests.filter((r) => r.path === "/v1/entries").length;
+    const start = lists();
+    for (const css of ["a", "b", "c"]) {
+      items.set("example.com", { css });
+      events.emit(DOMAIN_CSS_CHANGED, { domain: "example.com", enabled: true, hasFile: true });
+    }
+    await vi.waitFor(() => expect(service.value("domains", "example.com")).toEqual({ css: "c" }));
+    expect(lists()).toBe(start + 1);
+
+    service.write("domains", "other.org", { css: "remote" });
+    await commands.send("sync:now", {});
+    expect(items.get("other.org")).toEqual({ css: "remote" });
+    // The feature emits a change event when it applies the download; no run follows it.
+    events.emit(DOMAIN_CSS_CHANGED, { domain: "other.org", enabled: true, hasFile: true });
+    const afterDownload = lists();
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    expect(lists()).toBe(afterDownload);
   });
 });
 

@@ -1,4 +1,5 @@
 /** HTTP client for the app-data-service document API (see docs/features/SyncFeature.specs.md). */
+import { z } from "zod";
 
 export type JsonValue =
   | null
@@ -81,11 +82,27 @@ function decodeKey(key: string): string | undefined {
   }
 }
 
-interface WireEntry {
-  key: string;
-  value: JsonValue | null;
-  revision: number;
-  deleted: boolean;
+// Responses are checked like any other outside input: a wrong shape must not reach the
+// revision comparisons that decide what to change.
+const WireEntrySchema = z.object({
+  key: z.string(),
+  value: z.json().nullable(),
+  revision: z.number().int().nonnegative(),
+  deleted: z.boolean(),
+});
+const WirePageSchema = z.object({
+  entries: z.array(WireEntrySchema),
+  nextCursor: z.string().nullable(),
+});
+/** Far more documents than this browser writes; a service paging past it is misbehaving. */
+const MAX_PAGES = 10_000;
+
+function invalidResponse(): AppDataError {
+  return new AppDataError(
+    0,
+    "INVALID_RESPONSE",
+    "The sync service sent a response this browser could not read.",
+  );
 }
 
 export function createAppDataClient(options: {
@@ -100,12 +117,12 @@ export function createAppDataClient(options: {
   const apiKey = validateApiKey(options.apiKey);
   const send = options.fetch ?? fetch;
 
-  async function request<T>(
+  async function request(
     path: string,
     method: string,
     params: Record<string, string>,
     body?: unknown,
-  ): Promise<T> {
+  ): Promise<unknown> {
     const url = new URL(path, origin);
     url.search = new URLSearchParams({ application: SYNC_APPLICATION, ...params }).toString();
     let response: Response;
@@ -126,7 +143,7 @@ export function createAppDataClient(options: {
     } catch {
       throw new AppDataError(0, "NETWORK", "The sync service could not be reached.");
     }
-    let result: { error?: { code?: string; message?: string } } & Record<string, unknown>;
+    let result: { error?: { code?: string; message?: string } };
     try {
       result = await response.json();
     } catch {
@@ -145,13 +162,20 @@ export function createAppDataClient(options: {
           .split(apiKey)
           .join("[redacted]"),
       );
-    return result as T;
+    return result;
   }
 
-  function entry(wire: WireEntry): RemoteEntry {
+  function parse<T>(schema: z.ZodType<T>, value: unknown): T {
+    const parsed = schema.safeParse(value);
+    if (!parsed.success) throw invalidResponse();
+    return parsed.data;
+  }
+
+  function entry(response: unknown): RemoteEntry {
+    const wire = parse(WireEntrySchema, response);
     return {
       key: decodeKey(wire.key) ?? wire.key,
-      value: wire.deleted ? null : wire.value,
+      value: wire.deleted ? null : (wire.value as JsonValue),
       revision: wire.revision,
       deleted: wire.deleted,
     };
@@ -160,9 +184,7 @@ export function createAppDataClient(options: {
   return {
     async get(namespace, key) {
       try {
-        return entry(
-          await request<WireEntry>("/v1/data", "GET", { namespace, key: encodeKey(key) }),
-        );
+        return entry(await request("/v1/data", "GET", { namespace, key: encodeKey(key) }));
       } catch (error) {
         if (error instanceof AppDataError && error.status === 404) return null;
         throw error;
@@ -170,7 +192,7 @@ export function createAppDataClient(options: {
     },
     async put(namespace, key, value, expectedRevision) {
       return entry(
-        await request<WireEntry>(
+        await request(
           "/v1/data",
           "PUT",
           { namespace, key: encodeKey(key) },
@@ -180,7 +202,7 @@ export function createAppDataClient(options: {
     },
     async remove(namespace, key, expectedRevision) {
       return entry(
-        await request<WireEntry>(
+        await request(
           "/v1/data",
           "DELETE",
           { namespace, key: encodeKey(key) },
@@ -191,18 +213,25 @@ export function createAppDataClient(options: {
     async list(namespace) {
       const entries: RemoteEntry[] = [];
       let cursor: string | null = null;
-      do {
-        const page: { entries: WireEntry[]; nextCursor: string | null } = await request(
-          "/v1/entries",
-          "GET",
-          { namespace, ...(cursor === null ? {} : { cursor }) },
+      for (let pages = 0; ; pages++) {
+        if (pages >= MAX_PAGES) throw invalidResponse();
+        const page: z.infer<typeof WirePageSchema> = parse(
+          WirePageSchema,
+          await request("/v1/entries", "GET", {
+            namespace,
+            ...(cursor === null ? {} : { cursor }),
+          }),
         );
         for (const wire of page.entries) {
           // A key this browser did not write cannot belong to any of its items.
           if (decodeKey(wire.key) !== undefined) entries.push(entry(wire));
         }
+        // Keys come in ascending order, so a cursor that doesn't move on would loop forever.
+        if (page.nextCursor !== null && cursor !== null && page.nextCursor <= cursor)
+          throw invalidResponse();
+        if (page.nextCursor === null) break;
         cursor = page.nextCursor;
-      } while (cursor !== null);
+      }
       return entries;
     },
     async check(namespace) {

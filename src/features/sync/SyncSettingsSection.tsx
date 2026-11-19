@@ -1,14 +1,10 @@
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useId, useRef, useState } from "react";
 import {
   SettingItem,
   settingsCategoryHeadingStyle,
 } from "../../renderer/src/components/SettingsLayout";
-import {
-  scriptButtonClass,
-  scriptErrorMessage,
-  scriptInputClass,
-} from "../domain-scripts/domain-scripts.ui";
-import { type ConflictChoice, SyncIssueList } from "./SyncIssueList";
+import { scriptErrorMessage, scriptInputClass } from "../domain-scripts/domain-scripts.ui";
+import { type ConflictChoice, SyncIssueList, syncButtonClass } from "./SyncIssueList";
 import type { SyncIssue, SyncState } from "./sync.shared";
 import { useSyncStore } from "./sync.store";
 
@@ -17,16 +13,25 @@ const timeFormat = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", tim
 /** Settings → Sync: connect this machine to the app data service and see how sync is going. */
 export function SyncSettingsSection({ state: shown }: { state?: SyncState } = {}) {
   const stored = useSyncStore((s) => s.state);
+  const loaded = useSyncStore((s) => s.loaded);
   // Previews pass a state; the app always uses the store.
   const state = shown ?? stored;
+  const ready = shown !== undefined || loaded;
   const [url, setUrl] = useState("");
   const [apiKey, setApiKey] = useState("");
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<string>();
+  const [confirming, setConfirming] = useState(false);
   const [error, setError] = useState<string>();
+  const id = useId();
+  const statusRef = useRef<HTMLParagraphElement>(null);
+  const urlRef = useRef<HTMLInputElement>(null);
+  const issuesRef = useRef<HTMLHeadingElement>(null);
 
+  /** Run a command unless one is running; focus stays put, as no control is disabled. */
   async function send(name: string, payload: unknown = {}) {
+    if (busy) return false;
     setError(undefined);
-    setBusy(true);
+    setBusy(name);
     try {
       await window.chiaroscuro.sendCommand(name, payload);
       return true;
@@ -34,17 +39,45 @@ export function SyncSettingsSection({ state: shown }: { state?: SyncState } = {}
       setError(scriptErrorMessage(error));
       return false;
     } finally {
-      setBusy(false);
+      setBusy(undefined);
     }
   }
 
   async function connect(event: FormEvent) {
     event.preventDefault();
-    if (await send("sync:connect", { url, apiKey })) setApiKey("");
+    if (await send("sync:connect", { url, apiKey })) {
+      setApiKey("");
+      // The form is gone; the status line says what happened.
+      requestAnimationFrame(() => statusRef.current?.focus());
+    } else urlRef.current?.focus();
   }
 
-  const resolve = (issue: SyncIssue, keep: ConflictChoice) =>
-    void send("sync:resolve", { id: issue.id, keep, version: issue.version ?? "" });
+  async function disconnect() {
+    if (await send("sync:disconnect")) {
+      setConfirming(false);
+      requestAnimationFrame(() => urlRef.current?.focus());
+    }
+  }
+
+  async function resolve(issue: SyncIssue, keep: ConflictChoice) {
+    await send("sync:resolve", { id: issue.id, keep, version: issue.version ?? "" });
+    requestAnimationFrame(() => (issuesRef.current ?? statusRef.current)?.focus());
+  }
+
+  // Only changes the user caused are announced: background syncs keep the same text.
+  const status = !ready
+    ? "Loading…"
+    : busy === "sync:connect"
+      ? "Connecting…"
+      : !state.connected
+        ? "Not connected"
+        : state.syncing
+          ? "Syncing…"
+          : state.error
+            ? "Sync isn't working right now"
+            : "Connected";
+  const alert = error ?? state.error;
+  const muted = "m-0 text-[var(--content-text-secondary)]";
 
   return (
     <section id="settings-sync">
@@ -54,53 +87,90 @@ export function SyncSettingsSection({ state: shown }: { state?: SyncState } = {}
         description="Keep domain styles, navigation rules and website scripts the same on every machine connected to your app data service. Scripts that come from your other machines run here like scripts you add yourself."
       >
         <div className="flex flex-col gap-3 text-[length:var(--text-sm)]">
-          {state.connected ? (
-            <>
-              <p className="m-0" role="status">
-                {state.syncing
-                  ? "Syncing…"
-                  : state.lastSyncedAt
+          <div className="flex flex-col gap-1">
+            <p ref={statusRef} tabIndex={-1} role="status" className="m-0 outline-none">
+              {status}
+            </p>
+            {ready && state.connected && (
+              <>
+                <p className={`${muted} break-all`}>Service: {state.serviceUrl}</p>
+                <p className={muted}>
+                  {state.lastSyncedAt
                     ? `Last synced ${timeFormat.format(state.lastSyncedAt)}`
                     : "Not synced yet"}
-              </p>
-              <p className="m-0 break-all text-[var(--muted-foreground)]">
-                Connected to {state.serviceUrl}
-              </p>
-              {state.readOnly && (
-                <p className="m-0 text-[var(--muted-foreground)]">
-                  This machine's key can only read. Changes made here aren't uploaded.
+                  {state.lastFailedAt && ` · Last failed ${timeFormat.format(state.lastFailedAt)}`}
                 </p>
-              )}
+                {state.readOnly && (
+                  <p className={muted}>
+                    This machine's key can only read. Changes made here aren't uploaded.
+                  </p>
+                )}
+              </>
+            )}
+          </div>
+          {alert && (
+            <p role="alert" className="m-0 text-[var(--destructive)]">
+              {alert}
+            </p>
+          )}
+          {ready && state.connected && !confirming && (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                className={syncButtonClass}
+                aria-disabled={!!busy || state.syncing}
+                onClick={() => {
+                  if (!state.syncing) void send("sync:now");
+                }}
+              >
+                Sync now
+              </button>
+              <button type="button" className={syncButtonClass} onClick={() => setConfirming(true)}>
+                Disconnect
+              </button>
+            </div>
+          )}
+          {ready && state.connected && confirming && (
+            // biome-ignore lint/a11y/useSemanticElements: a fieldset would restyle the row
+            <div className="flex flex-col gap-2" role="group" aria-labelledby={`${id}-confirm`}>
+              <p id={`${id}-confirm`} className="m-0">
+                Stop syncing on this machine? Your customizations stay here. To connect again you'll
+                need a new key.
+              </p>
               <div className="flex flex-wrap gap-2">
                 <button
                   type="button"
-                  className={scriptButtonClass}
-                  disabled={busy || state.syncing}
-                  onClick={() => void send("sync:now")}
+                  className={syncButtonClass}
+                  aria-disabled={!!busy}
+                  onClick={() => void disconnect()}
                 >
-                  Sync now
+                  Stop syncing
                 </button>
                 <button
                   type="button"
-                  className={scriptButtonClass}
-                  disabled={busy}
-                  onClick={() => void send("sync:disconnect")}
+                  className={syncButtonClass}
+                  onClick={() => setConfirming(false)}
                 >
-                  Disconnect
+                  Cancel
                 </button>
               </div>
-            </>
-          ) : (
+            </div>
+          )}
+          {ready && !state.connected && (
             <form className="flex flex-col gap-2" onSubmit={(event) => void connect(event)}>
               <label className="flex flex-col gap-1">
                 Service URL
                 <input
+                  ref={urlRef}
                   className={scriptInputClass}
                   type="url"
                   required
                   autoComplete="off"
                   spellCheck={false}
                   placeholder="https://your-deployment.convex.site"
+                  aria-describedby={`${id}-help`}
+                  aria-invalid={!!error}
+                  readOnly={!!busy}
                   value={url}
                   onChange={(event) => setUrl(event.target.value)}
                 />
@@ -114,33 +184,31 @@ export function SyncSettingsSection({ state: shown }: { state?: SyncState } = {}
                   autoComplete="off"
                   spellCheck={false}
                   placeholder="ads_…"
+                  aria-describedby={`${id}-help`}
+                  aria-invalid={!!error}
+                  readOnly={!!busy}
                   value={apiKey}
                   onChange={(event) => setApiKey(event.target.value)}
                 />
               </label>
-              <p className="m-0 text-[var(--muted-foreground)]">
-                Create a key for this machine in the service's admin page, for the application
-                chiaroscuro2. The key is stored encrypted on this machine.
+              <p id={`${id}-help`} className={muted}>
+                Your app data service stores customizations for your machines. Create a key for this
+                machine in its admin page, for the application chiaroscuro2. The key is stored
+                encrypted on this machine.
               </p>
               <div>
-                <button type="submit" className={scriptButtonClass} disabled={busy}>
-                  {busy ? "Connecting…" : "Connect"}
+                <button type="submit" className={syncButtonClass} aria-disabled={!!busy}>
+                  Connect
                 </button>
               </div>
             </form>
           )}
-          {state.error && !error && (
-            <p role="alert" className="m-0 text-[var(--destructive)]">
-              {state.error}
-              {state.lastFailedAt && ` (${timeFormat.format(state.lastFailedAt)})`}
-            </p>
-          )}
-          {error && (
-            <p role="alert" className="m-0 text-[var(--destructive)]">
-              {error}
-            </p>
-          )}
-          <SyncIssueList issues={state.issues} disabled={busy} onResolve={resolve} />
+          <SyncIssueList
+            issues={state.issues}
+            busy={!!busy}
+            headingRef={issuesRef}
+            onResolve={(issue, keep) => void resolve(issue, keep)}
+          />
         </div>
       </SettingItem>
     </section>

@@ -50,6 +50,8 @@ export interface PersistedSyncState {
   service: string;
   records: Record<string, SyncRecord>;
   lastSyncedAt?: number;
+  /** Learned from the service refusing a write; keys can't gain write access later. */
+  readOnly?: boolean;
 }
 
 /** Errors about one item. Anything else, such as a rejected key, stops the whole run. */
@@ -94,9 +96,9 @@ export class SyncEngine {
   private readonly refused = new Map<string, string>();
   /** Both versions of each conflict as the user is shown them. */
   private readonly conflicts = new Map<string, Conflict>();
-  /** Set once the key turns out to be read-only; local changes then stay on this machine. */
-  readOnly = false;
   private stopped = false;
+  /** Whether history changed since it was last saved. */
+  private dirty = false;
 
   constructor(
     private readonly client: AppDataClient,
@@ -105,6 +107,29 @@ export class SyncEngine {
     private readonly persist: (state: PersistedSyncState) => Promise<void>,
     private readonly now: () => number = Date.now,
   ) {}
+
+  /** True once the key turned out to be read-only; local changes then stay on this machine. */
+  get readOnly(): boolean {
+    return this.state.readOnly === true;
+  }
+
+  /** Whether any local item differs from what was last synced, without asking the service. */
+  hasLocalChanges(): boolean {
+    for (const source of this.sources) {
+      const local = source.read();
+      const prefix = `${source.namespace}/`;
+      for (const [key, value] of local)
+        if (!jsonEqual(value, this.state.records[prefix + key]?.base ?? null)) return true;
+      for (const id of Object.keys(this.state.records))
+        if (
+          id.startsWith(prefix) &&
+          this.state.records[id]?.base !== null &&
+          !local.has(id.slice(prefix.length))
+        )
+          return true;
+    }
+    return false;
+  }
 
   /** Disconnecting stops a run at its next step; nothing changes or saves after that. */
   stop() {
@@ -130,7 +155,9 @@ export class SyncEngine {
         const keys = new Set([
           ...local.keys(),
           ...remote.keys(),
-          ...Object.keys(this.state.records)
+          // Items with a history, and items with an issue but no history (refused uploads
+          // of items that only ever existed here), so their state stays current.
+          ...[...Object.keys(this.state.records), ...this.issues.keys()]
             .filter((id) => id.startsWith(prefix))
             .map((id) => id.slice(prefix.length)),
         ]);
@@ -141,7 +168,11 @@ export class SyncEngine {
     } catch (error) {
       if (!(error instanceof StoppedError)) throw error;
     } finally {
-      if (!this.stopped) await this.persist(this.state);
+      // An idle run only moves the last-synced time, which isn't worth a disk write.
+      if (!this.stopped && this.dirty) {
+        this.dirty = false;
+        await this.persist(this.state);
+      }
     }
   }
 
@@ -179,7 +210,10 @@ export class SyncEngine {
       if (error instanceof LocalChangedError || isConflict(error)) throw changed();
       throw error;
     } finally {
-      if (!this.stopped) await this.persist(this.state);
+      if (!this.stopped && this.dirty) {
+        this.dirty = false;
+        await this.persist(this.state);
+      }
     }
     this.clear(id);
   }
@@ -223,7 +257,7 @@ export class SyncEngine {
         remote.revision < record.revision ||
         (remote.revision === record.revision && !jsonEqual(remoteValue, record.base)))
     ) {
-      delete this.state.records[id];
+      this.forget(id);
       record = undefined;
     }
     const base = record?.base ?? null;
@@ -234,13 +268,12 @@ export class SyncEngine {
 
     if (!remoteChanged && !localChanged) {
       this.clear(id);
-      if (remoteRevision === 0 && base === null) delete this.state.records[id];
+      if (remoteRevision === 0 && base === null) this.forget(id);
       return;
     }
     if (!localChanged) return this.download(source, key, remoteRevision, remoteValue, local);
-    if (!remoteChanged || (remoteValue === null && base === null))
-      // Changed only here, or created here while this machine had never seen the remote
-      // version, which another machine had since removed.
+    // Changed only here, or new here and never on the service.
+    if (!remoteChanged || remote === null)
       return this.upload(source, key, local, remote, label, attempt);
     if (jsonEqual(local, remoteValue)) {
       this.record(id, remoteRevision, remoteValue);
@@ -277,7 +310,10 @@ export class SyncEngine {
       local === null
         ? "Removed on this machine and changed on another."
         : remoteValue === null
-          ? "Changed on this machine and removed on another."
+          ? base === null
+            ? // Never synced here: it may be an old copy of something removed on purpose.
+              "Still on this machine, but removed on another."
+            : "Changed on this machine and removed on another."
           : "Changed on this machine and on another.",
       version,
     );
@@ -317,7 +353,7 @@ export class SyncEngine {
     const revision = remote?.revision ?? 0;
     if (value === null && (remote === null || remote.deleted)) {
       this.record(id, revision, null);
-      if (revision === 0) delete this.state.records[id];
+      if (revision === 0) this.forget(id);
       this.clear(id);
       return;
     }
@@ -345,7 +381,8 @@ export class SyncEngine {
         return this.reconcile(source, key, local, fresh, attempt + 1);
       }
       if (error instanceof AppDataError && error.code === "READ_ONLY") {
-        this.readOnly = true;
+        this.state.readOnly = true;
+        this.dirty = true;
         return;
       }
       if (!isItemError(error)) throw error;
@@ -363,7 +400,16 @@ export class SyncEngine {
 
   private record(id: string, revision: number, base: JsonValue | null) {
     this.guard();
+    const current = this.state.records[id];
+    if (current?.revision === revision && jsonEqual(current.base, base)) return;
     this.state.records[id] = { revision, base };
+    this.dirty = true;
+  }
+
+  private forget(id: string) {
+    if (!(id in this.state.records)) return;
+    delete this.state.records[id];
+    this.dirty = true;
   }
 
   private issue(

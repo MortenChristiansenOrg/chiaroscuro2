@@ -57,12 +57,14 @@ test("sync connects in Settings, applies another machine's CSS and uploads local
   await sync.getByLabel("Service URL").fill(service.url);
   await sync.getByLabel("Key for this machine").fill(FAKE_APP_DATA_KEY);
   await sync.getByRole("button", { name: "Connect" }).click();
-  await expect(sync.getByRole("status")).toHaveText(/^Last synced /);
-  await expect(sync.getByText(`Connected to ${service.url}`)).toBeVisible();
+  await expect(sync.getByText(/^Last synced /)).toBeVisible();
+  await expect(sync.getByRole("status")).toHaveText("Connected");
+  await expect(sync.getByText(`Service: ${service.url}`)).toBeVisible();
   await expect(page.locator("h1")).toHaveCSS("color", "rgb(20, 110, 60)");
 
   // Turning the CSS off here reaches the service shortly after.
   await session.command("domain-css:toggle", { domain: "127.0.0.1" });
+  await session.command("sync:now", {});
   await waitUntil(
     "domain CSS change uploaded",
     async () => service.value("domains", "127.0.0.1") as { enabled?: boolean } | undefined,
@@ -83,7 +85,8 @@ test("sync connects in Settings, applies another machine's CSS and uploads local
       shortcut: "",
     },
   });
-  const issues = sync.getByRole("list", { name: "Items that didn't sync" });
+  await session.command("sync:now", {});
+  const issues = sync.getByRole("list", { name: "Needs attention" });
   await expect(issues).toContainText("Script “Big script” on 127.0.0.1");
   await expect(issues).toContainText("JSON values are limited to 4096 bytes.");
   expect(service.value("scripts", "big-script")).toBeUndefined();
@@ -91,6 +94,7 @@ test("sync connects in Settings, applies another machine's CSS and uploads local
   await session.capture("sync-settings-connected");
 
   await sync.getByRole("button", { name: "Disconnect" }).click();
+  await sync.getByRole("button", { name: "Stop syncing" }).click();
   await expect(sync.getByLabel("Service URL")).toBeVisible();
   await session.capture("sync-settings-disconnected");
 });

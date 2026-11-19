@@ -59,13 +59,23 @@ function domainRecord(domain: string, value: DomainCustomization | null): JsonVa
   return value && { schemaVersion: SCHEMA_VERSION, domain, ...value };
 }
 
+function isHostname(domain: string): boolean {
+  try {
+    return normalizeDomain(domain) === domain;
+  } catch {
+    return false;
+  }
+}
+
 export const domainCustomizationSource: SyncSource = {
   namespace: "domains",
   describe: (domain) => `${domain} styles and navigation rules`,
   read() {
     const result = new Map<string, JsonValue>();
-    for (const [domain, value] of listDomainCustomizations())
-      result.set(domain, domainRecord(domain, value) as JsonValue);
+    for (const [domain, value] of listDomainCustomizations()) {
+      // Only hostnames sync; anything else would be refused by every machine's `parse`.
+      if (isHostname(domain)) result.set(domain, domainRecord(domain, value) as JsonValue);
+    }
     return result;
   },
   parse(key, value) {

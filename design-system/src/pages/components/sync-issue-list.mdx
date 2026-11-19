@@ -21,7 +21,7 @@ import { SyncIssueList } from "@features/sync/SyncIssueList"
 
 <ComponentPreview label="Conflict, too large, and not applied">
   <SyncIssueList onResolve={() => {}} issues={[
-    { id: "domains/example.com", label: "example.com styles and navigation rules", kind: "conflict", message: "Changed on this machine and on another." },
+    { id: "domains/example.com", label: "example.com styles and navigation rules", kind: "conflict", message: "Changed on this machine and on another.", version: "2:preview" },
     { id: "scripts/1", label: "Script “Export table” on example.com", kind: "too-large", message: "Too large to sync. The service says: “JSON values are limited to 128 KiB.” It stays on this machine." },
     { id: "scripts/2", label: "Script “Copy title” on github.com", kind: "not-applied", message: "Alias /copy-title is already used on this domain." },
   ]} />
@@ -34,13 +34,18 @@ import { SyncIssueList } from "@features/sync/SyncIssueList"
 | Row border / radius | `--border`, `--radius-sm` |
 | Row padding | 0.75rem |
 | Name | `--foreground`, medium weight |
-| Explanation | `--muted-foreground` |
+| Heading | `--foreground`, `--text-sm`, medium weight |
+| Explanation | `--content-text-secondary` |
+| Name to explanation gap | 0.25rem |
+| Buttons | `--border`, `--background`, `--radius-sm` |
 | Text | `--text-sm` |
 | Control height | `--click-target-min` |
 
 ## States
 
-Renders nothing when no item needs attention. Conflict rows offer both choices; other rows only explain what happened, because they settle once the item changes (too large, refused) or the cause is fixed (not applied). Buttons are disabled while a choice is being applied.
+Renders nothing when no item needs attention. Conflict rows offer both choices; other rows only explain what happened, because they settle once the item changes (too large, refused) or the cause is fixed (not applied). While any command in the section runs, the buttons are `aria-disabled` and ignore clicks.
+
+Buttons use `--accent` on hover, `--muted` when pressed, and `--ring` for focus; `aria-disabled` buttons have 0.5 opacity and no interactive hover.
 
 ## Variants
 
@@ -56,11 +61,11 @@ Control colors transition using `--duration-fast` / `--ease-out`; reduced motion
 
 ## Keyboard & Focus
 
-Tab moves through each row's buttons in order.
+Tab moves through each row's buttons in order. After a choice, focus moves to the Needs attention heading (or the section's status line when the list is gone).
 
 ## Accessibility
 
-A named list ("Items that didn't sync") of rows with plain-text explanations; choices are semantic buttons with visible focus outlines.
+A list labelled by its Needs attention heading. Each conflict's buttons form a group named after the item, so "Keep this machine's version" is never ambiguous; choices are semantic buttons with visible focus outlines.
 
 ## Layout & Composition
 

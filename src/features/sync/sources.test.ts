@@ -318,4 +318,18 @@ describe("website script sync", () => {
       "The other machine's version runs on other.org instead of example.com. A script's domain can't change.",
     );
   });
+
+  it("keeps the local script when another machine's version can't be saved", async () => {
+    const { engine, service, send, dataStore } = await setup();
+    await send(DOMAIN_SCRIPTS_SAVE, { script: script() });
+    await engine.run();
+    service.write("scripts", "script-one", { schemaVersion: 1, ...script({ name: "Renamed" }) });
+    dataStore.failDurable = true;
+    await engine.run();
+    expect(await send(DOMAIN_SCRIPTS_LIST, {})).toEqual([script()]);
+    expect(engine.getIssues()).toMatchObject([{ kind: "not-applied", message: /no space left/ }]);
+    dataStore.failDurable = false;
+    await engine.run();
+    expect(await send(DOMAIN_SCRIPTS_LIST, {})).toEqual([script({ name: "Renamed" })]);
+  });
 });

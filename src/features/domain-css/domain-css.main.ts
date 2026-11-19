@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import type { CommandBus } from "../../bus/command-bus";
@@ -555,15 +556,6 @@ export function getDomainCustomization(domain: string): DomainCustomization | nu
   return readCustomization(domain);
 }
 
-function writeCss(domain: string, css: string | null) {
-  const file = getCssFilePath(domain);
-  if (css === null) fs.rmSync(file, { force: true });
-  else {
-    fs.mkdirSync(cssDir, { recursive: true });
-    fs.writeFileSync(file, css);
-  }
-}
-
 /**
  * Replace a domain's customization with another machine's version (`null` removes it) and
  * save it durably, or throw with nothing changed. Local state changes before the first
@@ -575,14 +567,21 @@ export async function applyDomainCustomization(
   value: DomainCustomization | null,
 ): Promise<void> {
   if (!loaded) throw new Error("Domain settings haven't loaded yet.");
+  const file = getCssFilePath(domain);
   const previous = {
     css: readCssFileStrict(domain),
     state: domainStates.get(domain),
     navigation: navigationStates.get(domain),
   };
   const css = value?.css ?? null;
-  stopWatching(domain);
-  if (css !== previous.css) writeCss(domain, css);
+  const cssChanged = css !== previous.css;
+  // Stage the new stylesheet first: if that fails, nothing has changed yet.
+  let staged: string | undefined;
+  if (cssChanged && css !== null) {
+    fs.mkdirSync(cssDir, { recursive: true });
+    staged = `${file}.${randomUUID()}.tmp`;
+    fs.writeFileSync(staged, css);
+  }
   if (value) domainStates.set(domain, { enabled: value.enabled });
   else domainStates.delete(domain);
   if (value && !isNavigationDefault(value.navigation))
@@ -591,9 +590,12 @@ export async function applyDomainCustomization(
   try {
     await persistStates(true);
     await persistNavigationStates(true);
+    stopWatching(domain);
+    if (staged) fs.renameSync(staged, file);
+    else if (cssChanged) fs.rmSync(file, { force: true });
   } catch (error) {
-    // Put everything back, so this machine doesn't remember a version it didn't save.
-    if (css !== previous.css) writeCss(domain, previous.css);
+    // Put the settings back, so this machine doesn't remember a version it didn't save.
+    if (staged) fs.rmSync(staged, { force: true });
     if (previous.state) domainStates.set(domain, previous.state);
     else domainStates.delete(domain);
     if (previous.navigation) navigationStates.set(domain, previous.navigation);
@@ -607,7 +609,7 @@ export async function applyDomainCustomization(
   }
   // The AI undo snapshot restores the stylesheet from before generation; once another
   // machine's stylesheet replaces it, restoring would bring back an outdated version.
-  if (css !== previous.css) fs.rmSync(`${getCssFilePath(domain)}.previous.json`, { force: true });
+  if (cssChanged) fs.rmSync(`${file}.previous.json`, { force: true });
   await injectOrRemoveForAllTabs(domain);
   if (value?.enabled && css !== null) startWatching(domain);
   emitChanged(domain);

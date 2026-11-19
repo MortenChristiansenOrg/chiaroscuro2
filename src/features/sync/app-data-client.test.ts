@@ -33,7 +33,10 @@ describe("app data client", () => {
       "https://sync.example/v1/data?application=chiaroscuro2&namespace=domains&key=a%2520b",
     );
     expect(url.toString()).not.toContain(FAKE_APP_DATA_KEY);
-    expect(init.headers).toMatchObject({ Authorization: `Bearer ${FAKE_APP_DATA_KEY}` });
+    expect(init.headers).toMatchObject({
+      Authorization: `Bearer ${FAKE_APP_DATA_KEY}`,
+      "Content-Type": "application/json",
+    });
     expect(init.redirect).toBe("error");
     expect(JSON.parse(init.body as string)).toEqual({ value: 1, expectedRevision: 1 });
   });

@@ -119,8 +119,23 @@ export class JsonDataStore implements DataStore {
 
   async setSetting<T>(key: string, value: T, options?: { durable?: boolean }): Promise<void> {
     if (options?.durable) {
+      // Write a complete copy, flush it to disk and swap it in, so neither a failure nor a
+      // crash leaves a partly written file.
       const next = { ...this.settings, [key]: value };
-      fs.writeFileSync(this.settingsPath, JSON.stringify(next, null, 2));
+      const temp = `${this.settingsPath}.${process.pid}.${Date.now()}.tmp`;
+      try {
+        const fd = fs.openSync(temp, "w");
+        try {
+          fs.writeFileSync(fd, JSON.stringify(next, null, 2));
+          fs.fsyncSync(fd);
+        } finally {
+          fs.closeSync(fd);
+        }
+        fs.renameSync(temp, this.settingsPath);
+      } catch (error) {
+        fs.rmSync(temp, { force: true });
+        throw error;
+      }
       this.settings = next;
       this.dirty = false;
       return;

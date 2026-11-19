@@ -22,10 +22,13 @@ JSON documents with revisions. Sync is optional and off until a machine is conne
 - Settings → Sync connects a machine with the service URL and its key. The key is checked
   with the service before it is saved, then stored encrypted with the OS keyring in the
   main process (a plain-text keyring fallback is refused). It never reaches web pages or
-  the renderer again. Disconnect deletes the key and the sync history; local data stays.
+  the renderer again. The first sync then runs in the background. Disconnect asks first,
+  then deletes the key and the sync history; local data stays.
 - Local data stays the source of truth, and the browser works the same offline. Local
-  changes sync about two seconds after they happen; other machines' changes arrive within
-  about a minute, at startup and on Sync now.
+  changes sync about two seconds after the last of a burst of edits (at most ten seconds
+  after the first); changes this machine just applied from the service don't start a run.
+  Other machines' changes arrive within about a minute, at startup and on Sync now. While
+  the service can't be reached, automatic syncs back off, doubling up to every 15 minutes.
 - Each run compares every item's local version, base and service version:
   - Changed only here: uploaded with the base revision.
   - Changed only on the service: applied locally, re-injecting CSS and rebinding shortcuts.
@@ -37,8 +40,9 @@ JSON documents with revisions. Sync is optional and off until a machine is conne
     when the same conflict was already settled.
 - Removing an item removes it everywhere. The service keeps removals as tombstones, so a
   machine that was offline and didn't change the item removes it too instead of restoring
-  it. An item created on a machine that never synced it is uploaded even if an earlier
-  item with the same key was removed elsewhere.
+  it. A machine without sync history for an item (first connection, or reconnecting with
+  a new key) that still has an item removed elsewhere shows a conflict ("Still on this
+  machine, but removed on another") instead of restoring it or removing it.
 - Another machine's version is applied only if the local item is still the version the
   run read, so an edit made during a run is never overwritten; it syncs on the next run.
   It is saved to disk before sync counts it as synced; when saving fails, the local item is
@@ -50,8 +54,10 @@ JSON documents with revisions. Sync is optional and off until a machine is conne
 - If the service seems to have forgotten a document or gone back to an older revision (a
   restored backup, another account behind the same address), the item syncs as if for the
   first time, which never removes anything.
-- A synced script never moves to another domain, as when editing it locally; a version
-  that does is reported instead of applied.
+- A synced script that exists here never moves to another domain, as when editing it
+  locally; a version that does is reported instead of applied. (A script removed here and
+  later recreated elsewhere with the same id arrives like a new script.)
+- Domains that aren't plain hostnames don't sync.
 - Runs, conflict choices and disconnecting take turns. Disconnecting aborts requests in
   flight, and nothing changes or saves after it.
 - A write rejected because another machine wrote first (`409 REVISION_CONFLICT`) is
@@ -60,10 +66,16 @@ JSON documents with revisions. Sync is optional and off until a machine is conne
 - The browser has no size limit of its own. When the service refuses an item as too large
   (`413`), the item stays on this machine and Settings shows the service's own message.
   The same version isn't uploaded again; a changed version is.
-- A read-only key downloads changes; Settings explains that local changes aren't uploaded.
-- Settings shows Syncing…, Last synced with its time, the most recent failure with its time
-  and guidance (unreachable service, rejected or revoked key, key for another application,
-  service errors), and every item that needs attention.
+- A read-only key downloads changes; once the service refuses a write, this is remembered
+  and Settings explains that local changes aren't uploaded.
+- Settings shows a status line (Loading…, Not connected, Connecting…, Connected, Syncing…
+  for syncs the user started, or Sync isn't working right now), Last synced and Last failed
+  with their times, one alert with guidance (unreachable service, rejected or revoked key,
+  key for another application, read-only key, service errors), and every item that needs
+  attention. Background syncs don't change the status line, so screen readers aren't
+  interrupted every minute; the main process only notifies windows when this changes.
+- Service responses are validated before use; a malformed response, or paging that doesn't
+  move forward, stops the run with an error.
 - A document saved by a newer browser version (`schemaVersion` above this browser's) or
   that fails validation is reported, never misread or overwritten.
 
